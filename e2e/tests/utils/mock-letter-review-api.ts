@@ -17,6 +17,18 @@ interface MockLetterImage {
   segmentTrustState?: 'trusted' | 'unverified';
 }
 
+interface MockStructuredNote {
+  id: string;
+  content: string;
+  category: 'identity' | 'date' | 'transcription' | 'relationship' | 'context' | 'cross-reference' | 'location' | 'condition';
+  priority: 'high' | 'medium' | 'low';
+  status: 'open' | 'resolved' | 'dismissed';
+  resolves_when: string | null;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  source: 'ai' | 'admin';
+}
+
 interface MockLetterReviewLetter {
   id: string;
   title: string;
@@ -64,6 +76,7 @@ interface MockLetterReviewLetter {
   linkedPlaces?: unknown[];
   entityExtractionStatus?: string;
   entityExtractionJson?: unknown;
+  aiNotes?: MockStructuredNote[] | string | null;
 }
 
 interface MockUpdateLetterRequest {
@@ -147,6 +160,15 @@ interface MockAiNotesRequest {
   url: string;
   body: {
     aiNotes?: string | null;
+  };
+}
+
+interface MockNoteStatusRequest {
+  url: string;
+  noteId: string;
+  body: {
+    primarySourceRevision?: number;
+    status?: 'resolved' | 'dismissed';
   };
 }
 
@@ -377,6 +399,7 @@ export interface MockLetterReviewContext {
   verifyPhotoDescriptionRequests: string[];
   unverifyPhotoDescriptionRequests: string[];
   updateAiNotesRequests: MockAiNotesRequest[];
+  noteStatusRequests: MockNoteStatusRequest[];
   verifyExtraContentRequests: string[];
   unverifyExtraContentRequests: string[];
   flagRequests: Array<{ url: string; body: unknown }>;
@@ -419,6 +442,7 @@ export async function installMockLetterReviewApi(
         | 'verifyPhotoDescription'
         | 'unverifyPhotoDescription'
         | 'aiNotes'
+        | 'noteStatus'
         | 'verifyExtraContent'
         | 'unverifyExtraContent'
         | 'flag',
@@ -440,6 +464,7 @@ export async function installMockLetterReviewApi(
   const verifyPhotoDescriptionRequests: string[] = [];
   const unverifyPhotoDescriptionRequests: string[] = [];
   const updateAiNotesRequests: MockAiNotesRequest[] = [];
+  const noteStatusRequests: MockNoteStatusRequest[] = [];
   const verifyExtraContentRequests: string[] = [];
   const unverifyExtraContentRequests: string[] = [];
   const flagRequests: Array<{ url: string; body: unknown }> = [];
@@ -869,6 +894,52 @@ export async function installMockLetterReviewApi(
     });
   });
 
+  await page.route(
+    new RegExp(`${escapeRegex(letterPath)}/notes/[^/]+$`),
+    async (route) => {
+      const body =
+        route.request().postDataJSON() as MockNoteStatusRequest['body'];
+      const noteId = decodeURIComponent(
+        new URL(route.request().url()).pathname.split('/').pop() ?? '',
+      );
+      noteStatusRequests.push({
+        url: route.request().url(),
+        noteId,
+        body,
+      });
+      if (routeFailures.noteStatus) {
+        await fulfillFailure(route, routeFailures.noteStatus);
+        return;
+      }
+      if (body.primarySourceRevision !== letter.primarySourceRevision) {
+        await fulfillFailure(route, {
+          status: 409,
+          error: 'Letter source changed; reload before updating the note',
+        });
+        return;
+      }
+
+      const notes = Array.isArray(letter.aiNotes) ? letter.aiNotes : [];
+      const note = notes.find((candidate) => candidate.id === noteId);
+      if (!note || !body.status) {
+        await fulfillFailure(route, {
+          status: 404,
+          error: 'Note not found',
+        });
+        return;
+      }
+      note.status = body.status;
+      note.resolved_at = '2026-07-24T12:00:00.000Z';
+      note.resolved_by = 'mock-admin';
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(letter),
+      });
+    },
+  );
+
   await page.route(new RegExp(`${escapeRegex(letterPath)}/verify-extra-content$`), async (route) => {
     verifyExtraContentRequests.push(route.request().url());
     if (routeFailures.verifyExtraContent) {
@@ -1079,6 +1150,7 @@ export async function installMockLetterReviewApi(
     verifyPhotoDescriptionRequests,
     unverifyPhotoDescriptionRequests,
     updateAiNotesRequests,
+    noteStatusRequests,
     verifyExtraContentRequests,
     unverifyExtraContentRequests,
     flagRequests,

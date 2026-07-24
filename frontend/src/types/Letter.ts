@@ -25,6 +25,44 @@ export type ContentStatus = 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
 
 export type DateConfidence = 'exact' | 'unknown' | 'inferred';
 
+export type NoteCategory =
+  | 'identity'
+  | 'date'
+  | 'transcription'
+  | 'relationship'
+  | 'context'
+  | 'cross-reference'
+  | 'location'
+  | 'condition';
+
+export type NotePriority = 'high' | 'medium' | 'low';
+
+export type NoteResolutionTrigger =
+  | 'sender_filled'
+  | 'recipient_filled'
+  | 'date_confirmed'
+  | 'date_conflict_resolved'
+  | 'location_filled'
+  | 'relationship_set'
+  | 'transcription_edited';
+
+export interface StructuredNote {
+  id: string;
+  content: string;
+  category: NoteCategory;
+  priority: NotePriority;
+  status: 'open' | 'resolved' | 'dismissed';
+  resolves_when: NoteResolutionTrigger | null;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  source: 'ai' | 'admin';
+}
+
+export type StructuredNoteDraft = Pick<
+  StructuredNote,
+  'content' | 'category' | 'priority'
+>;
+
 // V2 Metadata types
 export type EmotionalTone =
   | 'joyful'
@@ -418,8 +456,8 @@ export interface Letter {
   photoDescriptionVerifiedAt?: string;
   photoDescriptionVerifiedBy?: string;
   photoDescriptionContext?: string;
-  // AI notes (observations, suggestions)
-  aiNotes?: string;
+  // AI notes (structured current format or legacy text)
+  aiNotes?: StructuredNote[] | string | null;
   // Reading view text (independent spacing from raw transcript)
   readingText?: string;
   // Entity extraction (Prompt 2)

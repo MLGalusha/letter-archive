@@ -22,8 +22,6 @@ import {
 import {
   toggleLetterFlag,
   reExtractLetter,
-  updateNoteStatus,
-  addNote,
   generateReadingView,
 } from "../../api/admin/letters";
 import LetterViewer from "../../components/LetterViewer/LetterViewer";
@@ -63,7 +61,9 @@ import { useLetterSourceConflict } from "./LetterReview/useLetterSourceConflict"
 import { useGuardedLetterState } from "./LetterReview/useGuardedLetterState";
 import { useLetterSavingState } from "./LetterReview/useLetterSavingState";
 import { useLetterReviewVisit } from "./LetterReview/useLetterReviewVisit";
+import { useLetterReviewMutationExecutor } from "./LetterReview/useLetterReviewMutationExecutor";
 import { useLetterReviewStatusResets } from "./LetterReview/useLetterReviewStatusResets";
+import { useStructuredNoteActions } from "./LetterReview/useStructuredNoteActions";
 import { usePhotoDescriptionWorkspace } from "./LetterReview/usePhotoDescriptionWorkspace";
 import { loadCurrentLetter } from "./LetterReview/loadCurrentLetter";
 import { usePretextFontSize } from "../../hooks/usePretextFontSize";
@@ -323,6 +323,22 @@ export default function LetterReviewPage() {
     applyLetterMetadata,
     hydratePhotoDescription,
   ]);
+  const executeLetterMutation = useLetterReviewMutationExecutor({
+    visit,
+    beginSaving,
+    flushPendingSaves,
+    tryAdoptLetter,
+    hydrateAdoptedLetter,
+    handleMutationError,
+  });
+  const {
+    handleAddNote,
+    handleNoteStatusChange,
+  } = useStructuredNoteActions({
+    letter,
+    executeLetterMutation,
+    showToast,
+  });
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -547,37 +563,24 @@ export default function LetterReviewPage() {
     if (!letterId || !letter) return;
     if (letter.visibility === newVisibility) return;
 
-    const releaseSaving = beginSaving();
-
-    try {
-      if (!visit.isActive() || !await flushPendingSaves()) return;
-
-      const updated = await updateLetter(letterId, {
+    await executeLetterMutation({
+      request: () => updateLetter(letterId, {
         primarySourceRevision: letter.primarySourceRevision,
         visibility: newVisibility,
-      });
-      if (!tryAdoptLetter(updated)) return;
-      hydrateAdoptedLetter(updated);
-      showToast(
-        newVisibility === "PUBLISHED" ? "Letter published" : "Letter hidden",
-        "success",
-      );
-    } catch (err) {
-      handleMutationError(err, "Failed to update visibility");
-      console.error("Visibility change error:", err);
-    } finally {
-      releaseSaving();
-    }
+      }),
+      failureMessage: "Failed to update visibility",
+      afterAdopt: () => {
+        showToast(
+          newVisibility === "PUBLISHED" ? "Letter published" : "Letter hidden",
+          "success",
+        );
+      },
+    });
   }, [
-    beginSaving,
-    flushPendingSaves,
-    handleMutationError,
-    hydrateAdoptedLetter,
+    executeLetterMutation,
     letter,
     letterId,
     showToast,
-    tryAdoptLetter,
-    visit,
   ]);
 
   const handleContentPublishToggle = useCallback(async (
@@ -585,33 +588,23 @@ export default function LetterReviewPage() {
     value: boolean,
   ) => {
     if (!letterId || !letter) return;
-    const releaseSaving = beginSaving();
-    try {
-      if (!visit.isActive() || !await flushPendingSaves()) return;
-
-      const updated = await updateLetter(letterId, {
+    await executeLetterMutation({
+      request: () => updateLetter(letterId, {
         primarySourceRevision: letter.primarySourceRevision,
         [field]: value,
-      });
-      if (!tryAdoptLetter(updated)) return;
-      hydrateAdoptedLetter(updated);
-      const label = field === 'transcriptPublished' ? 'Transcript' : 'Metadata';
-      showToast(`${label} ${value ? 'published' : 'hidden'}`, 'success');
-    } catch (err) {
-      handleMutationError(err, 'Failed to update content visibility');
-    } finally {
-      releaseSaving();
-    }
+      }),
+      failureMessage: 'Failed to update content visibility',
+      afterAdopt: () => {
+        const label =
+          field === 'transcriptPublished' ? 'Transcript' : 'Metadata';
+        showToast(`${label} ${value ? 'published' : 'hidden'}`, 'success');
+      },
+    });
   }, [
-    beginSaving,
-    flushPendingSaves,
-    handleMutationError,
-    hydrateAdoptedLetter,
+    executeLetterMutation,
     letter,
     letterId,
     showToast,
-    tryAdoptLetter,
-    visit,
   ]);
 
   const handleConfirmTranscript = useCallback(() => {
@@ -899,66 +892,44 @@ export default function LetterReviewPage() {
   // Extra content verification handlers
   const handleVerifyExtraContent = useCallback(async () => {
     if (!letterId || !letter) return;
-    const releaseSaving = beginSaving();
-    try {
-      if (!visit.isActive() || !await flushPendingSaves()) return;
-
-      const updated = await verifyExtraContent(
+    await executeLetterMutation({
+      request: () => verifyExtraContent(
         letterId,
         letter.primarySourceRevision,
-      );
-      if (!tryAdoptLetter(updated)) return;
-      hydrateAdoptedLetter(updated);
-      setIsExtraContentEditing(false);
-      showToast("Extra content verified", "success");
-    } catch (err) {
-      handleMutationError(err, "Failed to verify extra content");
-    } finally {
-      releaseSaving();
-    }
+      ),
+      failureMessage: "Failed to verify extra content",
+      afterAdopt: () => {
+        setIsExtraContentEditing(false);
+        showToast("Extra content verified", "success");
+      },
+    });
   }, [
-    beginSaving,
-    flushPendingSaves,
-    handleMutationError,
-    hydrateAdoptedLetter,
+    executeLetterMutation,
     letter,
     letterId,
     showToast,
-    tryAdoptLetter,
-    visit,
   ]);
 
   const handleUnverifyExtraContent = useCallback(async () => {
     if (!letterId || !letter) return;
     if (letter.extraContentStatus !== "VERIFIED") return;
 
-    const releaseSaving = beginSaving();
-    try {
-      if (!visit.isActive() || !await flushPendingSaves()) return;
-
-      const updated = await unverifyExtraContent(
+    await executeLetterMutation({
+      request: () => unverifyExtraContent(
         letterId,
         letter.primarySourceRevision,
-      );
-      if (!tryAdoptLetter(updated)) return;
-      hydrateAdoptedLetter(updated);
-      setIsExtraContentEditing(true);
-      showToast("Extra content verification removed", "info");
-    } catch (err) {
-      handleMutationError(err, "Failed to unverify extra content");
-    } finally {
-      releaseSaving();
-    }
+      ),
+      failureMessage: "Failed to unverify extra content",
+      afterAdopt: () => {
+        setIsExtraContentEditing(true);
+        showToast("Extra content verification removed", "info");
+      },
+    });
   }, [
-    beginSaving,
-    flushPendingSaves,
-    handleMutationError,
-    hydrateAdoptedLetter,
+    executeLetterMutation,
     letterId,
     letter,
     showToast,
-    tryAdoptLetter,
-    visit,
   ]);
 
   // Extra content auto-save
@@ -990,103 +961,17 @@ export default function LetterReviewPage() {
     [letter, letterId, scheduleDebouncedSave, setLetter],
   );
 
-  // Structured note handlers
-  const handleNoteStatusChange = useCallback(
-    async (noteId: string, status: 'resolved' | 'dismissed') => {
-      if (!letterId || !letter) return;
-      const releaseSaving = beginSaving();
-      try {
-        if (!visit.isActive() || !await flushPendingSaves()) return;
-
-        const updated = await updateNoteStatus(
-          letterId,
-          letter.primarySourceRevision,
-          noteId,
-          status,
-        );
-        if (!tryAdoptLetter(updated)) return;
-        hydrateAdoptedLetter(updated);
-        showToast(`Note ${status}`, 'success');
-      } catch (err) {
-        handleMutationError(err, `Failed to ${status} note`);
-      } finally {
-        releaseSaving();
-      }
-    },
-    [
-      beginSaving,
-      flushPendingSaves,
-      handleMutationError,
-      hydrateAdoptedLetter,
-      letter,
-      letterId,
-      showToast,
-      tryAdoptLetter,
-      visit,
-    ],
-  );
-
-  const handleAddNote = useCallback(
-    async (note: { content: string; category: string; priority: string }) => {
-      if (!letterId || !letter) return;
-      const releaseSaving = beginSaving();
-      try {
-        if (!visit.isActive() || !await flushPendingSaves()) return;
-
-        const updated = await addNote(
-          letterId,
-          letter.primarySourceRevision,
-          note,
-        );
-        if (!tryAdoptLetter(updated)) return;
-        hydrateAdoptedLetter(updated);
-        showToast('Note added', 'success');
-      } catch (err) {
-        handleMutationError(err, 'Failed to add note');
-      } finally {
-        releaseSaving();
-      }
-    },
-    [
-      beginSaving,
-      flushPendingSaves,
-      handleMutationError,
-      hydrateAdoptedLetter,
-      letter,
-      letterId,
-      showToast,
-      tryAdoptLetter,
-      visit,
-    ],
-  );
-
   const handleFlagToggle = useCallback(async () => {
     if (!letter) return;
     const newFlagged = !letter.flagged;
-    const releaseSaving = beginSaving();
-
-    try {
-      if (!visit.isActive() || !await flushPendingSaves()) return;
-
-      const updated = await toggleLetterFlag(letter.id, newFlagged);
-      if (!tryAdoptLetter(updated)) return;
-      hydrateAdoptedLetter(updated);
-    } catch (error) {
-      handleMutationError(
-        error,
+    await executeLetterMutation({
+      request: () => toggleLetterFlag(letter.id, newFlagged),
+      failureMessage:
         `Failed to ${newFlagged ? 'flag' : 'unflag'} letter`,
-      );
-    } finally {
-      releaseSaving();
-    }
+    });
   }, [
-    beginSaving,
-    flushPendingSaves,
-    handleMutationError,
-    hydrateAdoptedLetter,
+    executeLetterMutation,
     letter,
-    tryAdoptLetter,
-    visit,
   ]);
 
   const handleImageClick = useCallback((pageIndex: number) => {
@@ -1618,8 +1503,7 @@ export default function LetterReviewPage() {
             {showMetadataSections && (
               <div id="ai-notes-section">
                 <NotesSection
-                  notes={letter.aiNotes as import("./LetterReview/NotesSection").StructuredNote[] | string | null}
-                  letterId={letterId!}
+                  notes={letter.aiNotes ?? null}
                   disabled={saving}
                   onNoteStatusChange={handleNoteStatusChange}
                   onAddNote={handleAddNote}

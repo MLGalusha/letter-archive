@@ -1,26 +1,17 @@
 import { memo, useState, useMemo } from 'react';
 import Icon from '../../../components/common/Icon';
 import TaggedText from '../../../components/admin/TaggedText';
+import type {
+  StructuredNote,
+  StructuredNoteDraft,
+} from '../../../types/Letter';
 import './NotesSection.css';
-
-export interface StructuredNote {
-  id: string;
-  content: string;
-  category: 'identity' | 'date' | 'transcription' | 'relationship' | 'context' | 'cross-reference' | 'location' | 'condition';
-  priority: 'high' | 'medium' | 'low';
-  status: 'open' | 'resolved' | 'dismissed';
-  resolves_when: string | null;
-  resolved_at: string | null;
-  resolved_by: string | null;
-  source: 'ai' | 'admin';
-}
 
 interface NotesSectionProps {
   notes: StructuredNote[] | string | null;
-  letterId: string;
   disabled?: boolean;
   onNoteStatusChange: (noteId: string, status: 'resolved' | 'dismissed') => void;
-  onAddNote: (note: { content: string; category: string; priority: string }) => void;
+  onAddNote: (note: StructuredNoteDraft) => void;
 }
 
 type FilterMode = 'all' | 'open' | 'resolved' | 'dismissed';
@@ -47,8 +38,10 @@ const NotesSection = memo(function NotesSection({
 }: NotesSectionProps) {
   const [filter, setFilter] = useState<FilterMode>('all');
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newCategory, setNewCategory] = useState<string>('context');
-  const [newPriority, setNewPriority] = useState<string>('medium');
+  const [newCategory, setNewCategory] =
+    useState<StructuredNote['category']>('context');
+  const [newPriority, setNewPriority] =
+    useState<StructuredNote['priority']>('medium');
   const [newContent, setNewContent] = useState('');
 
   // Legacy string handling
@@ -316,12 +309,12 @@ function AddNoteForm({
   onSave,
   onCancel,
 }: {
-  category: string;
-  priority: string;
+  category: StructuredNote['category'];
+  priority: StructuredNote['priority'];
   content: string;
   disabled: boolean;
-  onCategoryChange: (v: string) => void;
-  onPriorityChange: (v: string) => void;
+  onCategoryChange: (v: StructuredNote['category']) => void;
+  onPriorityChange: (v: StructuredNote['priority']) => void;
   onContentChange: (v: string) => void;
   onSave: () => void;
   onCancel: () => void;
@@ -333,7 +326,9 @@ function AddNoteForm({
           className="note-add-select"
           value={category}
           disabled={disabled}
-          onChange={e => onCategoryChange(e.target.value)}
+          onChange={e => onCategoryChange(
+            e.target.value as StructuredNote['category'],
+          )}
         >
           {CATEGORY_OPTIONS.map(c => (
             <option key={c} value={c}>{formatCategory(c)}</option>
@@ -343,7 +338,9 @@ function AddNoteForm({
           className="note-add-select"
           value={priority}
           disabled={disabled}
-          onChange={e => onPriorityChange(e.target.value)}
+          onChange={e => onPriorityChange(
+            e.target.value as StructuredNote['priority'],
+          )}
         >
           {PRIORITY_OPTIONS.map(p => (
             <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>

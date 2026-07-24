@@ -637,4 +637,40 @@ test.describe('@mocked Letter Review', () => {
       },
     ]);
   });
+
+  test('resolves a structured note through the shared mutation boundary', async ({ page }) => {
+    const initialLetter = createMockLetterReviewLetter({
+      aiNotes: [{
+        id: 'note-review-date',
+        content: 'Confirm the handwritten date.',
+        category: 'date',
+        priority: 'high',
+        status: 'open',
+        resolves_when: null,
+        resolved_at: null,
+        resolved_by: null,
+        source: 'ai',
+      }],
+    });
+    const mockedApi = await openMockLetterReview(page, initialLetter);
+    const note = page.locator('.note-card', {
+      hasText: 'Confirm the handwritten date.',
+    });
+
+    await note.getByRole('button', { name: 'Mark as resolved' }).click();
+
+    await expect(note).toHaveClass(/resolved/);
+    await expect(
+      page.locator('.toast:has-text("Note resolved")'),
+    ).toBeVisible();
+    expect(mockedApi.noteStatusRequests).toEqual([{
+      url:
+        `${API_BASE_URL}/admin/letters/letter-review-1/notes/note-review-date`,
+      noteId: 'note-review-date',
+      body: {
+        primarySourceRevision: 4,
+        status: 'resolved',
+      },
+    }]);
+  });
 });

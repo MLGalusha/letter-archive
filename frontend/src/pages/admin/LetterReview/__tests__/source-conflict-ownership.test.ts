@@ -34,6 +34,14 @@ const autoSaveCoordinatorPath = path.resolve(
   process.cwd(),
   'src/pages/admin/LetterReview/letterReviewAutosaveCoordinator.ts',
 );
+const mutationExecutorPath = path.resolve(
+  process.cwd(),
+  'src/pages/admin/LetterReview/useLetterReviewMutationExecutor.ts',
+);
+const structuredNoteActionsPath = path.resolve(
+  process.cwd(),
+  'src/pages/admin/LetterReview/useStructuredNoteActions.ts',
+);
 const photoDescriptionSectionPath = path.resolve(
   process.cwd(),
   'src/pages/admin/LetterReview/PhotoDescriptionSection.tsx',
@@ -72,33 +80,52 @@ describe('Letter Review source-conflict ownership', () => {
       photoDescriptionWorkspace,
       extraContentSection,
       reviewableDynamicEditor,
+      mutationExecutor,
+      structuredNoteActions,
     ] = await Promise.all([
       readFile(pagePath, 'utf8'),
       readFile(photoDescriptionSectionPath, 'utf8'),
       readFile(photoDescriptionWorkspacePath, 'utf8'),
       readFile(extraContentSectionPath, 'utf8'),
       readFile(reviewableDynamicEditorPath, 'utf8'),
+      readFile(mutationExecutorPath, 'utf8'),
+      readFile(structuredNoteActionsPath, 'utf8'),
     ]);
 
     expect(page).toContain('useLetterSourceConflict(showToast, visit)');
     for (const callback of [
       'handleTranscribeLetter',
       'handleTranscribeExtrasWithConfirm',
-      'handleVisibilityChange',
-      'handleContentPublishToggle',
       'executeConfirmTranscript',
       'executeMetadataRegenerate',
       'handleReExtract',
-      'handleVerifyExtraContent',
-      'handleUnverifyExtraContent',
       'handleGenerateReadingView',
       'handleDelete',
-      'handleNoteStatusChange',
-      'handleAddNote',
-      'handleFlagToggle',
     ]) {
       expect(callbackBlock(page, callback)).toContain('handleMutationError(');
     }
+    for (const callback of [
+      'handleVisibilityChange',
+      'handleContentPublishToggle',
+      'handleVerifyExtraContent',
+      'handleUnverifyExtraContent',
+      'handleFlagToggle',
+    ]) {
+      expect(callbackBlock(page, callback)).toContain(
+        'executeLetterMutation({',
+      );
+    }
+    expect(mutationExecutor).toContain(
+      'handleMutationError(error, failureMessage)',
+    );
+    expect(mutationExecutor).toContain('tryAdoptLetter(updatedLetter)');
+    expect(mutationExecutor).toContain(
+      'hydrateAdoptedLetter(updatedLetter)',
+    );
+    expect(page).toContain('useStructuredNoteActions({');
+    expect(structuredNoteActions).toContain(
+      'executeLetterMutation({',
+    );
     for (const callback of ['describe', 'toggleVerification']) {
       expect(callbackBlock(photoDescriptionWorkspace, callback)).toContain(
         'handleMutationError(',
@@ -107,11 +134,9 @@ describe('Letter Review source-conflict ownership', () => {
     expect(callbackBlock(page, 'handleDelete')).toContain(
       'deleteLetter(letterId, primarySourceRevision)',
     );
-    for (const callback of ['handleNoteStatusChange', 'handleAddNote']) {
-      expect(callbackBlock(page, callback)).toContain(
-        'letter.primarySourceRevision',
-      );
-    }
+    expect(structuredNoteActions).toContain(
+      'letter.primarySourceRevision',
+    );
     expect(photoDescriptionSection).toContain(
       'onRequestEdit={onVerifyPhotoDescription}',
     );
@@ -243,6 +268,8 @@ describe('Letter Review source-conflict ownership', () => {
       metadataEditing,
       photoDescriptionWorkspace,
       autoSaveCoordinator,
+      mutationExecutor,
+      structuredNoteActions,
     ] = await Promise.all([
       readFile(pagePath, 'utf8'),
       readFile(autoSavePath, 'utf8'),
@@ -250,6 +277,8 @@ describe('Letter Review source-conflict ownership', () => {
       readFile(metadataEditingPath, 'utf8'),
       readFile(photoDescriptionWorkspacePath, 'utf8'),
       readFile(autoSaveCoordinatorPath, 'utf8'),
+      readFile(mutationExecutorPath, 'utf8'),
+      readFile(structuredNoteActionsPath, 'utf8'),
     ]);
 
     expect(autoSave).toContain(
@@ -262,16 +291,9 @@ describe('Letter Review source-conflict ownership', () => {
     for (const callback of [
       'handleTranscribeLetter',
       'handleTranscribeExtrasWithConfirm',
-      'handleVisibilityChange',
-      'handleContentPublishToggle',
       'executeConfirmTranscript',
       'executeMetadataRegenerate',
       'handleReExtract',
-      'handleVerifyExtraContent',
-      'handleUnverifyExtraContent',
-      'handleNoteStatusChange',
-      'handleAddNote',
-      'handleFlagToggle',
       'handleGenerateReadingView',
     ]) {
       const block = callbackBlock(page, callback);
@@ -281,6 +303,25 @@ describe('Letter Review source-conflict ownership', () => {
       );
       expect(block).toContain('hydrateAdoptedLetter(');
     }
+    for (const callback of [
+      'handleVisibilityChange',
+      'handleContentPublishToggle',
+      'handleVerifyExtraContent',
+      'handleUnverifyExtraContent',
+      'handleFlagToggle',
+    ]) {
+      const block = callbackBlock(page, callback);
+      expect(block).toContain('executeLetterMutation({');
+      expect(block).not.toContain('await flushPendingSaves()');
+    }
+    expect(mutationExecutor).toContain('if (!visit.isActive())');
+    expect(mutationExecutor).toContain('await flushPendingSaves()');
+    expect(mutationExecutor).toContain(
+      'hydrateAdoptedLetter(updatedLetter)',
+    );
+    expect(structuredNoteActions).toContain(
+      'executeLetterMutation({',
+    );
     const deleteBlock = callbackBlock(page, 'handleDelete');
     expect(deleteBlock).toContain(
       'if (!visit.isActive() || !await flushPendingSaves())',

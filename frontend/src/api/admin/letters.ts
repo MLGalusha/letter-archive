@@ -5,6 +5,7 @@ import type {
   LineSegment,
   RelationshipType,
   SegmentTrustState,
+  StructuredNoteDraft,
 } from "../../types/Letter";
 
 export interface UpdateLetterData {
@@ -220,7 +221,7 @@ export async function updateNoteStatus(
 export async function addNote(
   letterId: string,
   primarySourceRevision: number,
-  note: { content: string; category: string; priority: string },
+  note: StructuredNoteDraft,
 ): Promise<Letter> {
   return apiPost<Letter>(`/admin/letters/${letterId}/notes`, {
     ...note,

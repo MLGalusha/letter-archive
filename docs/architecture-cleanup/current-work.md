@@ -7,10 +7,10 @@ Last updated: July 24, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 017 — Letter Review mutation workflow ownership
-- Last sealed cleanup implementation: mutation workflows at `9775a30a`
+- Current checkpoint: 018 — Letter Review direct-mutation execution ownership
+- Last sealed cleanup implementation: direct-mutation executor at `dc946648`
 - Feedback reliability prerequisite: Express request deadlines at `c8ac080b`
-- Current slice: 018 — extract the repeated visit-bound direct-mutation protocol
+- Current slice: 019 — extract the Extra Content vertical workspace
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -2012,14 +2012,106 @@ changed in this slice.
 
 ## Slice 018 — Letter Review Direct-Mutation Execution Boundary
 
+Status: complete at `dc946648`
+
+Problem:
+
+Fourteen `LetterReviewPage` handlers independently reproduced some version of acquire
+a saving lease, flush every autosave lane, call an API, reject a stale route response,
+adopt and hydrate a returned Letter DTO, report a result, handle failure, and release.
+The repetition made later workspace extraction risky. Counted saving leases prevented
+an early visual unlock, but did not order overlapping full-Letter responses; a slower
+older response could still overwrite a newer adopted DTO within the same route visit.
+
+Delivered invariant:
+
+Letter-returning direct mutations execute in call order within one opaque route visit.
+Each call acquires its own saving lease at enqueue time, waits for the previous direct
+mutation, verifies that its visit is still active, flushes all autosave lanes, performs
+the request, adopts and fully hydrates only an accepted DTO, runs at most one
+synchronous domain completion, and releases exactly once. Flush and request failures
+use the established mutation-error owner. Post-adoption programming errors reject and
+release, but are never misreported as a failed server mutation that is safe to retry.
+A fresh A visit has a fresh queue, so queued or in-flight work from an earlier
+A → B → A sequence fails closed.
+
+What changed:
+
+- `useLetterReviewMutationExecutor` is a 101-line visit-bound owner with one request,
+  one failure message, and one optional synchronous `afterAdopt`. It has no action
+  registry, selectors, lifecycle callback bag, command names, or generic result
+  protocol.
+- Visibility, content publication, Extra Content verify/unverify, flagging, and both
+  structured-note mutations now use the same ordered boundary. Stateful AI,
+  confirmation, deletion, and navigation workflows remain explicit.
+- `useStructuredNoteActions` owns the add and resolve/dismiss requests, their
+  source-revision payloads, and success copy. The route no longer imports or defines
+  those mutations.
+- Structured-note categories, priorities, resolution triggers, persisted notes, and
+  drafts now have one frontend contract in `types/Letter.ts`. The previous component
+  export, dynamic import cast, unused `letterId` prop, and stringly typed note draft
+  contract were removed.
+- `LetterReviewPage.tsx` fell from 1,861 to 1,745 lines and from 30 to 28 direct
+  `useCallback` owners. The change removed 116 lines from the route while adding the
+  executable ownership boundary and domain tests.
+- The deterministic browser API now models note-status requests, revision conflicts,
+  DTO hydration, and request capture. Browser coverage resolves a real structured note
+  through the rendered Letter Review UI and verifies the exact revision-bound request.
+
+Evidence:
+
+- Focused executor, structured-note action, and architecture coverage passed 3 files /
+  19 tests. It proves exact successful ordering, flush and inactive exits, one request
+  failure report, stale-adoption rejection, per-visit serialization, counted overlap,
+  A → B → A isolation, and truthful post-adoption failure semantics.
+- Complete backend suite passed 104 files / 1,016 tests; backend typecheck passed.
+- Complete frontend suite passed 120 files / 814 tests; frontend TypeScript and the
+  production build passed. One first full-suite run hit an unrelated five-second
+  Admin Dashboard test timeout under load; that test passed in isolation and the
+  complete suite then passed without changing it.
+- Changed/new frontend ESLint passed without warnings, and `git diff --check` passed.
+- The complete mocked browser suite passed 48/48 after the final concurrency repair.
+- The production build retains its existing large-chunk warning:
+  `LetterReviewPage` is 521.70 kB and `UpdateEditorPage` is 1,182.96 kB after
+  minification.
+- The first independent adversarial review stopped the checkpoint over false
+  post-commit failure reporting and unordered full-DTO adoption. Both were repaired;
+  the second pass found no remaining P0/P1 or checkpoint-blocking P2 issue.
+
+Residuals:
+
+- Seven stateful or non-Letter direct workflows remain explicit in the route:
+  letter transcription, Extra Content transcription, transcript confirmation,
+  metadata regeneration, metadata re-extraction, deletion, and reading-view
+  generation. They should move with their actual domain state rather than widening the
+  executor.
+- `afterAdopt` is documented and currently used only synchronously, but TypeScript's
+  `void` callback assignability cannot mechanically reject an accidentally async
+  callback.
+- The source-level architecture tripwire still enumerates several route callback
+  names. The behavior tests are authoritative; move or reduce those source assertions
+  as the named handlers enter vertical workspaces.
+- Flagging still uses a backend endpoint without a source-revision precondition. It is
+  visit-ordered and guarded on DTO adoption here, but is not claimed to be a
+  source-fenced server mutation.
+- The route remains 1,745 lines with 28 callback owners. The executor removes
+  duplicated safety machinery; it is a seam for the next vertical extraction, not the
+  end of Letter Review simplification.
+
+No product feature, visual layout, backend production behavior, database schema,
+deployment, or external state changed in this slice.
+
+## Slice 019 — Extra Content Vertical Workspace
+
 Status: next
 
 Intent:
 
-Characterize the repeated direct-mutation timeline in `LetterReviewPage`: acquire a
-counted lease, flush autosaves, call one source-fenced API operation, reject stale
-completion, adopt and hydrate the returned DTO, report the domain outcome, and release
-exactly once. Extract the smallest visit-bound executor and migrate a coherent family
-of simple direct mutations first. Keep domain-specific payloads, confirmation flows,
-navigation, and success copy outside that executor; do not introduce a command bus,
-generic action framework, or visible behavior change.
+Give one per-route-visit workspace ownership of the Extra Content draft, transcription
+progress, verified-editing state, autosave producer, transcription request, and
+verify/unverify mutations. Reuse the autosave coordinator and direct-mutation executor
+without moving their invariants or creating another scheduler. Preserve the existing
+section placement, regeneration-popup entrypoints, confirmation copy, line-review
+gate, and rendered behavior. Characterize the combined “letter then extras” action
+before moving it so one workflow cannot report success or begin the second request
+after the route visit becomes stale.

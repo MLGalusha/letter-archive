@@ -1,5 +1,5 @@
-import { eq, sql, type SQL } from 'drizzle-orm';
-import { letters } from '../../db/index.js';
+import { type SQL } from 'drizzle-orm';
+import { queuedExtraContentConditions } from '../processing-eligibility.js';
 import {
   processingFilterSchema,
   buildProcessingConditions,
@@ -23,24 +23,7 @@ import type { ProcessConfig } from './types.js';
 
 const spec = letterProcessSpecs.extra_content;
 
-/**
- * Only letters (type='L') that are PENDING and have related supplementary
- * items (telegrams T, covers C, ephemera E) with the same date/sequence.
- */
-const hasRelatedItems: SQL = sql`EXISTS (
-  SELECT 1 FROM letters AS rel
-  WHERE rel.collection_id = ${letters.collectionId}
-    AND rel.date_raw = ${letters.dateRaw}
-    AND rel.type_sequence = ${letters.typeSequence}
-    AND rel.type IN ('T', 'C', 'E')
-    AND rel.id != ${letters.id}
-)`;
-
-const baseQueueConditions: SQL[] = [
-  eq(letters.type, 'L'),
-  eq(letters.extraContentJobStatus, 'PENDING'),
-  hasRelatedItems,
-];
+const baseQueueConditions: SQL[] = queuedExtraContentConditions();
 
 export const extraContentProcess: ProcessConfig<ProcessingFilterOptions> = {
   key: 'extra_content',

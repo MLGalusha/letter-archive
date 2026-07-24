@@ -105,6 +105,24 @@ export function entityExtractionPrerequisiteConditions(): SQL[] {
 }
 
 /**
+ * Extra-content work belongs to a primary letter that has at least one related
+ * telegram, cover, or ephemera record with the same archive identity.
+ */
+export function extraContentPrerequisiteConditions(): SQL[] {
+  return [
+    eq(letters.type, 'L'),
+    sql`EXISTS (
+      SELECT 1 FROM letters AS rel
+      WHERE rel.collection_id = ${letters.collectionId}
+        AND rel.date_raw = ${letters.dateRaw}
+        AND rel.type_sequence = ${letters.typeSequence}
+        AND rel.type IN ('T', 'C', 'E')
+        AND rel.id != ${letters.id}
+    )`,
+  ];
+}
+
+/**
  * Durable queue predicates shared by API enqueueing, process snapshots, worker
  * polling, and worker wake/exit decisions. Keeping these predicates together
  * prevents one runtime from seeing work that another runtime considers absent.
@@ -148,5 +166,12 @@ export function queuedEntityExtractionConditions(): SQL[] {
     ...entityExtractionPrerequisiteConditions(),
     eq(letters.entityExtractionStatus, 'PENDING'),
     eq(letters.deadLetter, false),
+  ];
+}
+
+export function queuedExtraContentConditions(): SQL[] {
+  return [
+    ...extraContentPrerequisiteConditions(),
+    eq(letters.extraContentJobStatus, 'PENDING'),
   ];
 }

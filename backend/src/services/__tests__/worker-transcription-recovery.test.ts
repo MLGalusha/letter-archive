@@ -7,12 +7,15 @@ import {
 } from '../lease-recovery-coordinator.js';
 
 describe('worker queue recovery coordination', () => {
-  it('drains recovered metadata but not recovered extra-content work', () => {
+  it('drains recovered metadata and queued extra-content work', () => {
     expect(projectQueuedRecoveryForWorker({
       transcription: { requeued: [], failed: [] },
       metadata: { requeued: [{ id: 'metadata-1' }], failed: [] },
       extraContent: { requeued: [{ id: 'extra-1' }], failed: [] },
-    })).toEqual({ requeued: [{ id: 'metadata-1' }], failed: [] });
+    })).toEqual({
+      requeued: [{ id: 'metadata-1' }, { id: 'extra-1' }],
+      failed: [],
+    });
   });
 
   it('waits for a queued lease, drains it after recovery, then exits', async () => {

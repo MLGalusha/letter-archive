@@ -134,8 +134,10 @@ Each card is a pipeline stage:
 
 Each stage shows an API-computed snapshot of **eligible / queued / active** work and a
 `Start batch` button. That button currently starts the temporary registry runner inside
-the API process. The durable worker-owned queue is also used by uploads, bulk actions,
-and retries; local development must run `npm run worker` separately.
+the API process. The durable worker-owned queue covers transcription, supplementary
+extra-content transcription, metadata, and entity extraction. It is also used by
+uploads, bulk actions, and retries; local development must run `npm run worker`
+separately.
 
 The collapsing queues underneath each card list every job individually with the letter ID, attempt count, and last error — useful when one of the 29 starts failing.
 
@@ -275,7 +277,7 @@ A few things worth knowing that the diagram glosses:
 
 - **Storage is filesystem, not the GCS API.** In production the scan bucket is mounted into both the backend and worker containers via `gcsfuse` — see the volume mount in [`deploy/cloudrun/backend-worker-job.yaml`](deploy/cloudrun/backend-worker-job.yaml). In dev it's a local directory. Both processes call `getAbsoluteStoragePath()` and read files; nobody calls the GCS REST API directly.
 - **Image serving goes through the backend, not direct GCS URLs.** `GET /images/:pageId` ([`routes/images.ts`](backend/src/routes/images.ts)) streams the file with on-the-fly Sharp resize keyed by a `?w=` query param, cached in an in-process LRU (max 1000 variants). No signed URLs.
-- **The worker has two modes.** Locally it is normally a long-running polling process. With `EXIT_WHEN_EMPTY=true` it drains the queue and exits, which is the Cloud Run Job shape. Upload, bulk, and filtered-start API paths leave durable work for this worker and optionally wake the configured Cloud Run Job; local development therefore needs `npm run worker` in a separate terminal. The newer processing-dashboard batch runner still executes inside the API process today.
+- **The worker has two modes.** Locally it is normally a long-running polling process. With `EXIT_WHEN_EMPTY=true` it drains transcription, extra-content, metadata, and entity queues and exits, which is the Cloud Run Job shape. Upload, bulk, and filtered-start API paths leave durable work for this worker and optionally wake the configured Cloud Run Job; local development therefore needs `npm run worker` in a separate terminal. The newer processing-dashboard batch runner still executes inside the API process today.
 - **Processing-dashboard pause and abort are API-memory controls, not durable worker controls.** They belong only to the remaining registry runner. The `worker_state` row contains heartbeat/observation fields, and the separate worker does not read the registry runner's control flags.
 - **Frontend ↔ Backend uses both REST and SSE.** REST handles CRUD. Admin notifications
   use `/admin/notifications/stream` through

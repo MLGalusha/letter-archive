@@ -17,6 +17,7 @@ import {
   type MetadataRecoveryResult,
 } from './letter/metadata-job.js';
 import {
+  cancelExtraContentAttempt,
   recoverExpiredExtraContentJobs,
   type ExtraContentRecoveryResult,
 } from './letter/extra-content-job.js';
@@ -36,14 +37,17 @@ import {
 } from './processes/filter-helpers.js';
 import {
   entityExtractionPrerequisiteConditions,
+  extraContentPrerequisiteConditions,
   isMetadataStateEligible,
   isTranscriptionStateEligible,
   metadataPrerequisiteConditions,
   queuedEntityExtractionConditions,
+  queuedExtraContentConditions,
   queuedMetadataConditions,
   queuedTranscriptionConditions,
   transcriptionPrerequisiteConditions,
 } from './processing-eligibility.js';
+import { getWorkerState } from './worker-state.js';
 
 export {
   buildProcessingConditions,
@@ -88,13 +92,37 @@ async function hasQueuedEntityExtractionWork(): Promise<boolean> {
   return hasQueuedWork(queuedEntityExtractionConditions());
 }
 
+/** Reports durable queued extra-content work using the worker's exact predicate. */
+async function hasQueuedExtraContentWork(): Promise<boolean> {
+  return hasQueuedWork(queuedExtraContentConditions());
+}
+
+/**
+ * A dirty extra-content cancellation commits as PENDING rather than FAILED.
+ * Re-derive that durable outcome after cancellation and contain both the
+ * observation and worker request so a committed cancellation stays successful.
+ */
+async function requestWorkerAfterExtraContentCancellation(): Promise<void> {
+  try {
+    if (await hasQueuedExtraContentWork()) {
+      await requestBackgroundWorkerRun('cancel:extra_content');
+    }
+  } catch (error) {
+    log.warn(
+      { err: error },
+      'Could not request a worker after extra-content cancellation',
+    );
+  }
+}
+
 export async function hasQueuedProcessingWork(): Promise<boolean> {
-  const [transcription, metadata, entityExtraction] = await Promise.all([
+  const [transcription, metadata, entityExtraction, extraContent] = await Promise.all([
     hasQueuedTranscriptionWork(),
     hasQueuedMetadataWork(),
     hasQueuedEntityExtractionWork(),
+    hasQueuedExtraContentWork(),
   ]);
-  return transcription || metadata || entityExtraction;
+  return transcription || metadata || entityExtraction || extraContent;
 }
 
 /** Ensures any durable queued worker stage has a Cloud Run worker wake. */
@@ -208,7 +236,8 @@ export async function getQueueStatus() {
       or(
         eq(letters.transcriptionStatus, 'RUNNING'),
         eq(letters.metadataStatus, 'RUNNING'),
-        eq(letters.entityExtractionStatus, 'RUNNING')
+        eq(letters.entityExtractionStatus, 'RUNNING'),
+        eq(letters.extraContentJobStatus, 'RUNNING')
       )
     ),
     with: { collection: true },
@@ -264,6 +293,19 @@ export async function getQueueStatus() {
         progress: prog ? { step: prog.step, totalSteps: prog.totalSteps, stepLabel: prog.stepLabel } : null,
       });
     }
+    if (l.extraContentJobStatus === 'RUNNING') {
+      const prog = getJobProgress(l.id, 'extra_content');
+      jobs.push({
+        letterId: l.id,
+        letterTitle: l.dateRaw,
+        collectionCode: l.collection.collectionCode,
+        sender: l.sender,
+        recipient: l.recipient,
+        type: 'extra_content',
+        startedAt: l.updatedAt?.toISOString() ?? now.toISOString(),
+        progress: prog ? { step: prog.step, totalSteps: prog.totalSteps, stepLabel: prog.stepLabel } : null,
+      });
+    }
     return jobs;
   });
 
@@ -286,6 +328,14 @@ export async function getQueueStatus() {
   // Queued entity extraction jobs (only after metadata has succeeded)
   const queuedEntityExtraction = await db.query.letters.findMany({
     where: and(...queuedEntityExtractionConditions()),
+    with: { collection: true },
+    orderBy: (l, { asc }) => [asc(l.createdAt)],
+    limit: PAGINATION.QUEUE_BATCH_SIZE,
+  });
+
+  // Queued supplementary-content transcription jobs
+  const queuedExtraContent = await db.query.letters.findMany({
+    where: and(...queuedExtraContentConditions()),
     with: { collection: true },
     orderBy: (l, { asc }) => [asc(l.createdAt)],
     limit: PAGINATION.QUEUE_BATCH_SIZE,
@@ -396,19 +446,37 @@ export async function getQueueStatus() {
       };
     });
 
+  // Extra-content has no stage-specific queued timestamp yet. Returning null is
+  // more truthful than presenting the letter creation or an unrelated update
+  // as the enqueue time.
+  const mapQueuedExtraContent = () =>
+    queuedExtraContent.map(l => ({
+      letterId: l.id,
+      letterTitle: l.dateRaw,
+      collectionCode: l.collection.collectionCode,
+      sender: l.sender,
+      recipient: l.recipient,
+      queuedAt: null,
+    }));
+
+  const worker = await getWorkerState();
+
   return {
     active,
     queued: {
       transcription: mapQueued(queuedTranscription, 'createdAt'),
       metadata: mapQueued(queuedMetadata, 'transcriptConfirmedAt'),
       entityExtraction: mapQueued(queuedEntityExtraction, 'createdAt'),
+      extraContent: mapQueuedExtraContent(),
     },
     recent,
+    worker,
     counts: {
       activeCount: active.length,
       queuedTranscription: queuedTranscription.length,
       queuedMetadata: queuedMetadata.length,
       queuedEntityExtraction: queuedEntityExtraction.length,
+      queuedExtraContent: queuedExtraContent.length,
       recentSuccessCount: recent.filter(r => r.status === 'SUCCESS').length,
       recentFailedCount: recent.filter(r => r.status === 'FAILED').length,
       recentClearedCount: recent.filter(r => r.status === 'CLEARED').length,
@@ -498,7 +566,12 @@ export async function startEntityExtractionProcessing(options: ProcessingFilterO
 // QUEUE MANAGEMENT
 // ============================================================================
 
-export const queueJobTypeSchema = z.enum(['transcription', 'metadata', 'entity_extraction']);
+export const queueJobTypeSchema = z.enum([
+  'transcription',
+  'metadata',
+  'entity_extraction',
+  'extra_content',
+]);
 export type QueueJobType = z.infer<typeof queueJobTypeSchema>;
 
 /**
@@ -580,6 +653,34 @@ export async function removeFromQueue(letterId: string, type: QueueJobType): Pro
     if (removed.length === 0) {
       throw new ProcessingError('Cannot remove: entity extraction is no longer pending', 409);
     }
+  } else if (type === 'extra_content') {
+    if (letter.extraContentJobStatus !== 'PENDING') {
+      throw new ProcessingError(
+        `Cannot remove: extra content status is ${letter.extraContentJobStatus}`,
+        400,
+      );
+    }
+    const removed = await db
+      .update(letters)
+      .set({
+        extraContentJobStatus: 'FAILED',
+        extraContentJobRunId: null,
+        extraContentJobLeaseExpiresAt: null,
+        extraContentJobLeaseRunId: null,
+        extraContentJobClaimKind: null,
+        extraContentJobDirty: false,
+        extraContentJobError: 'Removed from queue by admin',
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(letters.id, letterId),
+        ...queuedExtraContentConditions(),
+        observedTimestampMatches(letters.updatedAt, letter.updatedAt),
+      ))
+      .returning({ id: letters.id });
+    if (removed.length === 0) {
+      throw new ProcessingError('Cannot remove: extra content changed since it was loaded', 409);
+    }
   }
 
   return { message: 'Removed from queue' };
@@ -659,6 +760,31 @@ export async function clearQueue(type: QueueJobType): Promise<{ message: string;
         .where(and(
           inArray(letters.id, queued.map(l => l.id)),
           ...queuedEntityExtractionConditions(),
+        ))
+        .returning({ id: letters.id });
+      cleared = clearedRows.length;
+    }
+  } else if (type === 'extra_content') {
+    const queued = await db.query.letters.findMany({
+      where: and(...queuedExtraContentConditions()),
+      columns: { id: true },
+    });
+    if (queued.length > 0) {
+      const clearedRows = await db
+        .update(letters)
+        .set({
+          extraContentJobStatus: 'FAILED',
+          extraContentJobRunId: null,
+          extraContentJobLeaseExpiresAt: null,
+          extraContentJobLeaseRunId: null,
+          extraContentJobClaimKind: null,
+          extraContentJobDirty: false,
+          extraContentJobError: 'Cleared from queue by admin',
+          updatedAt: new Date(),
+        })
+        .where(and(
+          inArray(letters.id, queued.map(l => l.id)),
+          ...queuedExtraContentConditions(),
         ))
         .returning({ id: letters.id });
       cleared = clearedRows.length;
@@ -772,6 +898,38 @@ export async function retryJob(letterId: string, type: QueueJobType): Promise<{ 
     if (retried.length === 0) {
       throw new ProcessingError('Cannot retry: entity extraction changed since it was loaded', 409);
     }
+  } else if (type === 'extra_content') {
+    if (letter.extraContentJobStatus !== 'FAILED') {
+      throw new ProcessingError(
+        `Cannot retry: extra content status is ${letter.extraContentJobStatus}`,
+        400,
+      );
+    }
+    if (letter.type !== 'L') {
+      throw new ProcessingError('Cannot retry: extra content prerequisites are not satisfied', 400);
+    }
+    const retried = await db
+      .update(letters)
+      .set({
+        extraContentJobStatus: 'PENDING',
+        extraContentJobRunId: null,
+        extraContentJobLeaseExpiresAt: null,
+        extraContentJobLeaseRunId: null,
+        extraContentJobClaimKind: null,
+        extraContentJobDirty: false,
+        extraContentJobError: null,
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(letters.id, letterId),
+        eq(letters.extraContentJobStatus, 'FAILED'),
+        ...extraContentPrerequisiteConditions(),
+        observedTimestampMatches(letters.updatedAt, letter.updatedAt),
+      ))
+      .returning({ id: letters.id });
+    if (retried.length === 0) {
+      throw new ProcessingError('Cannot retry: extra content changed since it was loaded', 409);
+    }
   }
 
   await requestBackgroundWorkerRun(`retry:${type}`);
@@ -836,6 +994,20 @@ export async function cancelActiveJob(letterId: string, type: QueueJobType): Pro
       // token and the stale cancellation cannot overwrite the new projection.
       throw new ProcessingError('Cannot cancel: entity extraction attempt changed since it was loaded', 409);
     }
+  } else if (type === 'extra_content') {
+    if (letter.extraContentJobStatus !== 'RUNNING') {
+      throw new ProcessingError(
+        `Cannot cancel: extra content status is ${letter.extraContentJobStatus}`,
+        400,
+      );
+    }
+    if (!letter.extraContentJobRunId) {
+      throw new ProcessingError('Cannot cancel: extra content job has no active run ID', 409);
+    }
+    if (!await cancelExtraContentAttempt(letterId, letter.extraContentJobRunId)) {
+      throw new ProcessingError('Cannot cancel: extra content attempt changed since it was loaded', 409);
+    }
+    await requestWorkerAfterExtraContentCancellation();
   }
 
   clearJobProgress(letterId, type);

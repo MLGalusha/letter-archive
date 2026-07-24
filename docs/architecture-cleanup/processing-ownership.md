@@ -13,9 +13,9 @@ existing owner remains frictionless, while behavior tests remain the authority.
 
 | Entry point | Runtime owner | Stages | Execution model | Control and recovery |
 | --- | --- | --- | --- | --- |
-| `worker.ts` polling loop | Worker process | Transcription, metadata, entity extraction | Queries durable eligible `PENDING` rows and invokes the pipeline directly | Worker availability is persisted but does not yet carry an execution owner token. Transcription and metadata have run-bound database-clock leases and heartbeats; entity extraction has a run/revision commit fence but no lease. Polling, wake checks, queue snapshots, and both exit checks share stage-specific eligibility. The worker publishes idle before its final recheck so entity-only work cannot disappear in the handoff. |
+| `worker.ts` polling loop | Worker process | Transcription, extra content, metadata, entity extraction | Queries durable eligible `PENDING` rows and invokes the pipeline directly | Worker availability is persisted but does not yet carry an execution owner token. Transcription, extra content, and metadata have run-bound database-clock leases and heartbeats; entity extraction has a run/revision commit fence but no lease. Polling, wake checks, queue snapshots, and both exit checks share stage-specific eligibility. The worker publishes idle before its final recheck so stage-only work cannot disappear in the handoff. |
 | `POST /admin/processing/processes/:key/start` | API process | Transcription, metadata, entity extraction, extra content | `processes/runner.ts` starts a fire-and-forget in-memory batch through `letter-process-helpers.ts` | Pause, abort, progress, and the batch mutex live only in API memory. Transcription, metadata, and extra-content attempts have persisted, run-ID-bound database-clock leases and explicit queued/requested intent. |
-| Filtered starts and post-upload auto-start | Worker process | Transcription, metadata, entity extraction | The API counts durable eligible rows and optionally wakes the configured Cloud Run Job; local development relies on the separately running worker | No process-local execution or controls remain. Filters scope the reported count and wake decision, not the worker's global drain. Entity-only rows participate in level-triggered wake and exit checks. |
+| Filtered starts and post-upload auto-start | Worker process | Transcription, extra content, metadata, entity extraction | The API counts or observes durable eligible rows and optionally wakes the configured Cloud Run Job; local development relies on the separately running worker | No legacy process-local execution or controls remain. Filters scope the reported count and wake decision, not the worker's global drain. Upload auto-processing and recovery use the complete four-stage durable predicate. |
 | Bulk transcription and metadata operations | Worker process | Transcription, metadata | Guarded updates reset only exact observed eligible rows to durable `PENDING`, then optionally wake the configured worker | Full source/job compare-and-set prevents a stale selection from reporting stranded work. Metadata never bypasses transcript confirmation. |
 | Letter content actions | API request process | Letter-only transcription, metadata, entity extraction, extra content | The route awaits pipeline or regeneration functions directly | Transcription, metadata, and extra content share their respective canonical persisted ownership/lease boundaries with batch and automatic work. |
 
@@ -49,11 +49,12 @@ does not create avoidable lock ordering. Conditional `UPDATE ... RETURNING` oper
 make overlapping API/worker reconcilers report and transition each expiry once.
 
 After API reconciliation, configured-worker wakeup is level-triggered: the API asks the
-database whether eligible transcription, metadata, or entity work remains `PENDING`,
+database whether eligible transcription, extra-content, metadata, or entity work remains `PENDING`,
 awaits the Cloud Run trigger, and retries on a later tick if the trigger fails. A Cloud
-Run exit-when-empty worker projects queued transcription and metadata recovery/leases
-plus all three stages' current pending state into its exit decision; extra recovery
-alone cannot keep it alive. It waits for a queued lease it can observe, publishes idle,
+Run exit-when-empty worker projects queued transcription, metadata, and extra-content
+recovery/leases plus all four stages' current pending state into its exit decision.
+It also waits for a dirty requested extra-content lease because expiry converts that
+attempt into queued worker work. It publishes idle,
 then repeats reconciliation and the durable queue check. A failed required idle write
 propagates so the job exits nonzero, while successful/rejected duplicate cleanup is
 memoized inside one execution. The deployment supplies the worker job identity so a
@@ -80,7 +81,7 @@ metadata attempts are likewise kept manual until old executables have drained.
 | API restarts while a worker transcribes | Only an expired, run-bound authoritative attempt is reconciled; an active heartbeat remains authoritative |
 | API crashes during queued transcription | Expiry returns the attempt to durable `PENDING`; periodic API reconciliation re-derives and retries configured-worker wakeup |
 | API crashes during requested transcription | Expiry makes the attempt visibly `FAILED` in place rather than silently converting it to queued work |
-| API crashes during extra-content work | Dirty or queued expiry requeues; clean requested expiry fails in place. Legacy or lease-mismatched attempts remain manual |
+| API crashes during extra-content work | Dirty or queued expiry requeues and keeps/drives the worker drain; clean requested expiry fails in place. Legacy or lease-mismatched attempts remain manual |
 | API or worker crashes during metadata work | Queued expiry requeues; requested expiry fails without replacing committed metadata. Legacy tokenless attempts remain manual |
 | API or worker crashes during current entity work | The exact run remains `RUNNING` and visible; its incomplete materialization rolls back, and automatic recovery remains deferred until the stage has a lease |
 | Old entity executor is still running during migration 0051 | It may drain its already-claimed tokenless attempt; new tokenless claims are rejected and its output is database-stamped as one candidate revision |
@@ -122,8 +123,8 @@ first remove the duplicate API batch executors so one runtime owns automatic wor
 
 ## Extra-Content Ownership Repair
 
-Extra content now has one lifecycle boundary shared by automatic transcription,
-regeneration, the direct route, and dashboard batches:
+Extra content now has one lifecycle boundary shared by worker queues, automatic
+transcription, regeneration, the direct route, and the temporary dashboard batches:
 
 - related T/C/E eligibility is established before a claim;
 - automatic work claims only `PENDING`; explicit regeneration may replace a completed
@@ -151,6 +152,12 @@ requires the persisted lease-run binding to equal the current run ID, so an olde
 binary cannot make its inherited lease fields authoritative for a replacement run.
 Forced file replacement still precedes the database transaction and cannot be rolled
 back with it; that broader filesystem/database compensation gap remains ingestion debt.
+
+Migration 0044 initialized historical rows as `PENDING`. Now that the worker treats an
+L record with related T/C/E sources as ordinary durable queued work, deployment must
+first inspect that historical eligible count and deliberately accept or reconcile the
+resulting AI backlog. This checkpoint changes repository code only; it does not deploy
+or launch external worker executions.
 
 ## Main-Transcription Ownership Repair
 

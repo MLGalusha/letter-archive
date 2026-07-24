@@ -62,7 +62,7 @@ const canonicalTranscriptionClaimOwner = 'services/letter/transcription-job.ts';
 const canonicalExtraContentClaimOwner = 'services/letter/extra-content-job.ts';
 const canonicalMetadataClaimOwner = 'services/letter/metadata-job.ts';
 
-const executionCall = /\b(?:processLetter|processMetadata|runTranscription|runRequestedTranscription|runMetadataExtractionV2|runEntityExtractionOnly|regenerateTranscription|transcribeLetterOnly|transcribeExtras|processLettersAsync|startBatch)\s*\(|\.runBatch\s*\(/;
+const executionCall = /\b(?:processLetter|processMetadata|runTranscription|runRequestedTranscription|runMetadataExtractionV2|runEntityExtractionOnly|tryTranscribeExtras|regenerateTranscription|transcribeLetterOnly|transcribeExtras|processLettersAsync|startBatch)\s*\(|\.runBatch\s*\(/;
 
 async function productionTypeScriptFiles(directory: string): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -113,6 +113,18 @@ describe('processing execution ownership', () => {
 
     expect(workerJob).toMatch(/name:\s*CLOUD_RUN_REGION/);
     expect(workerJob).toMatch(/name:\s*CLOUD_RUN_WORKER_JOB_NAME/);
+  });
+
+  it('keeps queued extra-content execution worker-owned and explicitly queued', async () => {
+    const worker = await readFile(path.join(sourceRoot, 'worker.ts'), 'utf8');
+
+    expect(worker).toContain('queuedExtraContentConditions');
+    expect(worker).toMatch(
+      /tryTranscribeExtras\(letter\.id,\s*\{\s*expectedStatus:\s*'PENDING',\s*claimKind:\s*'QUEUED',\s*\}\)/,
+    );
+    expect(worker).toMatch(
+      /extraContentJobStatus,\s*'RUNNING'[\s\S]*?isNotNull\(letters\.extraContentJobClaimKind\)[\s\S]*?extraContentJobClaimKind,\s*'QUEUED'[\s\S]*?extraContentJobDirty,\s*true/,
+    );
   });
 
   it('allows existing execution owners to be deleted but not silently multiplied', async () => {

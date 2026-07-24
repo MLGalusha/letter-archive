@@ -14,12 +14,14 @@ const {
   recoverExpiredTranscriptionsMock,
   recoverExpiredMetadataJobsMock,
   recoverExpiredExtraContentJobsMock,
+  cancelExtraContentAttemptMock,
   cancelTranscriptionAttemptMock,
   cancelMetadataAttemptMock,
   cancelLegacyEntityExtractionMock,
   failEntityExtractionMock,
   shouldUseCloudRunWorkerJobMock,
   triggerWorkerJobMock,
+  getWorkerStateMock,
 } = vi.hoisted(() => ({
   findFirstMock: vi.fn(),
   findManyLettersMock: vi.fn(),
@@ -34,12 +36,14 @@ const {
   recoverExpiredTranscriptionsMock: vi.fn(),
   recoverExpiredMetadataJobsMock: vi.fn(),
   recoverExpiredExtraContentJobsMock: vi.fn(),
+  cancelExtraContentAttemptMock: vi.fn(),
   cancelTranscriptionAttemptMock: vi.fn(),
   cancelMetadataAttemptMock: vi.fn(),
   cancelLegacyEntityExtractionMock: vi.fn(),
   failEntityExtractionMock: vi.fn(),
   shouldUseCloudRunWorkerJobMock: vi.fn(),
   triggerWorkerJobMock: vi.fn(),
+  getWorkerStateMock: vi.fn(),
 }));
 
 vi.mock('drizzle-orm', () => ({
@@ -94,6 +98,7 @@ vi.mock('../../db/index.js', () => {
       summary: 'letters.summary',
       hook: 'letters.hook',
       dateRaw: 'letters.dateRaw',
+      typeSequence: 'letters.typeSequence',
       createdAt: 'letters.createdAt',
       updatedAt: 'letters.updatedAt',
       transcriptionStatus: 'letters.transcriptionStatus',
@@ -112,6 +117,12 @@ vi.mock('../../db/index.js', () => {
       entityExtractionRunId: 'letters.entityExtractionRunId',
       entityExtractionRunRevision: 'letters.entityExtractionRunRevision',
       extraContentJobStatus: 'letters.extraContentJobStatus',
+      extraContentJobError: 'letters.extraContentJobError',
+      extraContentJobRunId: 'letters.extraContentJobRunId',
+      extraContentJobLeaseExpiresAt: 'letters.extraContentJobLeaseExpiresAt',
+      extraContentJobLeaseRunId: 'letters.extraContentJobLeaseRunId',
+      extraContentJobClaimKind: 'letters.extraContentJobClaimKind',
+      extraContentJobDirty: 'letters.extraContentJobDirty',
       transcriptConfirmedAt: 'letters.transcriptConfirmedAt',
       transcriptionText: 'letters.transcriptionText',
       deadLetter: 'letters.deadLetter',
@@ -140,7 +151,12 @@ vi.mock('../letter/transcription-job.js', () => ({
 }));
 
 vi.mock('../letter/extra-content-job.js', () => ({
+  cancelExtraContentAttempt: cancelExtraContentAttemptMock,
   recoverExpiredExtraContentJobs: recoverExpiredExtraContentJobsMock,
+}));
+
+vi.mock('../worker-state.js', () => ({
+  getWorkerState: getWorkerStateMock,
 }));
 
 vi.mock('../letter/metadata-job.js', () => ({
@@ -177,6 +193,7 @@ import {
   removeFromQueue,
   recoverExpiredProcessingJobs,
   retryJob,
+  queueJobTypeSchema,
   startEntityExtractionProcessing,
   startMetadataProcessing,
   startTranscriptionProcessing,
@@ -193,12 +210,20 @@ describe('processing queue service', () => {
     recoverExpiredTranscriptionsMock.mockResolvedValue({ requeued: [], failed: [] });
     recoverExpiredMetadataJobsMock.mockResolvedValue({ requeued: [], failed: [] });
     recoverExpiredExtraContentJobsMock.mockResolvedValue({ requeued: [], failed: [] });
+    cancelExtraContentAttemptMock.mockResolvedValue(true);
     cancelTranscriptionAttemptMock.mockResolvedValue(true);
     cancelMetadataAttemptMock.mockResolvedValue(true);
     cancelLegacyEntityExtractionMock.mockResolvedValue(true);
     failEntityExtractionMock.mockResolvedValue(true);
     shouldUseCloudRunWorkerJobMock.mockReturnValue(false);
     triggerWorkerJobMock.mockResolvedValue(true);
+    getWorkerStateMock.mockResolvedValue({
+      lastTickAt: null,
+      isPolling: false,
+      lastError: null,
+      currentBatchSize: null,
+      updatedAt: null,
+    });
   });
 
   it('returns collectionNotFound when the collection code does not match any records', async () => {
@@ -238,6 +263,91 @@ describe('processing queue service', () => {
         values: ['collection-9a', 'collection-9b'],
       },
     ]);
+  });
+
+  it('accepts extra content as a durable queue job type', () => {
+    expect(queueJobTypeSchema.parse('extra_content')).toBe('extra_content');
+  });
+
+  it('projects extra-content queue state and persisted worker observation without invented timestamps', async () => {
+    const collection = { collectionCode: '009' };
+    const activeAt = new Date('2026-07-23T12:00:00.000Z');
+    const queuedAt = new Date('2026-07-23T12:01:00.000Z');
+    const completedAt = new Date('2026-07-23T12:02:00.000Z');
+    const worker = {
+      lastTickAt: '2026-07-23T12:03:00.000Z',
+      isPolling: true,
+      lastError: null,
+      currentBatchSize: 1,
+      updatedAt: '2026-07-23T12:03:00.000Z',
+    };
+    getWorkerStateMock.mockResolvedValue(worker);
+    findManyLettersMock
+      .mockResolvedValueOnce([{
+        id: 'extra-active',
+        dateRaw: '19470810',
+        collection,
+        sender: 'Alice',
+        recipient: 'Bob',
+        updatedAt: activeAt,
+        extraContentJobStatus: 'RUNNING',
+      }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{
+        id: 'extra-queued',
+        dateRaw: '19470811',
+        collection,
+        sender: 'Carol',
+        recipient: 'David',
+        createdAt: queuedAt,
+      }])
+      .mockResolvedValueOnce([{
+        id: 'extra-recent',
+        dateRaw: '19470812',
+        collection,
+        updatedAt: completedAt,
+        extraContentJobStatus: 'FAILED',
+        extraContentJobError: 'extra AI failed',
+      }]);
+
+    const status = await getQueueStatus();
+
+    expect(status.active).toEqual([{
+      letterId: 'extra-active',
+      letterTitle: '19470810',
+      collectionCode: '009',
+      sender: 'Alice',
+      recipient: 'Bob',
+      type: 'extra_content',
+      startedAt: activeAt.toISOString(),
+      progress: null,
+    }]);
+    expect(status.queued.extraContent).toEqual([{
+      letterId: 'extra-queued',
+      letterTitle: '19470811',
+      collectionCode: '009',
+      sender: 'Carol',
+      recipient: 'David',
+      queuedAt: null,
+    }]);
+    expect(status.recent).toEqual([]);
+    expect(status.counts).toMatchObject({
+      activeCount: 1,
+      queuedExtraContent: 1,
+      recentFailedCount: 0,
+    });
+    expect(status.worker).toEqual(worker);
+    expect(findManyLettersMock.mock.calls[4]?.[0]).toMatchObject({
+      where: {
+        kind: 'and',
+        clauses: expect.arrayContaining([
+          { kind: 'eq', field: 'letters.type', value: 'L' },
+          { kind: 'eq', field: 'letters.extraContentJobStatus', value: 'PENDING' },
+        ]),
+      },
+    });
   });
 
   it('hides retranscribing letters from durable downstream queue snapshots', async () => {
@@ -336,6 +446,43 @@ describe('processing queue service', () => {
     });
   });
 
+  it('removes only the exact observed queued extra-content job', async () => {
+    const observedAt = new Date('2026-07-23T12:00:00.000Z');
+    findFirstMock.mockResolvedValue({
+      id: 'letter-extra',
+      extraContentJobStatus: 'PENDING',
+      updatedAt: observedAt,
+    });
+
+    await expect(removeFromQueue('letter-extra', 'extra_content')).resolves.toEqual({
+      message: 'Removed from queue',
+    });
+
+    expect(updateSetMock).toHaveBeenCalledWith({
+      extraContentJobStatus: 'FAILED',
+      extraContentJobRunId: null,
+      extraContentJobLeaseExpiresAt: null,
+      extraContentJobLeaseRunId: null,
+      extraContentJobClaimKind: null,
+      extraContentJobDirty: false,
+      extraContentJobError: 'Removed from queue by admin',
+      updatedAt: expect.any(Date),
+    });
+    expect(updateWhereMock).toHaveBeenCalledWith({
+      kind: 'and',
+      clauses: expect.arrayContaining([
+        { kind: 'eq', field: 'letters.id', value: 'letter-extra' },
+        { kind: 'eq', field: 'letters.type', value: 'L' },
+        { kind: 'eq', field: 'letters.extraContentJobStatus', value: 'PENDING' },
+        {
+          kind: 'sql',
+          strings: ["date_trunc('milliseconds', ", ') = ', '::timestamptz'],
+          values: ['letters.updatedAt', observedAt.toISOString()],
+        },
+      ]),
+    });
+  });
+
   it('clears only transcriptions that remain pending and reports the actual count', async () => {
     findManyLettersMock.mockResolvedValue([{ id: 'letter-1' }, { id: 'letter-2' }]);
     updateReturningMock.mockResolvedValue([{ id: 'letter-2' }]);
@@ -404,6 +551,38 @@ describe('processing queue service', () => {
         { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
         { kind: 'eq', field: 'letters.metadataStatus', value: 'SUCCESS' },
         { kind: 'eq', field: 'letters.deadLetter', value: false },
+      ]),
+    });
+  });
+
+  it('clears only rows that remain in the durable extra-content queue', async () => {
+    findManyLettersMock.mockResolvedValue([{ id: 'extra-1' }, { id: 'extra-2' }]);
+    updateReturningMock.mockResolvedValue([{ id: 'extra-2' }]);
+
+    await expect(clearQueue('extra_content')).resolves.toEqual({
+      message: 'Cleared 1 items from extra_content queue',
+      cleared: 1,
+    });
+    expect(updateSetMock).toHaveBeenCalledWith({
+      extraContentJobStatus: 'FAILED',
+      extraContentJobRunId: null,
+      extraContentJobLeaseExpiresAt: null,
+      extraContentJobLeaseRunId: null,
+      extraContentJobClaimKind: null,
+      extraContentJobDirty: false,
+      extraContentJobError: 'Cleared from queue by admin',
+      updatedAt: expect.any(Date),
+    });
+    expect(updateWhereMock).toHaveBeenCalledWith({
+      kind: 'and',
+      clauses: expect.arrayContaining([
+        {
+          kind: 'inArray',
+          field: 'letters.id',
+          values: ['extra-1', 'extra-2'],
+        },
+        { kind: 'eq', field: 'letters.type', value: 'L' },
+        { kind: 'eq', field: 'letters.extraContentJobStatus', value: 'PENDING' },
       ]),
     });
   });
@@ -639,6 +818,80 @@ describe('processing queue service', () => {
     expect(dbUpdateMock).not.toHaveBeenCalled();
   });
 
+  it('retries failed extra-content work with a fresh durable ownership tuple', async () => {
+    const observedAt = new Date('2026-07-23T12:00:00.000Z');
+    findFirstMock.mockResolvedValue({
+      id: 'letter-extra',
+      type: 'L',
+      extraContentJobStatus: 'FAILED',
+      updatedAt: observedAt,
+    });
+
+    await expect(retryJob('letter-extra', 'extra_content')).resolves.toEqual({
+      message: 'Retrying extra_content for letter letter-extra',
+    });
+
+    expect(updateSetMock).toHaveBeenCalledWith({
+      extraContentJobStatus: 'PENDING',
+      extraContentJobRunId: null,
+      extraContentJobLeaseExpiresAt: null,
+      extraContentJobLeaseRunId: null,
+      extraContentJobClaimKind: null,
+      extraContentJobDirty: false,
+      extraContentJobError: null,
+      updatedAt: expect.any(Date),
+    });
+    expect(updateWhereMock).toHaveBeenCalledWith({
+      kind: 'and',
+      clauses: [
+        { kind: 'eq', field: 'letters.id', value: 'letter-extra' },
+        { kind: 'eq', field: 'letters.extraContentJobStatus', value: 'FAILED' },
+        { kind: 'eq', field: 'letters.type', value: 'L' },
+        expect.objectContaining({
+          kind: 'sql',
+          strings: expect.arrayContaining([
+            expect.stringContaining("rel.type IN ('T', 'C', 'E')"),
+          ]),
+        }),
+        {
+          kind: 'sql',
+          strings: ["date_trunc('milliseconds', ", ') = ', '::timestamptz'],
+          values: ['letters.updatedAt', observedAt.toISOString()],
+        },
+      ],
+    });
+  });
+
+  it('rejects an extra-content retry whose durable prerequisites lose the CAS', async () => {
+    findFirstMock.mockResolvedValue({
+      id: 'letter-extra',
+      type: 'L',
+      extraContentJobStatus: 'FAILED',
+      updatedAt: new Date('2026-07-23T12:00:00.000Z'),
+    });
+    updateReturningMock.mockResolvedValue([]);
+
+    await expect(retryJob('letter-extra', 'extra_content')).rejects.toMatchObject({
+      statusCode: 409,
+      message: 'Cannot retry: extra content changed since it was loaded',
+    });
+  });
+
+  it('rejects an extra-content retry for a non-letter record', async () => {
+    findFirstMock.mockResolvedValue({
+      id: 'cover-extra',
+      type: 'C',
+      extraContentJobStatus: 'FAILED',
+      updatedAt: new Date('2026-07-23T12:00:00.000Z'),
+    });
+
+    await expect(retryJob('cover-extra', 'extra_content')).rejects.toMatchObject({
+      statusCode: 400,
+      message: 'Cannot retry: extra content prerequisites are not satisfied',
+    });
+    expect(dbUpdateMock).not.toHaveBeenCalled();
+  });
+
   it('cancels running transcription jobs and clears progress tracking', async () => {
     findFirstMock.mockResolvedValue({
       id: 'letter-3',
@@ -667,6 +920,93 @@ describe('processing queue service', () => {
       'metadata-run-a',
     );
     expect(clearJobProgressMock).toHaveBeenCalledWith('letter-4', 'metadata');
+  });
+
+  it('delegates extra-content cancellation to the canonical exact-run lifecycle owner', async () => {
+    findFirstMock
+      .mockResolvedValueOnce({
+        id: 'letter-extra',
+        extraContentJobStatus: 'RUNNING',
+        extraContentJobRunId: 'extra-run-a',
+      })
+      .mockResolvedValueOnce(null);
+
+    await expect(cancelActiveJob('letter-extra', 'extra_content')).resolves.toEqual({
+      message: 'Job cancelled',
+    });
+
+    expect(cancelExtraContentAttemptMock).toHaveBeenCalledWith(
+      'letter-extra',
+      'extra-run-a',
+    );
+    expect(clearJobProgressMock).toHaveBeenCalledWith('letter-extra', 'extra_content');
+    expect(triggerWorkerJobMock).not.toHaveBeenCalled();
+  });
+
+  it('requests a worker when extra-content cancellation leaves durable queued work', async () => {
+    shouldUseCloudRunWorkerJobMock.mockReturnValue(true);
+    findFirstMock
+      .mockResolvedValueOnce({
+        id: 'letter-extra',
+        extraContentJobStatus: 'RUNNING',
+        extraContentJobRunId: 'extra-run-a',
+      })
+      .mockResolvedValueOnce({ id: 'letter-extra' });
+
+    await expect(cancelActiveJob('letter-extra', 'extra_content')).resolves.toEqual({
+      message: 'Job cancelled',
+    });
+
+    expect(cancelExtraContentAttemptMock).toHaveBeenCalledWith(
+      'letter-extra',
+      'extra-run-a',
+    );
+    expect(findFirstMock.mock.calls[1]?.[0]).toMatchObject({
+      where: {
+        kind: 'and',
+        clauses: expect.arrayContaining([
+          { kind: 'eq', field: 'letters.type', value: 'L' },
+          { kind: 'eq', field: 'letters.extraContentJobStatus', value: 'PENDING' },
+        ]),
+      },
+      columns: { id: true },
+    });
+    expect(triggerWorkerJobMock).toHaveBeenCalledWith('cancel:extra_content');
+  });
+
+  it('keeps a committed extra-content cancellation successful when the wake check fails', async () => {
+    shouldUseCloudRunWorkerJobMock.mockReturnValue(true);
+    findFirstMock
+      .mockResolvedValueOnce({
+        id: 'letter-extra',
+        extraContentJobStatus: 'RUNNING',
+        extraContentJobRunId: 'extra-run-a',
+      })
+      .mockRejectedValueOnce(new Error('queue observation failed'));
+
+    await expect(cancelActiveJob('letter-extra', 'extra_content')).resolves.toEqual({
+      message: 'Job cancelled',
+    });
+
+    expect(cancelExtraContentAttemptMock).toHaveBeenCalledWith(
+      'letter-extra',
+      'extra-run-a',
+    );
+    expect(triggerWorkerJobMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects extra-content cancellation after the observed run loses ownership', async () => {
+    findFirstMock.mockResolvedValue({
+      id: 'letter-extra',
+      extraContentJobStatus: 'RUNNING',
+      extraContentJobRunId: 'extra-run-a',
+    });
+    cancelExtraContentAttemptMock.mockResolvedValue(false);
+
+    await expect(cancelActiveJob('letter-extra', 'extra_content')).rejects.toMatchObject({
+      statusCode: 409,
+      message: 'Cannot cancel: extra content attempt changed since it was loaded',
+    });
   });
 
   it('cancels only the exact observed entity-extraction run', async () => {
@@ -833,6 +1173,7 @@ describe('processing queue service', () => {
     findFirstMock
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ id: 'queued-metadata' })
+      .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null);
 
     await expect(
@@ -846,11 +1187,12 @@ describe('processing queue service', () => {
     findFirstMock
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ id: 'queued-entity' });
+      .mockResolvedValueOnce({ id: 'queued-entity' })
+      .mockResolvedValueOnce(null);
 
     await expect(hasQueuedProcessingWork()).resolves.toBe(true);
 
-    expect(findFirstMock).toHaveBeenCalledTimes(3);
+    expect(findFirstMock).toHaveBeenCalledTimes(4);
     expect(findFirstMock.mock.calls[2]?.[0]).toMatchObject({
       where: {
         kind: 'and',
@@ -858,6 +1200,34 @@ describe('processing queue service', () => {
           { kind: 'eq', field: 'letters.metadataStatus', value: 'SUCCESS' },
           { kind: 'eq', field: 'letters.entityExtractionStatus', value: 'PENDING' },
         ]),
+      },
+      columns: { id: true },
+    });
+  });
+
+  it('treats extra-content-only pending rows as durable queued processing work', async () => {
+    findFirstMock
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'queued-extra-content' });
+
+    await expect(hasQueuedProcessingWork()).resolves.toBe(true);
+
+    expect(findFirstMock).toHaveBeenCalledTimes(4);
+    expect(findFirstMock.mock.calls[3]?.[0]).toMatchObject({
+      where: {
+        kind: 'and',
+        clauses: [
+          { kind: 'eq', field: 'letters.type', value: 'L' },
+          expect.objectContaining({
+            kind: 'sql',
+            strings: expect.arrayContaining([
+              expect.stringContaining("rel.type IN ('T', 'C', 'E')"),
+            ]),
+          }),
+          { kind: 'eq', field: 'letters.extraContentJobStatus', value: 'PENDING' },
+        ],
       },
       columns: { id: true },
     });

@@ -8,7 +8,7 @@ import { processUploadedFile } from '../../services/upload.js';
 import { parseFilename } from '../../services/filename-parser.js';
 import { buildStoragePath, fileExists } from '../../services/storage.js';
 import { db, siteSettings } from '../../db/index.js';
-import { startTranscriptionProcessing } from '../../services/processing-queue.js';
+import { ensureBackgroundWorkerForQueuedProcessing } from '../../services/processing-queue.js';
 import { createLogger } from '../../utils/logger.js';
 import { notify } from '../../services/notifications.js';
 
@@ -168,9 +168,9 @@ router.post('/uploads', upload.array('files', 500), async (req, res, next) => {
         .limit(1);
 
       if (row?.value === 'true') {
-        log.info({ uploadedCount: results.length }, 'Auto-transcribe enabled, starting transcription');
-        startTranscriptionProcessing({}).catch(err => {
-          log.error({ err }, 'Auto-transcription failed to start');
+        log.info({ uploadedCount: results.length }, 'Automatic processing enabled, waking worker');
+        ensureBackgroundWorkerForQueuedProcessing('upload').catch(err => {
+          log.error({ err }, 'Automatic processing failed to start');
         });
       }
     } catch (err) {

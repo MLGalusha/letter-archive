@@ -43,6 +43,9 @@ vi.mock('../../db/index.js', () => ({
     metadataClaimKind: 'letters.metadataClaimKind',
     entityExtractionStatus: 'letters.entityExtractionStatus',
     extraContentJobStatus: 'letters.extraContentJobStatus',
+    collectionId: 'letters.collectionId',
+    dateRaw: 'letters.dateRaw',
+    typeSequence: 'letters.typeSequence',
     transcriptConfirmedAt: 'letters.transcriptConfirmedAt',
     transcriptionText: 'letters.transcriptionText',
     deadLetter: 'letters.deadLetter',
@@ -63,6 +66,7 @@ vi.mock('../processes/letter-process-helpers.js', () => ({
     transcription: {},
     metadata: {},
     entity_extraction: {},
+    extra_content: {},
   },
   queueSnapshot: vi.fn(),
   activeJobSnapshot: vi.fn(),
@@ -82,8 +86,13 @@ vi.mock('../processes/runner.js', () => ({
 
 import { metadataProcess } from '../processes/metadata.js';
 import { entityExtractionProcess } from '../processes/entity-extraction.js';
+import { extraContentProcess } from '../processes/extra-content.js';
 import { transcriptionProcess } from '../processes/transcription.js';
-import { isMetadataStateEligible } from '../processing-eligibility.js';
+import {
+  extraContentPrerequisiteConditions,
+  isMetadataStateEligible,
+  queuedExtraContentConditions,
+} from '../processing-eligibility.js';
 
 describe('process registry downstream eligibility', () => {
   beforeEach(() => {
@@ -177,6 +186,41 @@ describe('process registry downstream eligibility', () => {
       { kind: 'eq', field: 'letters.metadataStatus', value: 'SUCCESS' },
       { kind: 'eq', field: 'letters.entityExtractionStatus', value: 'PENDING' },
       { kind: 'eq', field: 'letters.deadLetter', value: false },
+    ]);
+  });
+
+  it('shares the archive-identity extra-content predicate without requiring PENDING', () => {
+    expect(extraContentPrerequisiteConditions()).toEqual([
+      { kind: 'eq', field: 'letters.type', value: 'L' },
+      expect.objectContaining({
+        kind: 'sql',
+        strings: expect.arrayContaining([
+          expect.stringContaining('rel.collection_id'),
+          expect.stringContaining('rel.date_raw'),
+          expect.stringContaining('rel.type_sequence'),
+          expect.stringContaining("rel.type IN ('T', 'C', 'E')"),
+        ]),
+        values: [
+          'letters.collectionId',
+          'letters.dateRaw',
+          'letters.typeSequence',
+          'letters.id',
+        ],
+      }),
+    ]);
+  });
+
+  it('uses the shared queued extra-content predicate in the registry adapter', async () => {
+    await extraContentProcess.getEligibleCount({});
+
+    expect(buildProcessingConditionsMock).toHaveBeenCalledWith(
+      {},
+      queuedExtraContentConditions(),
+    );
+    expect(buildProcessingConditionsMock.mock.calls[0]?.[1]).toEqual([
+      { kind: 'eq', field: 'letters.type', value: 'L' },
+      expect.objectContaining({ kind: 'sql' }),
+      { kind: 'eq', field: 'letters.extraContentJobStatus', value: 'PENDING' },
     ]);
   });
 });

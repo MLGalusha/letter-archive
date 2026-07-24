@@ -1,8 +1,57 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { invokeRouter } from '../../../test/express-test-utils.js';
 
-const { fileExistsMock } = vi.hoisted(() => ({
+const {
+  dbSelectMock,
+  ensureBackgroundWorkerForQueuedProcessingMock,
+  fileExistsMock,
+  processUploadedFileMock,
+  uploadedFiles,
+} = vi.hoisted(() => ({
+  dbSelectMock: vi.fn(),
+  ensureBackgroundWorkerForQueuedProcessingMock: vi.fn(),
   fileExistsMock: vi.fn(),
+  processUploadedFileMock: vi.fn(),
+  uploadedFiles: [{
+    path: '/tmp/letter-archive-upload-test.jpg',
+    originalname: '003-19320706-L01-01.jpg',
+    mimetype: 'image/jpeg',
+  }],
+}));
+
+vi.mock('multer', () => ({
+  default: vi.fn(() => ({
+    array: vi.fn(() => (
+      req: { files?: typeof uploadedFiles },
+      _res: unknown,
+      next: () => void,
+    ) => {
+      req.files = uploadedFiles;
+      next();
+    }),
+  })),
+}));
+
+vi.mock('../../../db/index.js', () => ({
+  db: {
+    select: dbSelectMock,
+  },
+  siteSettings: {
+    key: 'siteSettings.key',
+  },
+}));
+
+vi.mock('../../../services/upload.js', () => ({
+  processUploadedFile: processUploadedFileMock,
+}));
+
+vi.mock('../../../services/processing-queue.js', () => ({
+  ensureBackgroundWorkerForQueuedProcessing:
+    ensureBackgroundWorkerForQueuedProcessingMock,
+}));
+
+vi.mock('../../../services/notifications.js', () => ({
+  notify: vi.fn(),
 }));
 
 vi.mock('../../../services/storage.js', async (importOriginal) => {
@@ -18,6 +67,14 @@ import uploadsRouter from '../uploads.js';
 describe('admin uploads route integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    ensureBackgroundWorkerForQueuedProcessingMock.mockResolvedValue(true);
+    processUploadedFileMock.mockResolvedValue({
+      letter: { id: 'letter-1' },
+      page: { id: 'page-1' },
+      collection: { collectionCode: '003' },
+      storagePath: '003/19320706/003-19320706-L01-01.jpg',
+      alreadyExists: false,
+    });
   });
 
   it('injects requestId into manual validation errors', async () => {
@@ -83,5 +140,51 @@ describe('admin uploads route integration', () => {
     expect(response.headers['x-request-id']).toBe(
       (response.body as { requestId: string }).requestId,
     );
+  });
+
+  it('wakes the worker for any durable upload work when automatic processing is enabled', async () => {
+    dbSelectMock.mockReturnValue({
+      from: () => ({
+        where: () => ({
+          limit: async () => [{ value: 'true' }],
+        }),
+      }),
+    });
+
+    const response = await invokeRouter(uploadsRouter, {
+      method: 'POST',
+      url: '/uploads',
+      path: '/uploads',
+      headers: { 'content-type': 'multipart/form-data; boundary=test' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toMatchObject({ success: 1, failed: 0 });
+    await vi.waitFor(() => {
+      expect(ensureBackgroundWorkerForQueuedProcessingMock).toHaveBeenCalledWith('upload');
+    });
+  });
+
+  it('preserves the automatic-processing opt-out', async () => {
+    dbSelectMock.mockReturnValue({
+      from: () => ({
+        where: () => ({
+          limit: async () => [{ value: 'false' }],
+        }),
+      }),
+    });
+
+    const response = await invokeRouter(uploadsRouter, {
+      method: 'POST',
+      url: '/uploads',
+      path: '/uploads',
+      headers: { 'content-type': 'multipart/form-data; boundary=test' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    await vi.waitFor(() => {
+      expect(dbSelectMock).toHaveBeenCalledOnce();
+    });
+    expect(ensureBackgroundWorkerForQueuedProcessingMock).not.toHaveBeenCalled();
   });
 });

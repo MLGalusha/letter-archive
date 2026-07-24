@@ -3,6 +3,7 @@ import { eq, and, isNotNull, or } from 'drizzle-orm';
 import { db, letters } from './db/index.js';
 import { processLetter, processMetadata } from './pipeline/processor.js';
 import { runEntityExtractionOnly } from './pipeline/metadataV2.js';
+import { tryTranscribeExtras } from './services/letter/extra-content.js';
 import { createLogger, LOG_DIR, getLogRetentionHours } from './utils/logger.js';
 import { notify } from './services/notifications.js';
 import {
@@ -22,6 +23,7 @@ import {
 } from './services/lease-recovery-coordinator.js';
 import {
   queuedEntityExtractionConditions,
+  queuedExtraContentConditions,
   queuedMetadataConditions,
   queuedTranscriptionConditions,
 } from './services/processing-eligibility.js';
@@ -68,6 +70,18 @@ async function getQueuedProcessingWorkState(): Promise<'pending' | 'leased' | 'n
         isNotNull(letters.metadataLeaseExpiresAt),
         isNotNull(letters.metadataLeaseRunId),
         eq(letters.metadataLeaseRunId, letters.metadataRunId),
+      ),
+      and(
+        eq(letters.extraContentJobStatus, 'RUNNING'),
+        isNotNull(letters.extraContentJobRunId),
+        isNotNull(letters.extraContentJobLeaseExpiresAt),
+        isNotNull(letters.extraContentJobLeaseRunId),
+        isNotNull(letters.extraContentJobClaimKind),
+        eq(letters.extraContentJobLeaseRunId, letters.extraContentJobRunId),
+        or(
+          eq(letters.extraContentJobClaimKind, 'QUEUED'),
+          eq(letters.extraContentJobDirty, true),
+        ),
       ),
     ),
     columns: { id: true },
@@ -127,6 +141,17 @@ async function findLettersNeedingEntityExtraction() {
 }
 
 /**
+ * Finds primary letters with queued supplementary-content transcription work.
+ */
+async function findLettersNeedingExtraContent() {
+  return db.query.letters.findMany({
+    where: and(...queuedExtraContentConditions()),
+    limit: BATCH_SIZE,
+    orderBy: (l, { asc }) => [asc(l.createdAt)],
+  });
+}
+
+/**
  * Processes pending jobs. Returns true if any work was found this cycle,
  * false if both queues were empty — the Job-mode main loop uses this
  * signal to decide when to exit.
@@ -136,10 +161,14 @@ async function processPendingJobs(): Promise<boolean> {
 
   // Phase 1: Transcription
   const needingTranscription = await findLettersNeedingTranscription();
+  const needingExtraContent = await findLettersNeedingExtraContent();
   const needingMetadata = await findLettersNeedingMetadata();
   const needingEntityExtraction = await findLettersNeedingEntityExtraction();
   const totalPendingThisCycle =
-    needingTranscription.length + needingMetadata.length + needingEntityExtraction.length;
+    needingTranscription.length
+    + needingExtraContent.length
+    + needingMetadata.length
+    + needingEntityExtraction.length;
 
   // Heartbeat: let the admin API observe us.
   publishHeartbeat(totalPendingThisCycle);
@@ -193,6 +222,55 @@ async function processPendingJobs(): Promise<boolean> {
         sourceId: letter.id,
         metadata: { error: message, durationMs: duration, dateRaw: letter.dateRaw },
         dedupeKey: `transcription_failed:${letter.id}`,
+      });
+    }
+  }
+
+  if (needingExtraContent.length > 0) {
+    log.debug({ count: needingExtraContent.length }, 'Found letters needing extra-content transcription');
+  }
+
+  // Process supplementary content before metadata so a metadata claim reloads
+  // the latest extra-content transcript and its source revision.
+  for (const letter of needingExtraContent) {
+    publishHeartbeat(totalPendingThisCycle);
+    const jobStart = Date.now();
+    log.info(
+      { letterId: letter.id, collectionId: letter.collectionId, dateRaw: letter.dateRaw },
+      'Starting extra-content transcription job'
+    );
+    try {
+      const outcome = await tryTranscribeExtras(letter.id, {
+        expectedStatus: 'PENDING',
+        claimKind: 'QUEUED',
+      });
+      publishHeartbeat(totalPendingThisCycle);
+      const duration = Date.now() - jobStart;
+      if (outcome.kind !== 'completed') {
+        log.info(
+          { letterId: letter.id, duration, reason: outcome.kind },
+          'Extra-content transcription job skipped',
+        );
+        continue;
+      }
+      log.info({ letterId: letter.id, duration }, 'Extra-content transcription job completed');
+    } catch (error) {
+      const duration = Date.now() - jobStart;
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      publishHeartbeat(totalPendingThisCycle, message);
+      log.error(
+        { letterId: letter.id, duration, err: error },
+        'Extra-content transcription job failed'
+      );
+      void notify({
+        type: 'extra_content_failed',
+        title: 'Extra-content transcription failed',
+        message,
+        link: `/admin/letters/${letter.id}`,
+        sourceType: 'letter',
+        sourceId: letter.id,
+        metadata: { error: message, durationMs: duration, dateRaw: letter.dateRaw },
+        dedupeKey: `extra_content_failed:${letter.id}`,
       });
     }
   }
@@ -280,12 +358,16 @@ async function processPendingJobs(): Promise<boolean> {
   }
 
   const totalProcessed =
-    needingTranscription.length + needingMetadata.length + needingEntityExtraction.length;
+    needingTranscription.length
+    + needingExtraContent.length
+    + needingMetadata.length
+    + needingEntityExtraction.length;
   if (totalProcessed > 0) {
     const cycleDuration = Date.now() - cycleStart;
     log.info(
       {
         transcriptionCount: needingTranscription.length,
+        extraContentCount: needingExtraContent.length,
         metadataCount: needingMetadata.length,
         entityCount: needingEntityExtraction.length,
         totalProcessed,

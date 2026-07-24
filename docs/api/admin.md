@@ -53,7 +53,10 @@ Soft delete.
 ## Processing Queue
 
 ### GET /admin/processing/queue
-Full queue status: active, queued, and recent jobs.
+Durable active and queued state for transcription, metadata, entity extraction, and
+extra content; recent main-stage activity; and persisted worker observation. Extra
+content has no stage-specific queue/completion timestamp yet, so its queued timestamp
+is `null` and it is not projected into recent activity.
 
 **Service**: `getQueueStatus()` in `processing-queue.ts`
 
@@ -84,7 +87,8 @@ worker controls. The separate process-registry API under `/admin/processing/snap
 temporarily owns its own API-memory batch controls.
 
 ### POST /admin/processing/queue/remove
-Remove a PENDING item: `{ letterId, type }` where type is `transcription | metadata | entity_extraction`
+Remove a PENDING item: `{ letterId, type }` where type is
+`transcription | metadata | entity_extraction | extra_content`.
 
 ### POST /admin/processing/queue/clear
 Clear all PENDING items of a type: `{ type }`

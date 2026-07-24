@@ -192,13 +192,22 @@ function createQueueStatus() {
       transcription: [],
       metadata: [],
       entityExtraction: [],
+      extraContent: [],
     },
     recent: [],
+    worker: {
+      lastTickAt: null,
+      isPolling: false,
+      lastError: null,
+      currentBatchSize: null,
+      updatedAt: null,
+    },
     counts: {
       activeCount: 0,
       queuedTranscription: 0,
       queuedMetadata: 0,
       queuedEntityExtraction: 0,
+      queuedExtraContent: 0,
       recentSuccessCount: 0,
       recentFailedCount: 0,
       recentClearedCount: 0,
@@ -301,8 +310,29 @@ describe('admin letters processing queue integration', () => {
     expect(cancelActiveJobMock).not.toHaveBeenCalled();
   });
 
+  it('forwards extra-content cancellation through the durable queue route', async () => {
+    queueJobTypeParseMock.mockReturnValue('extra_content');
+    cancelActiveJobMock.mockResolvedValue({ message: 'Job cancelled' });
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'POST',
+      url: '/processing/cancel',
+      path: '/processing/cancel',
+      headers: { accept: 'application/json' },
+      body: {
+        letterId: 'letter-extra',
+        type: 'extra_content',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual({ message: 'Job cancelled' });
+    expect(queueJobTypeParseMock).toHaveBeenCalledWith('extra_content');
+    expect(cancelActiveJobMock).toHaveBeenCalledWith('letter-extra', 'extra_content');
+  });
+
   it('removes a queued job after parsing the queue job type', async () => {
-    queueJobTypeParseMock.mockReturnValue('metadata');
+    queueJobTypeParseMock.mockReturnValue('extra_content');
     removeFromQueueMock.mockResolvedValue({ message: 'Removed from queue' });
 
     const response = await invokeRouter(lettersRouter, {
@@ -312,20 +342,20 @@ describe('admin letters processing queue integration', () => {
       headers: { accept: 'application/json' },
       body: {
         letterId: 'letter-3',
-        type: 'metadata',
+        type: 'extra_content',
       },
     });
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toEqual({ message: 'Removed from queue' });
-    expect(queueJobTypeParseMock).toHaveBeenCalledWith('metadata');
-    expect(removeFromQueueMock).toHaveBeenCalledWith('letter-3', 'metadata');
+    expect(queueJobTypeParseMock).toHaveBeenCalledWith('extra_content');
+    expect(removeFromQueueMock).toHaveBeenCalledWith('letter-3', 'extra_content');
   });
 
   it('clears an entire queue after validating the job type', async () => {
-    queueJobTypeParseMock.mockReturnValue('entity_extraction');
+    queueJobTypeParseMock.mockReturnValue('extra_content');
     clearQueueMock.mockResolvedValue({
-      message: 'Cleared entity extraction queue',
+      message: 'Cleared extra content queue',
       cleared: 4,
     });
 
@@ -335,21 +365,21 @@ describe('admin letters processing queue integration', () => {
       path: '/processing/queue/clear',
       headers: { accept: 'application/json' },
       body: {
-        type: 'entity_extraction',
+        type: 'extra_content',
       },
     });
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toEqual({
-      message: 'Cleared entity extraction queue',
+      message: 'Cleared extra content queue',
       cleared: 4,
     });
-    expect(clearQueueMock).toHaveBeenCalledWith('entity_extraction');
+    expect(clearQueueMock).toHaveBeenCalledWith('extra_content');
   });
 
   it('retries a failed job after validating the job type', async () => {
-    queueJobTypeParseMock.mockReturnValue('transcription');
-    retryJobMock.mockResolvedValue({ message: 'Retrying transcription for letter letter-7' });
+    queueJobTypeParseMock.mockReturnValue('extra_content');
+    retryJobMock.mockResolvedValue({ message: 'Retrying extra_content for letter letter-7' });
 
     const response = await invokeRouter(lettersRouter, {
       method: 'POST',
@@ -358,15 +388,15 @@ describe('admin letters processing queue integration', () => {
       headers: { accept: 'application/json' },
       body: {
         letterId: 'letter-7',
-        type: 'transcription',
+        type: 'extra_content',
       },
     });
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toEqual({
-      message: 'Retrying transcription for letter letter-7',
+      message: 'Retrying extra_content for letter letter-7',
     });
-    expect(retryJobMock).toHaveBeenCalledWith('letter-7', 'transcription');
+    expect(retryJobMock).toHaveBeenCalledWith('letter-7', 'extra_content');
   });
 
   it('re-enqueues an existing letter for processing', async () => {

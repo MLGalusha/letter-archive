@@ -7,11 +7,11 @@ Last updated: July 23, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 010 — retire the legacy in-process batch executor, complete
-- Last sealed cleanup checkpoint: public delivery and entity projection boundaries at
-  `97bca4a3`
-- Current slice: 011 — retire the API registry executor, then make recovery
-  worker-owned (framed, not started)
+- Current checkpoint: 011A — move queued extra-content work to the durable worker,
+  complete
+- Last sealed cleanup checkpoint: legacy executor retirement at `a8359250`
+- Current slice: 011B — migrate the Processing page and retire the API registry
+  executor (framed, not started)
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -1226,7 +1226,68 @@ Residuals carried forward:
   availability. Slice 011 must choose an execution token/compare-and-set boundary or a
   continuously renewed availability lease before claiming singleton ownership.
 
-## Slice 011 — Retire the Process-Registry Batch Executor
+## Slice 011A — Move Queued Extra Content to the Durable Worker
+
+Status: complete
+
+Problem:
+
+The process registry was the only executor and management surface for standalone
+`extraContentJobStatus = PENDING` work. Deleting it directly would strand jobs created
+when supplementary T/C/E pages change after the primary letter has already completed
+main transcription.
+
+Delivered invariant:
+
+- Primary letters with related T/C/E records use one shared extra-content prerequisite
+  and queue predicate across the worker, wake/exit checks, the temporary registry
+  adapter, snapshots, queue clearing, and retries.
+- The worker claims queued extra content through the canonical run/lease boundary,
+  processes it before metadata, publishes normal stage failure notifications, and
+  includes queued or dirty-recoverable leases in its empty-job decision.
+- Durable queue observation and remove/clear/retry/cancel operations cover extra
+  content. Every mutation clears or revokes the complete ownership tuple and uses the
+  same compare-and-set protections as the existing lifecycle owner.
+- Automatic upload processing asks whether *any* durable stage needs a worker, so an
+  extra-only invalidation is not ignored. Cancelling a dirty extra attempt rechecks for
+  its persisted PENDING replacement and requests a contained worker wake.
+- Extra-content recent and queued timestamps are not fabricated from the letter-wide
+  `updatedAt`/`createdAt` fields. The durable snapshot reports no extra terminal history
+  and a null queued timestamp until a stage-specific timestamp exists.
+
+Evidence:
+
+- Focused eligibility, queue, recovery, ownership, route, and upload coverage passed:
+  6 files / 104 tests.
+- Definitive `CI=1 ./scripts/verify-all.sh` passed: backend 76 files / 711 tests,
+  backend typecheck, frontend 92 files / 612 tests, production build, and mocked
+  browser suite 35/35. The existing large-chunk build warning remains visible.
+- `git diff --check` passed.
+- Independent adversarial review found and drove fixes for extra-only upload wake,
+  dirty-requested exit liveness, dirty-cancellation wake, and fabricated history. It
+  reported no remaining P1 correctness blocker in the slice.
+
+Rollout note:
+
+Migration 0044 initialized historical extra-content job rows as `PENDING`. This slice
+now gives that durable state its ordinary meaning: a primary L record with related
+T/C/E sources is worker-eligible. Before deployment, inspect the historical eligible
+count and either deliberately accept the AI backlog or reconcile rows that already
+have authoritative extra content. No deployment or external job launch is part of this
+checkpoint.
+
+Residuals:
+
+- The API registry executor can still race the worker for an extra-content claim during
+  this transitional checkpoint; the canonical compare-and-set lets only one own it.
+- Metadata and entity recent activity still inherit the pre-existing letter-wide
+  timestamp ambiguity. This slice did not expand that known reporting flaw to the new
+  stage.
+- `worker.ts` now exposes the fourth repeated stage loop. Registry retirement should
+  first delete the competing executor; a later contained worker-loop extraction can
+  consolidate repetition without mixing that refactor into the ownership move.
+
+## Slice 011B — Retire the Process-Registry Batch Executor
 
 Status: framed, not started
 
@@ -1241,8 +1302,9 @@ Target invariant:
 
 Automatic/batch AI work has one runtime owner: the worker. The Processing page observes
 and mutates durable stage state and requests worker wakeups; it does not create a second
-executor. API startup no longer owns automatic recovery after the final API batch
-executor is gone. Direct single-letter requests remain explicit and separately fenced.
+executor. Direct single-letter requests remain explicit and separately fenced.
+Recovery ownership remains transitional until the worker availability lease and
+scheduled reconciliation wake are implemented as the next contained checkpoint.
 
 First audit:
 
@@ -1252,7 +1314,23 @@ First audit:
   the stage predicates from Slice 010 rather than adding another orchestration layer.
 - Preserve truthful queue/recent/error visibility while deleting process-local
   batch-control promises the worker cannot honor.
-- Move automatic reconciliation out of API startup after the last API batch executor
-  is gone, and give worker availability an execution-owned liveness boundary.
 - Decide explicitly whether filtered starts should disappear as redundant global wakes
   or gain durable scoped selection; do not preserve the current count-only illusion.
+
+Non-goal:
+
+Do not remove API reconciliation or claim the ownerless `worker_state` singleton is
+safe in this slice. Slice 011C must add an execution-token lease and a durable scheduled
+worker wake before recovery can become worker-only without losing eventual liveness.
+
+## Slice 011C — Fence Worker Availability and Move Recovery
+
+Status: audited, not started
+
+Target invariant:
+
+Exactly one worker execution owns availability through a database-clock lease and
+token-fenced writes. Producers use persisted PENDING state for low-latency wakes, while
+a scheduled Cloud Run Job invocation provides eventual reconciliation after exhausted
+retries or a quiet API. Once both are in place, API startup and its periodic timer stop
+mutating processing recovery state.

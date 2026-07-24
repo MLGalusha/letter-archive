@@ -9,8 +9,11 @@ All routes are prefixed with `/admin/processing`.
 
 ### GET /queue
 
-Returns the durable active, queued, and recent transcription, metadata, and entity
-projection.
+Returns durable active and queued transcription, extra-content, metadata, and entity
+state; recent main-stage activity; and persisted worker observation. Extra content does
+not yet have a stage-specific queue/completion timestamp, so its queued timestamp is
+`null` and it is omitted from recent activity rather than borrowing the letter-wide
+timestamp.
 
 ### POST /start-transcription
 ### POST /start-metadata
@@ -41,7 +44,9 @@ pending workflow, idle downstream stages, a valid claim tuple, and a non-dead-le
 row. Metadata eligibility requires letter type, `TRANSCRIBED` workflow, a confirmed,
 non-empty transcript, idle downstream stages, a clear ownership tuple, and a
 non-dead-letter row. Entity eligibility requires successful metadata and a pending,
-non-dead-letter entity stage. Enqueue/reset/retry paths, the API snapshot, worker
+non-dead-letter entity stage. Extra-content eligibility requires a primary L record
+with a related T/C/E source and a pending extra-content stage. Enqueue/reset/retry
+paths, the API snapshot, worker
 poller, configured-worker wake check, and worker exit recheck reuse these stage
 prerequisites.
 
@@ -50,9 +55,9 @@ prerequisites.
 ### POST /queue/clear
 ### POST /queue/retry
 
-These mutate persisted queue state. Job types are `transcription`, `metadata`, and
-`entity_extraction`. Retry clears the stage's stale ownership and dead-letter state
-before requesting a worker wake.
+These mutate persisted queue state. Job types are `transcription`, `metadata`,
+`entity_extraction`, and `extra_content`. Retry clears the stage's stale ownership
+tuple (and dead-letter state where applicable) before requesting a worker wake.
 
 The old process-local `/status`, `/pause`, `/resume`, and `/abort` endpoints were
 retired with the duplicate in-process executor.

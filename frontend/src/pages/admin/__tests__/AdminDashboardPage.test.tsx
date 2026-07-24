@@ -8,7 +8,7 @@ import type { Letter } from "../../../types/Letter";
 const {
   confirmTranscriptMock,
   getAdminLettersMock,
-  getFilteredLetterIdsMock,
+  getFilteredLetterSourcesMock,
   deleteLetterMock,
   toggleLetterFlagMock,
   regenerateMetadataMock,
@@ -22,7 +22,7 @@ const {
 } = vi.hoisted(() => ({
   confirmTranscriptMock: vi.fn(),
   getAdminLettersMock: vi.fn(),
-  getFilteredLetterIdsMock: vi.fn(),
+  getFilteredLetterSourcesMock: vi.fn(),
   deleteLetterMock: vi.fn(),
   toggleLetterFlagMock: vi.fn(),
   regenerateMetadataMock: vi.fn(),
@@ -41,7 +41,9 @@ vi.mock("../../../api/auth", () => ({
 
 vi.mock("../../../api/letters", () => ({
   getAdminLetters: (...args: unknown[]) => getAdminLettersMock(...args),
-  getFilteredLetterIds: (...args: unknown[]) => getFilteredLetterIdsMock(...args),
+  getFilteredLetterSources: (...args: unknown[]) => (
+    getFilteredLetterSourcesMock(...args)
+  ),
   deleteLetter: (...args: unknown[]) => deleteLetterMock(...args),
 }));
 

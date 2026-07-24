@@ -30,6 +30,8 @@ function renderProcessingActions(
     primarySourceRevision: 4 + (index * 5),
   })),
 ) {
+  const mutationIntent = { id: Symbol("mutation-intent") };
+  const makeSelectionExplicit = vi.fn().mockReturnValue(mutationIntent);
   const exitEditMode = vi.fn();
   const fetchLetters = vi.fn().mockResolvedValue(undefined);
   const hook = renderHook(() =>
@@ -37,12 +39,19 @@ function renderProcessingActions(
       selectedIds,
       selectedSources,
       singleSelectedLetter: null,
+      makeSelectionExplicit,
       exitEditMode,
       fetchLetters,
     }),
   );
 
-  return { ...hook, exitEditMode, fetchLetters };
+  return {
+    ...hook,
+    exitEditMode,
+    fetchLetters,
+    makeSelectionExplicit,
+    mutationIntent,
+  };
 }
 
 describe("useDashboardProcessingActions", () => {
@@ -82,7 +91,7 @@ describe("useDashboardProcessingActions", () => {
 
   it("passes selection-time source pairs to transcription", async () => {
     const selectedIds = new Set(["letter-on-page", "letter-on-another-page"]);
-    const { result, exitEditMode, fetchLetters } =
+    const { result, exitEditMode, fetchLetters, mutationIntent } =
       renderProcessingActions(selectedIds);
 
     await act(async () => {
@@ -100,7 +109,7 @@ describe("useDashboardProcessingActions", () => {
       "Queued 2 letters for transcription",
       "success",
     );
-    expect(exitEditMode).toHaveBeenCalled();
+    expect(exitEditMode).toHaveBeenCalledWith(mutationIntent);
     expect(fetchLetters).toHaveBeenCalled();
   });
 
@@ -190,9 +199,11 @@ describe("useDashboardProcessingActions", () => {
         reason: "Letter source changed; refresh and reselect",
       }],
     });
-    const { result, exitEditMode } = renderProcessingActions(
-      new Set(["letter-1", "letter-2"]),
-    );
+    const {
+      result,
+      exitEditMode,
+      makeSelectionExplicit,
+    } = renderProcessingActions(new Set(["letter-1", "letter-2"]));
 
     await act(async () => {
       await result.current.handleStartMetadataExtraction();
@@ -203,5 +214,6 @@ describe("useDashboardProcessingActions", () => {
       "info",
     );
     expect(exitEditMode).not.toHaveBeenCalled();
+    expect(makeSelectionExplicit).toHaveBeenCalledOnce();
   });
 });

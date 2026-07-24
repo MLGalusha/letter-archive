@@ -4,6 +4,7 @@ import { bulkUpdateFields } from "../../../api/admin";
 import { useToast } from "../../../contexts/ToastContext";
 import type { PendingChange } from "./types";
 import type { RowSelectionToggleOptions } from "./useDashboardRowSelection";
+import type { DashboardSelectionIntent } from "./useDashboardSelection";
 
 type CopyPasteColumn = "sender" | "recipient";
 
@@ -15,6 +16,10 @@ interface SourceCell {
 interface UseDashboardCopyPasteEditOptions {
   selectedIds: Set<string>;
   clearSelection: () => void;
+  makeSelectionExplicit: () => DashboardSelectionIntent;
+  isSelectionIntentCurrent: (
+    expectedIntent: DashboardSelectionIntent,
+  ) => boolean;
   handleCheckboxChange: (letterId: string, index: number, options?: RowSelectionToggleOptions) => void;
   fetchLetters: () => Promise<void>;
 }
@@ -22,6 +27,8 @@ interface UseDashboardCopyPasteEditOptions {
 export function useDashboardCopyPasteEdit({
   selectedIds,
   clearSelection,
+  makeSelectionExplicit,
+  isSelectionIntentCurrent,
   handleCheckboxChange,
   fetchLetters,
 }: UseDashboardCopyPasteEditOptions) {
@@ -44,14 +51,22 @@ export function useDashboardCopyPasteEdit({
     }
   }, [selectedIds.size, editToolbarOpen]);
 
-  const exitEditMode = useCallback(() => {
+  const exitEditMode = useCallback((
+    expectedIntent?: DashboardSelectionIntent,
+  ) => {
+    if (
+      expectedIntent
+      && !isSelectionIntentCurrent(expectedIntent)
+    ) {
+      return;
+    }
     clearSelection();
     setEditToolbarOpen(false);
     setPendingChanges(new Map());
     setCopyModeActive(false);
     setCopiedValue(null);
     setSourceCell(null);
-  }, [clearSelection]);
+  }, [clearSelection, isSelectionIntentCurrent]);
 
   const closeEditToolbar = useCallback(() => {
     setEditToolbarOpen(false);
@@ -60,6 +75,7 @@ export function useDashboardCopyPasteEdit({
   const handleSaveChanges = useCallback(async () => {
     if (pendingChanges.size === 0) return;
 
+    const mutationIntent = makeSelectionExplicit();
     setIsSaving(true);
     try {
       const updates = Array.from(pendingChanges.entries()).map(([letterId, changes]) => ({
@@ -76,11 +92,13 @@ export function useDashboardCopyPasteEdit({
           `Updated ${result.updated} letter${result.updated === 1 ? "" : "s"}`,
           "success",
         );
-        exitEditMode();
+        exitEditMode(mutationIntent);
       } else {
-        setPendingChanges((previous) => new Map(
-          Array.from(previous).filter(([letterId]) => skippedIds.has(letterId)),
-        ));
+        if (isSelectionIntentCurrent(mutationIntent)) {
+          setPendingChanges((previous) => new Map(
+            Array.from(previous).filter(([letterId]) => skippedIds.has(letterId)),
+          ));
+        }
         const sourceChanged = result.skipReasons.filter(
           ({ code }) => code === "SOURCE_CHANGED",
         ).length;
@@ -113,7 +131,14 @@ export function useDashboardCopyPasteEdit({
       }
       setIsSaving(false);
     }
-  }, [exitEditMode, fetchLetters, pendingChanges, showToast]);
+  }, [
+    exitEditMode,
+    fetchLetters,
+    isSelectionIntentCurrent,
+    makeSelectionExplicit,
+    pendingChanges,
+    showToast,
+  ]);
 
   const handleDone = useCallback(async () => {
     if (pendingChanges.size > 0) {
@@ -150,6 +175,7 @@ export function useDashboardCopyPasteEdit({
       setSourceCell(null);
       setCopiedValue(null);
     } else if (hasPendingChangeForColumn) {
+      makeSelectionExplicit();
       setPendingChanges(prev => {
         const next = new Map(prev);
         const existing = next.get(letterId);
@@ -165,6 +191,7 @@ export function useDashboardCopyPasteEdit({
         return next;
       });
     } else {
+      makeSelectionExplicit();
       setPendingChanges(prev => {
         const next = new Map(prev);
         const existing = next.get(letterId);
@@ -177,7 +204,14 @@ export function useDashboardCopyPasteEdit({
         return next;
       });
     }
-  }, [copiedValue, copyModeActive, editMode, pendingChanges, sourceCell]);
+  }, [
+    copiedValue,
+    copyModeActive,
+    editMode,
+    makeSelectionExplicit,
+    pendingChanges,
+    sourceCell,
+  ]);
 
   const handleEditModeRowClick = useCallback((
     letterId: string,

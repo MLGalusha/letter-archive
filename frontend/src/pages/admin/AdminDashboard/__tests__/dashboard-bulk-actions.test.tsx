@@ -36,18 +36,28 @@ function renderBulkActions(selectedSources = [
   { letterId: 'letter-2', primarySourceRevision: 9 },
 ]) {
   const selectedIds = new Set(['letter-1', 'letter-2']);
-  const setSelectedIds = vi.fn();
+  const replaceExplicitSelection = vi.fn();
+  const mutationIntent = { id: Symbol('mutation-intent') };
+  const makeSelectionExplicit = vi.fn().mockReturnValue(mutationIntent);
   const exitEditMode = vi.fn();
   const fetchLetters = vi.fn().mockResolvedValue(undefined);
   const hook = renderHook(() => useDashboardBulkActions({
     selectedIds,
     selectedSources,
-    setSelectedIds,
+    replaceExplicitSelection,
+    makeSelectionExplicit,
     exitEditMode,
     fetchLetters,
   }));
 
-  return { ...hook, exitEditMode, fetchLetters, setSelectedIds };
+  return {
+    ...hook,
+    exitEditMode,
+    fetchLetters,
+    makeSelectionExplicit,
+    mutationIntent,
+    replaceExplicitSelection,
+  };
 }
 
 describe('useDashboardBulkActions source-bound mutations', () => {
@@ -78,7 +88,11 @@ describe('useDashboardBulkActions source-bound mutations', () => {
         code: 'SOURCE_CHANGED_OR_INELIGIBLE',
       }],
     });
-    const { result, fetchLetters } = renderBulkActions();
+    const {
+      result,
+      fetchLetters,
+      makeSelectionExplicit,
+    } = renderBulkActions();
 
     await act(async () => {
       await result.current.handleBulkPublish();
@@ -100,6 +114,7 @@ describe('useDashboardBulkActions source-bound mutations', () => {
       expect.anything(),
     );
     expect(fetchLetters).toHaveBeenCalledOnce();
+    expect(makeSelectionExplicit).toHaveBeenCalledOnce();
   });
 
   it('publishes only with revisions retained from the selected rows', async () => {
@@ -279,7 +294,12 @@ describe('useDashboardBulkActions source-bound mutations', () => {
   });
 
   it('clears transcription state with the source pairs retained at selection time', async () => {
-    const { result, exitEditMode, fetchLetters } = renderBulkActions();
+    const {
+      result,
+      exitEditMode,
+      fetchLetters,
+      makeSelectionExplicit,
+    } = renderBulkActions();
 
     await act(async () => {
       await result.current.handleConfirmClearTranscriptions();
@@ -295,6 +315,7 @@ describe('useDashboardBulkActions source-bound mutations', () => {
     );
     expect(exitEditMode).toHaveBeenCalledOnce();
     expect(fetchLetters).toHaveBeenCalledOnce();
+    expect(makeSelectionExplicit).toHaveBeenCalledOnce();
   });
 
   it('reports the applied clear count and retains a partially skipped selection', async () => {
@@ -308,7 +329,12 @@ describe('useDashboardBulkActions source-bound mutations', () => {
         reason: 'Letter source changed; refresh and reselect',
       }],
     });
-    const { result, exitEditMode, fetchLetters } = renderBulkActions();
+    const {
+      result,
+      exitEditMode,
+      fetchLetters,
+      makeSelectionExplicit,
+    } = renderBulkActions();
 
     await act(async () => {
       await result.current.handleConfirmClearMetadata();
@@ -324,6 +350,7 @@ describe('useDashboardBulkActions source-bound mutations', () => {
     );
     expect(exitEditMode).not.toHaveBeenCalled();
     expect(fetchLetters).toHaveBeenCalledOnce();
+    expect(makeSelectionExplicit).toHaveBeenCalledOnce();
   });
 
   it('reports unobserved clear selections without sending an empty mutation', async () => {
@@ -347,7 +374,8 @@ describe('useDashboardBulkActions source-bound mutations', () => {
       result,
       exitEditMode,
       fetchLetters,
-      setSelectedIds,
+      mutationIntent,
+      replaceExplicitSelection,
     } = renderBulkActions();
 
     await act(async () => {
@@ -358,8 +386,8 @@ describe('useDashboardBulkActions source-bound mutations', () => {
     expect(deleteLetterMock).toHaveBeenNthCalledWith(1, 'letter-1', 4);
     expect(deleteLetterMock).toHaveBeenNthCalledWith(2, 'letter-2', 9);
     expect(showToastMock).toHaveBeenCalledWith('Deleted 2 letters', 'success');
-    expect(exitEditMode).toHaveBeenCalledOnce();
-    expect(setSelectedIds).not.toHaveBeenCalled();
+    expect(exitEditMode).toHaveBeenCalledWith(mutationIntent);
+    expect(replaceExplicitSelection).not.toHaveBeenCalled();
     expect(fetchLetters).toHaveBeenCalledOnce();
   });
 
@@ -367,7 +395,8 @@ describe('useDashboardBulkActions source-bound mutations', () => {
     const {
       result,
       exitEditMode,
-      setSelectedIds,
+      mutationIntent,
+      replaceExplicitSelection,
     } = renderBulkActions([
       { letterId: 'letter-1', primarySourceRevision: 4 },
     ]);
@@ -383,7 +412,10 @@ describe('useDashboardBulkActions source-bound mutations', () => {
       'info',
     );
     expect(exitEditMode).not.toHaveBeenCalled();
-    expect(setSelectedIds).toHaveBeenCalledWith(new Set(['letter-2']));
+    expect(replaceExplicitSelection).toHaveBeenCalledWith(
+      new Set(['letter-2']),
+      mutationIntent,
+    );
   });
 
   it('reports a stale per-letter deletion without hiding successful deletions', async () => {
@@ -400,7 +432,8 @@ describe('useDashboardBulkActions source-bound mutations', () => {
       result,
       exitEditMode,
       fetchLetters,
-      setSelectedIds,
+      mutationIntent,
+      replaceExplicitSelection,
     } = renderBulkActions();
 
     await act(async () => {
@@ -412,7 +445,10 @@ describe('useDashboardBulkActions source-bound mutations', () => {
       'info',
     );
     expect(exitEditMode).not.toHaveBeenCalled();
-    expect(setSelectedIds).toHaveBeenCalledWith(new Set(['letter-2']));
+    expect(replaceExplicitSelection).toHaveBeenCalledWith(
+      new Set(['letter-2']),
+      mutationIntent,
+    );
     expect(fetchLetters).toHaveBeenCalledOnce();
   });
 
@@ -422,7 +458,8 @@ describe('useDashboardBulkActions source-bound mutations', () => {
       .mockRejectedValueOnce(new Error('Connection interrupted'));
     const {
       result,
-      setSelectedIds,
+      mutationIntent,
+      replaceExplicitSelection,
     } = renderBulkActions();
 
     await act(async () => {
@@ -433,11 +470,18 @@ describe('useDashboardBulkActions source-bound mutations', () => {
       'Deleted 1 letter. Skipped: Deletion outcome could not be confirmed; refresh before retrying',
       'info',
     );
-    expect(setSelectedIds).toHaveBeenCalledWith(new Set(['letter-2']));
+    expect(replaceExplicitSelection).toHaveBeenCalledWith(
+      new Set(['letter-2']),
+      mutationIntent,
+    );
   });
 
   it('reports an entirely unobserved deletion without sending a request', async () => {
-    const { result, setSelectedIds } = renderBulkActions([]);
+    const {
+      result,
+      mutationIntent,
+      replaceExplicitSelection,
+    } = renderBulkActions([]);
 
     await act(async () => {
       await result.current.handleConfirmDelete();
@@ -448,8 +492,9 @@ describe('useDashboardBulkActions source-bound mutations', () => {
       'Deleted 0 letters. Skipped: Source version was not loaded; refresh and reselect (2 letters)',
       'error',
     );
-    expect(setSelectedIds).toHaveBeenCalledWith(
+    expect(replaceExplicitSelection).toHaveBeenCalledWith(
       new Set(['letter-1', 'letter-2']),
+      mutationIntent,
     );
   });
 });

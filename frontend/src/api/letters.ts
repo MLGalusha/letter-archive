@@ -11,6 +11,7 @@ import type {
   PublicLetter,
   VisibilityState,
 } from '../types/Letter';
+import type { BulkSource } from './admin/bulk';
 
 export interface LettersResponse {
   letters: PublicLetter[];
@@ -251,10 +252,13 @@ export async function getAdminLetters(params: AdminLetterQueryParams = {}): Prom
 }
 
 /**
- * Fetch all filtered letter IDs (for select-all across pages)
+ * Fetch every filtered letter and its observed source revision for select-all across
+ * pages.
  */
-export async function getFilteredLetterIds(params: Omit<AdminLetterQueryParams, 'page' | 'limit'>): Promise<string[]> {
-  const ids: string[] = [];
+export async function getFilteredLetterSources(
+  params: Omit<AdminLetterQueryParams, 'page' | 'limit'>,
+): Promise<BulkSource[]> {
+  const sources: BulkSource[] = [];
   let page = 1;
   let totalPages = 1;
   do {
@@ -263,11 +267,14 @@ export async function getFilteredLetterIds(params: Omit<AdminLetterQueryParams, 
       page,
       limit: 100,
     });
-    ids.push(...response.letters.map(l => l.id));
+    sources.push(...response.letters.map((letter) => ({
+      letterId: letter.id,
+      primarySourceRevision: letter.primarySourceRevision,
+    })));
     totalPages = response.pagination.totalPages;
     page++;
   } while (page <= totalPages);
-  return ids;
+  return sources;
 }
 
 /**

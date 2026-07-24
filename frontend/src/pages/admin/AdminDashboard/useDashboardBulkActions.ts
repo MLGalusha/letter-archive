@@ -1,8 +1,4 @@
-import {
-  useState,
-  type Dispatch,
-  type SetStateAction,
-} from "react";
+import { useState } from "react";
 import {
   bulkClearMetadata,
   bulkClearTranscriptions,
@@ -23,12 +19,17 @@ import {
   includeUnobservedSelections,
   summarizeSourceSkips,
 } from "./sourceBoundBulk";
+import type {
+  DashboardSelectionIntent,
+  ReplaceDashboardSelection,
+} from "./useDashboardSelection";
 
 interface UseDashboardBulkActionsOptions {
   selectedIds: Set<string>;
   selectedSources: BulkPublicationSource[];
-  setSelectedIds: Dispatch<SetStateAction<Set<string>>>;
-  exitEditMode: () => void;
+  replaceExplicitSelection: ReplaceDashboardSelection;
+  makeSelectionExplicit: () => DashboardSelectionIntent;
+  exitEditMode: (expectedIntent?: DashboardSelectionIntent) => void;
   fetchLetters: () => Promise<void>;
 }
 
@@ -63,7 +64,8 @@ function deletionSkipReason(
 export function useDashboardBulkActions({
   selectedIds,
   selectedSources,
-  setSelectedIds,
+  replaceExplicitSelection,
+  makeSelectionExplicit,
   exitEditMode,
   fetchLetters,
 }: UseDashboardBulkActionsOptions) {
@@ -192,6 +194,7 @@ export function useDashboardBulkActions({
   };
 
   const handleConfirmDelete = async () => {
+    const mutationIntent = makeSelectionExplicit();
     setDeleting(true);
     try {
       const attempts = await Promise.all(selectedSources.map(async ({
@@ -218,15 +221,15 @@ export function useDashboardBulkActions({
 
       setShowDeleteModal(false);
       if (result.skipped === 0) {
-        exitEditMode();
+        exitEditMode(mutationIntent);
         showToast(
           `Deleted ${result.applied} letter${result.applied === 1 ? "" : "s"}`,
           "success",
         );
       } else {
-        setSelectedIds(new Set(
+        replaceExplicitSelection(new Set(
           result.skipReasons.map(({ letterId }) => letterId),
-        ));
+        ), mutationIntent);
         showToast(
           `Deleted ${result.applied} letter${result.applied === 1 ? "" : "s"}. Skipped: ${summarizeSourceSkips(result.skipReasons)}`,
           result.applied > 0 ? "info" : "error",
@@ -256,12 +259,13 @@ export function useDashboardBulkActions({
   };
 
   const handleConfirmClearTranscriptions = async () => {
+    const mutationIntent = makeSelectionExplicit();
     setBulkActionLoading(true);
     try {
       const result = await applySourceBoundClear(bulkClearTranscriptions);
       setShowResetModal(false);
       reportBulkClearResult(result, "transcriptions");
-      if (result.skipped === 0) exitEditMode();
+      if (result.skipped === 0) exitEditMode(mutationIntent);
     } catch (err) {
       console.error("Failed to clear transcriptions:", err);
       showToast(err instanceof Error ? err.message : "Failed to clear transcriptions", "error");
@@ -282,12 +286,13 @@ export function useDashboardBulkActions({
   };
 
   const handleConfirmClearMetadata = async () => {
+    const mutationIntent = makeSelectionExplicit();
     setBulkActionLoading(true);
     try {
       const result = await applySourceBoundClear(bulkClearMetadata);
       setShowClearMetadataModal(false);
       reportBulkClearResult(result, "metadata");
-      if (result.skipped === 0) exitEditMode();
+      if (result.skipped === 0) exitEditMode(mutationIntent);
     } catch (err) {
       console.error("Failed to clear metadata:", err);
       showToast(err instanceof Error ? err.message : "Failed to clear metadata", "error");
@@ -303,6 +308,7 @@ export function useDashboardBulkActions({
 
   const handleBulkPublish = async () => {
     if (selectedIds.size === 0) return;
+    makeSelectionExplicit();
     setBulkActionLoading(true);
     try {
       const result = await applyContentVisibilityAction("PUBLISH_LETTER");
@@ -320,6 +326,7 @@ export function useDashboardBulkActions({
 
   const handleBulkHide = async () => {
     if (selectedIds.size === 0) return;
+    makeSelectionExplicit();
     setBulkActionLoading(true);
     try {
       const result = await applyContentVisibilityAction("HIDE_LETTER");
@@ -340,6 +347,7 @@ export function useDashboardBulkActions({
     value: boolean,
   ) => {
     if (selectedIds.size === 0) return;
+    makeSelectionExplicit();
     setBulkActionLoading(true);
     const label = field === "transcriptPublished" ? "transcript" : "metadata";
     try {

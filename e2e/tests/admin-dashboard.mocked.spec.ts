@@ -165,6 +165,62 @@ test.describe('@mocked Admin Dashboard', () => {
     );
   });
 
+  test('keeps all-filtered source provenance complete and revokes it on a manual edit', async ({
+    page,
+  }) => {
+    const mockedApi = await installMockAdminDashboardApi(page, {
+      letterCount: 51,
+    });
+
+    await page.goto('/admin');
+    await waitForAdminDashboardReady(page);
+    await expect(page.locator(SELECTORS.dashboard.tableRow)).toHaveCount(50);
+
+    const firstLetter = page.getByRole('checkbox', {
+      name: 'Select Letter One',
+    });
+    await firstLetter.check();
+    await page.getByRole('button', { name: 'All 51', exact: true }).click();
+
+    const bulkActions = page.getByRole('region', { name: 'Bulk actions' });
+    await expect(bulkActions).toContainText('51 selected');
+    await expect(
+      page.getByRole('button', { name: 'All 51 ✓', exact: true }),
+    ).toBeVisible();
+
+    await firstLetter.uncheck();
+
+    await expect(bulkActions).toContainText('50 selected');
+    await expect(
+      page.getByRole('button', { name: 'All 51', exact: true }),
+    ).toBeVisible();
+
+    await page.getByRole('button', { name: 'All 51', exact: true }).click();
+    await page.getByRole('button', {
+      name: 'Transcribe (51)',
+      exact: true,
+    }).click();
+    await page.getByRole('button', {
+      name: 'Queue Eligible',
+      exact: true,
+    }).click();
+
+    await expect.poll(
+      () => mockedApi.bulkTranscriptionRequests.length,
+    ).toBe(1);
+    const [request] = mockedApi.bulkTranscriptionRequests;
+    expect(request.overwrite).toBe(false);
+    expect(request.sources).toHaveLength(51);
+    expect(request.sources[0]).toEqual({
+      letterId: 'letter-1',
+      primarySourceRevision: 11,
+    });
+    expect(request.sources[50]).toEqual({
+      letterId: 'letter-51',
+      primarySourceRevision: 1051,
+    });
+  });
+
   test('optimistically toggles the flag button and sends the patch request', async ({ page }) => {
     const mockedApi = await installMockAdminDashboardApi(page);
 

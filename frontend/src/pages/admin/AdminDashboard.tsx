@@ -156,15 +156,19 @@ export default function AdminDashboard() {
   const {
     selectedIds,
     selectedSources,
-    setSelectedIds,
+    selectionIntent,
+    replaceExplicitSelection,
+    reconcileSelection,
+    makeSelectionExplicit,
+    isSelectionIntentCurrent,
     allFilteredSelected,
-    setAllFilteredSelected,
     toggleSelection,
     clearSelection,
+    clearSelectionIfCurrent,
     allPageSelected,
     handleSelectAllPage,
     selectAllFiltered,
-  } = useDashboardSelection(filteredLetters);
+  } = useDashboardSelection(filteredLetters, committedQuery);
 
   const {
     hasDragMoved,
@@ -174,8 +178,7 @@ export default function AdminDashboard() {
   } = useDashboardRowSelection({
     rows: filteredLetters,
     selectedIds,
-    setSelectedIds,
-    setAllFilteredSelected,
+    replaceExplicitSelection,
     toggleSelection,
   });
 
@@ -195,6 +198,8 @@ export default function AdminDashboard() {
   } = useDashboardCopyPasteEdit({
     selectedIds,
     clearSelection,
+    makeSelectionExplicit,
+    isSelectionIntentCurrent,
     handleCheckboxChange,
     fetchLetters,
   });
@@ -202,9 +207,9 @@ export default function AdminDashboard() {
   const { handleSelectAllFiltered } = useDashboardFilteredSelection({
     query: committedQuery,
     selectedIds,
-    setSelectedIds,
-    setAllFilteredSelected,
-    clearSelection,
+    selectionIntent,
+    reconcileSelection,
+    clearSelectionIfCurrent,
     closeEditToolbar,
     selectAllFiltered,
   });
@@ -227,12 +232,16 @@ export default function AdminDashboard() {
     selectedIds,
   });
 
-  const { handleToggleFlag } = useDashboardFlagActions({ setLetters });
+  const { handleToggleFlag } = useDashboardFlagActions({
+    setLetters,
+    makeSelectionExplicit,
+  });
 
   const bulkActions = useDashboardBulkActions({
     selectedIds,
     selectedSources,
-    setSelectedIds,
+    replaceExplicitSelection,
+    makeSelectionExplicit,
     exitEditMode,
     fetchLetters,
   });
@@ -250,6 +259,7 @@ export default function AdminDashboard() {
     selectedIds,
     selectedSources,
     singleSelectedLetter,
+    makeSelectionExplicit,
     exitEditMode,
     fetchLetters,
   });

@@ -3,32 +3,38 @@ import {
   useLayoutEffect,
   useRef,
 } from "react";
-import type { Dispatch, SetStateAction } from "react";
+import type { BulkSource } from "../../../api/admin";
 import { isAuthenticated } from "../../../api/auth";
 import { getErrorMessage } from "../../../api/client";
-import { getFilteredLetterIds } from "../../../api/letters";
+import { getFilteredLetterSources } from "../../../api/letters";
 import { useToast } from "../../../contexts/ToastContext";
 import {
   buildDashboardLetterQuery,
   type DashboardCommittedQuery,
 } from "./dashboardQueryModel";
+import type { DashboardSelectionIntent } from "./useDashboardSelection";
 
 interface UseDashboardFilteredSelectionOptions {
   query: DashboardCommittedQuery;
   selectedIds: Set<string>;
-  setSelectedIds: Dispatch<SetStateAction<Set<string>>>;
-  setAllFilteredSelected: (value: boolean) => void;
-  clearSelection: () => void;
+  selectionIntent: DashboardSelectionIntent;
+  reconcileSelection: (sources: readonly BulkSource[]) => void;
+  clearSelectionIfCurrent: (
+    expectedIntent: DashboardSelectionIntent,
+  ) => void;
   closeEditToolbar: () => void;
-  selectAllFiltered: (ids: string[]) => void;
+  selectAllFiltered: (
+    sources: readonly BulkSource[],
+    expectedIntent: DashboardSelectionIntent,
+  ) => void;
 }
 
 export function useDashboardFilteredSelection({
   query,
   selectedIds,
-  setSelectedIds,
-  setAllFilteredSelected,
-  clearSelection,
+  selectionIntent,
+  reconcileSelection,
+  clearSelectionIfCurrent,
   closeEditToolbar,
   selectAllFiltered,
 }: UseDashboardFilteredSelectionOptions) {
@@ -38,9 +44,9 @@ export function useDashboardFilteredSelection({
   const currentSelectAllRef = useRef<object | null>(null);
   const actionsRef = useRef({
     selectedIds,
-    setSelectedIds,
-    setAllFilteredSelected,
-    clearSelection,
+    selectionIntent,
+    reconcileSelection,
+    clearSelectionIfCurrent,
     closeEditToolbar,
     selectAllFiltered,
   });
@@ -48,19 +54,19 @@ export function useDashboardFilteredSelection({
   useLayoutEffect(() => {
     actionsRef.current = {
       selectedIds,
-      setSelectedIds,
-      setAllFilteredSelected,
-      clearSelection,
+      selectionIntent,
+      reconcileSelection,
+      clearSelectionIfCurrent,
       closeEditToolbar,
       selectAllFiltered,
     };
   }, [
-    clearSelection,
+    clearSelectionIfCurrent,
     closeEditToolbar,
+    reconcileSelection,
     selectAllFiltered,
     selectedIds,
-    setAllFilteredSelected,
-    setSelectedIds,
+    selectionIntent,
   ]);
 
   useLayoutEffect(() => {
@@ -78,15 +84,15 @@ export function useDashboardFilteredSelection({
   useEffect(() => {
     if (!isAuthenticated()) return;
     const request = {};
+    const requestIntent = actionsRef.current.selectionIntent;
     currentPruneRef.current = request;
-    actionsRef.current.setAllFilteredSelected(false);
 
     if (actionsRef.current.selectedIds.size === 0) {
       return;
     }
 
-    void getFilteredLetterIds(buildDashboardLetterQuery(query))
-      .then((validIds) => {
+    void getFilteredLetterSources(buildDashboardLetterQuery(query))
+      .then((validSources) => {
         if (
           currentQueryRef.current !== query
           || currentPruneRef.current !== request
@@ -94,26 +100,29 @@ export function useDashboardFilteredSelection({
           return;
         }
 
-        const validSet = new Set(validIds);
-        actionsRef.current.setSelectedIds((previous) => {
-          const pruned = new Set(
-            [...previous].filter((id) => validSet.has(id)),
-          );
-          if (pruned.size === previous.size) return previous;
-          if (pruned.size === 0) {
-            actionsRef.current.closeEditToolbar();
-          }
-          return pruned;
-        });
+        const validIds = new Set(
+          validSources.map(({ letterId }) => letterId),
+        );
+        const selectionWillBeEmpty = (
+          actionsRef.current.selectedIds.size > 0
+          && [...actionsRef.current.selectedIds].every(
+            (letterId) => !validIds.has(letterId),
+          )
+        );
+        actionsRef.current.reconcileSelection(validSources);
+        if (selectionWillBeEmpty) {
+          actionsRef.current.closeEditToolbar();
+        }
       })
       .catch(() => {
         if (
           currentQueryRef.current !== query
           || currentPruneRef.current !== request
+          || actionsRef.current.selectionIntent !== requestIntent
         ) {
           return;
         }
-        actionsRef.current.clearSelection();
+        actionsRef.current.clearSelectionIfCurrent(requestIntent);
         actionsRef.current.closeEditToolbar();
       });
 
@@ -128,22 +137,27 @@ export function useDashboardFilteredSelection({
     if (currentQueryRef.current !== query) return;
 
     const request = {};
+    const requestIntent = actionsRef.current.selectionIntent;
     currentSelectAllRef.current = request;
 
     try {
-      const allIds = await getFilteredLetterIds(buildDashboardLetterQuery(query));
+      const allSources = await getFilteredLetterSources(
+        buildDashboardLetterQuery(query),
+      );
       if (
         currentQueryRef.current !== query
         || currentSelectAllRef.current !== request
+        || actionsRef.current.selectionIntent !== requestIntent
       ) {
         return;
       }
       currentPruneRef.current = null;
-      actionsRef.current.selectAllFiltered(allIds);
+      actionsRef.current.selectAllFiltered(allSources, requestIntent);
     } catch (err) {
       if (
         currentQueryRef.current !== query
         || currentSelectAllRef.current !== request
+        || actionsRef.current.selectionIntent !== requestIntent
       ) {
         return;
       }

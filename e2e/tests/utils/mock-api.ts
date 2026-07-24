@@ -6,6 +6,7 @@ import {
 
 interface MockLetter {
   id: string;
+  primarySourceRevision: number;
   title: string;
   collectionCode?: string;
   images: Array<{
@@ -43,6 +44,7 @@ interface MockLetter {
 const baseLetters: MockLetter[] = [
   {
     id: 'letter-1',
+    primarySourceRevision: 11,
     title: 'Letter One',
     collectionCode: '001',
     images: [{ id: 'img-1', type: 'letter', imageUrl: '/images/1', pageNumber: 1 }],
@@ -73,6 +75,7 @@ const baseLetters: MockLetter[] = [
   },
   {
     id: 'letter-2',
+    primarySourceRevision: 22,
     title: 'Letter Two',
     collectionCode: '002',
     images: [{ id: 'img-2', type: 'letter', imageUrl: '/images/2', pageNumber: 1 }],
@@ -107,6 +110,28 @@ function cloneLetters(letters: MockLetter[]): MockLetter[] {
   return JSON.parse(JSON.stringify(letters)) as MockLetter[];
 }
 
+function createDashboardLetters(count: number): MockLetter[] {
+  const letters = cloneLetters(baseLetters).slice(0, count);
+  for (let index = letters.length + 1; index <= count; index += 1) {
+    const template = cloneLetters([
+      baseLetters[(index - 1) % baseLetters.length],
+    ])[0];
+    letters.push({
+      ...template,
+      id: `letter-${index}`,
+      primarySourceRevision: 1000 + index,
+      title: `Letter ${index}`,
+      collectionCode: String(index).padStart(3, '0'),
+      metadata: {
+        ...template.metadata,
+        sender: `Archive Sender ${index}`,
+        recipient: `Archive Recipient ${index}`,
+      },
+    });
+  }
+  return letters;
+}
+
 function buildStats(letters: MockLetter[]) {
   const published = letters.filter((letter) => letter.visibility === 'PUBLISHED').length;
   const hidden = letters.filter((letter) => letter.visibility === 'HIDDEN').length;
@@ -136,14 +161,22 @@ function buildStats(letters: MockLetter[]) {
   };
 }
 
-function buildAdminLettersResponse(letters: MockLetter[], statsSource: MockLetter[] = letters) {
+function buildAdminLettersResponse(
+  letters: MockLetter[],
+  statsSource: MockLetter[] = letters,
+  requestUrl?: URL,
+) {
+  const page = Number(requestUrl?.searchParams.get('page') ?? 1);
+  const limit = Number(requestUrl?.searchParams.get('limit') ?? 50);
+  const start = (page - 1) * limit;
+
   return {
-    letters,
+    letters: letters.slice(start, start + limit),
     pagination: {
-      page: 1,
-      limit: 50,
+      page,
+      limit,
       total: letters.length,
-      totalPages: 1,
+      totalPages: Math.max(1, Math.ceil(letters.length / limit)),
     },
     stats: buildStats(statsSource),
   };
@@ -193,9 +226,17 @@ function escapeRegex(value: string): string {
 export interface MockAdminDashboardContext {
   adminLettersRequests: URL[];
   flagRequests: Array<{ url: string; body: unknown }>;
+  bulkTranscriptionRequests: Array<{
+    sources: Array<{
+      letterId: string;
+      primarySourceRevision: number;
+    }>;
+    overwrite: boolean;
+  }>;
 }
 
 interface MockAdminDashboardOptions {
+  letterCount?: number;
   lettersError?: {
     message: string;
     requestId?: string;
@@ -214,9 +255,12 @@ export async function installMockAdminDashboardApi(
 ): Promise<MockAdminDashboardContext> {
   await installMockImageSessionApi(page);
 
-  const letters = cloneLetters(baseLetters);
+  const letters = createDashboardLetters(options.letterCount ?? baseLetters.length);
   const adminLettersRequests: URL[] = [];
   const flagRequests: Array<{ url: string; body: unknown }> = [];
+  const bulkTranscriptionRequests: MockAdminDashboardContext[
+    'bulkTranscriptionRequests'
+  ] = [];
 
   await page.addInitScript(() => {
     localStorage.setItem('adminToken', 'mock-token');
@@ -249,7 +293,32 @@ export async function installMockAdminDashboardApi(
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(buildAdminLettersResponse(filteredLetters, letters)),
+      body: JSON.stringify(buildAdminLettersResponse(
+        filteredLetters,
+        letters,
+        requestUrl,
+      )),
+    });
+  });
+
+  await page.route(`${API_BASE_URL}/admin/letters/bulk/transcribe`, async (route) => {
+    const body = route.request().postDataJSON() as {
+      sources: MockAdminDashboardContext['bulkTranscriptionRequests'][number]['sources'];
+      overwrite?: boolean;
+    };
+    bulkTranscriptionRequests.push({
+      sources: body.sources,
+      overwrite: body.overwrite ?? false,
+    });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        requested: body.sources.length,
+        queued: body.sources.length,
+        skipped: 0,
+        skipReasons: [],
+      }),
     });
   });
 
@@ -289,6 +358,7 @@ export async function installMockAdminDashboardApi(
   return {
     adminLettersRequests,
     flagRequests,
+    bulkTranscriptionRequests,
   };
 }
 

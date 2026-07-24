@@ -13,6 +13,7 @@ import {
   includeUnobservedSelections,
   summarizeSourceSkips,
 } from "./sourceBoundBulk";
+import type { DashboardSelectionIntent } from "./useDashboardSelection";
 
 type SingleMetadataMode = "extract" | "regenerate";
 
@@ -20,7 +21,8 @@ interface UseDashboardProcessingActionsOptions {
   selectedIds: Set<string>;
   selectedSources: BulkSource[];
   singleSelectedLetter: Letter | null;
-  exitEditMode: () => void;
+  makeSelectionExplicit: () => DashboardSelectionIntent;
+  exitEditMode: (expectedIntent?: DashboardSelectionIntent) => void;
   fetchLetters: () => Promise<void>;
 }
 
@@ -39,6 +41,7 @@ export function useDashboardProcessingActions({
   selectedIds,
   selectedSources,
   singleSelectedLetter,
+  makeSelectionExplicit,
   exitEditMode,
   fetchLetters,
 }: UseDashboardProcessingActionsOptions) {
@@ -60,6 +63,7 @@ export function useDashboardProcessingActions({
 
   const handleStartTranscription = useCallback(async (overwriteExisting = false) => {
     if (selectedIds.size === 0) return;
+    const mutationIntent = makeSelectionExplicit();
     try {
       const mutation = selectedSources.length > 0
         ? await bulkTranscribe(selectedSources, overwriteExisting)
@@ -77,7 +81,7 @@ export function useDashboardProcessingActions({
         showToast(`Queued ${processLabel(result.queued)} for transcription. Skipped: ${summary}`, "info");
       } else {
         showToast(`Queued ${processLabel(result.queued)} for transcription`, "success");
-        exitEditMode();
+        exitEditMode(mutationIntent);
       }
     } catch (err) {
       console.error("Failed to start transcription:", err);
@@ -92,6 +96,7 @@ export function useDashboardProcessingActions({
   }, [
     exitEditMode,
     fetchLetters,
+    makeSelectionExplicit,
     selectedIds,
     selectedSources,
     showToast,
@@ -99,6 +104,7 @@ export function useDashboardProcessingActions({
 
   const handleStartMetadataExtraction = useCallback(async () => {
     if (selectedIds.size === 0) return;
+    const mutationIntent = makeSelectionExplicit();
     try {
       const mutation = selectedSources.length > 0
         ? await bulkExtractMetadata(selectedSources)
@@ -117,7 +123,7 @@ export function useDashboardProcessingActions({
         showToast(`Queued ${processLabel(result.queued)} for metadata extraction. Skipped: ${summary}`, "info");
       } else {
         showToast(`Queued ${processLabel(result.queued)} for metadata extraction`, "success");
-        exitEditMode();
+        exitEditMode(mutationIntent);
       }
     } catch (err) {
       console.error("Failed to start metadata extraction:", err);
@@ -132,6 +138,7 @@ export function useDashboardProcessingActions({
   }, [
     exitEditMode,
     fetchLetters,
+    makeSelectionExplicit,
     selectedIds,
     selectedSources,
     showToast,
@@ -156,6 +163,7 @@ export function useDashboardProcessingActions({
 
   const handleSingleMetadataExtraction = useCallback(async () => {
     if (!singleSelectedLetter) return;
+    const mutationIntent = makeSelectionExplicit();
 
     const extractionOptions = {
       confirmedSender: singleMetadataSender.trim() || undefined,
@@ -207,7 +215,7 @@ export function useDashboardProcessingActions({
           : "Metadata generated",
         "success",
       );
-      exitEditMode();
+      exitEditMode(mutationIntent);
       await fetchLetters();
     } catch (err) {
       console.error("Failed to extract metadata for selected letter:", err);
@@ -223,6 +231,7 @@ export function useDashboardProcessingActions({
   }, [
     exitEditMode,
     fetchLetters,
+    makeSelectionExplicit,
     showToast,
     singleMetadataRecipient,
     singleMetadataSender,

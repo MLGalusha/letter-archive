@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState, type Dispatch, type MouseEvent, type SetStateAction } from "react";
+import { useCallback, useEffect, useState, type MouseEvent } from "react";
+import type { ReplaceDashboardSelection } from "./useDashboardSelection";
 
 interface IdentifiableRow {
   id: string;
@@ -13,16 +14,14 @@ export interface RowSelectionToggleOptions {
 interface UseDashboardRowSelectionOptions<T extends IdentifiableRow> {
   rows: T[];
   selectedIds: Set<string>;
-  setSelectedIds: Dispatch<SetStateAction<Set<string>>>;
-  setAllFilteredSelected: (value: boolean) => void;
+  replaceExplicitSelection: ReplaceDashboardSelection;
   toggleSelection: (id: string) => void;
 }
 
 export function useDashboardRowSelection<T extends IdentifiableRow>({
   rows,
   selectedIds,
-  setSelectedIds,
-  setAllFilteredSelected,
+  replaceExplicitSelection,
   toggleSelection,
 }: UseDashboardRowSelectionOptions<T>) {
   const [isDragging, setIsDragging] = useState(false);
@@ -42,8 +41,7 @@ export function useDashboardRowSelection<T extends IdentifiableRow>({
         nextSelected.add(rows[i].id);
       }
 
-      setSelectedIds(nextSelected);
-      setAllFilteredSelected(false);
+      replaceExplicitSelection(nextSelected);
     } else {
       toggleSelection(letterId);
     }
@@ -51,10 +49,9 @@ export function useDashboardRowSelection<T extends IdentifiableRow>({
     setLastClickedIndex(index);
   }, [
     lastClickedIndex,
+    replaceExplicitSelection,
     rows,
     selectedIds,
-    setAllFilteredSelected,
-    setSelectedIds,
     toggleSelection,
   ]);
 
@@ -110,18 +107,16 @@ export function useDashboardRowSelection<T extends IdentifiableRow>({
     });
 
     setDraggedIds(rangeIds);
-    setSelectedIds(nextSelected);
-    setAllFilteredSelected(false);
+    replaceExplicitSelection(nextSelected);
   }, [
     dragMode,
     dragStartIndex,
     draggedIds,
     hasDragMoved,
     isDragging,
+    replaceExplicitSelection,
     rows,
     selectedIds,
-    setAllFilteredSelected,
-    setSelectedIds,
   ]);
 
   const handleMouseUp = useCallback(() => {

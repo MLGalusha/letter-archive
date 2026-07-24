@@ -1,15 +1,20 @@
 import { useState, type ReactNode } from "react";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { BulkSource } from "../../../../api/admin";
 import { ToastProvider } from "../../../../contexts/ToastContext";
 import type { DashboardCommittedQuery } from "../dashboardQueryModel";
 import { useDashboardFilteredSelection } from "../useDashboardFilteredSelection";
+import {
+  useDashboardSelection,
+  type DashboardSelectionIntent,
+} from "../useDashboardSelection";
 
 const {
-  getFilteredLetterIdsMock,
+  getFilteredLetterSourcesMock,
   showToastMock,
 } = vi.hoisted(() => ({
-  getFilteredLetterIdsMock: vi.fn(),
+  getFilteredLetterSourcesMock: vi.fn(),
   showToastMock: vi.fn(),
 }));
 
@@ -31,7 +36,7 @@ vi.mock("../../../../api/letters", async () => {
   const actual = await vi.importActual<typeof import("../../../../api/letters")>("../../../../api/letters");
   return {
     ...actual,
-    getFilteredLetterIds: getFilteredLetterIdsMock,
+    getFilteredLetterSources: getFilteredLetterSourcesMock,
   };
 });
 
@@ -76,6 +81,13 @@ function createDeferred<T>() {
   return { promise, resolve, reject };
 }
 
+function makeSources(...letterIds: string[]): BulkSource[] {
+  return letterIds.map((letterId, index) => ({
+    letterId,
+    primarySourceRevision: index + 1,
+  }));
+}
+
 function useFilteredSelectionHarness({
   query = DEFAULT_QUERY,
   initialSelectedIds = [],
@@ -87,23 +99,46 @@ function useFilteredSelectionHarness({
 } = {}) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(initialSelectedIds));
   const [allFilteredSelected, setAllFilteredSelected] = useState(false);
+  const [selectionIntent, setSelectionIntent] = useState<DashboardSelectionIntent>(
+    () => ({ id: Symbol("test-selection-intent") }),
+  );
 
   const clearSelection = () => {
     setSelectedIds(new Set());
     setAllFilteredSelected(false);
+    setSelectionIntent({ id: Symbol("test-selection-intent") });
   };
 
-  const selectAllFiltered = (ids: string[]) => {
-    setSelectedIds(new Set(ids));
+  const clearSelectionIfCurrent = (
+    expectedIntent: DashboardSelectionIntent,
+  ) => {
+    if (selectionIntent === expectedIntent) clearSelection();
+  };
+
+  const reconcileSelection = (sources: readonly BulkSource[]) => {
+    const validIds = new Set(sources.map(({ letterId }) => letterId));
+    setSelectedIds((previous) => new Set(
+      [...previous].filter((letterId) => validIds.has(letterId)),
+    ));
+    setAllFilteredSelected(false);
+  };
+
+  const selectAllFiltered = (
+    sources: readonly BulkSource[],
+    expectedIntent: DashboardSelectionIntent,
+  ) => {
+    if (selectionIntent !== expectedIntent) return;
+    setSelectedIds(new Set(sources.map(({ letterId }) => letterId)));
     setAllFilteredSelected(true);
+    setSelectionIntent({ id: Symbol("test-selection-intent") });
   };
 
   const filteredSelection = useDashboardFilteredSelection({
     query,
     selectedIds,
-    setSelectedIds,
-    setAllFilteredSelected,
-    clearSelection,
+    selectionIntent,
+    reconcileSelection,
+    clearSelectionIfCurrent,
     closeEditToolbar,
     selectAllFiltered,
   });
@@ -115,9 +150,34 @@ function useFilteredSelectionHarness({
   };
 }
 
+const composedRows = [
+  { id: "letter-1", primarySourceRevision: 11 },
+  { id: "letter-2", primarySourceRevision: 22 },
+];
+
+function useComposedFilteredSelectionHarness(
+  query: DashboardCommittedQuery,
+) {
+  const selection = useDashboardSelection(composedRows, query);
+  const filteredSelection = useDashboardFilteredSelection({
+    query,
+    selectedIds: selection.selectedIds,
+    selectionIntent: selection.selectionIntent,
+    reconcileSelection: selection.reconcileSelection,
+    clearSelectionIfCurrent: selection.clearSelectionIfCurrent,
+    closeEditToolbar: vi.fn(),
+    selectAllFiltered: selection.selectAllFiltered,
+  });
+
+  return {
+    ...selection,
+    ...filteredSelection,
+  };
+}
+
 describe("useDashboardFilteredSelection", () => {
   beforeEach(() => {
-    getFilteredLetterIdsMock.mockReset();
+    getFilteredLetterSourcesMock.mockReset();
     showToastMock.mockReset();
   });
 
@@ -147,7 +207,9 @@ describe("useDashboardFilteredSelection", () => {
         { field: "letterDate", direction: "desc" },
       ],
     });
-    getFilteredLetterIdsMock.mockResolvedValue(["letter-1", "letter-2", "letter-3"]);
+    getFilteredLetterSourcesMock.mockResolvedValue(
+      makeSources("letter-1", "letter-2", "letter-3"),
+    );
     const { result } = renderHook(
       () => useFilteredSelectionHarness({ query }),
       { wrapper },
@@ -157,8 +219,8 @@ describe("useDashboardFilteredSelection", () => {
       await result.current.handleSelectAllFiltered();
     });
 
-    expect(getFilteredLetterIdsMock).toHaveBeenCalledTimes(1);
-    expect(getFilteredLetterIdsMock).toHaveBeenCalledWith({
+    expect(getFilteredLetterSourcesMock).toHaveBeenCalledTimes(1);
+    expect(getFilteredLetterSourcesMock).toHaveBeenCalledWith({
       page: undefined,
       limit: undefined,
       collection: "003",
@@ -197,7 +259,7 @@ describe("useDashboardFilteredSelection", () => {
       flaggedFilter: "FLAGGED",
       sortColumns: [{ field: "createdAt", direction: "asc" }],
     });
-    getFilteredLetterIdsMock.mockResolvedValue(["letter-1"]);
+    getFilteredLetterSourcesMock.mockResolvedValue(makeSources("letter-1"));
     const closeEditToolbar = vi.fn();
 
     const { result } = renderHook(
@@ -213,8 +275,8 @@ describe("useDashboardFilteredSelection", () => {
       expect(Array.from(result.current.selectedIds)).toEqual(["letter-1"]);
     });
 
-    expect(getFilteredLetterIdsMock).toHaveBeenCalledTimes(1);
-    expect(getFilteredLetterIdsMock).toHaveBeenCalledWith({
+    expect(getFilteredLetterSourcesMock).toHaveBeenCalledTimes(1);
+    expect(getFilteredLetterSourcesMock).toHaveBeenCalledWith({
       page: undefined,
       limit: undefined,
       collection: "012",
@@ -241,7 +303,7 @@ describe("useDashboardFilteredSelection", () => {
   });
 
   it("clears edit mode when pruning removes every selected id", async () => {
-    getFilteredLetterIdsMock.mockResolvedValue([]);
+    getFilteredLetterSourcesMock.mockResolvedValue([]);
     const closeEditToolbar = vi.fn();
 
     const { result } = renderHook(
@@ -262,9 +324,9 @@ describe("useDashboardFilteredSelection", () => {
   it("keeps stale prune success inert after the committed query changes", async () => {
     const staleQuery = makeQuery({ searchQuery: "alice" });
     const currentQuery = makeQuery({ searchQuery: "clara" });
-    const staleRequest = createDeferred<string[]>();
-    const currentRequest = createDeferred<string[]>();
-    getFilteredLetterIdsMock
+    const staleRequest = createDeferred<BulkSource[]>();
+    const currentRequest = createDeferred<BulkSource[]>();
+    getFilteredLetterSourcesMock
       .mockReturnValueOnce(staleRequest.promise)
       .mockReturnValueOnce(currentRequest.promise);
     const closeEditToolbar = vi.fn();
@@ -281,18 +343,18 @@ describe("useDashboardFilteredSelection", () => {
       },
     );
 
-    expect(getFilteredLetterIdsMock).toHaveBeenCalledTimes(1);
+    expect(getFilteredLetterSourcesMock).toHaveBeenCalledTimes(1);
     rerender({ query: currentQuery });
-    expect(getFilteredLetterIdsMock).toHaveBeenCalledTimes(2);
+    expect(getFilteredLetterSourcesMock).toHaveBeenCalledTimes(2);
 
     await act(async () => {
-      currentRequest.resolve(["letter-2"]);
+      currentRequest.resolve(makeSources("letter-2"));
       await currentRequest.promise;
     });
     expect(Array.from(result.current.selectedIds)).toEqual(["letter-2"]);
 
     await act(async () => {
-      staleRequest.resolve(["letter-1"]);
+      staleRequest.resolve(makeSources("letter-1"));
       await staleRequest.promise;
     });
 
@@ -304,9 +366,9 @@ describe("useDashboardFilteredSelection", () => {
   it("keeps stale prune failure inert after the committed query changes", async () => {
     const staleQuery = makeQuery({ searchQuery: "alice" });
     const currentQuery = makeQuery({ searchQuery: "clara" });
-    const staleRequest = createDeferred<string[]>();
-    const currentRequest = createDeferred<string[]>();
-    getFilteredLetterIdsMock
+    const staleRequest = createDeferred<BulkSource[]>();
+    const currentRequest = createDeferred<BulkSource[]>();
+    getFilteredLetterSourcesMock
       .mockReturnValueOnce(staleRequest.promise)
       .mockReturnValueOnce(currentRequest.promise);
     const closeEditToolbar = vi.fn();
@@ -323,12 +385,12 @@ describe("useDashboardFilteredSelection", () => {
       },
     );
 
-    expect(getFilteredLetterIdsMock).toHaveBeenCalledTimes(1);
+    expect(getFilteredLetterSourcesMock).toHaveBeenCalledTimes(1);
     rerender({ query: currentQuery });
-    expect(getFilteredLetterIdsMock).toHaveBeenCalledTimes(2);
+    expect(getFilteredLetterSourcesMock).toHaveBeenCalledTimes(2);
 
     await act(async () => {
-      currentRequest.resolve(["letter-1", "letter-2"]);
+      currentRequest.resolve(makeSources("letter-1", "letter-2"));
       await currentRequest.promise;
     });
 
@@ -343,7 +405,9 @@ describe("useDashboardFilteredSelection", () => {
   });
 
   it("still clears selection when the current prune request fails", async () => {
-    getFilteredLetterIdsMock.mockRejectedValue(new Error("current prune failed"));
+    getFilteredLetterSourcesMock.mockRejectedValue(
+      new Error("current prune failed"),
+    );
     const closeEditToolbar = vi.fn();
 
     const { result } = renderHook(
@@ -365,10 +429,10 @@ describe("useDashboardFilteredSelection", () => {
   it("keeps current pruning active when select-all fails", async () => {
     const initialQuery = makeQuery({ searchQuery: "alice" });
     const currentQuery = makeQuery({ searchQuery: "clara" });
-    const currentPrune = createDeferred<string[]>();
-    const failedSelectAll = createDeferred<string[]>();
-    getFilteredLetterIdsMock
-      .mockResolvedValueOnce(["letter-1", "letter-2"])
+    const currentPrune = createDeferred<BulkSource[]>();
+    const failedSelectAll = createDeferred<BulkSource[]>();
+    getFilteredLetterSourcesMock
+      .mockResolvedValueOnce(makeSources("letter-1", "letter-2"))
       .mockReturnValueOnce(currentPrune.promise)
       .mockReturnValueOnce(failedSelectAll.promise);
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -384,26 +448,26 @@ describe("useDashboardFilteredSelection", () => {
       },
     );
     await waitFor(() => {
-      expect(getFilteredLetterIdsMock).toHaveBeenCalledTimes(1);
+      expect(getFilteredLetterSourcesMock).toHaveBeenCalledTimes(1);
     });
 
     rerender({ query: currentQuery });
     await waitFor(() => {
-      expect(getFilteredLetterIdsMock).toHaveBeenCalledTimes(2);
+      expect(getFilteredLetterSourcesMock).toHaveBeenCalledTimes(2);
     });
 
     let selectAllAction!: Promise<void>;
     act(() => {
       selectAllAction = result.current.handleSelectAllFiltered();
     });
-    expect(getFilteredLetterIdsMock).toHaveBeenCalledTimes(3);
+    expect(getFilteredLetterSourcesMock).toHaveBeenCalledTimes(3);
 
     await act(async () => {
       failedSelectAll.reject(new Error("select all failed"));
       await selectAllAction;
     });
     await act(async () => {
-      currentPrune.resolve(["letter-2"]);
+      currentPrune.resolve(makeSources("letter-2"));
       await currentPrune.promise;
     });
 
@@ -413,10 +477,12 @@ describe("useDashboardFilteredSelection", () => {
   });
 
   it("supersedes a pending prune only after select-all succeeds", async () => {
-    const pendingPrune = createDeferred<string[]>();
-    getFilteredLetterIdsMock
+    const pendingPrune = createDeferred<BulkSource[]>();
+    getFilteredLetterSourcesMock
       .mockReturnValueOnce(pendingPrune.promise)
-      .mockResolvedValueOnce(["letter-1", "letter-2", "letter-3"]);
+      .mockResolvedValueOnce(
+        makeSources("letter-1", "letter-2", "letter-3"),
+      );
     const closeEditToolbar = vi.fn();
 
     const { result } = renderHook(
@@ -427,7 +493,7 @@ describe("useDashboardFilteredSelection", () => {
       { wrapper },
     );
     await waitFor(() => {
-      expect(getFilteredLetterIdsMock).toHaveBeenCalledTimes(1);
+      expect(getFilteredLetterSourcesMock).toHaveBeenCalledTimes(1);
     });
 
     await act(async () => {
@@ -457,8 +523,8 @@ describe("useDashboardFilteredSelection", () => {
   it("keeps stale select-all success inert and accepts the current completion", async () => {
     const staleQuery = makeQuery({ searchQuery: "alice" });
     const currentQuery = makeQuery({ searchQuery: "clara" });
-    const staleRequest = createDeferred<string[]>();
-    getFilteredLetterIdsMock.mockReturnValueOnce(staleRequest.promise);
+    const staleRequest = createDeferred<BulkSource[]>();
+    getFilteredLetterSourcesMock.mockReturnValueOnce(staleRequest.promise);
 
     const { result, rerender } = renderHook(
       ({ query }: { query: DashboardCommittedQuery }) => useFilteredSelectionHarness({ query }),
@@ -472,18 +538,20 @@ describe("useDashboardFilteredSelection", () => {
     act(() => {
       staleAction = result.current.handleSelectAllFiltered();
     });
-    expect(getFilteredLetterIdsMock).toHaveBeenCalledTimes(1);
+    expect(getFilteredLetterSourcesMock).toHaveBeenCalledTimes(1);
 
     rerender({ query: currentQuery });
     await act(async () => {
-      staleRequest.resolve(["stale-letter"]);
+      staleRequest.resolve(makeSources("stale-letter"));
       await staleAction;
     });
 
     expect(result.current.selectedIds.size).toBe(0);
     expect(result.current.allFilteredSelected).toBe(false);
 
-    getFilteredLetterIdsMock.mockResolvedValueOnce(["current-letter"]);
+    getFilteredLetterSourcesMock.mockResolvedValueOnce(
+      makeSources("current-letter"),
+    );
     await act(async () => {
       await result.current.handleSelectAllFiltered();
     });
@@ -495,8 +563,8 @@ describe("useDashboardFilteredSelection", () => {
   it("keeps stale select-all failure inert and reports the current failure", async () => {
     const staleQuery = makeQuery({ searchQuery: "alice" });
     const currentQuery = makeQuery({ searchQuery: "clara" });
-    const staleRequest = createDeferred<string[]>();
-    getFilteredLetterIdsMock.mockReturnValueOnce(staleRequest.promise);
+    const staleRequest = createDeferred<BulkSource[]>();
+    getFilteredLetterSourcesMock.mockReturnValueOnce(staleRequest.promise);
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const { result, rerender } = renderHook(
@@ -522,7 +590,9 @@ describe("useDashboardFilteredSelection", () => {
     expect(result.current.allFilteredSelected).toBe(false);
     expect(showToastMock).not.toHaveBeenCalled();
 
-    getFilteredLetterIdsMock.mockRejectedValueOnce(new Error("current select-all failed"));
+    getFilteredLetterSourcesMock.mockRejectedValueOnce(
+      new Error("current select-all failed"),
+    );
     await act(async () => {
       await result.current.handleSelectAllFiltered();
     });
@@ -533,8 +603,8 @@ describe("useDashboardFilteredSelection", () => {
   });
 
   it("keeps a select-all failure inert after the selection owner unmounts", async () => {
-    const request = createDeferred<string[]>();
-    getFilteredLetterIdsMock.mockReturnValueOnce(request.promise);
+    const request = createDeferred<BulkSource[]>();
+    getFilteredLetterSourcesMock.mockReturnValueOnce(request.promise);
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const { result, unmount } = renderHook(
       () => useFilteredSelectionHarness(),
@@ -553,5 +623,212 @@ describe("useDashboardFilteredSelection", () => {
 
     expect(showToastMock).not.toHaveBeenCalled();
     expect(consoleError).not.toHaveBeenCalled();
+  });
+});
+
+describe("useDashboardFilteredSelection with the real selection owner", () => {
+  beforeEach(() => {
+    getFilteredLetterSourcesMock.mockReset();
+    showToastMock.mockReset();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("keeps a slow select-all response from overwriting newer manual intent", async () => {
+    const selectAllRequest = createDeferred<BulkSource[]>();
+    getFilteredLetterSourcesMock.mockReturnValueOnce(selectAllRequest.promise);
+    const { result } = renderHook(
+      () => useComposedFilteredSelectionHarness(DEFAULT_QUERY),
+      { wrapper },
+    );
+
+    let selectAllAction!: Promise<void>;
+    act(() => {
+      selectAllAction = result.current.handleSelectAllFiltered();
+    });
+    act(() => {
+      result.current.toggleSelection("letter-1");
+    });
+
+    await act(async () => {
+      selectAllRequest.resolve(makeSources("letter-1", "letter-2"));
+      await selectAllAction;
+    });
+
+    expect(Array.from(result.current.selectedIds)).toEqual(["letter-1"]);
+    expect(result.current.selectedSources).toEqual([
+      { letterId: "letter-1", primarySourceRevision: 11 },
+    ]);
+    expect(result.current.allFilteredSelected).toBe(false);
+  });
+
+  it("makes a successful select-all supersede an older real-owner prune", async () => {
+    const firstQuery = makeQuery({ searchQuery: "first" });
+    const secondQuery = makeQuery({ searchQuery: "second" });
+    const pruneRequest = createDeferred<BulkSource[]>();
+    const selectAllRequest = createDeferred<BulkSource[]>();
+    const { result, rerender } = renderHook(
+      ({ query }) => useComposedFilteredSelectionHarness(query),
+      {
+        wrapper,
+        initialProps: { query: firstQuery },
+      },
+    );
+
+    act(() => {
+      result.current.toggleSelection("letter-1");
+    });
+    getFilteredLetterSourcesMock
+      .mockReturnValueOnce(pruneRequest.promise)
+      .mockReturnValueOnce(selectAllRequest.promise);
+    rerender({ query: secondQuery });
+    await waitFor(() => {
+      expect(getFilteredLetterSourcesMock).toHaveBeenCalledTimes(1);
+    });
+
+    let selectAllAction!: Promise<void>;
+    act(() => {
+      selectAllAction = result.current.handleSelectAllFiltered();
+    });
+    await act(async () => {
+      selectAllRequest.resolve([
+        { letterId: "letter-1", primarySourceRevision: 101 },
+        { letterId: "letter-2", primarySourceRevision: 202 },
+      ]);
+      await selectAllAction;
+    });
+    await act(async () => {
+      pruneRequest.resolve([
+        { letterId: "letter-1", primarySourceRevision: 303 },
+      ]);
+      await pruneRequest.promise;
+    });
+
+    expect(result.current.selectedSources).toEqual([
+      { letterId: "letter-1", primarySourceRevision: 101 },
+      { letterId: "letter-2", primarySourceRevision: 202 },
+    ]);
+    expect(result.current.allFilteredSelected).toBe(true);
+  });
+
+  it("lets a real-owner prune retain the current observed revision after select-all fails", async () => {
+    const firstQuery = makeQuery({ searchQuery: "first" });
+    const secondQuery = makeQuery({ searchQuery: "second" });
+    const pruneRequest = createDeferred<BulkSource[]>();
+    const selectAllRequest = createDeferred<BulkSource[]>();
+    const { result, rerender } = renderHook(
+      ({ query }) => useComposedFilteredSelectionHarness(query),
+      {
+        wrapper,
+        initialProps: { query: firstQuery },
+      },
+    );
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    act(() => {
+      result.current.toggleSelection("letter-1");
+    });
+    getFilteredLetterSourcesMock
+      .mockReturnValueOnce(pruneRequest.promise)
+      .mockReturnValueOnce(selectAllRequest.promise);
+    rerender({ query: secondQuery });
+    await waitFor(() => {
+      expect(getFilteredLetterSourcesMock).toHaveBeenCalledTimes(1);
+    });
+
+    let selectAllAction!: Promise<void>;
+    act(() => {
+      selectAllAction = result.current.handleSelectAllFiltered();
+    });
+    await act(async () => {
+      selectAllRequest.reject(new Error("select all failed"));
+      await selectAllAction;
+    });
+    await act(async () => {
+      pruneRequest.resolve([
+        { letterId: "letter-1", primarySourceRevision: 303 },
+      ]);
+      await pruneRequest.promise;
+    });
+
+    expect(result.current.selectedSources).toEqual([
+      { letterId: "letter-1", primarySourceRevision: 303 },
+    ]);
+    expect(result.current.allFilteredSelected).toBe(false);
+  });
+
+  it("keeps a stale prune failure from clearing newer manual intent", async () => {
+    const firstQuery = makeQuery({ searchQuery: "first" });
+    const secondQuery = makeQuery({ searchQuery: "second" });
+    const pruneRequest = createDeferred<BulkSource[]>();
+    const { result, rerender } = renderHook(
+      ({ query }) => useComposedFilteredSelectionHarness(query),
+      {
+        wrapper,
+        initialProps: { query: firstQuery },
+      },
+    );
+
+    act(() => {
+      result.current.toggleSelection("letter-1");
+    });
+    getFilteredLetterSourcesMock.mockReturnValueOnce(pruneRequest.promise);
+    rerender({ query: secondQuery });
+    await waitFor(() => {
+      expect(getFilteredLetterSourcesMock).toHaveBeenCalledOnce();
+    });
+    act(() => {
+      result.current.toggleSelection("letter-2");
+    });
+
+    await act(async () => {
+      pruneRequest.reject(new Error("stale prune failed"));
+      await Promise.resolve();
+    });
+
+    expect(result.current.selectedSources).toEqual([
+      { letterId: "letter-1", primarySourceRevision: 11 },
+      { letterId: "letter-2", primarySourceRevision: 22 },
+    ]);
+    expect(result.current.allFilteredSelected).toBe(false);
+  });
+
+  it("reconciles newer manual intent when the current-query prune succeeds", async () => {
+    const firstQuery = makeQuery({ searchQuery: "first" });
+    const secondQuery = makeQuery({ searchQuery: "second" });
+    const pruneRequest = createDeferred<BulkSource[]>();
+    const { result, rerender } = renderHook(
+      ({ query }) => useComposedFilteredSelectionHarness(query),
+      {
+        wrapper,
+        initialProps: { query: firstQuery },
+      },
+    );
+
+    act(() => {
+      result.current.toggleSelection("letter-1");
+    });
+    getFilteredLetterSourcesMock.mockReturnValueOnce(pruneRequest.promise);
+    rerender({ query: secondQuery });
+    await waitFor(() => {
+      expect(getFilteredLetterSourcesMock).toHaveBeenCalledOnce();
+    });
+
+    act(() => {
+      result.current.toggleSelection("letter-2");
+    });
+    await act(async () => {
+      pruneRequest.resolve([
+        { letterId: "letter-2", primarySourceRevision: 202 },
+      ]);
+      await pruneRequest.promise;
+    });
+
+    expect(result.current.selectedSources).toEqual([
+      { letterId: "letter-2", primarySourceRevision: 202 },
+    ]);
+    expect(result.current.allFilteredSelected).toBe(false);
   });
 });

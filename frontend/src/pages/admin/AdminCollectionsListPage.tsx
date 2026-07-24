@@ -128,9 +128,8 @@ export default function CollectionsDashboard() {
 
   const {
     selectedIds,
-    setSelectedIds,
+    replaceExplicitSelection,
     allFilteredSelected,
-    setAllFilteredSelected,
     toggleSelection,
     clearSelection,
     handleSelectAllPage,
@@ -204,8 +203,7 @@ export default function CollectionsDashboard() {
       for (let i = start; i <= end; i++) {
         newSelected.add(collections[i].id);
       }
-      setSelectedIds(newSelected);
-      setAllFilteredSelected(false);
+      replaceExplicitSelection(newSelected);
     } else {
       toggleSelection(id);
     }

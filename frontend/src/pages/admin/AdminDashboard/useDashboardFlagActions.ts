@@ -6,12 +6,17 @@ import type { Letter } from "../../../types/Letter";
 
 interface UseDashboardFlagActionsOptions {
   setLetters: Dispatch<SetStateAction<Letter[]>>;
+  makeSelectionExplicit: () => void;
 }
 
-export function useDashboardFlagActions({ setLetters }: UseDashboardFlagActionsOptions) {
+export function useDashboardFlagActions({
+  setLetters,
+  makeSelectionExplicit,
+}: UseDashboardFlagActionsOptions) {
   const { showToast } = useToast();
 
   const handleToggleFlag = async (letterId: string, flagged: boolean) => {
+    makeSelectionExplicit();
     setLetters(prev => prev.map(l => l.id === letterId ? {
       ...l,
       flagged,

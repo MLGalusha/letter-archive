@@ -15,57 +15,57 @@ function parseCollectionFilter(value: string | null | undefined): string[] {
 }
 
 export function useDashboardFilters() {
-  const persistedState = useRef(loadPersistedState());
+  const [persistedState] = useState(loadPersistedState);
 
   const [dateMode, setDateMode] = useState<DateMode>(
-    persistedState.current.dateMode ?? 'specific',
+    persistedState.dateMode ?? 'specific',
   );
   const [contentFilterView, setContentFilterView] = useState<ContentFilterView>('transcript');
   const [collectionInput, setCollectionInput] = useState('');
   const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>(
-    persistedState.current.visibilityFilter ?? 'ALL',
+    persistedState.visibilityFilter ?? 'ALL',
   );
   const [transcriptStatusFilters, setTranscriptStatusFilters] = useState<ContentStatus[]>(
-    (persistedState.current.transcriptStatusFilters as ContentStatus[]) ?? [],
+    (persistedState.transcriptStatusFilters as ContentStatus[]) ?? [],
   );
   const [metadataStatusFilters, setMetadataStatusFilters] = useState<ContentStatus[]>(
-    (persistedState.current.metadataStatusFilters as ContentStatus[]) ?? [],
+    (persistedState.metadataStatusFilters as ContentStatus[]) ?? [],
   );
   const [extraContentStatusFilters, setExtraContentStatusFilters] = useState<ContentStatus[]>(
-    (persistedState.current.extraContentStatusFilters as ContentStatus[]) ?? [],
+    (persistedState.extraContentStatusFilters as ContentStatus[]) ?? [],
   );
   const [workflowFilters, setWorkflowFilters] = useState<WorkflowState[]>(
-    (persistedState.current.workflowFilters as WorkflowState[]) ?? [],
+    (persistedState.workflowFilters as WorkflowState[]) ?? [],
   );
   const [flaggedFilter, setFlaggedFilter] = useState<FlaggedFilter>(
-    persistedState.current.flaggedFilter ?? 'ALL',
+    persistedState.flaggedFilter ?? 'ALL',
   );
   const [missingFilters, setMissingFilters] = useState<MissingFilter[]>(
-    persistedState.current.missingFilters ?? [],
+    persistedState.missingFilters ?? [],
   );
   const [contentShapeFilters, setContentShapeFilters] = useState<ContentShapeFilter[]>(
-    persistedState.current.contentShapeFilters ?? [],
+    persistedState.contentShapeFilters ?? [],
   );
   const [collectionFilters, setCollectionFilters] = useState<string[]>(
-    parseCollectionFilter(persistedState.current.collectionFilter),
+    parseCollectionFilter(persistedState.collectionFilter),
   );
   const [yearFilter, setYearFilter] = useState<number | null>(
-    persistedState.current.year ?? null,
+    persistedState.year ?? null,
   );
   const [monthFilter, setMonthFilter] = useState<number | null>(
-    persistedState.current.month ?? null,
+    persistedState.month ?? null,
   );
   const [dayFilter, setDayFilter] = useState<number | null>(
-    persistedState.current.day ?? null,
+    persistedState.day ?? null,
   );
   const [dateFromFilter, setDateFromFilter] = useState<string | null>(
-    persistedState.current.dateFrom ?? null,
+    persistedState.dateFrom ?? null,
   );
   const [dateToFilter, setDateToFilter] = useState<string | null>(
-    persistedState.current.dateTo ?? null,
+    persistedState.dateTo ?? null,
   );
-  const [searchInput, setSearchInput] = useState(persistedState.current.searchQuery ?? '');
-  const [searchQuery, setSearchQuery] = useState(persistedState.current.searchQuery ?? '');
+  const [searchInput, setSearchInput] = useState(persistedState.searchQuery ?? '');
+  const [searchQuery, setSearchQuery] = useState(persistedState.searchQuery ?? '');
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -254,48 +254,8 @@ export function useDashboardFilters() {
     hasDateFilter,
     clearDateFilters,
     handleClearAllFilters,
-    initialSortColumns: persistedState.current.sortColumns ?? [],
+    initialSortColumns: persistedState.sortColumns ?? [],
   };
 }
 
 export type DashboardFilterControls = ReturnType<typeof useDashboardFilters>;
-
-export interface DashboardFilterQueryFields {
-  collectionFilter: string;
-  visibilityFilter: VisibilityFilter;
-  searchQuery: string;
-  yearFilter: number | null;
-  monthFilter: number | null;
-  dayFilter: number | null;
-  dateFromFilter: string | null;
-  dateToFilter: string | null;
-  transcriptStatusFilters: ContentStatus[];
-  metadataStatusFilters: ContentStatus[];
-  extraContentStatusFilters: ContentStatus[];
-  workflowFilters: WorkflowState[];
-  flaggedFilter: FlaggedFilter;
-  missingFilters: MissingFilter[];
-  contentShapeFilters: ContentShapeFilter[];
-}
-
-export function getDashboardFilterQueryFields(
-  filters: DashboardFilterControls,
-): DashboardFilterQueryFields {
-  return {
-    collectionFilter: filters.collectionFilter,
-    visibilityFilter: filters.visibilityFilter,
-    searchQuery: filters.searchQuery,
-    yearFilter: filters.yearFilter,
-    monthFilter: filters.monthFilter,
-    dayFilter: filters.dayFilter,
-    dateFromFilter: filters.dateFromFilter,
-    dateToFilter: filters.dateToFilter,
-    transcriptStatusFilters: filters.transcriptStatusFilters,
-    metadataStatusFilters: filters.metadataStatusFilters,
-    extraContentStatusFilters: filters.extraContentStatusFilters,
-    workflowFilters: filters.workflowFilters,
-    flaggedFilter: filters.flaggedFilter,
-    missingFilters: filters.missingFilters,
-    contentShapeFilters: filters.contentShapeFilters,
-  };
-}

@@ -1,94 +1,152 @@
-import { useEffect } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+} from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { isAuthenticated } from "../../../api/auth";
 import { getErrorMessage } from "../../../api/client";
 import { getFilteredLetterIds } from "../../../api/letters";
 import { useToast } from "../../../contexts/ToastContext";
-import { DEFAULT_DASHBOARD_SORT } from "./constants";
-import type { SortColumn } from "./types";
 import {
-  getDashboardFilterQueryFields,
-  type DashboardFilterControls,
-} from "./useDashboardFilters";
-import { buildDashboardLetterQuery } from "./utils";
+  buildDashboardLetterQuery,
+  type DashboardCommittedQuery,
+} from "./dashboardQueryModel";
 
 interface UseDashboardFilteredSelectionOptions {
-  filters: DashboardFilterControls;
-  sortColumns: SortColumn[];
+  query: DashboardCommittedQuery;
   selectedIds: Set<string>;
   setSelectedIds: Dispatch<SetStateAction<Set<string>>>;
   setAllFilteredSelected: (value: boolean) => void;
   clearSelection: () => void;
   closeEditToolbar: () => void;
-  fetchLetters: (showLoading?: boolean, page?: number) => Promise<void>;
   selectAllFiltered: (ids: string[]) => void;
 }
 
 export function useDashboardFilteredSelection({
-  filters,
-  sortColumns,
+  query,
   selectedIds,
   setSelectedIds,
   setAllFilteredSelected,
   clearSelection,
   closeEditToolbar,
-  fetchLetters,
   selectAllFiltered,
 }: UseDashboardFilteredSelectionOptions) {
   const { showToast } = useToast();
-  const filterQueryFields = getDashboardFilterQueryFields(filters);
+  const currentQueryRef = useRef<DashboardCommittedQuery | null>(query);
+  const currentPruneRef = useRef<object | null>(null);
+  const currentSelectAllRef = useRef<object | null>(null);
+  const actionsRef = useRef({
+    selectedIds,
+    setSelectedIds,
+    setAllFilteredSelected,
+    clearSelection,
+    closeEditToolbar,
+    selectAllFiltered,
+  });
 
-  const query = {
-    ...filterQueryFields,
-    sortColumns,
-    defaultSort: DEFAULT_DASHBOARD_SORT,
-  };
+  useLayoutEffect(() => {
+    actionsRef.current = {
+      selectedIds,
+      setSelectedIds,
+      setAllFilteredSelected,
+      clearSelection,
+      closeEditToolbar,
+      selectAllFiltered,
+    };
+  }, [
+    clearSelection,
+    closeEditToolbar,
+    selectAllFiltered,
+    selectedIds,
+    setAllFilteredSelected,
+    setSelectedIds,
+  ]);
+
+  useLayoutEffect(() => {
+    currentQueryRef.current = query;
+    currentPruneRef.current = null;
+    currentSelectAllRef.current = null;
+
+    return () => {
+      currentQueryRef.current = null;
+      currentPruneRef.current = null;
+      currentSelectAllRef.current = null;
+    };
+  }, [query]);
 
   useEffect(() => {
     if (!isAuthenticated()) return;
-    fetchLetters(true, 1);
+    const request = {};
+    currentPruneRef.current = request;
+    actionsRef.current.setAllFilteredSelected(false);
 
-    if (selectedIds.size > 0) {
-      getFilteredLetterIds(buildDashboardLetterQuery(query)).then(validIds => {
+    if (actionsRef.current.selectedIds.size === 0) {
+      return;
+    }
+
+    void getFilteredLetterIds(buildDashboardLetterQuery(query))
+      .then((validIds) => {
+        if (
+          currentQueryRef.current !== query
+          || currentPruneRef.current !== request
+        ) {
+          return;
+        }
+
         const validSet = new Set(validIds);
-        setSelectedIds(prev => {
-          const pruned = new Set([...prev].filter(id => validSet.has(id)));
-          if (pruned.size === prev.size) return prev;
-          if (pruned.size === 0) closeEditToolbar();
+        actionsRef.current.setSelectedIds((previous) => {
+          const pruned = new Set(
+            [...previous].filter((id) => validSet.has(id)),
+          );
+          if (pruned.size === previous.size) return previous;
+          if (pruned.size === 0) {
+            actionsRef.current.closeEditToolbar();
+          }
           return pruned;
         });
-        setAllFilteredSelected(false);
-      }).catch(() => {
-        clearSelection();
-        closeEditToolbar();
+      })
+      .catch(() => {
+        if (
+          currentQueryRef.current !== query
+          || currentPruneRef.current !== request
+        ) {
+          return;
+        }
+        actionsRef.current.clearSelection();
+        actionsRef.current.closeEditToolbar();
       });
-    }
-  // The dashboard intentionally refetches only when filter/sort inputs change.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    filterQueryFields.collectionFilter,
-    filterQueryFields.visibilityFilter,
-    filterQueryFields.searchQuery,
-    sortColumns,
-    filterQueryFields.yearFilter,
-    filterQueryFields.monthFilter,
-    filterQueryFields.dayFilter,
-    filterQueryFields.dateFromFilter,
-    filterQueryFields.dateToFilter,
-    filterQueryFields.transcriptStatusFilters,
-    filterQueryFields.metadataStatusFilters,
-    filterQueryFields.extraContentStatusFilters,
-    filterQueryFields.workflowFilters,
-    filterQueryFields.flaggedFilter,
-    filterQueryFields.missingFilters,
-    filterQueryFields.contentShapeFilters,
-  ]);
+
+    return () => {
+      if (currentPruneRef.current === request) {
+        currentPruneRef.current = null;
+      }
+    };
+  }, [query]);
 
   const handleSelectAllFiltered = async () => {
+    if (currentQueryRef.current !== query) return;
+
+    const request = {};
+    currentSelectAllRef.current = request;
+
     try {
       const allIds = await getFilteredLetterIds(buildDashboardLetterQuery(query));
-      selectAllFiltered(allIds);
+      if (
+        currentQueryRef.current !== query
+        || currentSelectAllRef.current !== request
+      ) {
+        return;
+      }
+      currentPruneRef.current = null;
+      actionsRef.current.selectAllFiltered(allIds);
     } catch (err) {
+      if (
+        currentQueryRef.current !== query
+        || currentSelectAllRef.current !== request
+      ) {
+        return;
+      }
       console.error("Failed to select all filtered:", err);
       showToast(getErrorMessage(err, "Failed to select all filtered letters"), "error");
     }

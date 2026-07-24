@@ -1,96 +1,15 @@
 import type { ContentStatus } from "../../../types/Letter";
-import type { AdminLetterQueryParams } from "../../../api/letters";
-import { MONTH_OPTIONS, SAVED_VIEWS_STORAGE_KEY, SERVER_SORT_FIELDS, STORAGE_KEY } from "./constants";
+import {
+  MONTH_OPTIONS,
+  SAVED_VIEWS_STORAGE_KEY,
+  SERVER_SORT_FIELDS,
+  STORAGE_KEY,
+} from "./constants";
 import type {
   DateMode,
-  ExtendedSortField,
-  FlaggedFilter,
   PersistedState,
   SavedDashboardView,
-  ServerSortField,
-  SortColumn,
-  VisibilityFilter,
 } from "./types";
-
-export function isServerSortField(
-  field: ExtendedSortField,
-): field is ServerSortField {
-  return (SERVER_SORT_FIELDS as readonly string[]).includes(field);
-}
-
-interface DashboardLetterQueryOptions {
-  page?: number;
-  limit?: number;
-  collectionFilter: string;
-  visibilityFilter: VisibilityFilter;
-  searchQuery: string;
-  sortColumns: SortColumn[];
-  defaultSort: SortColumn;
-  yearFilter: number | null;
-  monthFilter: number | null;
-  dayFilter: number | null;
-  dateFromFilter: string | null;
-  dateToFilter: string | null;
-  transcriptStatusFilters: ContentStatus[];
-  metadataStatusFilters: ContentStatus[];
-  extraContentStatusFilters: ContentStatus[];
-  workflowFilters: string[];
-  flaggedFilter: FlaggedFilter;
-  missingFilters: string[];
-  contentShapeFilters: string[];
-}
-
-export function buildDashboardLetterQuery({
-  page,
-  limit,
-  collectionFilter,
-  visibilityFilter,
-  searchQuery,
-  sortColumns,
-  defaultSort,
-  yearFilter,
-  monthFilter,
-  dayFilter,
-  dateFromFilter,
-  dateToFilter,
-  transcriptStatusFilters,
-  metadataStatusFilters,
-  extraContentStatusFilters,
-  workflowFilters,
-  flaggedFilter,
-  missingFilters,
-  contentShapeFilters,
-}: DashboardLetterQueryOptions): AdminLetterQueryParams {
-  const serverSortColumns = sortColumns
-    .filter((col): col is SortColumn & { field: ServerSortField } => isServerSortField(col.field));
-  const fallbackSortField = isServerSortField(defaultSort.field) ? defaultSort.field : undefined;
-  const sortRules = serverSortColumns.length > 0
-    ? serverSortColumns.map((column) => `${column.field}:${column.direction}`).join(",")
-    : fallbackSortField ? `${fallbackSortField}:${defaultSort.direction}` : undefined;
-
-  return {
-    page,
-    limit,
-    collection: collectionFilter === "all" ? undefined : collectionFilter,
-    visibility: visibilityFilter !== "ALL" ? visibilityFilter : undefined,
-    search: searchQuery || undefined,
-    sort: serverSortColumns[0]?.field ?? fallbackSortField,
-    sortOrder: serverSortColumns[0]?.direction ?? (fallbackSortField ? defaultSort.direction : undefined),
-    sortRules,
-    year: yearFilter ?? undefined,
-    month: monthFilter ?? undefined,
-    day: dayFilter ?? undefined,
-    dateFrom: dateFromFilter ?? undefined,
-    dateTo: dateToFilter ?? undefined,
-    transcriptStatus: transcriptStatusFilters.length > 0 ? transcriptStatusFilters.join(",") : undefined,
-    metadataStatus: metadataStatusFilters.length > 0 ? metadataStatusFilters.join(",") : undefined,
-    extraContentStatus: extraContentStatusFilters.length > 0 ? extraContentStatusFilters.join(",") : undefined,
-    workflow: workflowFilters.length > 0 ? workflowFilters.join(",") : undefined,
-    flagged: flaggedFilter === "FLAGGED" ? "true" : flaggedFilter === "UNFLAGGED" ? "false" : undefined,
-    missing: missingFilters.length > 0 ? missingFilters.join(",") : undefined,
-    contentShape: contentShapeFilters.length > 0 ? contentShapeFilters.join(",") : undefined,
-  };
-}
 
 // Combine transcript + extra content status into a single status.
 // Only considers sections that actually exist (have corresponding images).
@@ -240,46 +159,5 @@ export function saveSavedDashboardViews(views: SavedDashboardView[]): void {
     localStorage.setItem(SAVED_VIEWS_STORAGE_KEY, JSON.stringify(views));
   } catch (error) {
     console.warn("Failed to save dashboard views:", error);
-  }
-}
-
-// Status icon component for two-track workflow.
-export function StatusIcon({
-  status,
-  type,
-}: {
-  status: ContentStatus;
-  type: "T" | "M";
-}) {
-  const titleMap = { T: "Transcript", M: "Metadata" };
-  const title = titleMap[type];
-
-  switch (status) {
-    case "EMPTY":
-      return (
-        <span className="status-icon status-empty" title={`${title}: Empty`}>
-          —
-        </span>
-      );
-    case "AI_DRAFT":
-      return (
-        <span className="status-icon status-draft" title={`${title}: Draft`}>
-          Draft
-        </span>
-      );
-    case "EDITED":
-      return (
-        <span className={`status-icon status-edited status-edited-${type === "T" ? "transcript" : "metadata"}`} title={`${title}: Edited`}>
-          Edited
-        </span>
-      );
-    case "VERIFIED":
-      return (
-        <span className="status-icon status-verified" title={`${title}: Verified`}>
-          ✓
-        </span>
-      );
-    default:
-      return <span className="status-icon">—</span>;
   }
 }

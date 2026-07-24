@@ -1,19 +1,17 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import {
-  buildDashboardLetterQuery,
   dateRawToDisplay,
   displayToDateRaw,
   formatDashboardDateTime,
   formatDateRaw,
   getDashboardDateButtonText,
   getCombinedTranscriptStatus,
-  isServerSortField,
   loadPersistedState,
   loadSavedDashboardViews,
   savePersistedState,
   saveSavedDashboardViews,
 } from "../utils";
-import { DEFAULT_DASHBOARD_SORT } from "../constants";
+import { isServerSortField } from "../dashboardQueryModel";
 import type { SavedDashboardView } from "../types";
 
 describe("admin dashboard utils", () => {
@@ -68,46 +66,6 @@ describe("admin dashboard utils", () => {
       dateFromFilter: "18860314",
       dateToFilter: null,
     })).toBe("03/14/1886 - ...");
-  });
-
-  it("builds API query params from dashboard filters", () => {
-    expect(buildDashboardLetterQuery({
-      collectionFilter: "003",
-      visibilityFilter: "PUBLISHED",
-      searchQuery: "molly",
-      sortColumns: [
-        { field: "letters", direction: "asc" },
-        { field: "createdAt", direction: "desc" },
-      ],
-      defaultSort: DEFAULT_DASHBOARD_SORT,
-      yearFilter: 1886,
-      monthFilter: null,
-      dayFilter: null,
-      dateFromFilter: null,
-      dateToFilter: "18861231",
-      transcriptStatusFilters: ["EMPTY", "AI_DRAFT"],
-      metadataStatusFilters: [],
-      extraContentStatusFilters: ["EDITED"],
-      workflowFilters: ["REVIEWED"],
-      flaggedFilter: "FLAGGED",
-      missingFilters: ["sender", "date"],
-      contentShapeFilters: ["extras", "photos"],
-    })).toMatchObject({
-      collection: "003",
-      visibility: "PUBLISHED",
-      search: "molly",
-      sort: "letters",
-      sortOrder: "asc",
-      sortRules: "letters:asc,createdAt:desc",
-      year: 1886,
-      dateTo: "18861231",
-      transcriptStatus: "EMPTY,AI_DRAFT",
-      extraContentStatus: "EDITED",
-      workflow: "REVIEWED",
-      flagged: "true",
-      missing: "sender,date",
-      contentShape: "extras,photos",
-    });
   });
 
   it("persists and restores dashboard state", () => {

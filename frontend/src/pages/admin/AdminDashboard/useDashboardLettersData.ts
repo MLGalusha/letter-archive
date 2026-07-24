@@ -1,13 +1,17 @@
-import { useCallback, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import { isAuthenticated } from "../../../api/auth";
 import { getAdminLetters } from "../../../api/letters";
 import type { Letter } from "../../../types/Letter";
-import { DEFAULT_DASHBOARD_SORT } from "./constants";
-import type { SortColumn } from "./types";
 import {
-  getDashboardFilterQueryFields,
-  type DashboardFilterControls,
-} from "./useDashboardFilters";
-import { buildDashboardLetterQuery } from "./utils";
+  buildDashboardLetterQuery,
+  type DashboardCommittedQuery,
+} from "./dashboardQueryModel";
 
 const DEFAULT_PAGINATION = {
   page: 1,
@@ -54,34 +58,59 @@ const DEFAULT_STATS = {
 };
 
 interface UseDashboardLettersDataOptions {
-  filters: DashboardFilterControls;
-  sortColumns: SortColumn[];
+  query: DashboardCommittedQuery;
 }
 
 export function useDashboardLettersData({
-  filters,
-  sortColumns,
+  query,
 }: UseDashboardLettersDataOptions) {
-  const filterQueryFields = getDashboardFilterQueryFields(filters);
-
   const [letters, setLetters] = useState<Letter[]>([]);
   const [loading, setLoading] = useState(true);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pagination, setPagination] = useState(DEFAULT_PAGINATION);
   const [stats, setStats] = useState(DEFAULT_STATS);
+  const currentQueryRef = useRef<DashboardCommittedQuery | null>(query);
+  const currentRequestRef = useRef<object | null>(null);
+  const currentPageRef = useRef(DEFAULT_PAGINATION.page);
 
-  const fetchLetters = useCallback(async (showLoading = false, page = pagination.page) => {
+  useLayoutEffect(() => {
+    currentQueryRef.current = query;
+    currentRequestRef.current = null;
+    currentPageRef.current = 1;
+
+    return () => {
+      currentQueryRef.current = null;
+      currentRequestRef.current = null;
+    };
+  }, [query]);
+
+  const fetchLetters = useCallback(async (
+    showLoading = false,
+    page?: number,
+  ) => {
+    const requestQuery = currentQueryRef.current;
+    if (!requestQuery) return;
+
+    const request = {};
+    const requestPage = page ?? currentPageRef.current;
+    currentRequestRef.current = request;
     if (showLoading) setLoading(true);
     setError(null);
+
     try {
-      const response = await getAdminLetters(buildDashboardLetterQuery({
-        page,
-        limit: 50,
-        ...filterQueryFields,
-        sortColumns,
-        defaultSort: DEFAULT_DASHBOARD_SORT,
-      }));
+      const response = await getAdminLetters(buildDashboardLetterQuery(
+        requestQuery,
+        { page: requestPage, limit: 50 },
+      ));
+      if (
+        currentQueryRef.current !== requestQuery
+        || currentRequestRef.current !== request
+      ) {
+        return;
+      }
+
+      currentPageRef.current = response.pagination.page;
       setLetters(response.letters);
       setPagination(response.pagination);
       setStats({
@@ -121,31 +150,29 @@ export function useDashboardLettersData({
         hasVoice: response.stats.contentShape?.voice ?? 0,
       });
     } catch (err) {
+      if (
+        currentQueryRef.current !== requestQuery
+        || currentRequestRef.current !== request
+      ) {
+        return;
+      }
       setError(err instanceof Error ? err.message : "Failed to load letters");
       console.error("Failed to fetch letters:", err);
     } finally {
-      setLoading(false);
-      setIsInitialLoad(false);
+      if (
+        currentQueryRef.current === requestQuery
+        && currentRequestRef.current === request
+      ) {
+        setLoading(false);
+        setIsInitialLoad(false);
+      }
     }
-  }, [
-    filterQueryFields.collectionFilter,
-    filterQueryFields.dateFromFilter,
-    filterQueryFields.dateToFilter,
-    filterQueryFields.dayFilter,
-    filterQueryFields.metadataStatusFilters,
-    filterQueryFields.missingFilters,
-    filterQueryFields.monthFilter,
-    filterQueryFields.extraContentStatusFilters,
-    filterQueryFields.contentShapeFilters,
-    filterQueryFields.flaggedFilter,
-    filterQueryFields.workflowFilters,
-    pagination.page,
-    filterQueryFields.searchQuery,
-    sortColumns,
-    filterQueryFields.transcriptStatusFilters,
-    filterQueryFields.visibilityFilter,
-    filterQueryFields.yearFilter,
-  ]);
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated()) return;
+    void fetchLetters(true, 1);
+  }, [fetchLetters, query]);
 
   const filteredLetters = letters;
 

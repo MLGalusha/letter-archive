@@ -1,4 +1,8 @@
-import { useState, useEffect } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import { isAuthenticated } from "../../api/auth";
 import AdminLayout from "../../components/AdminLayout";
@@ -14,8 +18,8 @@ import {
   formatDateRaw,
   getDashboardDateButtonText,
   getCombinedTranscriptStatus,
-  StatusIcon,
 } from "./AdminDashboard/utils";
+import { StatusIcon } from "./AdminDashboard/StatusIcon";
 import { useDashboardBulkActions } from "./AdminDashboard/useDashboardBulkActions";
 import { useDashboardColumns } from "./AdminDashboard/useDashboardColumns";
 import { useDashboardCopyPasteEdit } from "./AdminDashboard/useDashboardCopyPasteEdit";
@@ -31,6 +35,7 @@ import { useDashboardSelection } from "./AdminDashboard/useDashboardSelection";
 import { useDashboardSelectionDetails } from "./AdminDashboard/useDashboardSelectionDetails";
 import { useDashboardSort } from "./AdminDashboard/useDashboardSort";
 import { useDashboardViewState } from "./AdminDashboard/useDashboardViewState";
+import { createDashboardCommittedQuery } from "./AdminDashboard/dashboardQueryModel";
 import CollectionsDashboard from "./AdminCollectionsListPage";
 import "./AdminDashboard.css";
 
@@ -42,9 +47,64 @@ export default function AdminDashboard() {
 
   const dashboardFilters = useDashboardFilters();
   const {
+    collectionFilter,
+    visibilityFilter,
+    searchQuery,
+    yearFilter,
+    monthFilter,
+    dayFilter,
+    dateFromFilter,
+    dateToFilter,
+    transcriptStatusFilters,
+    metadataStatusFilters,
+    extraContentStatusFilters,
+    workflowFilters,
+    flaggedFilter,
+    missingFilters,
+    contentShapeFilters,
     initialSortColumns,
   } = dashboardFilters;
   const { sortColumns, setSortColumns } = useDashboardSort(initialSortColumns);
+  const committedQuery = useMemo(
+    () => createDashboardCommittedQuery(
+      {
+        collectionFilter,
+        visibilityFilter,
+        searchQuery,
+        yearFilter,
+        monthFilter,
+        dayFilter,
+        dateFromFilter,
+        dateToFilter,
+        transcriptStatusFilters,
+        metadataStatusFilters,
+        extraContentStatusFilters,
+        workflowFilters,
+        flaggedFilter,
+        missingFilters,
+        contentShapeFilters,
+      },
+      sortColumns,
+    ),
+    [
+      collectionFilter,
+      visibilityFilter,
+      searchQuery,
+      yearFilter,
+      monthFilter,
+      dayFilter,
+      dateFromFilter,
+      dateToFilter,
+      transcriptStatusFilters,
+      metadataStatusFilters,
+      extraContentStatusFilters,
+      workflowFilters,
+      flaggedFilter,
+      missingFilters,
+      contentShapeFilters,
+      sortColumns,
+    ],
+  );
   const {
     visibleColumns,
     setVisibleColumns,
@@ -74,8 +134,7 @@ export default function AdminDashboard() {
     stats,
     fetchLetters,
   } = useDashboardLettersData({
-    filters: dashboardFilters,
-    sortColumns,
+    query: committedQuery,
   });
 
   useEffect(() => {
@@ -141,14 +200,12 @@ export default function AdminDashboard() {
   });
 
   const { handleSelectAllFiltered } = useDashboardFilteredSelection({
-    filters: dashboardFilters,
-    sortColumns,
+    query: committedQuery,
     selectedIds,
     setSelectedIds,
     setAllFilteredSelected,
     clearSelection,
     closeEditToolbar,
-    fetchLetters,
     selectAllFiltered,
   });
 

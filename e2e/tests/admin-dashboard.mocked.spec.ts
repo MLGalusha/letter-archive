@@ -90,6 +90,81 @@ test.describe('@mocked Admin Dashboard', () => {
     await expect(page.locator(SELECTORS.dashboard.table)).toContainText('Alice Smith');
   });
 
+  test('keeps list and filtered-selection requests on the same committed query', async ({
+    page,
+  }) => {
+    const mockedApi = await installMockAdminDashboardApi(page);
+
+    await page.goto('/admin');
+    await waitForAdminDashboardReady(page);
+    await page.getByRole('button', { name: 'Filters' }).click();
+
+    const publishedRequest = waitForAdminLettersRequest(
+      page,
+      (url) => url.searchParams.get('visibility') === 'PUBLISHED',
+    );
+    await page.locator('.filter-published').click();
+    await publishedRequest;
+
+    const transcriptRequest = waitForAdminLettersRequest(
+      page,
+      (url) => url.searchParams.get('transcriptStatus') === 'AI_DRAFT',
+    );
+    await page.getByRole('button', { name: 'Draft 1' }).click();
+    await transcriptRequest;
+
+    await page.getByRole('button', { name: 'Metadata', exact: true }).click();
+    const metadataRequest = waitForAdminLettersRequest(
+      page,
+      (url) => url.searchParams.get('metadataStatus') === 'EDITED',
+    );
+    await page.getByRole('button', { name: 'Edited 1' }).click();
+    await metadataRequest;
+
+    await page.getByRole('checkbox', { name: 'Select Letter One' }).check();
+    await page.getByRole('searchbox', {
+      name: 'Search letters, senders, recipients...',
+    }).fill('alice');
+
+    await expect.poll(() => (
+      mockedApi.adminLettersRequests.filter((url) => (
+        url.searchParams.get('search') === 'alice'
+        && url.searchParams.get('visibility') === 'PUBLISHED'
+        && url.searchParams.get('transcriptStatus') === 'AI_DRAFT'
+        && url.searchParams.get('metadataStatus') === 'EDITED'
+      )).length
+    )).toBeGreaterThanOrEqual(2);
+
+    const committedRequests = mockedApi.adminLettersRequests.filter((url) => (
+      url.searchParams.get('search') === 'alice'
+      && url.searchParams.get('visibility') === 'PUBLISHED'
+      && url.searchParams.get('transcriptStatus') === 'AI_DRAFT'
+      && url.searchParams.get('metadataStatus') === 'EDITED'
+    ));
+    const listRequest = committedRequests.find(
+      (url) => url.searchParams.get('limit') === '50',
+    );
+    const selectionRequest = committedRequests.find(
+      (url) => url.searchParams.get('limit') === '100',
+    );
+
+    expect(listRequest).toBeDefined();
+    expect(selectionRequest).toBeDefined();
+    expect(listRequest?.searchParams.get('sortRules')).toBe(
+      'lastOpenedAt:desc',
+    );
+
+    const committedParams = (url: URL | undefined) => (
+      [...(url?.searchParams.entries() ?? [])]
+        .filter(([name]) => name !== 'page' && name !== 'limit')
+        .sort(([left], [right]) => left.localeCompare(right))
+    );
+
+    expect(committedParams(selectionRequest)).toEqual(
+      committedParams(listRequest),
+    );
+  });
+
   test('optimistically toggles the flag button and sends the patch request', async ({ page }) => {
     const mockedApi = await installMockAdminDashboardApi(page);
 

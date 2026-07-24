@@ -13,7 +13,7 @@ existing owner remains frictionless, while behavior tests remain the authority.
 
 | Entry point | Runtime owner | Stages | Execution model | Control and recovery |
 | --- | --- | --- | --- | --- |
-| `worker.ts` polling loop | Worker process | Transcription, extra content, metadata, entity extraction | Acquires the singleton worker execution lease, queries durable eligible `PENDING` rows, and invokes the pipeline directly | Acquisition uses the PostgreSQL clock and a 120-second lease; contenders that lose the atomic claim exit before recovery or queue scans. An independent heartbeat confirms ownership immediately and then every 30 seconds. Every automatic stage claim and worker recovery mutation includes the exact live execution token in the same SQL statement. Transcription, extra content, and metadata also have their own run-bound leases; entity extraction has a run/revision commit fence but no stage lease. |
+| `worker.ts` lifecycle + `services/worker-processing-cycle.ts` | Worker process | Transcription, extra content, metadata, entity extraction | The executable acquires the singleton lease and owns recovery, polling, signals, release, and handoff. The import-safe cycle snapshots bounded durable `PENDING` rows and invokes four explicit stage producers in order. | Acquisition uses the PostgreSQL clock and a 120-second lease; contenders that lose the atomic claim exit before recovery or queue scans. An independent heartbeat confirms ownership immediately and then every 30 seconds. The cycle checks that ownership at every scan/item boundary, while every automatic stage claim and worker recovery mutation includes the exact live execution token in the same SQL statement. Transcription, extra content, and metadata also have their own run-bound leases; entity extraction has a run/revision commit fence but no stage lease. |
 | Upload, retry, and global wake | API producer / worker executor | Transcription, extra content, metadata, entity extraction | The API persists or observes durable eligible rows and optionally wakes the configured Cloud Run Job; local development relies on the separately running worker | No process-local execution or controls remain. The explicit admin wake has no stage or filter because every worker execution drains the global queue. All wake paths use the complete four-stage durable predicate and suppress a redundant trigger while a live worker execution lease exists. |
 | Expired-stage recovery | API and worker during rollout | Transcription, extra content, metadata | A shared serialized coordinator applies each stage's queued/requested expiry policy | Worker mutations require its exact live global execution token in addition to the stage lease predicate. Transitional API recovery omits only that global worker-execution predicate until the scheduled worker wake is deployed and proven; stage compare-and-set rules keep concurrent reconcilers idempotent. |
 | Bulk transcription and metadata operations | Worker process | Transcription, metadata | Guarded updates reset only exact observed eligible rows to durable `PENDING`, then optionally wake the configured worker | Full source/job compare-and-set prevents a stale selection from reporting stranded work. Metadata never bypasses transcript confirmation. |
@@ -22,7 +22,9 @@ existing owner remains frictionless, while behavior tests remain the authority.
 The transcription, metadata, and extra-content lifecycle helpers own their
 compare-and-swap claims and terminal publication. Entity extraction separately owns an
 atomic run/revision projection commit. Automatic batch execution has no API-process
-runner; the Processing page reads and mutates only durable state.
+runner; the Processing page reads and mutates only durable state. The executable
+worker owns process lifecycle, while its import-safe cycle owns durable discovery and
+ordered stage execution behind a token/ownership/state-reporting control boundary.
 
 ## Recovery Coverage
 
@@ -133,8 +135,9 @@ terminal write over a current owner, and discards an abandoned candidate on
 legacy failure/cancellation. Operationally, old entity executors must finish or be
 terminated before tokenless leftovers are cancelled and new claimers are started.
 
-This stage is fenced but not leased. Adding a lease is not the immediate next step:
-first remove the duplicate API batch executors so one runtime owns automatic work.
+This stage is fenced but not leased. The duplicate API batch executors are now gone
+and the worker cycle is isolated, so Slice 013 can add stage liveness without changing
+automatic execution ownership at the same time.
 
 ## Extra-Content Ownership Repair
 
@@ -251,7 +254,12 @@ bulk reset paths use conditional updates rather than briefly reopening all stage
     `worker_state`; fence state reports, release, every automatic stage claim, and every
     worker recovery mutation by the exact token; renew independently; and check in a
     default-disabled five-minute scheduled reconciliation target.
-12. **Operational follow-up:** deploy migration 0052 and the lease-aware worker, drain
+12. **Completed in Slice 012:** isolate the import-safe, behavior-tested worker cycle
+    from process boot, recovery, polling, signals, release, handoff, and database
+    shutdown; keep four explicit stage contracts and remove positional cycle tests.
+13. **Current Slice 013:** add run/revision-bound liveness and explicit recovery intent
+    to entity extraction without changing its atomic projection model.
+14. **Operational follow-up:** deploy migration 0052 and the lease-aware worker, drain
     pre-lease executions, enable the schedule, observe at least two ticks plus a manual
     overlap, and only then remove API startup and periodic recovery in a later
     deployment.

@@ -7,9 +7,9 @@ Last updated: July 23, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 012 — extract the worker processing-cycle boundary
-- Last sealed cleanup implementation: worker execution ownership at `931ee06d`
-- Current slice: 012 — framed; behavioral characterization and extraction next
+- Current checkpoint: 013 — establish durable entity-extraction liveness
+- Last sealed cleanup implementation: worker processing-cycle extraction at `45903733`
+- Current slice: 013 — framed; ownership and recovery characterization next
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -1455,45 +1455,53 @@ Residuals:
 - Best-effort state reports are individually bounded, but the complete cleanup queue
   and required database release do not yet have an aggregate statement deadline.
 - Worker lifecycle tests combine executable heartbeat/state tests with source-order
-  assertions. An import-safe lifecycle/cycle seam should replace the remaining
-  positional assertions with signal and ownership-loss behavior tests.
-- `worker.ts` is 621 lines and repeats the discovery, ownership gate, timing, error,
-  notification, and result envelope across four stages. The next slice isolates that
-  orchestration before adding another stage-level lease.
+  assertions for the still-executable outer lifecycle. The processing cycle itself is
+  now import-safe and behavior-tested; a later lifecycle seam can replace the
+  remaining boot/signal/cleanup ordering assertions.
+- The repeated discovery and four stage loops have moved out of `worker.ts`; Slice 012
+  below records that completed boundary.
 
 ## Slice 012 — Extract the Worker Processing-Cycle Boundary
 
-Status: framed, not started
+Status: complete at `45903733`
 
 Problem:
 
-`worker.ts` currently owns process boot, global execution leasing, recovery scheduling,
-polling, signals, shutdown, final handoff, four queue queries, and four nearly identical
-stage loops. A change to one stage requires editing a large executable module, while
-most lifecycle coverage asserts source ordering because importing the file starts the
-process.
+`worker.ts` owned process boot, global execution leasing, recovery scheduling, polling,
+signals, shutdown, final handoff, four queue queries, and four nearly identical stage
+loops. A change to one stage required editing a large executable module, while most
+cycle coverage asserted source ordering because importing the file starts the process.
 
 Target invariant:
 
 The executable owns only process lifecycle and the outer poll/drain loop. An
 import-safe processing-cycle module owns one ordered cycle through the four explicit
-stages and can be exercised behaviorally with injected queries and runners. Stage
+stages and is exercised behaviorally through its production module wiring. Stage
 eligibility, order, token forwarding, error isolation, notifications, and exit
-semantics remain unchanged.
+semantics are unchanged.
 
-Scope:
+Delivered invariant:
 
-- Characterize transcription → extra content → metadata → entity order and ownership
-  checks after every discovery and before every job.
-- Extract the four queue queries and repeated per-stage execution envelope from the
-  executable behind a small dependency-injected boundary.
-- Keep four explicit stage definitions and stage-specific outcome/log/notification
-  behavior; share only the actually identical orchestration.
-- Replace positional source assertions for cycle behavior with tests for order,
-  ownership loss at scan/job boundaries, worker-token forwarding, skipped outcomes,
-  per-job error isolation, and cycle result calculation.
-- Keep boot, global lease acquisition/renewal, recovery start/stop, polling, signals,
-  release, handoff, and database close in `worker.ts`.
+- `worker.ts` fell from 621 to 301 lines and now owns boot, the singleton execution
+  lease, recovery scheduling, the outer poll/drain decision, signals, release,
+  post-release handoff, and database close. It no longer imports pipeline producers or
+  stage eligibility predicates.
+- `worker-processing-cycle.ts` is import-safe and exposes only the batch-size constant,
+  a three-member control contract, and `processWorkerCycle(control)`. Four private
+  processors keep transcription, extra-content, metadata, and entity outcome contracts
+  explicit. Only state/timing/error mechanics are shared.
+- The cycle snapshots all four bounded, oldest-first durable queries before execution,
+  checks live global ownership before and after each query and before every item, and
+  preserves exact stage order, producer options, notifications, fixed discovered-size
+  reporting, per-item failure isolation, and discovery-error propagation.
+- No dependency container, normalized result union, generic stage framework, or
+  request-owned abstraction was introduced. Tests mock the real production modules,
+  so predicate-to-stage mapping, selected columns, limit 5, ordering, and producer
+  calls are exercised without widening the production API for tests.
+- Source-position assertions for the cycle were replaced with executable behavior
+  tests covering ownership loss at every scan and stage, a deferred active producer,
+  all neutral outcomes, exact failure/state sequences, notification envelopes, and
+  the discovered-work result that drives exit-when-empty reconciliation.
 
 Non-goals:
 
@@ -1503,12 +1511,83 @@ Non-goals:
 - No generic job framework or abstraction shared with request-owned processing.
 - No frontend or API contract changes.
 
+Evidence:
+
+- Focused cycle, lifecycle, ownership, and real eligibility coverage passed: 4 files /
+  52 tests. Backend typecheck and `git diff --check` passed.
+- The complete backend suite passed: 81 files / 728 tests.
+- Definitive `CI=1 ./scripts/verify-all.sh` passed the same backend suite and
+  typecheck, frontend 92 files / 615 tests, the production build, and mocked browser
+  37/37.
+- Independent behavior, simplicity, and adversarial reviews found no remaining P0–P2
+  issue after removing redundant source regexes and locking batch size, outer
+  discovered-work wiring, and both normal/fallback notification contracts.
+
+Residuals:
+
+- The outer lifecycle remains an executable entry point, so acquisition, signal,
+  cleanup, release, and fatal-exit composition still has small source-order tripwires.
+  Heartbeat/state behavior and the complete processing cycle are executable tests.
+- Entity extraction is now the only automatic stage with a run/revision publication
+  fence but no stage lease, heartbeat, or expiry-aware recovery.
+
+## Slice 013 — Durable Entity-Extraction Liveness
+
+Status: framed; characterization next
+
+Problem:
+
+Entity extraction atomically reserves a run/revision and publishes one complete
+projection, but the active attempt has no database-clock lease, heartbeat, or persisted
+queued-versus-requested intent. A killed worker or API request therefore leaves a
+current `RUNNING` row indefinitely. The singleton worker lease prevents overlapping
+automatic executors; it cannot prove that a particular entity attempt survived after
+the process owning that global lease disappeared.
+
+Target invariant:
+
+Every new entity attempt has one run/revision-bound liveness contract before AI work
+starts. Renewal and terminal projection publication must still own that exact live
+attempt. Expiry reconciliation follows explicit persisted intent, reports one
+compare-and-set winner, and never guesses that a tokenless, mismatched, or
+rolling-deployment attempt is abandoned.
+
+Scope:
+
+- Trace and characterize every worker, metadata follow-on, explicit regeneration,
+  retry, reset, cancellation, failure, and terminal-publication path before changing
+  schema or recovery.
+- Inventory every ownership-revoking patch and direct writer—including human metadata
+  edits, source invalidation, identity/name propagation, version restore, extra-content
+  and transcription changes, retagging, bulk operations, and queue mutations—so each
+  clears the complete current entity liveness tuple or deliberately treats
+  rolling-version residue as non-authoritative.
+- Persist a PostgreSQL-clock lease, exact run binding, and explicit claim intent for
+  current entity claims, with a rolling-deployment boundary that leaves unknown legacy
+  attempts manual.
+- Reuse the existing serialized heartbeat scheduler and recovery coordinator without
+  merging entity projection rules into another stage's lifecycle helper.
+- Require the exact run, reserved revision, live lease, and worker execution token
+  where applicable at claim, renewal, recovery, failure, and transactional publication
+  boundaries.
+- Add entity recovery to durable wake/exit observations only after its queued/requested
+  expiry policy is executable and proven.
+
+Non-goals:
+
+- No entity prompt, matching, merge, public projection, or review-workflow redesign.
+- No change to the atomic revisioned projection model established in Slice 009.
+- No removal of transitional API recovery and no deployment or Scheduler activation.
+- No generic multi-stage lease framework.
+
 Acceptance:
 
-- Focused behavioral cycle and lifecycle tests pass without importing an executable
-  that registers signals or exits the process.
-- Existing ownership architecture tests still prove all automatic claims and worker
-  recoveries carry the execution token.
-- Full backend tests/typecheck and aggregate repository verification remain green.
-- The diff removes the four repeated execution envelopes from `worker.ts` and gives
-  stage changes a testable module boundary without hiding their distinct contracts.
+- Focused tests prove intent-specific claim, renewal, expiry, cancellation, stale
+  producer, supersession/invalidation, worker-token, and transactional publication
+  behavior. The architecture boundary accounts for every claim, terminal, recovery,
+  and ownership-tuple writer.
+- Migration checks and a real PostgreSQL proof cover rolling overlap, exact
+  compare-and-set recovery, and publication fencing.
+- Full backend/typecheck and aggregate repository verification remain green.
+- Independent concurrency and simplicity reviews find no P0–P2 issue before the
+  checkpoint is committed.

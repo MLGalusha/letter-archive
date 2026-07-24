@@ -7,11 +7,11 @@ Last updated: July 24, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 026 — source-complete, query-bound Dashboard selection
-- Last sealed cleanup implementation: Dashboard selection provenance at `a68900d3`
+- Current checkpoint: 027 — validated, replay-safe Dashboard stored state
+- Last sealed cleanup implementation: Dashboard stored-state ownership at `4c72423f`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Current slice: 027 — validated, replay-safe Dashboard stored state
+- Current slice: 028 — next ownership boundary orientation
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -2104,7 +2104,7 @@ deployment, or external state changed in this slice.
 
 ## Slice 027 — Validated, Replay-Safe Dashboard Stored State
 
-Status: next
+Status: complete at `4c72423f`
 
 Problem:
 
@@ -2146,38 +2146,40 @@ the exact committed value. Save/delete operations rebase on the latest decoded s
 and open tabs adopt storage events, so sequential cross-tab work is not silently lost.
 Malformed saved views are isolated from valid siblings.
 
-Planned minimum:
+Delivered:
 
-- Add a focused `dashboardStoredStateModel` with total `unknown` decoders for a
-  complete canonical filter/sort snapshot and saved-view snapshot. Validate known
-  enums, arrays, dates, sort field/direction pairs, and known unique columns; preserve
+- Added a focused `dashboardStoredStateModel` with total `unknown` decoders for a
+  complete canonical filter/sort snapshot and saved-view snapshot. It validates known
+  enums, arrays, dates, sort field/direction pairs, and known unique columns; preserves
   compatible storage keys and backfill fields added after older saved views.
-- Tighten stored status/workflow contracts from `string[]` to their domain unions and
-  remove downstream casts that currently assert unvalidated values are safe.
-- Build one owned stored snapshot from the current committed query plus `dateMode`.
-  Feed its persisted subset to the persistence hook and its column-extended form to
+- Tightened stored status/workflow contracts from `string[]` to their domain unions
+  and removed downstream casts that asserted unvalidated values were safe.
+- Built one owned stored snapshot from the current committed query plus `dateMode`.
+  Its persisted subset feeds the persistence hook and its column-extended form feeds
   saved views, rather than reconstructing the whitelist twice.
-- Give filters and columns one named stored-state replacement transition each. Keep
-  their existing individual controls for the UI; do not introduce a reducer merely to
-  hide setters.
-- Make saved-view record creation, cloning, save/delete calculation, and persistence
-  explicit pure transitions outside React state updater functions. Re-read the decoded
-  stored list before mutation and synchronize other open tabs through the browser
-  storage event. Document truly simultaneous writes as last-writer-wins.
-- Add focused decoder/capture/apply tests for partial legacy values, hostile JSON-valid
+- Gave filters and columns one named stored-state replacement transition each. Their
+  existing individual UI controls remain; no reducer was introduced merely to hide
+  setters.
+- Made saved-view record creation, cloning, save/delete calculation, and persistence
+  explicit transitions outside React state updater functions. Each action re-reads
+  the decoded stored list before mutation, and open tabs synchronize through the
+  browser storage event. Truly simultaneous writes remain last-writer-wins.
+- Added focused decoder/capture/apply tests for partial legacy values, hostile JSON-valid
   values, null and malformed siblings, owned array isolation, query serialization,
   Strict Mode identity/storage parity, and sequential two-tab save/delete behavior.
-- Add one discriminating mocked-browser flow that seeds hostile persisted fields plus
-  a partial legacy saved view, proves the Dashboard still renders with a normalized
+- Added one discriminating mocked-browser flow that seeds hostile persisted fields plus
+  a partial legacy saved view. It proves the Dashboard still renders with a normalized
   list request, applies the view, and remains usable.
 
 Non-goals:
 
-- No filter reducer, filter-component prop redesign, search-debounce change, or broad
-  route-state rewrite.
+- No filter reducer, filter-component prop redesign, debounce-duration change, or
+  broad route-state rewrite. A stored-state replacement does cancel the superseded
+  pending search draft.
 - No range-date draft/input repair or change to user-visible date-filter semantics.
-- No query, fetching, selection, API endpoint, backend, database, CSS, or layout
-  change.
+- No query-filter meaning, fetching ownership, selection, API endpoint, backend,
+  database, CSS, or layout change. Query construction only enforces the backend's
+  existing sort limit and a transport-safe search bound.
 - No server-synced, shared, renamed, or schema-versioned saved-view feature.
 - Do not merge the standalone Dashboard mode or column-durability storage keys into
   the persisted filter key. Their separate ownership can be audited independently.
@@ -2200,6 +2202,84 @@ Acceptance:
   last-writer-wins.
 - Focused model/hook/composition tests, touched lint/typecheck, a hostile-storage
   browser proof, related Dashboard tests, and the full repository gate pass.
+
+What changed:
+
+- `dashboardStoredStateModel.ts` is now the pure owner for complete filter/sort
+  defaults, enum arrays, collection parsing, bounded search, mutually exclusive date
+  modes, server-compatible sort limits, visible-column/order normalization, legacy
+  backfills, saved-view identity/count limits, and owned array copies. Both the main
+  Dashboard state key and the separate column-settings key cross that validation
+  boundary before entering React state.
+- `AdminDashboard` builds one stored snapshot from the already-owned committed query
+  plus `dateMode`. The persistence and saved-view hooks consume that snapshot instead
+  of rebuilding the 17-field whitelist independently.
+- Saved-view application now crosses three named runtime transitions—replace filters,
+  replace sort, and replace columns—instead of 21 external setter calls. Raw column
+  setters are no longer exposed. The collection-code parser is shared by stored
+  decoding, initial filter state, and replacement.
+- The persistence hook fell from 71 to 9 lines, the Dashboard saved-view composition
+  hook from 165 to 62, and the column hook from 200 to 133. The added 384-line stored
+  model is pure, domain-cohesive, and directly covered rather than distributing casts
+  and fallback branches across those runtime hooks.
+- Saved-view save/delete work no longer performs UUID generation, time capture,
+  snapshot capture, storage writes, or callbacks inside React state updaters. Each
+  action rebases on current decoded storage, publishes React state only after a
+  successful storage write, and reloads current durable storage when an event arrives
+  so a delayed older event cannot regress a tab.
+- Saved payloads reject malformed/null siblings independently, empty or duplicate
+  identities, unknown/duplicate enum and column values, and entries beyond the
+  established 12-view limit. Every capture and apply boundary owns its arrays.
+- Dashboard sorting now enforces the backend's eight-rule contract in stored decoding,
+  committed-query construction, request serialization, and the sort UI. Dashboard
+  search is bounded to 500 characters at stored decoding, committed-query
+  construction, and the rendered input so hostile storage cannot create an
+  unrecoverable oversized request.
+- The deterministic browser API can seed the Dashboard state and saved-view keys. Its
+  new hostile flow proves malformed persisted state produces the exact default
+  request, a partial legacy view safely produces the exact normalized search request,
+  and the rendered table/search/column state remains usable.
+
+Evidence:
+
+- Final focused stored-state, saved-view, query, sort, toolbar, and utility surface
+  passed 7 files / 57 tests. The complete Admin Dashboard unit neighborhood passed
+  25 files / 174 tests during the independent adversarial review.
+- Definitive `CI=1 ./scripts/verify-all.sh` passed backend 104 files / 1,016 tests plus
+  typecheck, frontend 134 files / 930 tests plus the production build, and the complete
+  mocked browser suite 59/59.
+- The hostile-storage browser proof passed 1/1 in Chromium; the complete mocked
+  Dashboard spec passed 9/9.
+- Touched frontend ESLint, frontend `tsc -b`, and `git diff --check` passed.
+- The production build retains its existing large-chunk warnings:
+  `LetterReviewPage` is 527.84 kB and `UpdateEditorPage` is 1,182.96 kB after
+  minification.
+- Independent architecture, correctness, and adversarial reviewers initially stopped
+  the checkpoint over a delayed stale storage event, the backend's eight-sort limit,
+  false success after rejected storage writes, duplicate/unbounded saved views,
+  cast-based standalone column storage, duplicated collection parsing, and oversized
+  search requests. Each finding was repaired with a discriminating regression; all
+  three final passes found no remaining P0–P2 issue.
+
+Residuals:
+
+- `localStorage` has no compare-and-swap transaction. Sequential cross-tab actions
+  rebase correctly and delayed events reload current durable state, but truly
+  simultaneous read-modify-write actions remain last-writer-wins.
+- Filter and column settings remain best-effort browser configuration. Saved-view
+  mutations now fail closed when their storage write is rejected, but this slice does
+  not add user-facing quota/unavailable-storage errors.
+- Range-date validation deliberately matches the existing input contract
+  (`YYYYMMDD`, month 1–12, day 1–31); it does not introduce stricter calendar-day
+  semantics.
+- The filter controller still owns many individual `useState` values and the toolbar,
+  active-chip, and panel layers still expose a broad control surface. Slice 027
+  centralized the serializable boundary and safe replacement transition; it did not
+  claim the prioritized filter-transition/plumbing work is complete.
+
+No product feature, layout, backend production behavior, API endpoint, database
+schema, deployment, or external state changed. The eight-sort and bounded-search
+changes prevent previously offered invalid client state from breaking the Dashboard.
 
 Rollback base: `a68900d3`.
 

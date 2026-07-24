@@ -30,7 +30,6 @@ export interface AutoSaveData {
   senderRecipientRelationship?: RelationshipType | null;
   primaryTopics?: string[] | null;
   notes?: string | null;
-  readingText?: string | null;
 }
 
 interface UseAutoSaveOptions {

@@ -18,7 +18,6 @@ import {
 import {
   toggleLetterFlag,
   reExtractLetter,
-  generateReadingView,
 } from "../../api/admin/letters";
 import LetterViewer from "../../components/LetterViewer/LetterViewer";
 import AdminLayout from "../../components/AdminLayout";
@@ -34,7 +33,6 @@ import { trackEdit } from "../../utils/recentEdits";
 import { highlightTranscriptMarkers } from "../../utils/transcriptHighlight";
 import type { Letter, LetterImage, VisibilityState } from "../../types/Letter";
 import {
-  getPrimaryImageType,
   hasPrimaryTranscriptContent,
   hasRelatedExtraContent,
   shouldShowPhotoDescriptionWorkflow,
@@ -62,6 +60,7 @@ import { useLetterReviewStatusResets } from "./LetterReview/useLetterReviewStatu
 import { useStructuredNoteActions } from "./LetterReview/useStructuredNoteActions";
 import { usePhotoDescriptionWorkspace } from "./LetterReview/usePhotoDescriptionWorkspace";
 import { useExtraContentWorkspace } from "./LetterReview/useExtraContentWorkspace";
+import { useReadingViewWorkspace } from "./LetterReview/useReadingViewWorkspace";
 import { loadCurrentLetter } from "./LetterReview/loadCurrentLetter";
 import { usePretextFontSize } from "../../hooks/usePretextFontSize";
 import LineReviewMode, {
@@ -92,28 +91,6 @@ export default function LetterReviewPage() {
   } = useGuardedLetterState(markSourceConflict, visit);
 
   const [transcript, setTranscript] = useState("");
-  const [transcriptViewMode, setTranscriptViewMode] = useState<"edit" | "preview">("edit");
-  // Reader view text — sourced from backend readingText
-  const [readerText, setReaderText] = useState<string | null>(null);
-  const [readingViewGenerating, setReadingViewGenerating] = useState(false);
-
-  // Initialize reader text from backend when switching to preview
-  const handleViewModeChange = useCallback((mode: "edit" | "preview") => {
-    setTranscriptViewMode(mode);
-    if (mode === "preview" && readerText === null && letter?.readingText) {
-      setReaderText(letter.readingText);
-    }
-  }, [readerText, letter?.readingText]);
-
-  // Sync reader text when letter data updates (e.g. after verification auto-generates it)
-  useEffect(() => {
-    if (letter?.readingText && readerText === null) {
-      // Don't auto-set — wait until user opens preview
-    } else if (letter?.readingText && letter.readingText !== readerText) {
-      // Backend has newer reading text (e.g. from auto-generation on verify)
-      setReaderText(letter.readingText);
-    }
-  }, [letter?.readingText, readerText]);
 
   // Metadata regeneration state
   const [regenerateState, setRegenerateState] = useState<
@@ -169,7 +146,6 @@ export default function LetterReviewPage() {
   const [mappingText, setMappingText] = useState<string | undefined>(undefined);
 
   useLayoutEffect(() => {
-    setReadingViewGenerating(false);
     setRegenerateState("idle");
     setReExtractState("idle");
     setEntityReExtractState("idle");
@@ -302,7 +278,6 @@ export default function LetterReviewPage() {
   });
   const hydrateAdoptedLetter = useCallback((updatedLetter: Letter) => {
     setTranscript(updatedLetter.transcript.fullText);
-    setReaderText(updatedLetter.readingText ?? null);
     applyLetterMetadata(updatedLetter);
     hydratePhotoDescription(updatedLetter);
   }, [
@@ -316,6 +291,13 @@ export default function LetterReviewPage() {
     tryAdoptLetter,
     hydrateAdoptedLetter,
     handleMutationError,
+  });
+  const readingViewWorkspace = useReadingViewWorkspace({
+    visit,
+    letter,
+    transcriptText: transcript,
+    surfaceActive: !reviewMode,
+    executeLetterMutation,
   });
   const extraContentWorkspace = useExtraContentWorkspace({
     visit,
@@ -862,45 +844,6 @@ export default function LetterReviewPage() {
     letter,
   ]);
 
-  const handleReaderTextChange = useCallback((text: string) => {
-    startTransition(() => {
-      setReaderText(text);
-    });
-    void triggerAutoSave({ readingText: text });
-  }, [triggerAutoSave]);
-
-  const handleGenerateReadingView = useCallback(async () => {
-    if (!letterId || !letter) return;
-    const releaseSaving = beginSaving();
-    try {
-      if (!visit.isActive() || !await flushPendingSaves()) return;
-
-      setReadingViewGenerating(true);
-      const updated = await generateReadingView(
-        letterId,
-        letter.primarySourceRevision,
-      );
-      if (!tryAdoptLetter(updated)) return;
-      hydrateAdoptedLetter(updated);
-      showToast("Reading view generated", "success");
-    } catch (error) {
-      handleMutationError(error, "Failed to generate reading view");
-    } finally {
-      if (visit.isActive()) setReadingViewGenerating(false);
-      releaseSaving();
-    }
-  }, [
-    beginSaving,
-    flushPendingSaves,
-    handleMutationError,
-    hydrateAdoptedLetter,
-    letter,
-    letterId,
-    showToast,
-    tryAdoptLetter,
-    visit,
-  ]);
-
   const handleMetadataAutoSave = useCallback((updates: AutoSaveData) => {
     void triggerAutoSave(updates);
   }, [triggerAutoSave]);
@@ -1108,7 +1051,7 @@ export default function LetterReviewPage() {
           className="review-layout"
           firstPanelClassName="images-panel"
           secondPanelClassName="edit-panel"
-          forceSplit={transcriptViewMode === "preview" ? 0.4 : undefined}
+          forceSplit={readingViewWorkspace.readingViewOpen ? 0.4 : undefined}
         >
           {/* Left side: Letter viewer */}
           <div className="image-review-shell">
@@ -1288,12 +1231,7 @@ export default function LetterReviewPage() {
                 onTranscriptDoubleClick={handleTranscriptDoubleClick}
                 onTranscriptInput={handleTranscriptInput}
                 onEditorKeyDown={handleEditorKeyDown}
-                onViewModeChange={handleViewModeChange}
-                readerText={readerText ?? ""}
-                onReaderTextChange={handleReaderTextChange}
-                hideReadingView={getPrimaryImageType(letter) !== "letter"}
-                onGenerateReadingView={handleGenerateReadingView}
-                readingViewGenerating={readingViewGenerating}
+                {...readingViewWorkspace.sectionProps}
               />
             )}
 

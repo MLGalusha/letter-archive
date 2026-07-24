@@ -1,4 +1,4 @@
-import { memo, useState, useMemo, useEffect, useCallback, type RefObject, type CSSProperties } from "react";
+import { memo, useMemo, useEffect, type RefObject, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "../../../components/common";
 import { countMarkers, highlightTranscriptMarkers, type MarkerType } from "../../../utils/transcriptHighlight";
@@ -34,13 +34,13 @@ interface TranscriptionSectionProps {
   onTranscriptDoubleClick: (e: React.MouseEvent) => void;
   onTranscriptInput: (text: string) => void;
   onEditorKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
-  onViewModeChange?: (mode: "edit" | "preview") => void;
+  readingViewOpen: boolean;
+  onReadingViewOpenChange: (open: boolean) => void;
   readerText: string;
-  onReaderTextChange: (text: string) => void;
   /** Hide the reading view toggle (e.g. for non-letter types like telegrams, covers) */
   hideReadingView?: boolean;
-  onGenerateReadingView?: () => void;
-  readingViewGenerating?: boolean;
+  onGenerateReadingView: () => void;
+  readingViewGenerating: boolean;
 }
 
 const hasContent = (text: string) => text.trim().length > 0;
@@ -63,36 +63,33 @@ const TranscriptionSection = memo(function TranscriptionSection({
   onTranscriptDoubleClick,
   onTranscriptInput,
   onEditorKeyDown,
-  onViewModeChange,
+  readingViewOpen,
+  onReadingViewOpenChange,
   readerText,
   hideReadingView,
   onGenerateReadingView,
   readingViewGenerating,
 }: TranscriptionSectionProps) {
-  const [viewMode, setViewMode] = useState<"edit" | "preview">("edit");
-  const showReadingView = !hideReadingView && viewMode === "preview" && hasContent(transcriptText);
-
-  const changeViewMode = useCallback((mode: "edit" | "preview") => {
-    setViewMode(mode);
-    onViewModeChange?.(mode);
-  }, [onViewModeChange]);
+  const showReadingView = !hideReadingView
+    && readingViewOpen
+    && hasContent(transcriptText);
 
   // Re-populate editor when switching back from preview to edit.
   useEffect(() => {
-    if (viewMode === "edit" && editorRef.current && transcriptText) {
+    if (!showReadingView && editorRef.current && transcriptText) {
       const current = editorRef.current.innerText;
       if (current !== transcriptText) {
         editorRef.current.innerHTML = highlightTranscriptMarkers(transcriptText);
       }
     }
-  }, [viewMode, transcriptText, editorRef]);
+  }, [showReadingView, transcriptText, editorRef]);
 
   useEffect(() => {
     if (!showReadingView) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        changeViewMode("edit");
+        onReadingViewOpenChange(false);
       }
     };
 
@@ -104,7 +101,7 @@ const TranscriptionSection = memo(function TranscriptionSection({
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [showReadingView, changeViewMode]);
+  }, [showReadingView, onReadingViewOpenChange]);
 
   const markerCounts = useMemo(
     () => countMarkers(transcriptText),
@@ -145,15 +142,15 @@ const TranscriptionSection = memo(function TranscriptionSection({
             <div className="view-mode-toggle">
               <button
                 type="button"
-                className={`view-mode-btn${viewMode === "edit" ? " active" : ""}`}
-                onClick={() => changeViewMode("edit")}
+                className={`view-mode-btn${!readingViewOpen ? " active" : ""}`}
+                onClick={() => onReadingViewOpenChange(false)}
               >
                 Edit
               </button>
               <button
                 type="button"
-                className={`view-mode-btn${viewMode === "preview" ? " active" : ""}`}
-                onClick={() => changeViewMode("preview")}
+                className={`view-mode-btn${readingViewOpen ? " active" : ""}`}
+                onClick={() => onReadingViewOpenChange(true)}
               >
                 Reading view
               </button>
@@ -243,7 +240,7 @@ const TranscriptionSection = memo(function TranscriptionSection({
       {showReadingView && createPortal(
         <div
           className="reading-view-overlay"
-          onMouseDown={() => changeViewMode("edit")}
+          onMouseDown={() => onReadingViewOpenChange(false)}
         >
           <div
             className="reading-view-modal"
@@ -260,30 +257,28 @@ const TranscriptionSection = memo(function TranscriptionSection({
                 </p>
               </div>
               <div className="reading-view-modal-actions">
-                {onGenerateReadingView && (
-                  <button
-                    type="button"
-                    className="action-btn"
-                    onClick={onGenerateReadingView}
-                    disabled={saving || readingViewGenerating}
-                  >
-                    {readingViewGenerating ? (
-                      <>
-                        <Icon name="process" size={14} className="spinning" />
-                        <span>Generating...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Icon name="process" size={14} />
-                        <span>{readerText ? "Regenerate" : "Generate"} Reading View</span>
-                      </>
-                    )}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className="action-btn"
+                  onClick={onGenerateReadingView}
+                  disabled={saving || readingViewGenerating}
+                >
+                  {readingViewGenerating ? (
+                    <>
+                      <Icon name="process" size={14} className="spinning" />
+                      <span>Generating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Icon name="process" size={14} />
+                      <span>{readerText ? "Regenerate" : "Generate"} Reading View</span>
+                    </>
+                  )}
+                </button>
                 <button
                   type="button"
                   className="reading-view-close-btn"
-                  onClick={() => changeViewMode("edit")}
+                  onClick={() => onReadingViewOpenChange(false)}
                 >
                   Close
                 </button>
@@ -311,17 +306,15 @@ const TranscriptionSection = memo(function TranscriptionSection({
                   ) : (
                     <div className="reading-view-empty">
                       <p>No reading view generated yet.</p>
-                      {onGenerateReadingView && (
-                        <button
-                          type="button"
-                          className="action-btn generate-reading-view-cta"
-                          onClick={onGenerateReadingView}
-                          disabled={saving || readingViewGenerating}
-                        >
-                          <Icon name="process" size={14} />
-                          <span>Generate Reading View</span>
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        className="action-btn generate-reading-view-cta"
+                        onClick={onGenerateReadingView}
+                        disabled={saving || readingViewGenerating}
+                      >
+                        <Icon name="process" size={14} />
+                        <span>Generate Reading View</span>
+                      </button>
                     </div>
                   )}
                 </div>

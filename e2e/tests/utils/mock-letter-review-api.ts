@@ -62,6 +62,7 @@ interface MockLetterReviewLetter {
   metadataContentStatus: 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
   extraContentStatus: 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
   extraContentTranscript?: string;
+  readingText?: string;
   photoDescriptionStatus?: 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
   photoDescription?: string;
   photoDescriptionContext?: string;
@@ -417,6 +418,10 @@ export interface MockLetterReviewContext {
     url: string;
     body: { primarySourceRevision?: number };
   }>;
+  generateReadingViewRequests: Array<{
+    url: string;
+    body: { primarySourceRevision?: number };
+  }>;
 }
 
 export async function installMockLetterReviewApi(
@@ -440,6 +445,7 @@ export async function installMockLetterReviewApi(
         | 'verifyTranscript'
         | 'transcribeLetter'
         | 'transcribeExtras'
+        | 'generateReadingView'
         | 'verifyMetadata'
         | 'extraContent'
         | 'describePhoto'
@@ -481,6 +487,7 @@ export async function installMockLetterReviewApi(
   const versionRequests: MockVersionRequest[] = [];
   const transcribeLetterRequests: MockLetterReviewContext['transcribeLetterRequests'] = [];
   const transcribeExtrasRequests: MockLetterReviewContext['transcribeExtrasRequests'] = [];
+  const generateReadingViewRequests: MockLetterReviewContext['generateReadingViewRequests'] = [];
   const letterPath = `${API_BASE_URL}/admin/letters/${letter.id}`;
   const detectLinesByPageId = options.detectLinesByPageId
     ? clone(options.detectLinesByPageId)
@@ -723,6 +730,40 @@ export async function installMockLetterReviewApi(
         transcribedCount: 1,
         extraContentStatus: 'AI_DRAFT',
       }),
+    });
+  });
+
+  await page.route(new RegExp(`${escapeRegex(letterPath)}/generate-reading-view$`), async (route) => {
+    const body = route.request().postDataJSON() as {
+      primarySourceRevision?: number;
+    };
+    generateReadingViewRequests.push({
+      url: route.request().url(),
+      body,
+    });
+    if (routeFailures.generateReadingView) {
+      await fulfillFailure(route, routeFailures.generateReadingView);
+      return;
+    }
+    if (body.primarySourceRevision !== letter.primarySourceRevision) {
+      await fulfillFailure(route, {
+        status: 409,
+        error: 'Letter source changed; reload before generating a reading view',
+        code: 'SOURCE_REVISION_CHANGED',
+      });
+      return;
+    }
+
+    letter.readingText = [
+      'My dear mother,',
+      'I arrived safely in Boston. The weather has been kind.',
+      'Love, Alice',
+    ].join('\n\n');
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(letter),
     });
   });
 
@@ -1201,5 +1242,6 @@ export async function installMockLetterReviewApi(
     versionRequests,
     transcribeLetterRequests,
     transcribeExtrasRequests,
+    generateReadingViewRequests,
   };
 }

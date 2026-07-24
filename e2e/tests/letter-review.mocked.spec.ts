@@ -157,6 +157,113 @@ test.describe('@mocked Letter Review', () => {
     );
   });
 
+  test('resets Reading View generation, overlay, and split layout for a new visit', async ({
+    page,
+  }) => {
+    const initialLetter = createMockLetterReviewLetter({
+      primarySourceRevision: 3,
+      readingText: undefined,
+    });
+    const secondLetter = createMockLetterReviewLetter({
+      id: 'letter-review-2',
+      title: 'Review Letter Two',
+      primarySourceRevision: 7,
+      readingText: undefined,
+      transcript: {
+        pages: [{
+          pageNumber: 1,
+          text: 'Second letter transcript with no reading view.',
+        }],
+        fullText: 'Second letter transcript with no reading view.',
+        verified: false,
+      },
+    });
+    await installMockLetterReviewApi(page, {
+      initialLetter: secondLetter,
+    });
+    const mockedApi = await openMockLetterReview(page, initialLetter);
+    const splitPane = page.locator('.review-layout.split-pane');
+    const divider = page.locator(
+      '.review-layout.split-pane > .split-pane-divider',
+    );
+    const overlay = page.locator('body > .reading-view-overlay');
+    const readSplitPercent = () => splitPane.evaluate((element) => (
+      (element as HTMLElement).style.getPropertyValue('--split-percent')
+    ));
+    const initialBodyOverflow = await page.evaluate(
+      () => document.body.style.overflow,
+    );
+
+    await expect.poll(readSplitPercent).toBe('60%');
+    const initialSplitPercent = await readSplitPercent();
+    await expect(overlay).toHaveCount(0);
+    await transcriptionSection(page).getByRole('button', {
+      name: 'Reading view',
+      exact: true,
+    }).click();
+
+    const dialog = page.getByRole('dialog', { name: 'Reading view' });
+    await expect(dialog).toBeVisible();
+    await expect(divider).toHaveClass(/(^|\s)locked(\s|$)/);
+    await expect.poll(readSplitPercent).toBe('40%');
+    await expect.poll(() => page.evaluate(() => document.body.style.overflow))
+      .toBe('hidden');
+
+    await dialog.locator('.generate-reading-view-cta').click();
+
+    await expect
+      .poll(() => mockedApi.generateReadingViewRequests.length)
+      .toBe(1);
+    expect(mockedApi.generateReadingViewRequests[0]).toEqual({
+      url: `${API_BASE_URL}/admin/letters/letter-review-1/generate-reading-view`,
+      body: { primarySourceRevision: 3 },
+    });
+    await expect(dialog.locator('.reading-view-text')).toContainText(
+      'I arrived safely in Boston. The weather has been kind.',
+    );
+    await expect(page.locator('.toast')).toContainText(
+      'Reading view generated',
+    );
+
+    await page.evaluate((letterId) => {
+      window.history.pushState({}, '', `/admin/letters/${letterId}`);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    }, secondLetter.id);
+
+    await expect(
+      transcriptionSection(page).locator('.transcript-editor'),
+    ).toContainText('Second letter transcript with no reading view.');
+    await expect(overlay).toHaveCount(0);
+    await expect(dialog).toHaveCount(0);
+    await expect(divider).not.toHaveClass(/(^|\s)locked(\s|$)/);
+    await expect.poll(readSplitPercent).toBe(initialSplitPercent);
+    await expect.poll(() => page.evaluate(() => document.body.style.overflow))
+      .toBe(initialBodyOverflow);
+
+    await transcriptionSection(page).getByRole('button', {
+      name: 'Reading view',
+      exact: true,
+    }).click();
+    const secondDialog = page.getByRole('dialog', {
+      name: 'Reading view',
+    });
+    await expect(secondDialog.locator('.reading-view-empty')).toContainText(
+      'No reading view generated yet.',
+    );
+    await expect(secondDialog.locator('.reading-view-text')).toHaveCount(0);
+    await expect(secondDialog).not.toContainText(
+      'I arrived safely in Boston. The weather has been kind.',
+    );
+
+    await page.keyboard.press('Escape');
+    await expect(overlay).toHaveCount(0);
+    await expect(secondDialog).toHaveCount(0);
+    await expect(divider).not.toHaveClass(/(^|\s)locked(\s|$)/);
+    await expect.poll(readSplitPercent).toBe(initialSplitPercent);
+    await expect.poll(() => page.evaluate(() => document.body.style.overflow))
+      .toBe(initialBodyOverflow);
+  });
+
   test('verifies transcript through the real review UI', async ({ page }) => {
     const mockedApi = await openMockLetterReview(page);
 

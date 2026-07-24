@@ -42,6 +42,10 @@ const structuredNoteActionsPath = path.resolve(
   process.cwd(),
   'src/pages/admin/LetterReview/useStructuredNoteActions.ts',
 );
+const transcriptionSectionPath = path.resolve(
+  process.cwd(),
+  'src/pages/admin/LetterReview/TranscriptionSection.tsx',
+);
 const photoDescriptionSectionPath = path.resolve(
   process.cwd(),
   'src/pages/admin/LetterReview/PhotoDescriptionSection.tsx',
@@ -57,6 +61,10 @@ const extraContentSectionPath = path.resolve(
 const extraContentWorkspacePath = path.resolve(
   process.cwd(),
   'src/pages/admin/LetterReview/useExtraContentWorkspace.ts',
+);
+const readingViewWorkspacePath = path.resolve(
+  process.cwd(),
+  'src/pages/admin/LetterReview/useReadingViewWorkspace.ts',
 );
 const reviewableDynamicEditorPath = path.resolve(
   process.cwd(),
@@ -80,19 +88,23 @@ describe('Letter Review source-conflict ownership', () => {
   it('routes every direct source-bound mutation through one terminal owner', async () => {
     const [
       page,
+      transcriptionSection,
       photoDescriptionSection,
       photoDescriptionWorkspace,
       extraContentSection,
       extraContentWorkspace,
+      readingViewWorkspace,
       reviewableDynamicEditor,
       mutationExecutor,
       structuredNoteActions,
     ] = await Promise.all([
       readFile(pagePath, 'utf8'),
+      readFile(transcriptionSectionPath, 'utf8'),
       readFile(photoDescriptionSectionPath, 'utf8'),
       readFile(photoDescriptionWorkspacePath, 'utf8'),
       readFile(extraContentSectionPath, 'utf8'),
       readFile(extraContentWorkspacePath, 'utf8'),
+      readFile(readingViewWorkspacePath, 'utf8'),
       readFile(reviewableDynamicEditorPath, 'utf8'),
       readFile(mutationExecutorPath, 'utf8'),
       readFile(structuredNoteActionsPath, 'utf8'),
@@ -104,7 +116,6 @@ describe('Letter Review source-conflict ownership', () => {
       'executeConfirmTranscript',
       'executeMetadataRegenerate',
       'handleReExtract',
-      'handleGenerateReadingView',
       'handleDelete',
     ]) {
       expect(callbackBlock(page, callback)).toContain('handleMutationError(');
@@ -129,6 +140,15 @@ describe('Letter Review source-conflict ownership', () => {
     expect(structuredNoteActions).toContain(
       'executeLetterMutation({',
     );
+    expect(page).toContain('useReadingViewWorkspace({');
+    expect(callbackBlock(readingViewWorkspace, 'generate')).toContain(
+      'executeLetterMutation({',
+    );
+    expect(page).not.toContain('transcriptViewMode');
+    expect(page).not.toContain('setReaderText');
+    expect(page).not.toContain('handleReaderTextChange');
+    expect(page).not.toContain('handleGenerateReadingView');
+    expect(transcriptionSection).not.toContain('onReaderTextChange');
     for (const callback of ['transcribe', 'toggleVerification']) {
       expect(callbackBlock(extraContentWorkspace, callback)).toContain(
         'executeLetterMutation({',
@@ -279,6 +299,7 @@ describe('Letter Review source-conflict ownership', () => {
       metadataEditing,
       photoDescriptionWorkspace,
       extraContentWorkspace,
+      readingViewWorkspace,
       autoSaveCoordinator,
       mutationExecutor,
       structuredNoteActions,
@@ -289,6 +310,7 @@ describe('Letter Review source-conflict ownership', () => {
       readFile(metadataEditingPath, 'utf8'),
       readFile(photoDescriptionWorkspacePath, 'utf8'),
       readFile(extraContentWorkspacePath, 'utf8'),
+      readFile(readingViewWorkspacePath, 'utf8'),
       readFile(autoSaveCoordinatorPath, 'utf8'),
       readFile(mutationExecutorPath, 'utf8'),
       readFile(structuredNoteActionsPath, 'utf8'),
@@ -306,7 +328,6 @@ describe('Letter Review source-conflict ownership', () => {
       'executeConfirmTranscript',
       'executeMetadataRegenerate',
       'handleReExtract',
-      'handleGenerateReadingView',
     ]) {
       const block = callbackBlock(page, callback);
       expect(block).toContain('await flushPendingSaves()');
@@ -315,6 +336,10 @@ describe('Letter Review source-conflict ownership', () => {
       );
       expect(block).toContain('hydrateAdoptedLetter(');
     }
+    expect(callbackBlock(readingViewWorkspace, 'generate')).toContain(
+      'executeLetterMutation({',
+    );
+    expect(autoSave).not.toContain('readingText?:');
     for (const callback of [
       'handleVisibilityChange',
       'handleContentPublishToggle',

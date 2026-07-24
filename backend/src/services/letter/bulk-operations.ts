@@ -32,6 +32,7 @@ import {
   observeMetadataState,
   observedMetadataStateConditions,
 } from './metadata-job.js';
+import { clearedEntityExtractionOwnership } from './entity-extraction-job.js';
 import {
   isTranscribableType,
   log,
@@ -302,8 +303,7 @@ export async function bulkClearTranscriptions(letterIds: string[]): Promise<Bulk
       aiNotes: null,
       entityExtractionJson: null,
       entityExtractionStatus: 'FAILED',
-      entityExtractionRunId: null,
-      entityExtractionRunRevision: null,
+      ...clearedEntityExtractionOwnership(),
       entityExtractionError: 'Cleared by admin',
       transcriptStatus: 'EMPTY',
       transcriptVerifiedAt: null,
@@ -459,8 +459,7 @@ export async function bulkClearMetadata(letterIds: string[]): Promise<BulkClearR
     aiNotes: null,
     entityExtractionJson: null,
     entityExtractionStatus: 'FAILED' as const,
-    entityExtractionRunId: null,
-    entityExtractionRunRevision: null,
+    ...clearedEntityExtractionOwnership(),
     entityExtractionError: 'Cleared by admin',
     metadataContentStatus: 'EMPTY' as const,
     metadataVerifiedAt: null,

@@ -164,8 +164,8 @@ const server = app.listen(env.PORT, () => {
     'Server started'
   );
 
-  // Only run-bound leased transcription, extra-content, and metadata attempts are
-  // recovered automatically. Entity RUNNING rows remain visible for exact action.
+  // Only exact run-bound leased attempts are recovered automatically. Unknown
+  // legacy, unleased, or lease-mismatched rows remain visible for exact action.
   void apiLeaseRecovery.reconcile();
   apiLeaseRecovery.start();
 

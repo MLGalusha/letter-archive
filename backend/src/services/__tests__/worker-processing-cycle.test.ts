@@ -206,7 +206,9 @@ beforeEach(() => {
     },
   });
   processMetadataMock.mockReset().mockResolvedValue(undefined);
-  runEntityExtractionOnlyMock.mockReset().mockResolvedValue(undefined);
+  runEntityExtractionOnlyMock.mockReset().mockResolvedValue({
+    kind: 'completed',
+  });
   notifyMock.mockReset().mockResolvedValue(null);
   installBatches();
 });
@@ -285,6 +287,7 @@ describe('worker processing cycle', () => {
     });
     runEntityExtractionOnlyMock.mockImplementation(async () => {
       trace.push('run:entity');
+      return { kind: 'completed' };
     });
 
     await expect(
@@ -315,6 +318,7 @@ describe('worker processing cycle', () => {
       workerExecutionToken: workerToken,
     });
     expect(runEntityExtractionOnlyMock).toHaveBeenCalledWith(entity.id, {
+      claimKind: 'QUEUED',
       workerExecutionToken: workerToken,
     });
     expect(notifyMock).toHaveBeenCalledTimes(1);
@@ -406,6 +410,7 @@ describe('worker processing cycle', () => {
       });
       runEntityExtractionOnlyMock.mockImplementation(async () => {
         loseAtTarget('entity');
+        return { kind: 'completed' };
       });
 
       await expect(
@@ -474,6 +479,9 @@ describe('worker processing cycle', () => {
       kind: 'skipped',
       reason: 'superseded',
     });
+    runEntityExtractionOnlyMock.mockResolvedValue({
+      kind: 'claim_lost',
+    });
 
     await expect(
       processWorkerCycle(createControl()),
@@ -483,6 +491,13 @@ describe('worker processing cycle', () => {
       expect(producer).toHaveBeenCalledOnce();
     }
     expect(notifyMock).not.toHaveBeenCalled();
+    expect(loggerInfoMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        letterId: 'entity-1',
+        reason: 'claim_lost',
+      }),
+      'Entity extraction job skipped',
+    );
   });
 
   it('isolates failures, publishes the exact state sequence, and continues', async () => {

@@ -1,5 +1,4 @@
-import { randomUUID } from 'node:crypto';
-import { eq, and, isNull, ne, sql } from 'drizzle-orm';
+import { eq, and, ne, sql } from 'drizzle-orm';
 import {
   db,
   type Database,
@@ -7,9 +6,9 @@ import {
   type Letter,
   type LetterType,
   type DateConfidence,
-  type JobStatus,
 } from '../db/index.js';
 import { isPlaceholderValue } from '../utils/placeholders.js';
+import { clearedEntityExtractionOwnership } from './letter/entity-extraction-job.js';
 import { buildExtraContentSourceInvalidationPatch } from './letter/extra-content-job.js';
 import { transcriptionPrerequisiteConditions } from './processing-eligibility.js';
 import {
@@ -17,7 +16,6 @@ import {
   publicCatalogueLetterTypeSql,
   selectPublicCatalogueRepresentative,
 } from './public-catalogue-unit.js';
-import { activeWorkerExecutionCondition } from './worker-state.js';
 
 export interface LetterIdentity {
   collectionId: string;
@@ -37,11 +35,6 @@ export type ExtraContentGroupIdentity = Pick<
 >;
 
 export type LetterUpdateDatabase = Pick<Database, 'update'>;
-
-export interface EntityExtractionClaim {
-  runId: string;
-  revision: number;
-}
 
 /**
  * Finds an existing letter by its identity, or creates a new one.
@@ -183,101 +176,6 @@ export async function invalidateExtraContentJobForSourceChange(
 }
 
 /**
- * Claim the next replacement revision without changing the last committed
- * entity projection. The run ID prevents a cancelled or retried producer from
- * committing work it no longer owns.
- */
-export async function claimEntityExtraction(
-  letterId: string,
-  expectedStatus: JobStatus = 'PENDING',
-  workerExecutionToken?: string,
-): Promise<EntityExtractionClaim | null> {
-  const runId = randomUUID();
-  const result = await db
-    .update(letters)
-    .set({
-      entityExtractionStatus: 'RUNNING',
-      entityExtractionRunId: runId,
-      entityExtractionRunRevision: sql`${letters.entityExtractionRevision} + 1`,
-      entityExtractionError: null,
-      updatedAt: new Date(),
-    })
-    .where(and(
-      eq(letters.id, letterId),
-      eq(letters.entityExtractionStatus, expectedStatus),
-      ne(letters.transcriptionStatus, 'RUNNING'),
-      eq(letters.metadataStatus, 'SUCCESS'),
-      ...(workerExecutionToken
-        ? [activeWorkerExecutionCondition(workerExecutionToken)]
-        : []),
-    ))
-    .returning({ revision: letters.entityExtractionRunRevision });
-
-  const revision = result[0]?.revision;
-  return revision === null || revision === undefined ? null : { runId, revision };
-}
-
-/**
- * Record failure only if the exact run still owns the replacement attempt.
- * The committed revision and its materialized links remain untouched.
- */
-export async function failEntityExtraction(
-  letterId: string,
-  claim: EntityExtractionClaim,
-  error: string,
-): Promise<boolean> {
-  const result = await db
-    .update(letters)
-    .set({
-      entityExtractionStatus: 'FAILED',
-      entityExtractionRunId: null,
-      entityExtractionRunRevision: null,
-      entityExtractionError: error,
-      updatedAt: new Date(),
-    })
-    .where(and(
-      eq(letters.id, letterId),
-      eq(letters.entityExtractionStatus, 'RUNNING'),
-      eq(letters.entityExtractionRunId, claim.runId),
-      eq(letters.entityExtractionRunRevision, claim.revision),
-    ))
-    .returning({ id: letters.id });
-
-  return result.length > 0;
-}
-
-/**
- * Close a tokenless entity attempt that predates migration 0051.
- *
- * The migration blocks every new tokenless RUNNING transition, so this exact
- * shape cannot suffer an ABA back to another legacy attempt. Operators must
- * drain or terminate old executors before using this rollout-only escape hatch.
- */
-export async function cancelLegacyEntityExtraction(
-  letterId: string,
-  error: string,
-): Promise<boolean> {
-  const result = await db
-    .update(letters)
-    .set({
-      entityExtractionStatus: 'FAILED',
-      entityExtractionRunId: null,
-      entityExtractionRunRevision: null,
-      entityExtractionError: error,
-      updatedAt: new Date(),
-    })
-    .where(and(
-      eq(letters.id, letterId),
-      eq(letters.entityExtractionStatus, 'RUNNING'),
-      isNull(letters.entityExtractionRunId),
-      isNull(letters.entityExtractionRunRevision),
-    ))
-    .returning({ id: letters.id });
-
-  return result.length > 0;
-}
-
-/**
  * Resets a letter for re-processing.
  */
 export async function resetLetterForProcessing(letterId: string): Promise<boolean> {
@@ -303,8 +201,7 @@ export async function resetLetterForProcessing(letterId: string): Promise<boolea
       metadataAttemptCount: 0,
       entityExtractionJson: null,
       entityExtractionStatus: 'PENDING',
-      entityExtractionRunId: null,
-      entityExtractionRunRevision: null,
+      ...clearedEntityExtractionOwnership(),
       entityExtractionError: null,
       // Reset two-track content status to EMPTY
       transcriptStatus: 'EMPTY',

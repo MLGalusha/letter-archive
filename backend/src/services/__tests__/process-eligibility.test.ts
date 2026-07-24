@@ -34,6 +34,11 @@ vi.mock('../../db/index.js', () => ({
     metadataLeaseRunId: 'letters.metadataLeaseRunId',
     metadataClaimKind: 'letters.metadataClaimKind',
     entityExtractionStatus: 'letters.entityExtractionStatus',
+    entityExtractionRunId: 'letters.entityExtractionRunId',
+    entityExtractionRunRevision: 'letters.entityExtractionRunRevision',
+    entityExtractionLeaseExpiresAt: 'letters.entityExtractionLeaseExpiresAt',
+    entityExtractionLeaseRunId: 'letters.entityExtractionLeaseRunId',
+    entityExtractionClaimKind: 'letters.entityExtractionClaimKind',
     extraContentJobStatus: 'letters.extraContentJobStatus',
     collectionId: 'letters.collectionId',
     dateRaw: 'letters.dateRaw',
@@ -125,7 +130,49 @@ describe('durable processing eligibility', () => {
       { kind: 'eq', field: 'letters.type', value: 'L' },
       { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
       { kind: 'eq', field: 'letters.metadataStatus', value: 'SUCCESS' },
+      { kind: 'ne', field: 'letters.extraContentJobStatus', value: 'RUNNING' },
       { kind: 'eq', field: 'letters.entityExtractionStatus', value: 'PENDING' },
+      { kind: 'isNull', field: 'letters.entityExtractionRunId' },
+      { kind: 'isNull', field: 'letters.entityExtractionRunRevision' },
+      {
+        kind: 'or',
+        clauses: [
+          {
+            kind: 'and',
+            clauses: [
+              {
+                kind: 'isNull',
+                field: 'letters.entityExtractionLeaseExpiresAt',
+              },
+              {
+                kind: 'isNull',
+                field: 'letters.entityExtractionLeaseRunId',
+              },
+              {
+                kind: 'isNull',
+                field: 'letters.entityExtractionClaimKind',
+              },
+            ],
+          },
+          {
+            kind: 'and',
+            clauses: [
+              {
+                kind: 'isNotNull',
+                field: 'letters.entityExtractionLeaseExpiresAt',
+              },
+              {
+                kind: 'isNotNull',
+                field: 'letters.entityExtractionLeaseRunId',
+              },
+              {
+                kind: 'isNotNull',
+                field: 'letters.entityExtractionClaimKind',
+              },
+            ],
+          },
+        ],
+      },
       { kind: 'eq', field: 'letters.deadLetter', value: false },
     ]);
   });
@@ -150,6 +197,7 @@ describe('durable processing eligibility', () => {
     ]);
     expect(queuedExtraContentConditions()).toEqual([
       ...prerequisites,
+      { kind: 'ne', field: 'letters.entityExtractionStatus', value: 'RUNNING' },
       { kind: 'eq', field: 'letters.extraContentJobStatus', value: 'PENDING' },
     ]);
   });

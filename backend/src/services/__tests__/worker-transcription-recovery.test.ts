@@ -6,14 +6,22 @@ import {
 } from '../lease-recovery-coordinator.js';
 
 describe('worker queue recovery coordination', () => {
-  it('drains recovered metadata and queued extra-content work', () => {
+  it('drains recovered work from every queued processing stage', () => {
     expect(projectQueuedRecoveryForWorker({
       transcription: { requeued: [], failed: [] },
       metadata: { requeued: [{ id: 'metadata-1' }], failed: [] },
+      entityExtraction: {
+        requeued: [{ id: 'entity-1' }],
+        failed: [{ id: 'requested-entity-1' }],
+      },
       extraContent: { requeued: [{ id: 'extra-1' }], failed: [] },
     })).toEqual({
-      requeued: [{ id: 'metadata-1' }, { id: 'extra-1' }],
-      failed: [],
+      requeued: [
+        { id: 'metadata-1' },
+        { id: 'entity-1' },
+        { id: 'extra-1' },
+      ],
+      failed: [{ id: 'requested-entity-1' }],
     });
   });
 
@@ -115,6 +123,7 @@ describe('worker queue recovery coordination', () => {
       const recover = vi.fn().mockResolvedValue({
         transcription: { requeued: [], failed: [] },
         metadata: { requeued: [], failed: [] },
+        entityExtraction: { requeued: [], failed: [] },
         extraContent: { requeued: [], failed: [] },
       });
       const coordinator = createLeaseRecoveryCoordinator({

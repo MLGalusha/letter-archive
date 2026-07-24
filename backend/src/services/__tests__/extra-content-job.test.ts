@@ -20,6 +20,7 @@ vi.mock('drizzle-orm', () => ({
   gt: vi.fn((field: unknown, value: unknown) => ({ kind: 'gt', field, value })),
   isNotNull: vi.fn((field: unknown) => ({ kind: 'isNotNull', field })),
   lte: vi.fn((field: unknown, value: unknown) => ({ kind: 'lte', field, value })),
+  ne: vi.fn((field: unknown, value: unknown) => ({ kind: 'ne', field, value })),
   sql: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({
     kind: 'sql',
     text: Array.from(strings).join('?'),
@@ -38,6 +39,7 @@ vi.mock('../../db/index.js', () => ({
   db: { update: dbUpdateMock },
   letters: {
     id: 'letters.id',
+    entityExtractionStatus: 'letters.entityExtractionStatus',
     extraContentJobStatus: 'letters.extraContentJobStatus',
     extraContentJobRunId: 'letters.extraContentJobRunId',
     extraContentJobDirty: 'letters.extraContentJobDirty',
@@ -61,6 +63,7 @@ import {
 
 interface JobRow {
   id: string;
+  entityExtractionStatus: 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';
   extraContentJobStatus: 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';
   extraContentJobError: string | null;
   extraContentJobRunId: string | null;
@@ -89,7 +92,7 @@ function sqlValue(value: unknown): Date | unknown {
 
 function matches(condition: unknown): boolean {
   const clause = condition as {
-    kind: 'and' | 'eq' | 'gt' | 'isNotNull' | 'lte' | 'sql';
+    kind: 'and' | 'eq' | 'gt' | 'isNotNull' | 'lte' | 'ne' | 'sql';
     clauses?: unknown[];
     field?: string;
     value?: unknown;
@@ -113,6 +116,7 @@ function matches(condition: unknown): boolean {
       : clause.value;
     return row[key] === expected;
   }
+  if (clause.kind === 'ne') return row[key] !== clause.value;
   const actual = row[key];
   const expected = sqlValue(clause.value);
   if (!(actual instanceof Date) || !(expected instanceof Date)) return false;
@@ -175,6 +179,7 @@ describe('extra-content job lifecycle', () => {
     vi.clearAllMocks();
     row = {
       id: 'letter-1',
+      entityExtractionStatus: 'PENDING',
       extraContentJobStatus: 'PENDING',
       extraContentJobError: null,
       extraContentJobRunId: null,
@@ -225,6 +230,22 @@ describe('extra-content job lifecycle', () => {
 
     expect(result).toEqual({ kind: 'claim_lost' });
     expect(produce).not.toHaveBeenCalled();
+  });
+
+  it('does not overlap entity extraction while claiming extra content', async () => {
+    row.entityExtractionStatus = 'RUNNING';
+    const produce = vi.fn();
+
+    await expect(runExtraContentJob({
+      letterId: row.id,
+      expectedStatus: 'PENDING',
+      expectedUpdatedAt: row.updatedAt,
+      claimKind: 'REQUESTED',
+      produce,
+    })).resolves.toEqual({ kind: 'claim_lost' });
+
+    expect(produce).not.toHaveBeenCalled();
+    expect(row.extraContentJobStatus).toBe('PENDING');
   });
 
   it('publishes content and SUCCESS atomically for the owning run ID', async () => {

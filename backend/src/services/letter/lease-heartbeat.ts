@@ -56,8 +56,11 @@ export async function withLeaseHeartbeat<T>(
     inFlight = renewal;
   }
 
-  // Confirm ownership immediately instead of spending one full interval blind.
+  // Confirm ownership before producer work instead of spending one full
+  // interval—or one paid provider call—blind.
   startRenewal();
+  const initialRenewal = inFlight;
+  if (initialRenewal !== null) await initialRenewal;
 
   try {
     return await operation({ hasOwnership: () => !ownershipLost });

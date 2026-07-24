@@ -47,6 +47,11 @@ vi.mock('../../db/index.js', () => ({
     metadataVerifiedAt: 'letters.metadataVerifiedAt',
     metadataVerifiedBy: 'letters.metadataVerifiedBy',
     entityExtractionStatus: 'letters.entityExtractionStatus',
+    entityExtractionRunId: 'letters.entityExtractionRunId',
+    entityExtractionRunRevision: 'letters.entityExtractionRunRevision',
+    entityExtractionLeaseExpiresAt: 'letters.entityExtractionLeaseExpiresAt',
+    entityExtractionLeaseRunId: 'letters.entityExtractionLeaseRunId',
+    entityExtractionClaimKind: 'letters.entityExtractionClaimKind',
     entityExtractionError: 'letters.entityExtractionError',
     deadLetter: 'letters.deadLetter',
     updatedAt: 'letters.updatedAt',
@@ -56,6 +61,7 @@ vi.mock('../../db/index.js', () => ({
 import {
   buildHumanMetadataJobPatch,
   buildHumanMetadataNotesPatch,
+  buildMetadataSourceInvalidationPatch,
   cancelMetadataAttempt,
   claimMetadataAfterTranscriptConfirmation,
   claimQueuedMetadata,
@@ -94,6 +100,11 @@ interface MetadataRow {
   metadataVerifiedAt: Date | null;
   metadataVerifiedBy: string | null;
   entityExtractionStatus: Status;
+  entityExtractionRunId: string | null;
+  entityExtractionRunRevision: number | null;
+  entityExtractionLeaseExpiresAt: Date | null;
+  entityExtractionLeaseRunId: string | null;
+  entityExtractionClaimKind: 'QUEUED' | 'REQUESTED' | null;
   entityExtractionError: string | null;
   entityExtractionJson: unknown;
   deadLetter: boolean;
@@ -245,6 +256,11 @@ describe('metadata job lifecycle', () => {
       metadataVerifiedAt: null,
       metadataVerifiedBy: null,
       entityExtractionStatus: 'PENDING',
+      entityExtractionRunId: null,
+      entityExtractionRunRevision: null,
+      entityExtractionLeaseExpiresAt: null,
+      entityExtractionLeaseRunId: null,
+      entityExtractionClaimKind: null,
       entityExtractionError: null,
       entityExtractionJson: null,
       deadLetter: false,
@@ -271,6 +287,11 @@ describe('metadata job lifecycle', () => {
 
   it('claims queued and requested work from the exact eligible source revision', async () => {
     row.entityExtractionStatus = 'FAILED';
+    row.entityExtractionRunId = 'stale-entity-run';
+    row.entityExtractionRunRevision = 7;
+    row.entityExtractionLeaseExpiresAt = new Date('2026-07-17T12:04:00.000Z');
+    row.entityExtractionLeaseRunId = 'stale-entity-run';
+    row.entityExtractionClaimKind = 'REQUESTED';
     row.entityExtractionError = 'Older entities are stale';
     const observed = observeMetadataState(row);
 
@@ -288,6 +309,11 @@ describe('metadata job lifecycle', () => {
       metadataClaimKind: 'QUEUED',
       transcriptionText: 'Dear Bob',
       entityExtractionStatus: 'PENDING',
+      entityExtractionRunId: null,
+      entityExtractionRunRevision: null,
+      entityExtractionLeaseExpiresAt: null,
+      entityExtractionLeaseRunId: null,
+      entityExtractionClaimKind: null,
       entityExtractionError: null,
     });
 
@@ -301,6 +327,11 @@ describe('metadata job lifecycle', () => {
     row.sender = 'Existing sender';
     row.metadataContentStatus = 'VERIFIED';
     row.deadLetter = true;
+    row.entityExtractionRunId = 'stale-entity-run-2';
+    row.entityExtractionRunRevision = 8;
+    row.entityExtractionLeaseExpiresAt = new Date('2026-07-17T12:04:00.000Z');
+    row.entityExtractionLeaseRunId = 'stale-entity-run-2';
+    row.entityExtractionClaimKind = 'QUEUED';
     randomUUIDMock.mockReturnValue('run-b');
 
     await expect(
@@ -315,6 +346,11 @@ describe('metadata job lifecycle', () => {
       sender: 'Existing sender',
       metadataContentStatus: 'VERIFIED',
       entityExtractionStatus: 'PENDING',
+      entityExtractionRunId: null,
+      entityExtractionRunRevision: null,
+      entityExtractionLeaseExpiresAt: null,
+      entityExtractionLeaseRunId: null,
+      entityExtractionClaimKind: null,
       deadLetter: false,
     });
   });
@@ -345,6 +381,11 @@ describe('metadata job lifecycle', () => {
     row.transcriptConfirmedAt = null;
     row.transcriptConfirmedBy = null;
     row.deadLetter = true;
+    row.entityExtractionRunId = 'stale-entity-run';
+    row.entityExtractionRunRevision = 7;
+    row.entityExtractionLeaseExpiresAt = new Date('2026-07-17T12:04:00.000Z');
+    row.entityExtractionLeaseRunId = 'stale-entity-run';
+    row.entityExtractionClaimKind = 'QUEUED';
 
     await expect(
       claimMetadataAfterTranscriptConfirmation(
@@ -361,6 +402,11 @@ describe('metadata job lifecycle', () => {
       metadataStatus: 'RUNNING',
       metadataRunId: 'run-a',
       metadataClaimKind: 'QUEUED',
+      entityExtractionRunId: null,
+      entityExtractionRunRevision: null,
+      entityExtractionLeaseExpiresAt: null,
+      entityExtractionLeaseRunId: null,
+      entityExtractionClaimKind: null,
       deadLetter: false,
     });
   });
@@ -456,6 +502,11 @@ describe('metadata job lifecycle', () => {
       metadataVerifiedAt: null,
       metadataVerifiedBy: null,
       metadataPublished: false,
+      entityExtractionRunId: null,
+      entityExtractionRunRevision: null,
+      entityExtractionLeaseExpiresAt: null,
+      entityExtractionLeaseRunId: null,
+      entityExtractionClaimKind: null,
     });
     expect(
       (humanPatch.metadataStatus as unknown as { strings: string[] }).strings.join(''),
@@ -509,6 +560,21 @@ describe('metadata job lifecycle', () => {
     expect(notesPatch).not.toHaveProperty('metadataPublished');
     expect(notesPatch).not.toHaveProperty('entityExtractionStatus');
     expect(notesPatch).not.toHaveProperty('entityExtractionJson');
+    expect(notesPatch).not.toHaveProperty('entityExtractionRunId');
+    expect(notesPatch).not.toHaveProperty('entityExtractionRunRevision');
+    expect(notesPatch).not.toHaveProperty('entityExtractionLeaseExpiresAt');
+    expect(notesPatch).not.toHaveProperty('entityExtractionLeaseRunId');
+    expect(notesPatch).not.toHaveProperty('entityExtractionClaimKind');
+  });
+
+  it('revokes the complete entity owner when its metadata source changes', () => {
+    expect(buildMetadataSourceInvalidationPatch()).toMatchObject({
+      entityExtractionRunId: null,
+      entityExtractionRunRevision: null,
+      entityExtractionLeaseExpiresAt: null,
+      entityExtractionLeaseRunId: null,
+      entityExtractionClaimKind: null,
+    });
   });
 
   it('does not let unrelated updated-at changes interfere with an exact source claim', async () => {

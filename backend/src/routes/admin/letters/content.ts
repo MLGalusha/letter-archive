@@ -28,6 +28,7 @@ import { getAbsoluteStoragePath } from '../../../services/storage.js';
 import {
   runEntityExtractionOnly,
   runMetadataExtractionV2,
+  type EntityExtractionRunOutcome,
   type ExtractionOptions,
   type MetadataRunOutcome,
 } from '../../../pipeline/metadataV2.js';
@@ -86,6 +87,15 @@ function requireCompletedMetadataRun(outcome: MetadataRunOutcome): void {
   throw new AppError(
     409,
     `Metadata extraction did not complete because the run was ${outcome.kind.replace('_', ' ')}`,
+  );
+}
+
+function requireCompletedEntityRun(outcome: EntityExtractionRunOutcome): void {
+  if (outcome.kind === 'completed') return;
+
+  throw new AppError(
+    409,
+    `Entity extraction did not complete because the run was ${outcome.kind.replace('_', ' ')}`,
   );
 }
 
@@ -294,25 +304,9 @@ router.post('/:letterId/regenerate-entities', async (req, res, next) => {
       throw new BadRequestError('Metadata extraction must complete before extracting entities');
     }
 
-    // Reset to PENDING so the atomic claim in runEntityExtractionOnly succeeds
-    const resetResult = await db.update(letters).set({
-      entityExtractionStatus: 'PENDING',
-      entityExtractionRunId: null,
-      entityExtractionRunRevision: null,
-      entityExtractionError: null,
-      deadLetter: false,
-      updatedAt: new Date(),
-    }).where(and(
-      ...observedTranscriptConditions(letterId, letter),
-      eq(letters.entityExtractionStatus, letter.entityExtractionStatus),
-      eq(letters.metadataStatus, letter.metadataStatus),
-    )).returning({ id: letters.id });
-
-    if (resetResult.length === 0) {
-      throw new BadRequestError('Letter processing state changed; try again');
-    }
-
-    await runEntityExtractionOnly(letterId);
+    requireCompletedEntityRun(await runEntityExtractionOnly(letterId, {
+      claimKind: 'REQUESTED',
+    }));
     res.json(await requireLetterDto(letterId, 'Failed to fetch updated letter', 500));
   } catch (error) {
     next(error);
@@ -398,24 +392,10 @@ router.post('/:letterId/re-extract', async (req, res, next) => {
       if (letter.metadataStatus !== 'SUCCESS') {
         throw new BadRequestError('Metadata extraction must complete before extracting entities');
       }
-      const resetResult = await db.update(letters).set({
-        entityExtractionStatus: 'PENDING',
-        entityExtractionRunId: null,
-        entityExtractionRunRevision: null,
-        entityExtractionError: null,
-        deadLetter: false,
-        updatedAt: new Date(),
-      }).where(and(
-        ...observedTranscriptConditions(letterId, letter),
-        eq(letters.entityExtractionStatus, letter.entityExtractionStatus),
-        eq(letters.metadataStatus, letter.metadataStatus),
-      )).returning({ id: letters.id });
-
-      if (resetResult.length === 0) {
-        throw new BadRequestError('Letter processing state changed; try again');
-      }
-
-      await runEntityExtractionOnly(letterId, extractionOptions);
+      requireCompletedEntityRun(await runEntityExtractionOnly(letterId, {
+        ...extractionOptions,
+        claimKind: 'REQUESTED',
+      }));
     }
 
     res.json(await requireLetterDto(letterId, 'Failed to fetch updated letter', 500));

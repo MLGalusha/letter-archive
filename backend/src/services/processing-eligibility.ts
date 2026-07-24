@@ -35,6 +35,13 @@ interface MetadataStageState {
   extraContentJobStatus: string;
 }
 
+interface EntityExtractionStageState {
+  type: string;
+  transcriptionStatus: string;
+  metadataStatus: string;
+  extraContentJobStatus: string;
+}
+
 /** In-memory half of the transcription prerequisites; SQL also requires a page. */
 export function hasIdleTranscriptionDownstream(
   state: TranscriptionDownstreamState,
@@ -71,6 +78,17 @@ export function isMetadataStateEligible(state: MetadataStageState): boolean {
   );
 }
 
+export function isEntityExtractionStateEligible(
+  state: EntityExtractionStageState,
+): boolean {
+  return (
+    state.type === 'L'
+    && state.transcriptionStatus !== 'RUNNING'
+    && state.metadataStatus === 'SUCCESS'
+    && state.extraContentJobStatus !== 'RUNNING'
+  );
+}
+
 export function transcriptionPrerequisiteConditions(): SQL[] {
   return [
     inArray(letters.type, [...TRANSCRIBABLE_TYPES]),
@@ -101,6 +119,7 @@ export function entityExtractionPrerequisiteConditions(): SQL[] {
     eq(letters.type, 'L'),
     ne(letters.transcriptionStatus, 'RUNNING'),
     eq(letters.metadataStatus, 'SUCCESS'),
+    ne(letters.extraContentJobStatus, 'RUNNING'),
   ];
 }
 
@@ -165,6 +184,20 @@ export function queuedEntityExtractionConditions(): SQL[] {
   return [
     ...entityExtractionPrerequisiteConditions(),
     eq(letters.entityExtractionStatus, 'PENDING'),
+    isNull(letters.entityExtractionRunId),
+    isNull(letters.entityExtractionRunRevision),
+    or(
+      and(
+        isNull(letters.entityExtractionLeaseExpiresAt),
+        isNull(letters.entityExtractionLeaseRunId),
+        isNull(letters.entityExtractionClaimKind),
+      ),
+      and(
+        isNotNull(letters.entityExtractionLeaseExpiresAt),
+        isNotNull(letters.entityExtractionLeaseRunId),
+        isNotNull(letters.entityExtractionClaimKind),
+      ),
+    )!,
     eq(letters.deadLetter, false),
   ];
 }
@@ -172,6 +205,7 @@ export function queuedEntityExtractionConditions(): SQL[] {
 export function queuedExtraContentConditions(): SQL[] {
   return [
     ...extraContentPrerequisiteConditions(),
+    ne(letters.entityExtractionStatus, 'RUNNING'),
     eq(letters.extraContentJobStatus, 'PENDING'),
   ];
 }

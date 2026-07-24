@@ -97,10 +97,7 @@ vi.mock('../../db/index.js', () => {
 });
 
 import {
-  cancelLegacyEntityExtraction,
   findOrCreateLetter,
-  claimEntityExtraction,
-  failEntityExtraction,
   invalidateExtraContentJobForSourceChange,
   resolveRepresentativeLetterId,
   resetLetterForProcessing,
@@ -278,101 +275,6 @@ describe('letters service', () => {
     expect(dirtySql).toContain("WHEN ? = 'RUNNING' THEN true ELSE false");
   });
 
-  it('claims entity work only after metadata succeeds and transcription is idle', async () => {
-    updateReturningMock.mockResolvedValueOnce([{ revision: 3 }]);
-
-    await expect(claimEntityExtraction('letter-claim')).resolves.toEqual({
-      runId: expect.any(String),
-      revision: 3,
-    });
-    expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
-      entityExtractionStatus: 'RUNNING',
-      entityExtractionRunId: expect.any(String),
-      entityExtractionRunRevision: expect.any(Object),
-      entityExtractionError: null,
-    }));
-
-    expect(updateWhereMock).toHaveBeenCalledWith({
-      kind: 'and',
-      clauses: [
-        { kind: 'eq', field: 'letters.id', value: 'letter-claim' },
-        { kind: 'eq', field: 'letters.entityExtractionStatus', value: 'PENDING' },
-        { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
-        { kind: 'eq', field: 'letters.metadataStatus', value: 'SUCCESS' },
-      ],
-    });
-  });
-
-  it('reports a lost downstream claim without starting work', async () => {
-    updateReturningMock.mockResolvedValueOnce([]);
-
-    await expect(claimEntityExtraction('letter-claim')).resolves.toBeNull();
-
-    expect(updateWhereMock).toHaveBeenCalledWith({
-      kind: 'and',
-      clauses: [
-        { kind: 'eq', field: 'letters.id', value: 'letter-claim' },
-        { kind: 'eq', field: 'letters.entityExtractionStatus', value: 'PENDING' },
-        { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
-        { kind: 'eq', field: 'letters.metadataStatus', value: 'SUCCESS' },
-      ],
-    });
-  });
-
-  it('fails only the exact owned entity run and preserves the committed revision', async () => {
-    updateReturningMock.mockResolvedValueOnce([{ id: 'letter-claim' }]);
-
-    await expect(failEntityExtraction(
-      'letter-claim',
-      { runId: 'run-a', revision: 3 },
-      'provider failed',
-    )).resolves.toBe(true);
-
-    expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
-      entityExtractionStatus: 'FAILED',
-      entityExtractionRunId: null,
-      entityExtractionRunRevision: null,
-      entityExtractionError: 'provider failed',
-    }));
-    expect(updateSetMock.mock.calls.at(-1)?.[0]).not.toHaveProperty(
-      'entityExtractionRevision',
-    );
-    expect(updateWhereMock).toHaveBeenCalledWith({
-      kind: 'and',
-      clauses: [
-        { kind: 'eq', field: 'letters.id', value: 'letter-claim' },
-        { kind: 'eq', field: 'letters.entityExtractionStatus', value: 'RUNNING' },
-        { kind: 'eq', field: 'letters.entityExtractionRunId', value: 'run-a' },
-        { kind: 'eq', field: 'letters.entityExtractionRunRevision', value: 3 },
-      ],
-    });
-  });
-
-  it('cancels only the exact tokenless legacy entity run shape', async () => {
-    updateReturningMock.mockResolvedValueOnce([{ id: 'letter-legacy' }]);
-
-    await expect(cancelLegacyEntityExtraction(
-      'letter-legacy',
-      'Cancelled by admin',
-    )).resolves.toBe(true);
-
-    expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
-      entityExtractionStatus: 'FAILED',
-      entityExtractionRunId: null,
-      entityExtractionRunRevision: null,
-      entityExtractionError: 'Cancelled by admin',
-    }));
-    expect(updateWhereMock).toHaveBeenCalledWith({
-      kind: 'and',
-      clauses: [
-        { kind: 'eq', field: 'letters.id', value: 'letter-legacy' },
-        { kind: 'eq', field: 'letters.entityExtractionStatus', value: 'RUNNING' },
-        { kind: 'isNull', field: 'letters.entityExtractionRunId' },
-        { kind: 'isNull', field: 'letters.entityExtractionRunRevision' },
-      ],
-    });
-  });
-
   it('resets entity extraction state when re-enqueuing a letter for processing', async () => {
     updateReturningMock.mockResolvedValueOnce([{ id: 'letter-3' }]);
 
@@ -391,6 +293,9 @@ describe('letters service', () => {
         entityExtractionStatus: 'PENDING',
         entityExtractionRunId: null,
         entityExtractionRunRevision: null,
+        entityExtractionLeaseExpiresAt: null,
+        entityExtractionLeaseRunId: null,
+        entityExtractionClaimKind: null,
         entityExtractionError: null,
         entityExtractionJson: null,
         transcriptStatus: 'EMPTY',

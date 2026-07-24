@@ -196,4 +196,96 @@ describe("migration validation", () => {
     expect(sql).not.toMatch(/\bCREATE\s+(?:UNIQUE\s+)?INDEX\b/i);
     expect(sql).not.toMatch(/DEFAULT\s+gen_random_uuid/i);
   });
+
+  it("orders entity extraction liveness after the ownership rollout boundaries", () => {
+    const journal = readJournal();
+    const commitBoundary = journal.entries.find(
+      (entry) => entry.tag === "0051_add_entity_extraction_commit_boundary",
+    );
+    const workerLease = journal.entries.find(
+      (entry) => entry.tag === "0052_add_worker_execution_lease",
+    );
+    const entityLiveness = journal.entries.find(
+      (entry) => entry.tag === "0053_add_entity_extraction_liveness",
+    );
+
+    expect(commitBoundary).toBeDefined();
+    expect(workerLease).toBeDefined();
+    expect(entityLiveness).toBeDefined();
+    expect(entityLiveness!.idx).toBe(workerLease!.idx + 1);
+    expect(entityLiveness!.idx).toBeGreaterThan(commitBoundary!.idx);
+    expect(entityLiveness!.breakpoints).toBe(true);
+  });
+
+  it("adds entity extraction liveness as an expand-only rollout-safe tuple", () => {
+    const sql = readMigrationSql("0053_add_entity_extraction_liveness");
+
+    expect(sql).toContain(
+      `CREATE TYPE "public"."entity_extraction_claim_kind" AS ENUM ('QUEUED', 'REQUESTED')`,
+    );
+
+    for (const column of [
+      '"entity_extraction_lease_expires_at" timestamp(3) with time zone',
+      '"entity_extraction_lease_run_id" uuid',
+      '"entity_extraction_claim_kind" "entity_extraction_claim_kind"',
+    ]) {
+      expect(sql).toContain(`ALTER TABLE "letters" ADD COLUMN ${column}`);
+      expect(sql).not.toMatch(
+        new RegExp(
+          `ADD COLUMN ${column.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[^;]*(?:NOT NULL|DEFAULT)`,
+          "i",
+        ),
+      );
+    }
+
+    expect(sql).not.toMatch(/\bUPDATE\s+"letters"\b/i);
+    expect(sql).not.toMatch(/\bALTER\s+COLUMN\b/i);
+    expect(sql).not.toMatch(/\bVALIDATE\s+CONSTRAINT\b/i);
+
+    const tupleConstraint = sql.match(
+      /ADD CONSTRAINT "entity_extraction_lease_metadata_valid"([\s\S]*?)NOT VALID;/,
+    )?.[1];
+    expect(tupleConstraint).toBeDefined();
+    expect(tupleConstraint).toMatch(
+      /\("entity_extraction_lease_expires_at" IS NULL\)\s*=\s*\("entity_extraction_lease_run_id" IS NULL\)/,
+    );
+    expect(tupleConstraint).toMatch(
+      /\("entity_extraction_lease_expires_at" IS NULL\)\s*=\s*\("entity_extraction_claim_kind" IS NULL\)/,
+    );
+
+    // Keep the 0051 rolling-deploy shapes valid: an older binary may own a run
+    // without liveness metadata or terminate it while leaving metadata residue.
+    expect(tupleConstraint).not.toContain('"entity_extraction_status"');
+    expect(tupleConstraint).not.toContain('"entity_extraction_run_id"');
+
+    expect(sql).toMatch(
+      /CREATE INDEX "idx_letters_entity_extraction_lease_expires_at"[\s\S]*ON "letters" \("entity_extraction_lease_expires_at"\)[\s\S]*WHERE "entity_extraction_status" = 'RUNNING'[\s\S]*AND "entity_extraction_lease_expires_at" IS NOT NULL/,
+    );
+  });
+
+  it("protects current entity liveness ownership while allowing renewals and 0051 terminal writers", () => {
+    const sql = readMigrationSql("0053_add_entity_extraction_liveness");
+    const guardFunction = sql.match(
+      /CREATE FUNCTION protect_current_entity_extraction_liveness\(\) RETURNS trigger AS \$\$([\s\S]*?)\$\$ LANGUAGE plpgsql;/,
+    )?.[1];
+
+    expect(guardFunction).toBeDefined();
+    expect(guardFunction).toMatch(
+      /OLD\.entity_extraction_status = 'RUNNING'[\s\S]*OLD\.entity_extraction_run_id IS NOT NULL[\s\S]*OLD\.entity_extraction_lease_expires_at IS NOT NULL[\s\S]*OLD\.entity_extraction_lease_run_id = OLD\.entity_extraction_run_id[\s\S]*OLD\.entity_extraction_claim_kind IS NOT NULL/,
+    );
+    expect(guardFunction).toMatch(
+      /NEW\.entity_extraction_status = 'RUNNING'[\s\S]*NEW\.entity_extraction_run_id = OLD\.entity_extraction_run_id/,
+    );
+    expect(guardFunction).toMatch(
+      /NEW\.entity_extraction_lease_expires_at IS NULL[\s\S]*NEW\.entity_extraction_lease_run_id IS DISTINCT FROM OLD\.entity_extraction_lease_run_id[\s\S]*NEW\.entity_extraction_claim_kind IS DISTINCT FROM OLD\.entity_extraction_claim_kind/,
+    );
+    expect(guardFunction).not.toMatch(
+      /NEW\.entity_extraction_lease_expires_at IS DISTINCT FROM OLD\.entity_extraction_lease_expires_at/,
+    );
+
+    expect(sql).toMatch(
+      /CREATE TRIGGER entity_extraction_liveness_guard[\s\S]*BEFORE UPDATE OF[\s\S]*entity_extraction_status,[\s\S]*entity_extraction_run_id,[\s\S]*entity_extraction_lease_expires_at,[\s\S]*entity_extraction_lease_run_id,[\s\S]*entity_extraction_claim_kind[\s\S]*EXECUTE FUNCTION protect_current_entity_extraction_liveness\(\)/,
+    );
+    expect(sql).not.toMatch(/\bDROP\s+(?:TRIGGER|FUNCTION|CONSTRAINT)\b/i);
+  });
 });

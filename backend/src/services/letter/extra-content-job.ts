@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq, gt, isNotNull, lte, sql } from 'drizzle-orm';
+import { and, eq, gt, isNotNull, lte, ne, sql } from 'drizzle-orm';
 import {
   db,
   letters,
@@ -255,6 +255,7 @@ export async function runExtraContentJob<T>({
     .where(and(
       eq(letters.id, letterId),
       eq(letters.extraContentJobStatus, expectedStatus),
+      ne(letters.entityExtractionStatus, 'RUNNING'),
       observedTimestampMatches(letters.updatedAt, expectedUpdatedAt),
       ...(workerExecutionToken
         ? [activeWorkerExecutionCondition(workerExecutionToken)]

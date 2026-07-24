@@ -2,10 +2,16 @@ import { extractMetadataV2, extractEntities } from '../ai/openai.js';
 import type { ExtractionCorrections } from '../ai/openai.js';
 import {
   getLetterWithPages,
-  claimEntityExtraction,
-  failEntityExtraction,
-  type EntityExtractionClaim,
 } from '../services/letters.js';
+import {
+  claimQueuedEntityExtraction,
+  claimRequestedEntityExtraction,
+  failEntityExtraction,
+  observeEntityExtractionState,
+  withEntityExtractionHeartbeat,
+  type EntityExtractionClaim,
+  type EntityExtractionHeartbeat,
+} from '../services/letter/entity-extraction-job.js';
 import {
   claimQueuedMetadata,
   completeMetadata,
@@ -19,6 +25,7 @@ import {
   EntityExtractionClaimLostError,
   processEntityExtraction,
 } from '../services/entities.js';
+import { isEntityExtractionStateEligible } from '../services/processing-eligibility.js';
 import { createLogger } from '../utils/logger.js';
 import { notify } from '../services/notifications.js';
 
@@ -34,11 +41,126 @@ export interface ExtractionOptions {
   workerExecutionToken?: string;
 }
 
+export interface EntityExtractionRunOptions {
+  claimKind: 'QUEUED' | 'REQUESTED';
+  confirmedSender?: string;
+  confirmedRecipient?: string;
+  previousAiSender?: string;
+  previousAiRecipient?: string;
+  /** Present only for the automatic worker's QUEUED claim. */
+  workerExecutionToken?: string;
+}
+
 export type MetadataRunOutcome =
   | { kind: 'completed' }
   | { kind: 'claim_lost' }
   | { kind: 'superseded' }
   | { kind: 'ineligible' };
+
+export type EntityExtractionRunOutcome =
+  | { kind: 'completed' }
+  | { kind: 'claim_lost' }
+  | { kind: 'superseded' }
+  | { kind: 'ineligible' };
+
+interface ClaimedEntityExtractionResult {
+  entityResult: Awaited<ReturnType<typeof extractEntities>>;
+  processingResult: Awaited<ReturnType<typeof processEntityExtraction>>;
+}
+
+function correctionsMatchingClaimedIdentity(
+  letter: Awaited<ReturnType<typeof getLetterWithPages>>,
+  corrections: ExtractionCorrections | undefined,
+): ExtractionCorrections | undefined {
+  if (!letter || !corrections) return undefined;
+
+  const confirmedSender = corrections.confirmedSender !== undefined
+    && corrections.confirmedSender === letter.sender
+    ? corrections.confirmedSender
+    : undefined;
+  const confirmedRecipient = corrections.confirmedRecipient !== undefined
+    && corrections.confirmedRecipient === letter.recipient
+    ? corrections.confirmedRecipient
+    : undefined;
+  if (confirmedSender === undefined && confirmedRecipient === undefined) {
+    return undefined;
+  }
+
+  return {
+    confirmedSender,
+    confirmedRecipient,
+    previousAiSender: confirmedSender === undefined
+      ? undefined
+      : corrections.previousAiSender,
+    previousAiRecipient: confirmedRecipient === undefined
+      ? undefined
+      : corrections.previousAiRecipient,
+  };
+}
+
+/**
+ * The two public entity entry paths share one post-claim input reload and
+ * transactional producer. Their failure/reporting contracts remain separate.
+ */
+async function executeClaimedEntityExtraction(
+  letterId: string,
+  claim: EntityExtractionClaim,
+  heartbeat: EntityExtractionHeartbeat,
+  corrections?: ExtractionCorrections,
+  requireCurrentIdentityMatch = false,
+): Promise<ClaimedEntityExtractionResult | null> {
+  if (!heartbeat.hasOwnership()) return null;
+
+  const letter = await getLetterWithPages(letterId);
+  if (!letter) {
+    throw new Error(`Letter not found: ${letterId}`);
+  }
+  if (
+    letter.entityExtractionStatus !== 'RUNNING'
+    || letter.entityExtractionRunId !== claim.runId
+    || letter.entityExtractionRunRevision !== claim.revision
+    || letter.entityExtractionRevision !== claim.revision - 1
+    || letter.entityExtractionLeaseRunId !== claim.runId
+    || letter.entityExtractionLeaseExpiresAt === null
+    || letter.entityExtractionClaimKind === null
+    || letter.extraContentJobStatus === 'RUNNING'
+  ) {
+    return null;
+  }
+  if (!letter.transcriptionText) {
+    throw new Error(`Letter ${letterId} has no transcription text`);
+  }
+
+  const entityResult = await extractEntities({
+    transcriptionText: letter.transcriptionText,
+    letterId,
+    basicMetadata: {
+      sender: letter.sender,
+      recipient: letter.recipient,
+      senderRecipientRelationship: letter.senderRecipientRelationship,
+      summary: letter.summary,
+    },
+    context: {
+      collectionCode: letter.collection.collectionCode,
+      dateRaw: letter.dateRaw,
+      dateFromFilename: letter.letterDate,
+      extraContentTranscript: letter.extraContentTranscript,
+    },
+    corrections: requireCurrentIdentityMatch
+      ? correctionsMatchingClaimedIdentity(letter, corrections)
+      : corrections,
+  });
+
+  if (!heartbeat.hasOwnership()) return null;
+
+  const processingResult = await processEntityExtraction(
+    entityResult.entities,
+    letterId,
+    claim,
+  );
+
+  return { entityResult, processingResult };
+}
 
 /**
  * Runs the two-phase metadata + entity extraction pipeline for a letter.
@@ -186,6 +308,17 @@ async function executeClaimedMetadataExtractionV2(
           confirmedRecipient: letter.recipient ?? undefined,
         }
       : undefined;
+  const embeddedEntityCorrections: ExtractionCorrections | undefined = options && (
+    options.confirmedSender !== undefined
+    || options.confirmedRecipient !== undefined
+  )
+    ? {
+        confirmedSender: options.confirmedSender,
+        confirmedRecipient: options.confirmedRecipient,
+        previousAiSender: options.previousAiSender,
+        previousAiRecipient: options.previousAiRecipient,
+      }
+    : undefined;
 
   // ========================================================================
   // PHASE 1: Basic Metadata Extraction
@@ -291,37 +424,41 @@ async function executeClaimedMetadataExtractionV2(
 
   let entityClaim: EntityExtractionClaim | null = null;
   try {
-    // Claim entity extraction atomically (within same pipeline, but still safe)
-    entityClaim = await claimEntityExtraction(
+    const entitySource = await getLetterWithPages(letterId);
+    if (!entitySource) {
+      letterLog.info('Letter disappeared before entity extraction could be claimed');
+      return { kind: 'completed' };
+    }
+
+    // Metadata publication creates required derived work. Even when an API
+    // performs it inline, expiry returns it to the durable queue.
+    entityClaim = await claimQueuedEntityExtraction(
       letterId,
-      'PENDING',
+      observeEntityExtractionState(entitySource),
       options?.workerExecutionToken,
     );
     if (!entityClaim) {
       letterLog.info('Entity extraction already claimed — skipping Phase 2');
       return { kind: 'completed' };
     }
+    const claimedEntity = entityClaim;
 
-    const entityResult = await extractEntities({
-      transcriptionText: letter.transcriptionText,
+    const claimedResult = await withEntityExtractionHeartbeat(
       letterId,
-      basicMetadata: {
-        sender: metadataResult.metadata.sender,
-        recipient: metadataResult.metadata.recipient,
-        senderRecipientRelationship: metadataResult.metadata.sender_recipient_relationship,
-        summary: metadataResult.metadata.summary,
-      },
-      context: extractionContext,
-      corrections: effectiveCorrections,
-    });
-
-    // The service materializes and commits the complete replacement under the
-    // exact run token in one transaction.
-    const processingResult = await processEntityExtraction(
-      entityResult.entities,
-      letterId,
-      entityClaim,
+      claimedEntity,
+      heartbeat => executeClaimedEntityExtraction(
+        letterId,
+        claimedEntity,
+        heartbeat,
+        embeddedEntityCorrections,
+        true,
+      ),
     );
+    if (!claimedResult) {
+      letterLog.info('Entity extraction lease was lost before commit');
+      return { kind: 'completed' };
+    }
+    const { entityResult, processingResult } = claimedResult;
 
     const totalDuration = Date.now() - start;
     letterLog.info(
@@ -403,25 +540,35 @@ async function executeClaimedMetadataExtractionV2(
  * Runs only the entity extraction (Phase 2) for a letter.
  * Used for re-extraction without re-running basic metadata.
  */
-export async function runEntityExtractionOnly(letterId: string, options?: ExtractionOptions): Promise<void> {
+export async function runEntityExtractionOnly(
+  letterId: string,
+  options: EntityExtractionRunOptions,
+): Promise<EntityExtractionRunOutcome> {
   const start = Date.now();
   const letterLog = log.child({ letterId });
 
   letterLog.debug('Starting entity-only extraction');
 
-  // Claim before loading model input so the source bound to this run is an
-  // authoritative post-claim snapshot rather than a stale pre-claim read.
-  const claim = await claimEntityExtraction(
-    letterId,
-    'PENDING',
-    options?.workerExecutionToken,
-  );
-  if (!claim) {
-    letterLog.info('Entity extraction job already claimed by another process — skipping');
-    return;
+  const source = await getLetterWithPages(letterId);
+  if (!source || !isEntityExtractionStateEligible(source)) {
+    letterLog.info('Entity extraction source is not eligible');
+    return { kind: 'ineligible' };
   }
 
-  const hasExplicitCorrections = options && (
+  const observed = observeEntityExtractionState(source);
+  const claim = options.claimKind === 'QUEUED'
+    ? await claimQueuedEntityExtraction(
+      letterId,
+      observed,
+      options.workerExecutionToken,
+    )
+    : await claimRequestedEntityExtraction(letterId, observed);
+  if (!claim) {
+    letterLog.info('Entity extraction job already claimed by another process — skipping');
+    return { kind: 'claim_lost' };
+  }
+
+  const hasExplicitCorrections = (
     options.confirmedSender !== undefined
     || options.confirmedRecipient !== undefined
     || options.previousAiSender !== undefined
@@ -429,49 +576,29 @@ export async function runEntityExtractionOnly(letterId: string, options?: Extrac
   );
   const corrections: ExtractionCorrections | undefined = hasExplicitCorrections
     ? {
-        confirmedSender: options?.confirmedSender,
-        confirmedRecipient: options?.confirmedRecipient,
-        previousAiSender: options?.previousAiSender,
-        previousAiRecipient: options?.previousAiRecipient,
+        confirmedSender: options.confirmedSender,
+        confirmedRecipient: options.confirmedRecipient,
+        previousAiSender: options.previousAiSender,
+        previousAiRecipient: options.previousAiRecipient,
       }
     : undefined;
 
   try {
-    const letter = await getLetterWithPages(letterId);
-
-    if (!letter) {
-      throw new Error(`Letter not found: ${letterId}`);
-    }
-
-    if (!letter.transcriptionText) {
-      throw new Error(`Letter ${letterId} has no transcription text`);
-    }
-
-    const basicMetadata = {
-      sender: letter.sender,
-      recipient: letter.recipient,
-      senderRecipientRelationship: letter.senderRecipientRelationship,
-      summary: letter.summary,
-    };
-
-    const entityResult = await extractEntities({
-      transcriptionText: letter.transcriptionText,
-      letterId,
-      basicMetadata,
-      context: {
-        collectionCode: letter.collection.collectionCode,
-        dateRaw: letter.dateRaw,
-        dateFromFilename: letter.letterDate,
-        extraContentTranscript: letter.extraContentTranscript,
-      },
-      corrections,
-    });
-
-    const processingResult = await processEntityExtraction(
-      entityResult.entities,
+    const claimedResult = await withEntityExtractionHeartbeat(
       letterId,
       claim,
+      heartbeat => executeClaimedEntityExtraction(
+        letterId,
+        claim,
+        heartbeat,
+        corrections,
+      ),
     );
+    if (!claimedResult) {
+      letterLog.info('Entity extraction lease was lost before commit');
+      return { kind: 'superseded' };
+    }
+    const { entityResult, processingResult } = claimedResult;
 
     const duration = Date.now() - start;
     letterLog.info(
@@ -504,17 +631,18 @@ export async function runEntityExtractionOnly(letterId: string, options?: Extrac
         standalone: true,
       },
     });
+    return { kind: 'completed' };
   } catch (error) {
     if (error instanceof EntityExtractionClaimLostError) {
       letterLog.info('Entity extraction run was superseded before commit');
-      return;
+      return { kind: 'superseded' };
     }
 
     const message = error instanceof Error ? error.message : 'Unknown error';
     letterLog.error({ letterId, err: error }, 'Entity-only extraction failed');
     if (!await failEntityExtraction(letterId, claim, message)) {
       letterLog.info('Entity extraction failure belonged to a superseded run');
-      return;
+      return { kind: 'superseded' };
     }
     throw error;
   }

@@ -10,6 +10,7 @@ export function projectQueuedRecoveryForWorker<
   T extends {
     transcription: WorkerQueueRecoveryResult;
     metadata: WorkerQueueRecoveryResult;
+    entityExtraction: WorkerQueueRecoveryResult;
     extraContent: WorkerQueueRecoveryResult;
   },
 >(
@@ -20,11 +21,13 @@ export function projectQueuedRecoveryForWorker<
     requeued: [
       ...result.transcription.requeued,
       ...result.metadata.requeued,
+      ...result.entityExtraction.requeued,
       ...result.extraContent.requeued,
     ],
     failed: [
       ...result.transcription.failed,
       ...result.metadata.failed,
+      ...result.entityExtraction.failed,
       ...result.extraContent.failed,
     ],
   };
@@ -84,8 +87,8 @@ export function createLeaseRecoveryCoordinator<T>(
 
 /**
  * Requested leases deliberately do not keep an EXIT_WHEN_EMPTY worker alive.
- * Pending worker-owned work—and leased queued transcription, metadata, or
- * extra-content work—can keep it draining.
+ * Pending worker-owned work—and leased queued transcription, metadata, entity,
+ * or extra-content work—can keep it draining.
  */
 export async function decideEmptyWorkerJob(options: {
   reconcile(): Promise<WorkerQueueRecoveryResult | null>;

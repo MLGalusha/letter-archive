@@ -21,6 +21,7 @@ const allowedExecutionOwners = new Set([
 
 const allowedDirectRunningWriters = new Set([
   'routes/admin/letters/content.ts',
+  'services/letter/entity-extraction-job.ts',
   'services/letter/extra-content-job.ts',
   'services/letter/metadata-job.ts',
   'services/letter/transcription-job.ts',
@@ -44,6 +45,10 @@ const allowedExpiredMetadataRecoveryCallers = new Set([
   'services/processing-queue.ts',
 ]);
 
+const allowedExpiredEntityExtractionRecoveryCallers = new Set([
+  'services/processing-queue.ts',
+]);
+
 const allowedTranscribeImageCallers = new Set([
   'ai/openai/transcription.ts',
   'pipeline/transcription.ts',
@@ -58,6 +63,17 @@ const allowedTranscribeExtraContentCallers = new Set([
 const canonicalTranscriptionClaimOwner = 'services/letter/transcription-job.ts';
 const canonicalExtraContentClaimOwner = 'services/letter/extra-content-job.ts';
 const canonicalMetadataClaimOwner = 'services/letter/metadata-job.ts';
+const canonicalEntityExtractionClaimOwner =
+  'services/letter/entity-extraction-job.ts';
+
+const allowedEntityExtractionStatusWriters = new Set([
+  canonicalEntityExtractionClaimOwner,
+  'services/entities/extraction.ts',
+  'services/letter/bulk-operations.ts',
+  'services/letter/metadata-job.ts',
+  'services/letters.ts',
+  'services/processing-queue.ts',
+]);
 
 const executionCall = /\b(?:processLetter|processMetadata|runTranscription|runRequestedTranscription|runMetadataExtractionV2|runEntityExtractionOnly|tryTranscribeExtras|regenerateTranscription|transcribeLetterOnly|transcribeExtras|processLettersAsync|startBatch)\s*\(|\.runBatch\s*\(/;
 
@@ -329,6 +345,55 @@ describe('processing execution ownership', () => {
     expect(unexpectedWriters.sort()).toEqual([]);
   });
 
+  it('keeps entity-extraction RUNNING transitions inside the claim owner', async () => {
+    const files = await productionTypeScriptFiles(sourceRoot);
+    const unexpectedWriters: string[] = [];
+
+    for (const absolutePath of files) {
+      const relativePath = path.relative(sourceRoot, absolutePath);
+      if (
+        /\bentityExtractionStatus\s*:\s*['"]RUNNING['"]/.test(
+          await readFile(absolutePath, 'utf8'),
+        )
+        && relativePath !== canonicalEntityExtractionClaimOwner
+      ) {
+        unexpectedWriters.push(relativePath);
+      }
+    }
+
+    expect(unexpectedWriters.sort()).toEqual([]);
+  });
+
+  it('keeps entity and extra-content producer claims mutually exclusive', async () => {
+    const [entityOwner, extraContentOwner, eligibility] = await Promise.all([
+      readFile(
+        path.join(sourceRoot, canonicalEntityExtractionClaimOwner),
+        'utf8',
+      ),
+      readFile(
+        path.join(sourceRoot, canonicalExtraContentClaimOwner),
+        'utf8',
+      ),
+      readFile(
+        path.join(sourceRoot, 'services/processing-eligibility.ts'),
+        'utf8',
+      ),
+    ]);
+
+    expect(entityOwner).toMatch(
+      /observedEntityExtractionStateConditions[\s\S]*eq\(letters\.extraContentJobStatus, observed\.extraContentJobStatus\)/,
+    );
+    expect(extraContentOwner).toMatch(
+      /eq\(letters\.extraContentJobStatus, expectedStatus\),[\s\S]*ne\(letters\.entityExtractionStatus, 'RUNNING'\)/,
+    );
+    expect(eligibility).toMatch(
+      /entityExtractionPrerequisiteConditions[\s\S]*ne\(letters\.extraContentJobStatus, 'RUNNING'\)/,
+    );
+    expect(eligibility).toMatch(
+      /queuedExtraContentConditions[\s\S]*ne\(letters\.entityExtractionStatus, 'RUNNING'\)/,
+    );
+  });
+
   it('keeps non-null metadata run-token writes inside the claim owner', async () => {
     const files = await productionTypeScriptFiles(sourceRoot);
     const unexpectedWriters: string[] = [];
@@ -357,6 +422,75 @@ describe('processing execution ownership', () => {
     }
 
     expect(unexpectedWriters.sort()).toEqual([]);
+  });
+
+  it('keeps non-null entity-extraction ownership writes inside the claim owner', async () => {
+    const files = await productionTypeScriptFiles(sourceRoot);
+    const unexpectedWriters: string[] = [];
+
+    for (const absolutePath of files) {
+      const relativePath = path.relative(sourceRoot, absolutePath);
+      if (
+        relativePath === 'db/schema.ts'
+        || relativePath === canonicalEntityExtractionClaimOwner
+      ) {
+        continue;
+      }
+      const source = await readFile(absolutePath, 'utf8');
+      const writesRunId = [...source.matchAll(
+        /\bentityExtractionRunId\s*:\s*([^,\n}]+)/g,
+      )].some(match => match[1].trim() !== 'null');
+      const writesRunRevision = [...source.matchAll(
+        /\bentityExtractionRunRevision\s*:\s*([^,\n}]+)/g,
+      )].some(match => match[1].trim() !== 'null');
+      const writesLease = [...source.matchAll(
+        /\bentityExtractionLeaseExpiresAt\s*:\s*([^,\n}]+)/g,
+      )].some(match => match[1].trim() !== 'null');
+      const writesLeaseRunId = [...source.matchAll(
+        /\bentityExtractionLeaseRunId\s*:\s*([^,\n}]+)/g,
+      )].some(match => match[1].trim() !== 'null');
+      const writesClaimKind = [...source.matchAll(
+        /\bentityExtractionClaimKind\s*:\s*([^,\n}]+)/g,
+      )].some(match => match[1].trim() !== 'null');
+      if (
+        writesRunId
+        || writesRunRevision
+        || writesLease
+        || writesLeaseRunId
+        || writesClaimKind
+      ) {
+        unexpectedWriters.push(relativePath);
+      }
+    }
+
+    expect(unexpectedWriters.sort()).toEqual([]);
+  });
+
+  it('keeps every entity status writer on the complete ownership-clear boundary', async () => {
+    const files = await productionTypeScriptFiles(sourceRoot);
+    const unexpectedWriters: string[] = [];
+    const incompleteWriters: string[] = [];
+
+    for (const absolutePath of files) {
+      const relativePath = path.relative(sourceRoot, absolutePath);
+      const source = await readFile(absolutePath, 'utf8');
+      if (
+        !/\bentityExtractionStatus\s*:\s*(?:['"]|sql)/.test(source)
+      ) {
+        continue;
+      }
+      if (!allowedEntityExtractionStatusWriters.has(relativePath)) {
+        unexpectedWriters.push(relativePath);
+      } else if (
+        relativePath !== canonicalEntityExtractionClaimOwner
+        && !source.includes('clearedEntityExtractionOwnership')
+      ) {
+        incompleteWriters.push(relativePath);
+      }
+    }
+
+    expect(unexpectedWriters.sort()).toEqual([]);
+    expect(incompleteWriters.sort()).toEqual([]);
   });
 
   it('keeps non-null transcription lease writes inside the claim owner', async () => {
@@ -434,6 +568,26 @@ describe('processing execution ownership', () => {
         /\brecoverExpiredMetadataJobs\s*\(/.test(
           await readFile(absolutePath, 'utf8'),
         ) && !allowedExpiredMetadataRecoveryCallers.has(relativePath)
+      ) {
+        unexpectedCallers.push(relativePath);
+      }
+    }
+
+    expect(unexpectedCallers.sort()).toEqual([]);
+  });
+
+  it('allows expired entity-extraction recovery callers to be removed but not multiplied', async () => {
+    const files = await productionTypeScriptFiles(sourceRoot);
+    const unexpectedCallers: string[] = [];
+
+    for (const absolutePath of files) {
+      const relativePath = path.relative(sourceRoot, absolutePath);
+      if (relativePath === canonicalEntityExtractionClaimOwner) continue;
+      if (
+        /\brecoverExpiredEntityExtractionJobs\s*\(/.test(
+          await readFile(absolutePath, 'utf8'),
+        )
+        && !allowedExpiredEntityExtractionRecoveryCallers.has(relativePath)
       ) {
         unexpectedCallers.push(relativePath);
       }
@@ -605,6 +759,65 @@ describe('processing execution ownership', () => {
       /CREATE FUNCTION discard_legacy_entity_extraction_projection\([\s\S]*?DELETE FROM "letter_persons"[\s\S]*?DELETE FROM "letter_places"[\s\S]*?DELETE FROM "person_relationships"[\s\S]*?DELETE FROM "entity_review_queue"/,
     );
     expect(migration).not.toMatch(/VALIDATE CONSTRAINT/i);
+  });
+
+  it('keeps entity-extraction liveness nullable, bound, and rolling-deploy safe', async () => {
+    const schema = await readFile(path.join(sourceRoot, 'db/schema.ts'), 'utf8');
+    const migration = await readFile(
+      path.join(
+        sourceRoot,
+        'db/migrations/0053_add_entity_extraction_liveness.sql',
+      ),
+      'utf8',
+    );
+    const worker = await readFile(path.join(sourceRoot, 'worker.ts'), 'utf8');
+
+    expect(schema).toContain("pgEnum('entity_extraction_claim_kind'");
+    expect(schema).toMatch(
+      /entityExtractionLeaseExpiresAt: timestamp\('entity_extraction_lease_expires_at', \{[\s\S]*?precision: 3,[\s\S]*?\}\)/,
+    );
+    expect(schema).toContain(
+      "entityExtractionLeaseRunId: uuid('entity_extraction_lease_run_id')",
+    );
+    expect(schema).toContain(
+      "entityExtractionClaimKind: entityExtractionClaimKindEnum('entity_extraction_claim_kind')",
+    );
+    expect(schema).toContain('entity_extraction_lease_metadata_valid');
+    expect(schema).toContain(
+      'idx_letters_entity_extraction_lease_expires_at',
+    );
+
+    expect(migration).toContain(
+      'CREATE TYPE "public"."entity_extraction_claim_kind" AS ENUM (\'QUEUED\', \'REQUESTED\')',
+    );
+    expect(migration).toContain(
+      'ADD COLUMN "entity_extraction_lease_expires_at" timestamp(3) with time zone',
+    );
+    expect(migration).toContain(
+      'ADD COLUMN "entity_extraction_lease_run_id" uuid',
+    );
+    expect(migration).toContain(
+      'ADD COLUMN "entity_extraction_claim_kind" "entity_extraction_claim_kind"',
+    );
+    expect(migration).toMatch(
+      /ADD CONSTRAINT "entity_extraction_lease_metadata_valid"[\s\S]*\("entity_extraction_lease_expires_at" IS NULL\)\s*=\s*\("entity_extraction_lease_run_id" IS NULL\)[\s\S]*\("entity_extraction_lease_expires_at" IS NULL\)\s*=\s*\("entity_extraction_claim_kind" IS NULL\)[\s\S]*NOT VALID/,
+    );
+    expect(migration).toMatch(
+      /CREATE INDEX "idx_letters_entity_extraction_lease_expires_at"[\s\S]*WHERE "entity_extraction_status" = 'RUNNING'[\s\S]*"entity_extraction_lease_expires_at" IS NOT NULL/,
+    );
+    expect(migration).toMatch(
+      /OLD\.entity_extraction_status = 'RUNNING'[\s\S]*OLD\.entity_extraction_lease_run_id = OLD\.entity_extraction_run_id[\s\S]*NEW\.entity_extraction_status = 'RUNNING'[\s\S]*NEW\.entity_extraction_run_id = OLD\.entity_extraction_run_id[\s\S]*entity_extraction_running_liveness_cannot_be_stripped/,
+    );
+    expect(migration).not.toMatch(/\bUPDATE\s+"letters"\b/i);
+    expect(migration).not.toMatch(/\bDEFAULT\b/i);
+    expect(migration).not.toMatch(/VALIDATE CONSTRAINT/i);
+
+    expect(worker).toMatch(
+      /entityExtractionStatus,\s*'RUNNING'[\s\S]*entityExtractionClaimKind,\s*'QUEUED'[\s\S]*entityExtractionRunRevision,[\s\S]*entityExtractionRevision/,
+    );
+    expect(worker).toMatch(
+      /isNotNull\(letters\.entityExtractionLeaseExpiresAt\)[\s\S]*isNotNull\(letters\.entityExtractionLeaseRunId\)[\s\S]*entityExtractionLeaseRunId,[\s\S]*entityExtractionRunId/,
+    );
   });
 
   it('keeps extra-content lease metadata stage-specific and rollout-compatible', async () => {

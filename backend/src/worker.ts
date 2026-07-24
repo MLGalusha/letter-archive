@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { eq, and, isNotNull, or } from 'drizzle-orm';
+import { eq, and, isNotNull, or, sql } from 'drizzle-orm';
 import { closeDatabase, db, letters } from './db/index.js';
 import { createLogger, LOG_DIR, getLogRetentionHours } from './utils/logger.js';
 import { notify } from './services/notifications.js';
@@ -81,6 +81,22 @@ async function getQueuedProcessingWorkState(): Promise<'pending' | 'leased' | 'n
         eq(letters.metadataLeaseRunId, letters.metadataRunId),
       ),
       and(
+        eq(letters.entityExtractionStatus, 'RUNNING'),
+        eq(letters.entityExtractionClaimKind, 'QUEUED'),
+        isNotNull(letters.entityExtractionRunId),
+        isNotNull(letters.entityExtractionRunRevision),
+        eq(
+          letters.entityExtractionRunRevision,
+          sql`${letters.entityExtractionRevision} + 1`,
+        ),
+        isNotNull(letters.entityExtractionLeaseExpiresAt),
+        isNotNull(letters.entityExtractionLeaseRunId),
+        eq(
+          letters.entityExtractionLeaseRunId,
+          letters.entityExtractionRunId,
+        ),
+      ),
+      and(
         eq(letters.extraContentJobStatus, 'RUNNING'),
         isNotNull(letters.extraContentJobRunId),
         isNotNull(letters.extraContentJobLeaseExpiresAt),
@@ -159,7 +175,7 @@ async function main() {
   try {
     if (canStartWorkerOperation(executionHeartbeat)) {
       // Only the singleton execution owner may recover or scan durable queues.
-      // Ownerless legacy metadata and entity RUNNING rows remain explicit actions.
+      // Ownerless or unbound rollout-era attempts remain explicit actions.
       await leaseRecovery.reconcile();
       if (canStartWorkerOperation(executionHeartbeat)) {
         leaseRecovery.start();

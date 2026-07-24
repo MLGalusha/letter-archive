@@ -372,6 +372,13 @@
       "when": 1777113600000,
       "tag": "0052_add_worker_execution_lease",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1777200000000,
+      "tag": "0053_add_entity_extraction_liveness",
+      "breakpoints": true
     }
   ]
 }

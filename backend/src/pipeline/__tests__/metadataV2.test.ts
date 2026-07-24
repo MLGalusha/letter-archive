@@ -4,8 +4,11 @@ const {
   extractMetadataV2Mock,
   extractEntitiesMock,
   getLetterWithPagesMock,
-  claimEntityExtractionMock,
+  claimQueuedEntityExtractionMock,
+  claimRequestedEntityExtractionMock,
   failEntityExtractionMock,
+  observeEntityExtractionStateMock,
+  withEntityExtractionHeartbeatMock,
   observeMetadataStateMock,
   claimQueuedMetadataMock,
   completeMetadataMock,
@@ -15,20 +18,23 @@ const {
   findFirstMock,
   notifyMock,
 } = vi.hoisted(() => ({
-  extractMetadataV2Mock: vi.fn(),
-  extractEntitiesMock: vi.fn(),
-  getLetterWithPagesMock: vi.fn(),
-  claimEntityExtractionMock: vi.fn(),
-  failEntityExtractionMock: vi.fn(),
-  observeMetadataStateMock: vi.fn(),
-  claimQueuedMetadataMock: vi.fn(),
-  completeMetadataMock: vi.fn(),
-  failMetadataMock: vi.fn(),
-  withMetadataHeartbeatMock: vi.fn(),
-  processEntityExtractionMock: vi.fn(),
-  findFirstMock: vi.fn(),
-  notifyMock: vi.fn(),
-}));
+    extractMetadataV2Mock: vi.fn(),
+    extractEntitiesMock: vi.fn(),
+    getLetterWithPagesMock: vi.fn(),
+    claimQueuedEntityExtractionMock: vi.fn(),
+    claimRequestedEntityExtractionMock: vi.fn(),
+    failEntityExtractionMock: vi.fn(),
+    observeEntityExtractionStateMock: vi.fn(),
+    withEntityExtractionHeartbeatMock: vi.fn(),
+    observeMetadataStateMock: vi.fn(),
+    claimQueuedMetadataMock: vi.fn(),
+    completeMetadataMock: vi.fn(),
+    failMetadataMock: vi.fn(),
+    withMetadataHeartbeatMock: vi.fn(),
+    processEntityExtractionMock: vi.fn(),
+    findFirstMock: vi.fn(),
+    notifyMock: vi.fn(),
+  }));
 
 vi.mock('../../ai/openai.js', () => ({
   extractMetadataV2: extractMetadataV2Mock,
@@ -37,8 +43,14 @@ vi.mock('../../ai/openai.js', () => ({
 
 vi.mock('../../services/letters.js', () => ({
   getLetterWithPages: getLetterWithPagesMock,
-  claimEntityExtraction: claimEntityExtractionMock,
+}));
+
+vi.mock('../../services/letter/entity-extraction-job.js', () => ({
+  claimQueuedEntityExtraction: claimQueuedEntityExtractionMock,
+  claimRequestedEntityExtraction: claimRequestedEntityExtractionMock,
   failEntityExtraction: failEntityExtractionMock,
+  observeEntityExtractionState: observeEntityExtractionStateMock,
+  withEntityExtractionHeartbeat: withEntityExtractionHeartbeatMock,
 }));
 
 vi.mock('../../services/letter/metadata-job.js', () => ({
@@ -83,6 +95,7 @@ vi.mock('drizzle-orm', () => ({
 }));
 
 import { runEntityExtractionOnly, runMetadataExtractionV2 } from '../metadataV2.js';
+import { EntityExtractionClaimLostError } from '../../services/entities.js';
 
 const entities = {
   people: [],
@@ -108,6 +121,13 @@ function letter() {
     metadataLeaseRunId: 'run-a',
     metadataClaimKind: 'QUEUED',
     entityExtractionStatus: 'PENDING',
+    entityExtractionRevision: 0,
+    entityExtractionRunId: null,
+    entityExtractionRunRevision: null,
+    entityExtractionLeaseExpiresAt: null,
+    entityExtractionLeaseRunId: null,
+    entityExtractionClaimKind: null,
+    extraContentJobStatus: 'PENDING',
     deadLetter: false,
     workflow: 'METADATA_EXTRACTING',
     updatedAt: new Date('2026-07-17T12:00:00.000Z'),
@@ -122,12 +142,58 @@ function letter() {
   };
 }
 
+function entityReadyLetter() {
+  return {
+    ...letter(),
+    metadataStatus: 'SUCCESS',
+    metadataRunId: null,
+    metadataRunRevision: null,
+    metadataLeaseExpiresAt: null,
+    metadataLeaseRunId: null,
+    metadataClaimKind: null,
+  };
+}
+
+function ownedEntityLetter(claimKind: 'QUEUED' | 'REQUESTED' = 'QUEUED') {
+  return {
+    ...entityReadyLetter(),
+    entityExtractionStatus: 'RUNNING',
+    entityExtractionRunId: entityClaim.runId,
+    entityExtractionRunRevision: entityClaim.revision,
+    entityExtractionLeaseExpiresAt: new Date('2026-07-17T12:05:00.000Z'),
+    entityExtractionLeaseRunId: entityClaim.runId,
+    entityExtractionClaimKind: claimKind,
+  };
+}
+
+function useStandaloneEntitySource() {
+  getLetterWithPagesMock.mockImplementation(async () => (
+    claimQueuedEntityExtractionMock.mock.calls.length > 0
+      ? ownedEntityLetter('QUEUED')
+      : claimRequestedEntityExtractionMock.mock.calls.length > 0
+        ? ownedEntityLetter('REQUESTED')
+        : entityReadyLetter()
+  ));
+}
+
 describe('metadata entity persistence ownership', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    getLetterWithPagesMock.mockResolvedValue(letter());
-    claimEntityExtractionMock.mockResolvedValue(entityClaim);
+    getLetterWithPagesMock.mockImplementation(async () => (
+      claimQueuedEntityExtractionMock.mock.calls.length > 0
+        ? ownedEntityLetter('QUEUED')
+        : claimRequestedEntityExtractionMock.mock.calls.length > 0
+          ? ownedEntityLetter('REQUESTED')
+          : letter()
+    ));
+    claimQueuedEntityExtractionMock.mockResolvedValue(entityClaim);
+    claimRequestedEntityExtractionMock.mockResolvedValue(entityClaim);
     failEntityExtractionMock.mockResolvedValue(true);
+    observeEntityExtractionStateMock.mockImplementation(source => source);
+    withEntityExtractionHeartbeatMock.mockImplementation(
+      async (_letterId, _claim, operation) =>
+        operation({ hasOwnership: () => true }),
+    );
     findFirstMock.mockResolvedValue({
       metadataStatus: 'RUNNING',
       metadataRunId: 'run-a',
@@ -163,17 +229,23 @@ describe('metadata entity persistence ownership', () => {
   });
 
   it('passes standalone ownership to the atomic entity commit boundary', async () => {
-    await runEntityExtractionOnly('letter-1', {
-      workerExecutionToken: 'execution-a',
-    });
+    useStandaloneEntitySource();
 
-    expect(claimEntityExtractionMock).toHaveBeenCalledWith(
+    await expect(runEntityExtractionOnly('letter-1', {
+      claimKind: 'QUEUED',
+      workerExecutionToken: 'execution-a',
+    })).resolves.toEqual({ kind: 'completed' });
+
+    expect(claimQueuedEntityExtractionMock).toHaveBeenCalledWith(
       'letter-1',
-      'PENDING',
+      expect.any(Object),
       'execution-a',
     );
-    expect(claimEntityExtractionMock.mock.invocationCallOrder[0]).toBeLessThan(
-      getLetterWithPagesMock.mock.invocationCallOrder[0]!,
+    expect(getLetterWithPagesMock.mock.invocationCallOrder[0]).toBeLessThan(
+      claimQueuedEntityExtractionMock.mock.invocationCallOrder[0]!,
+    );
+    expect(claimQueuedEntityExtractionMock.mock.invocationCallOrder[0]).toBeLessThan(
+      getLetterWithPagesMock.mock.invocationCallOrder[1]!,
     );
     expect(processEntityExtractionMock).toHaveBeenCalledWith(
       entities,
@@ -184,16 +256,22 @@ describe('metadata entity persistence ownership', () => {
   });
 
   it('binds standalone model input to the authoritative post-claim reload', async () => {
-    getLetterWithPagesMock.mockResolvedValueOnce({
-      ...letter(),
-      transcriptionText: 'Fresh post-claim transcript',
-      sender: 'Fresh Alice',
-      recipient: 'Fresh Bob',
-      summary: 'Fresh summary',
-    });
+    getLetterWithPagesMock
+      .mockResolvedValueOnce(entityReadyLetter())
+      .mockResolvedValueOnce({
+        ...ownedEntityLetter('REQUESTED'),
+        transcriptionText: 'Fresh post-claim transcript',
+        sender: 'Fresh Alice',
+        recipient: 'Fresh Bob',
+        summary: 'Fresh summary',
+      });
 
-    await runEntityExtractionOnly('letter-1');
+    await runEntityExtractionOnly('letter-1', { claimKind: 'REQUESTED' });
 
+    expect(claimRequestedEntityExtractionMock).toHaveBeenCalledWith(
+      'letter-1',
+      expect.any(Object),
+    );
     expect(extractEntitiesMock).toHaveBeenCalledWith(expect.objectContaining({
       transcriptionText: 'Fresh post-claim transcript',
       basicMetadata: {
@@ -213,12 +291,95 @@ describe('metadata entity persistence ownership', () => {
       { runId: 'run-a', revision: 4 },
       expect.any(Object),
     );
+    expect(claimQueuedEntityExtractionMock).toHaveBeenCalledWith(
+      'letter-1',
+      expect.any(Object),
+      undefined,
+    );
+    expect(claimRequestedEntityExtractionMock).not.toHaveBeenCalled();
     expect(processEntityExtractionMock).toHaveBeenCalledWith(
       entities,
       'letter-1',
       entityClaim,
     );
     expect(failEntityExtractionMock).not.toHaveBeenCalled();
+  });
+
+  it('uses the post-claim identity instead of stale Phase 1 corrections for entities', async () => {
+    getLetterWithPagesMock
+      .mockResolvedValueOnce({
+        ...letter(),
+        sender: 'Original Alice',
+        recipient: 'Original Bob',
+      })
+      .mockResolvedValueOnce({
+        ...entityReadyLetter(),
+        sender: 'Newly edited Carol',
+        recipient: 'Newly edited Dana',
+      })
+      .mockResolvedValueOnce({
+        ...ownedEntityLetter('QUEUED'),
+        sender: 'Newly edited Carol',
+        recipient: 'Newly edited Dana',
+      });
+
+    await runMetadataExtractionV2(
+      'letter-1',
+      {
+        confirmedSender: 'Original Alice',
+        confirmedRecipient: 'Original Bob',
+      },
+      { runId: 'run-a', revision: 4 },
+    );
+
+    expect(extractMetadataV2Mock).toHaveBeenCalledWith(expect.objectContaining({
+      corrections: expect.objectContaining({
+        confirmedSender: 'Original Alice',
+        confirmedRecipient: 'Original Bob',
+      }),
+    }));
+    expect(extractEntitiesMock).toHaveBeenCalledWith(expect.objectContaining({
+      basicMetadata: expect.objectContaining({
+        sender: 'Newly edited Carol',
+        recipient: 'Newly edited Dana',
+      }),
+      corrections: undefined,
+    }));
+  });
+
+  it('preserves reviewer correction semantics when the claimed identity still matches', async () => {
+    getLetterWithPagesMock
+      .mockResolvedValueOnce(letter())
+      .mockResolvedValueOnce({
+        ...entityReadyLetter(),
+        sender: 'Confirmed Alice',
+        recipient: 'Confirmed Bob',
+      })
+      .mockResolvedValueOnce({
+        ...ownedEntityLetter('QUEUED'),
+        sender: 'Confirmed Alice',
+        recipient: 'Confirmed Bob',
+      });
+
+    await runMetadataExtractionV2(
+      'letter-1',
+      {
+        confirmedSender: 'Confirmed Alice',
+        confirmedRecipient: 'Confirmed Bob',
+        previousAiSender: 'Old Alice',
+        previousAiRecipient: 'Old Bob',
+      },
+      { runId: 'run-a', revision: 4 },
+    );
+
+    expect(extractEntitiesMock).toHaveBeenCalledWith(expect.objectContaining({
+      corrections: {
+        confirmedSender: 'Confirmed Alice',
+        confirmedRecipient: 'Confirmed Bob',
+        previousAiSender: 'Old Alice',
+        previousAiRecipient: 'Old Bob',
+      },
+    }));
   });
 
   it('leaves entity extraction on the durable queue when the worker defers it', async () => {
@@ -241,20 +402,148 @@ describe('metadata entity persistence ownership', () => {
         confirmedRecipient: 'Bob',
       },
     }));
-    expect(claimEntityExtractionMock).not.toHaveBeenCalled();
+    expect(claimQueuedEntityExtractionMock).not.toHaveBeenCalled();
+    expect(claimRequestedEntityExtractionMock).not.toHaveBeenCalled();
     expect(extractEntitiesMock).not.toHaveBeenCalled();
     expect(processEntityExtractionMock).not.toHaveBeenCalled();
   });
 
   it('fails only the exact standalone run when extraction throws', async () => {
+    useStandaloneEntitySource();
     extractEntitiesMock.mockRejectedValueOnce(new Error('provider failed'));
 
-    await expect(runEntityExtractionOnly('letter-1')).rejects.toThrow('provider failed');
+    await expect(runEntityExtractionOnly('letter-1', {
+      claimKind: 'REQUESTED',
+    })).rejects.toThrow('provider failed');
 
     expect(failEntityExtractionMock).toHaveBeenCalledWith(
       'letter-1',
       entityClaim,
       'provider failed',
+    );
+  });
+
+  it('returns claim_lost without calling OpenAI when a standalone claim loses the CAS', async () => {
+    useStandaloneEntitySource();
+    claimRequestedEntityExtractionMock.mockResolvedValueOnce(null);
+
+    await expect(runEntityExtractionOnly('letter-1', {
+      claimKind: 'REQUESTED',
+    })).resolves.toEqual({ kind: 'claim_lost' });
+
+    expect(extractEntitiesMock).not.toHaveBeenCalled();
+    expect(processEntityExtractionMock).not.toHaveBeenCalled();
+    expect(failEntityExtractionMock).not.toHaveBeenCalled();
+    expect(notifyMock).not.toHaveBeenCalled();
+  });
+
+  it('returns superseded without calling OpenAI when the entity heartbeat starts unowned', async () => {
+    useStandaloneEntitySource();
+    withEntityExtractionHeartbeatMock.mockImplementationOnce(
+      async (_letterId, _claim, operation) =>
+        operation({ hasOwnership: () => false }),
+    );
+
+    await expect(runEntityExtractionOnly('letter-1', {
+      claimKind: 'REQUESTED',
+    })).resolves.toEqual({ kind: 'superseded' });
+
+    expect(extractEntitiesMock).not.toHaveBeenCalled();
+    expect(processEntityExtractionMock).not.toHaveBeenCalled();
+    expect(failEntityExtractionMock).not.toHaveBeenCalled();
+    expect(notifyMock).not.toHaveBeenCalled();
+  });
+
+  it('returns superseded when transactional publication loses entity ownership', async () => {
+    useStandaloneEntitySource();
+    processEntityExtractionMock.mockRejectedValueOnce(
+      new EntityExtractionClaimLostError(),
+    );
+
+    await expect(runEntityExtractionOnly('letter-1', {
+      claimKind: 'REQUESTED',
+    })).resolves.toEqual({ kind: 'superseded' });
+
+    expect(failEntityExtractionMock).not.toHaveBeenCalled();
+    expect(notifyMock).not.toHaveBeenCalled();
+  });
+
+  it('returns superseded when standalone failure no longer owns the attempt', async () => {
+    useStandaloneEntitySource();
+    extractEntitiesMock.mockRejectedValueOnce(new Error('provider failed'));
+    failEntityExtractionMock.mockResolvedValueOnce(false);
+
+    await expect(runEntityExtractionOnly('letter-1', {
+      claimKind: 'REQUESTED',
+    })).resolves.toEqual({ kind: 'superseded' });
+
+    expect(notifyMock).not.toHaveBeenCalled();
+  });
+
+  it('treats embedded entity heartbeat loss as non-fatal after metadata publishes', async () => {
+    withEntityExtractionHeartbeatMock.mockImplementationOnce(
+      async (_letterId, _claim, operation) =>
+        operation({ hasOwnership: () => false }),
+    );
+
+    await expect(
+      runMetadataExtractionV2(
+        'letter-1',
+        undefined,
+        { runId: 'run-a', revision: 4 },
+      ),
+    ).resolves.toEqual({ kind: 'completed' });
+
+    expect(completeMetadataMock).toHaveBeenCalledTimes(1);
+    expect(extractEntitiesMock).not.toHaveBeenCalled();
+    expect(failEntityExtractionMock).not.toHaveBeenCalled();
+    expect(notifyMock).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'metadata_success' }),
+    );
+    expect(notifyMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'entity_success' }),
+    );
+  });
+
+  it('records and reports an owned embedded entity failure without failing metadata', async () => {
+    extractEntitiesMock.mockRejectedValueOnce(new Error('entity provider failed'));
+
+    await expect(
+      runMetadataExtractionV2(
+        'letter-1',
+        undefined,
+        { runId: 'run-a', revision: 4 },
+      ),
+    ).resolves.toEqual({ kind: 'completed' });
+
+    expect(failEntityExtractionMock).toHaveBeenCalledWith(
+      'letter-1',
+      entityClaim,
+      'entity provider failed',
+    );
+    expect(notifyMock).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'entity_failed',
+      metadata: {
+        error: 'entity provider failed',
+        fatal: false,
+      },
+    }));
+  });
+
+  it('does not report an embedded failure after entity ownership is superseded', async () => {
+    extractEntitiesMock.mockRejectedValueOnce(new Error('entity provider failed'));
+    failEntityExtractionMock.mockResolvedValueOnce(false);
+
+    await expect(
+      runMetadataExtractionV2(
+        'letter-1',
+        undefined,
+        { runId: 'run-a', revision: 4 },
+      ),
+    ).resolves.toEqual({ kind: 'completed' });
+
+    expect(notifyMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'entity_failed' }),
     );
   });
 
@@ -280,7 +569,8 @@ describe('metadata entity persistence ownership', () => {
       expect.any(Object),
       'execution-a',
     );
-    expect(claimEntityExtractionMock).not.toHaveBeenCalled();
+    expect(claimQueuedEntityExtractionMock).not.toHaveBeenCalled();
+    expect(claimRequestedEntityExtractionMock).not.toHaveBeenCalled();
   });
 
   it('reloads input after claim and returns superseded without notifications or entities', async () => {
@@ -294,10 +584,8 @@ describe('metadata entity persistence ownership', () => {
     expect(extractMetadataV2Mock).toHaveBeenCalledTimes(1);
     expect(extractEntitiesMock).not.toHaveBeenCalled();
     expect(notifyMock).not.toHaveBeenCalled();
-    expect(claimEntityExtractionMock).not.toHaveBeenCalledWith(
-      'letter-1',
-      'PENDING',
-    );
+    expect(claimQueuedEntityExtractionMock).not.toHaveBeenCalled();
+    expect(claimRequestedEntityExtractionMock).not.toHaveBeenCalled();
   });
 
   it('rejects a post-claim source revision change before calling OpenAI', async () => {

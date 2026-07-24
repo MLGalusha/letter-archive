@@ -56,6 +56,11 @@ export const metadataClaimKindEnum = pgEnum('metadata_claim_kind', [
   'REQUESTED',
 ]);
 
+export const entityExtractionClaimKindEnum = pgEnum('entity_extraction_claim_kind', [
+  'QUEUED',
+  'REQUESTED',
+]);
+
 export const dateConfidenceEnum = pgEnum('date_confidence', [
   'exact',
   'unknown',
@@ -268,6 +273,12 @@ export const letters = pgTable(
     entityExtractionRevision: integer('entity_extraction_revision').notNull().default(0),
     entityExtractionRunId: uuid('entity_extraction_run_id'),
     entityExtractionRunRevision: integer('entity_extraction_run_revision'),
+    entityExtractionLeaseExpiresAt: timestamp('entity_extraction_lease_expires_at', {
+      withTimezone: true,
+      precision: 3,
+    }),
+    entityExtractionLeaseRunId: uuid('entity_extraction_lease_run_id'),
+    entityExtractionClaimKind: entityExtractionClaimKindEnum('entity_extraction_claim_kind'),
     entityExtractionError: text('entity_extraction_error'),
 
     // Transcript confirmation (gates metadata extraction)
@@ -341,6 +352,9 @@ export const letters = pgTable(
     index('idx_letters_metadata_lease_expires_at')
       .on(table.metadataLeaseExpiresAt)
       .where(sql`${table.metadataStatus} = 'RUNNING' AND ${table.metadataLeaseExpiresAt} IS NOT NULL`),
+    index('idx_letters_entity_extraction_lease_expires_at')
+      .on(table.entityExtractionLeaseExpiresAt)
+      .where(sql`${table.entityExtractionStatus} = 'RUNNING' AND ${table.entityExtractionLeaseExpiresAt} IS NOT NULL`),
     // Flag index (partial: only flagged=true rows)
     index('idx_letters_flagged').on(table.flagged),
     // V2 indexes
@@ -367,6 +381,16 @@ export const letters = pgTable(
         AND ${table.entityExtractionRunRevision} IS NOT NULL
         AND ${table.entityExtractionRunRevision} = ${table.entityExtractionRevision} + 1
       )`,
+    ),
+    // During rolling deployment an older terminal writer may clear the run
+    // tuple while leaving this new tuple behind. Current code treats that
+    // residue as non-authoritative and overwrites it on the next claim.
+    check(
+      'entity_extraction_lease_metadata_valid',
+      sql`(${table.entityExtractionLeaseExpiresAt} IS NULL)
+        = (${table.entityExtractionLeaseRunId} IS NULL)
+        AND (${table.entityExtractionLeaseExpiresAt} IS NULL)
+        = (${table.entityExtractionClaimKind} IS NULL)`,
     ),
     check(
       'metadata_owner_shape',
@@ -1050,6 +1074,8 @@ export type JobStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';
 export type TranscriptionClaimKind = (typeof transcriptionClaimKindEnum.enumValues)[number];
 export type ExtraContentClaimKind = (typeof extraContentClaimKindEnum.enumValues)[number];
 export type MetadataClaimKind = (typeof metadataClaimKindEnum.enumValues)[number];
+export type EntityExtractionClaimKind =
+  (typeof entityExtractionClaimKindEnum.enumValues)[number];
 export type DateConfidence = 'exact' | 'unknown' | 'inferred';
 export type ContentStatus = 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
 

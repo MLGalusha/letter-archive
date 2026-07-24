@@ -21,11 +21,14 @@ import {
   recoverExpiredExtraContentJobs,
   type ExtraContentRecoveryResult,
 } from './letter/extra-content-job.js';
-import { shouldUseCloudRunWorkerJob, triggerWorkerJob } from './cloud-run-job.js';
 import {
+  cancelEntityExtractionAttempt,
   cancelLegacyEntityExtraction,
-  failEntityExtraction,
-} from './letters.js';
+  clearedEntityExtractionOwnership,
+  recoverExpiredEntityExtractionJobs,
+  type EntityExtractionRecoveryResult,
+} from './letter/entity-extraction-job.js';
+import { shouldUseCloudRunWorkerJob, triggerWorkerJob } from './cloud-run-job.js';
 import {
   entityExtractionPrerequisiteConditions,
   extraContentPrerequisiteConditions,
@@ -150,12 +153,12 @@ export async function wakeBackgroundWorkerForQueuedProcessing(): Promise<Process
 // ============================================================================
 
 /**
- * Reconciles only expired, fully-owned leased attempts. Entity extraction is
- * run/revision fenced but unleased, so it is never guessed dead automatically.
+ * Reconciles only expired, fully-owned leased attempts.
  */
 export interface ProcessingLeaseRecoveryResult {
   transcription: TranscriptionRecoveryResult;
   metadata: MetadataRecoveryResult;
+  entityExtraction: EntityExtractionRecoveryResult;
   extraContent: ExtraContentRecoveryResult;
 }
 
@@ -164,11 +167,15 @@ export async function recoverExpiredProcessingJobs(
 ): Promise<ProcessingLeaseRecoveryResult> {
   let transcription: TranscriptionRecoveryResult = { requeued: [], failed: [] };
   let metadata: MetadataRecoveryResult = { requeued: [], failed: [] };
+  let entityExtraction: EntityExtractionRecoveryResult = {
+    requeued: [],
+    failed: [],
+  };
   let extraContent: ExtraContentRecoveryResult = { requeued: [], failed: [] };
 
-  // Keep the two stages as separate failure domains. They update the same table,
-  // and a successful main recovery must still reach the API's worker trigger if
-  // extra-content recovery fails (or vice versa).
+  // Keep every stage as a separate failure domain. They update the same table,
+  // and one successful recovery must still reach the worker trigger when
+  // another stage's recovery fails.
   try {
     transcription = await recoverExpiredTranscriptions(
       options.workerExecutionToken,
@@ -184,6 +191,14 @@ export async function recoverExpiredProcessingJobs(
   }
 
   try {
+    entityExtraction = await recoverExpiredEntityExtractionJobs(
+      options.workerExecutionToken,
+    );
+  } catch (error) {
+    log.error({ err: error }, 'Expired entity extraction lease recovery failed');
+  }
+
+  try {
     extraContent = await recoverExpiredExtraContentJobs(
       options.workerExecutionToken,
     );
@@ -196,13 +211,15 @@ export async function recoverExpiredProcessingJobs(
     ...transcription.failed.map(row => row.id),
     ...metadata.requeued.map(row => row.id),
     ...metadata.failed.map(row => row.id),
+    ...entityExtraction.requeued.map(row => row.id),
+    ...entityExtraction.failed.map(row => row.id),
     ...extraContent.requeued.map(row => row.id),
     ...extraContent.failed.map(row => row.id),
   ];
 
   if (recoveredLetterIds.length === 0) {
     log.info('Recovery found no expired leased processing attempts');
-    return { transcription, metadata, extraContent };
+    return { transcription, metadata, entityExtraction, extraContent };
   }
 
   log.info(
@@ -221,6 +238,8 @@ export async function recoverExpiredProcessingJobs(
       transcriptionFailed: transcription.failed.length,
       metadataRequeued: metadata.requeued.length,
       metadataFailed: metadata.failed.length,
+      entityExtractionRequeued: entityExtraction.requeued.length,
+      entityExtractionFailed: entityExtraction.failed.length,
       extraContentRequeued: extraContent.requeued.length,
       extraContentFailed: extraContent.failed.length,
     },
@@ -228,7 +247,7 @@ export async function recoverExpiredProcessingJobs(
     dedupeWindowMinutes: 5,
   });
 
-  return { transcription, metadata, extraContent };
+  return { transcription, metadata, entityExtraction, extraContent };
 }
 
 /**
@@ -563,8 +582,7 @@ export async function removeFromQueue(letterId: string, type: QueueJobType): Pro
     }
     const removed = await db.update(letters).set({
       entityExtractionStatus: 'FAILED',
-      entityExtractionRunId: null,
-      entityExtractionRunRevision: null,
+      ...clearedEntityExtractionOwnership(),
       entityExtractionError: 'Removed from queue by admin',
       updatedAt: new Date(),
     }).where(and(
@@ -673,8 +691,7 @@ export async function clearQueue(type: QueueJobType): Promise<{ message: string;
         .update(letters)
         .set({
           entityExtractionStatus: 'FAILED',
-          entityExtractionRunId: null,
-          entityExtractionRunRevision: null,
+          ...clearedEntityExtractionOwnership(),
           entityExtractionError: 'Cleared from queue by admin',
           updatedAt: new Date(),
         })
@@ -805,8 +822,7 @@ export async function retryJob(letterId: string, type: QueueJobType): Promise<{ 
     }
     const retried = await db.update(letters).set({
       entityExtractionStatus: 'PENDING',
-      entityExtractionRunId: null,
-      entityExtractionRunRevision: null,
+      ...clearedEntityExtractionOwnership(),
       entityExtractionError: null,
       deadLetter: false,
       updatedAt: new Date(),
@@ -903,7 +919,7 @@ export async function cancelActiveJob(letterId: string, type: QueueJobType): Pro
       }
     } else if (!letter.entityExtractionRunId || letter.entityExtractionRunRevision === null) {
       throw new ProcessingError('Cannot cancel: entity extraction job has no active run identity', 409);
-    } else if (!await failEntityExtraction(
+    } else if (!await cancelEntityExtractionAttempt(
       letterId,
       {
         runId: letter.entityExtractionRunId,

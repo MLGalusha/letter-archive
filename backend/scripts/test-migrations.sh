@@ -5,6 +5,7 @@ CONTAINER_NAME="letter-archive-migration-test-$$"
 DB_PORT=5434
 DB_NAME="migration_test"
 LEGACY_DB_NAME="migration_0051_legacy_test"
+LIVENESS_ROLLOUT_DB_NAME="migration_0053_rollout_test"
 DB_USER="test"
 DB_PASS="test"
 
@@ -51,6 +52,325 @@ docker exec -i "$CONTAINER_NAME" \
   > /dev/null
 
 echo "Worker execution lease semantics regression passed."
+
+docker exec -i "$CONTAINER_NAME" \
+  psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" \
+  < "src/db/__tests__/entity-extraction-liveness.sql" \
+  > /dev/null
+
+echo "Entity extraction liveness semantics regression passed."
+
+recovery_first_setup_count="$(
+  docker exec "$CONTAINER_NAME" \
+    psql -At -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" \
+    -c "WITH prepared AS (
+      UPDATE letters
+      SET entity_extraction_status = 'RUNNING',
+          entity_extraction_run_id = '53000000-0000-4000-8000-000000000011',
+          entity_extraction_run_revision = entity_extraction_revision + 1,
+          entity_extraction_lease_expires_at =
+            clock_timestamp() + interval '8 seconds',
+          entity_extraction_lease_run_id =
+            '53000000-0000-4000-8000-000000000011',
+          entity_extraction_claim_kind = 'QUEUED'
+      WHERE id = '53000000-0000-4000-8000-000000000010'
+        AND entity_extraction_status = 'PENDING'
+      RETURNING 1
+    )
+    SELECT count(*) FROM prepared;"
+)"
+if [[ "$recovery_first_setup_count" != "1" ]]; then
+  echo "Could not prepare the recovery-first entity race."
+  exit 1
+fi
+
+# Force the recovery-side lock ordering immediately before expiry. The
+# publisher starts while the previously committed lease is still live, blocks
+# on this row lock, and must lose compare-and-set re-evaluation after recovery.
+docker exec -i "$CONTAINER_NAME" \
+  psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" \
+  > /dev/null <<'SQL' &
+BEGIN;
+SET LOCAL application_name = 'entity-recovery-lock-first';
+SELECT id
+FROM letters
+WHERE id = '53000000-0000-4000-8000-000000000010'
+FOR UPDATE;
+SELECT pg_sleep(10);
+UPDATE letters
+SET entity_extraction_status = 'PENDING',
+    entity_extraction_run_id = NULL,
+    entity_extraction_run_revision = NULL,
+    entity_extraction_lease_expires_at = NULL,
+    entity_extraction_lease_run_id = NULL,
+    entity_extraction_claim_kind = NULL
+WHERE id = '53000000-0000-4000-8000-000000000010'
+  AND entity_extraction_status = 'RUNNING'
+  AND entity_extraction_run_id =
+    '53000000-0000-4000-8000-000000000011'
+  AND entity_extraction_run_revision = entity_extraction_revision + 1
+  AND entity_extraction_lease_run_id = entity_extraction_run_id
+  AND entity_extraction_claim_kind = 'QUEUED'
+  AND entity_extraction_lease_expires_at <= clock_timestamp();
+COMMIT;
+SQL
+entity_recovery_owner_pid=$!
+
+entity_recovery_locked=false
+for _ in $(seq 1 30); do
+  if [[ "$(
+    docker exec "$CONTAINER_NAME" \
+      psql -At -U "$DB_USER" -d "$DB_NAME" \
+      -c "SELECT count(*) FROM pg_stat_activity WHERE application_name = 'entity-recovery-lock-first' AND query LIKE 'SELECT pg_sleep%';"
+  )" == "1" ]]; then
+    entity_recovery_locked=true
+    break
+  fi
+  sleep 0.1
+done
+
+if [[ "$entity_recovery_locked" != "true" ]]; then
+  echo "Timed out waiting for the recovery-first entity row lock."
+  wait "$entity_recovery_owner_pid" || true
+  exit 1
+fi
+
+recovery_first_lease_live="$(
+  docker exec "$CONTAINER_NAME" \
+    psql -At -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" \
+    -c "SELECT entity_extraction_lease_expires_at > clock_timestamp()
+        FROM letters
+        WHERE id = '53000000-0000-4000-8000-000000000010';"
+)"
+if [[ "$recovery_first_lease_live" != "t" ]]; then
+  echo "The publisher did not enter the recovery-first race with a live lease."
+  wait "$entity_recovery_owner_pid" || true
+  exit 1
+fi
+recovery_first_owner_still_locked="$(
+  docker exec "$CONTAINER_NAME" \
+    psql -At -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" \
+    -c "SELECT count(*) FROM pg_stat_activity WHERE application_name = 'entity-recovery-lock-first' AND query LIKE 'SELECT pg_sleep%';"
+)"
+if [[ "$recovery_first_owner_still_locked" != "1" ]]; then
+  echo "The recovery-first row lock ended before the publisher contended."
+  wait "$entity_recovery_owner_pid" || true
+  exit 1
+fi
+
+recovery_first_publication_count="$(
+  docker exec "$CONTAINER_NAME" \
+    psql -At -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" \
+    -c "WITH published AS (
+      UPDATE letters
+      SET entity_extraction_status = 'SUCCESS',
+          entity_extraction_json = '{\"people\":[],\"places\":[]}'::jsonb,
+          entity_extraction_revision = entity_extraction_run_revision,
+          entity_extraction_run_id = NULL,
+          entity_extraction_run_revision = NULL,
+          entity_extraction_lease_expires_at = NULL,
+          entity_extraction_lease_run_id = NULL,
+          entity_extraction_claim_kind = NULL
+      WHERE id = '53000000-0000-4000-8000-000000000010'
+        AND entity_extraction_status = 'RUNNING'
+        AND entity_extraction_run_id =
+          '53000000-0000-4000-8000-000000000011'
+        AND entity_extraction_run_revision = entity_extraction_revision + 1
+        AND entity_extraction_lease_run_id = entity_extraction_run_id
+        AND entity_extraction_claim_kind IS NOT NULL
+        AND entity_extraction_lease_expires_at > clock_timestamp()
+      RETURNING 1
+    )
+    SELECT count(*) FROM published;"
+)"
+wait "$entity_recovery_owner_pid"
+
+if [[ "$recovery_first_publication_count" != "0" ]]; then
+  echo "A blocked entity publisher committed after recovery won the row lock."
+  exit 1
+fi
+
+recovery_first_final_count="$(
+  docker exec "$CONTAINER_NAME" \
+    psql -At -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" \
+    -c "SELECT count(*)
+        FROM letters
+        WHERE id = '53000000-0000-4000-8000-000000000010'
+          AND entity_extraction_status = 'PENDING'
+          AND entity_extraction_run_id IS NULL
+          AND entity_extraction_run_revision IS NULL
+          AND entity_extraction_lease_expires_at IS NULL
+          AND entity_extraction_lease_run_id IS NULL
+          AND entity_extraction_claim_kind IS NULL
+          AND entity_extraction_revision = 0;"
+)"
+if [[ "$recovery_first_final_count" != "1" ]]; then
+  echo "Recovery-first entity race did not leave the exact queued state."
+  exit 1
+fi
+
+echo "Entity extraction recovery-first publication race passed."
+
+publication_first_setup_count="$(
+  docker exec "$CONTAINER_NAME" \
+    psql -At -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" \
+    -c "WITH prepared AS (
+      UPDATE letters
+      SET entity_extraction_status = 'RUNNING',
+          entity_extraction_run_id = '53000000-0000-4000-8000-000000000021',
+          entity_extraction_run_revision = entity_extraction_revision + 1,
+          entity_extraction_lease_expires_at =
+            clock_timestamp() + interval '6 seconds',
+          entity_extraction_lease_run_id =
+            '53000000-0000-4000-8000-000000000021',
+          entity_extraction_claim_kind = 'QUEUED'
+      WHERE id = '53000000-0000-4000-8000-000000000020'
+        AND entity_extraction_status = 'PENDING'
+      RETURNING 1
+    )
+    SELECT count(*) FROM prepared;"
+)"
+if [[ "$publication_first_setup_count" != "1" ]]; then
+  echo "Could not prepare the publication-first entity race."
+  exit 1
+fi
+
+# The publisher refreshes the lease and holds the row through materialization.
+# Recovery starts only after the old committed deadline has expired, blocks,
+# and must re-evaluate to zero after the successful publication commits.
+docker exec -i "$CONTAINER_NAME" \
+  psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" \
+  > /dev/null <<'SQL' &
+BEGIN;
+SET LOCAL application_name = 'entity-publication-lock-first';
+UPDATE letters
+SET entity_extraction_lease_expires_at =
+      clock_timestamp() + interval '5 minutes'
+WHERE id = '53000000-0000-4000-8000-000000000020'
+  AND entity_extraction_status = 'RUNNING'
+  AND entity_extraction_run_id =
+    '53000000-0000-4000-8000-000000000021'
+  AND entity_extraction_run_revision = entity_extraction_revision + 1
+  AND entity_extraction_lease_run_id = entity_extraction_run_id
+  AND entity_extraction_claim_kind IS NOT NULL
+  AND entity_extraction_lease_expires_at > clock_timestamp();
+SELECT pg_sleep(12);
+UPDATE letters
+SET entity_extraction_status = 'SUCCESS',
+    entity_extraction_json = '{"people":[],"places":[]}'::jsonb,
+    entity_extraction_revision = entity_extraction_run_revision,
+    entity_extraction_run_id = NULL,
+    entity_extraction_run_revision = NULL,
+    entity_extraction_lease_expires_at = NULL,
+    entity_extraction_lease_run_id = NULL,
+    entity_extraction_claim_kind = NULL
+WHERE id = '53000000-0000-4000-8000-000000000020'
+  AND entity_extraction_status = 'RUNNING'
+  AND entity_extraction_run_id =
+    '53000000-0000-4000-8000-000000000021'
+  AND entity_extraction_run_revision = entity_extraction_revision + 1
+  AND entity_extraction_lease_run_id = entity_extraction_run_id
+  AND entity_extraction_claim_kind IS NOT NULL
+  AND entity_extraction_lease_expires_at > clock_timestamp();
+COMMIT;
+SQL
+entity_publication_owner_pid=$!
+
+entity_publication_locked=false
+for _ in $(seq 1 30); do
+  if [[ "$(
+    docker exec "$CONTAINER_NAME" \
+      psql -At -U "$DB_USER" -d "$DB_NAME" \
+      -c "SELECT count(*) FROM pg_stat_activity WHERE application_name = 'entity-publication-lock-first' AND query LIKE 'SELECT pg_sleep%';"
+  )" == "1" ]]; then
+    entity_publication_locked=true
+    break
+  fi
+  sleep 0.1
+done
+
+if [[ "$entity_publication_locked" != "true" ]]; then
+  echo "Timed out waiting for the publication-first entity row lock."
+  wait "$entity_publication_owner_pid" || true
+  exit 1
+fi
+
+sleep 7
+publication_first_old_lease_expired="$(
+  docker exec "$CONTAINER_NAME" \
+    psql -At -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" \
+    -c "SELECT entity_extraction_lease_expires_at <= clock_timestamp()
+        FROM letters
+        WHERE id = '53000000-0000-4000-8000-000000000020';"
+)"
+if [[ "$publication_first_old_lease_expired" != "t" ]]; then
+  echo "Recovery entered the publication-first race before the old lease expired."
+  wait "$entity_publication_owner_pid" || true
+  exit 1
+fi
+publication_first_owner_still_locked="$(
+  docker exec "$CONTAINER_NAME" \
+    psql -At -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" \
+    -c "SELECT count(*) FROM pg_stat_activity WHERE application_name = 'entity-publication-lock-first' AND query LIKE 'SELECT pg_sleep%';"
+)"
+if [[ "$publication_first_owner_still_locked" != "1" ]]; then
+  echo "The publication-first row lock ended before recovery contended."
+  wait "$entity_publication_owner_pid" || true
+  exit 1
+fi
+
+publication_first_recovery_count="$(
+  docker exec "$CONTAINER_NAME" \
+    psql -At -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" \
+    -c "WITH recovered AS (
+      UPDATE letters
+      SET entity_extraction_status = 'PENDING',
+          entity_extraction_run_id = NULL,
+          entity_extraction_run_revision = NULL,
+          entity_extraction_lease_expires_at = NULL,
+          entity_extraction_lease_run_id = NULL,
+          entity_extraction_claim_kind = NULL
+      WHERE id = '53000000-0000-4000-8000-000000000020'
+        AND entity_extraction_status = 'RUNNING'
+        AND entity_extraction_run_id =
+          '53000000-0000-4000-8000-000000000021'
+        AND entity_extraction_run_revision = entity_extraction_revision + 1
+        AND entity_extraction_lease_run_id = entity_extraction_run_id
+        AND entity_extraction_claim_kind = 'QUEUED'
+        AND entity_extraction_lease_expires_at <= clock_timestamp()
+      RETURNING 1
+    )
+    SELECT count(*) FROM recovered;"
+)"
+wait "$entity_publication_owner_pid"
+
+if [[ "$publication_first_recovery_count" != "0" ]]; then
+  echo "Blocked entity recovery revoked an already-published attempt."
+  exit 1
+fi
+
+publication_first_final_count="$(
+  docker exec "$CONTAINER_NAME" \
+    psql -At -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" \
+    -c "SELECT count(*)
+        FROM letters
+        WHERE id = '53000000-0000-4000-8000-000000000020'
+          AND entity_extraction_status = 'SUCCESS'
+          AND entity_extraction_revision = 1
+          AND entity_extraction_run_id IS NULL
+          AND entity_extraction_run_revision IS NULL
+          AND entity_extraction_lease_expires_at IS NULL
+          AND entity_extraction_lease_run_id IS NULL
+          AND entity_extraction_claim_kind IS NULL
+          AND entity_extraction_json =
+            '{\"people\":[],\"places\":[]}'::jsonb;"
+)"
+if [[ "$publication_first_final_count" != "1" ]]; then
+  echo "Publication-first entity race did not commit the exact projection."
+  exit 1
+fi
+
+echo "Entity extraction publication-first recovery race passed."
 
 docker exec -i "$CONTAINER_NAME" \
   psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" \
@@ -365,3 +685,120 @@ END $$;
 SQL
 
 echo "Migration 0051 legacy cancellation/retry regression passed."
+
+echo "Replaying migration 0053 over active migration-era entity attempts..."
+docker exec "$CONTAINER_NAME" \
+  createdb -U "$DB_USER" "$LIVENESS_ROLLOUT_DB_NAME"
+
+while IFS= read -r migration_tag; do
+  docker exec -i "$CONTAINER_NAME" \
+    psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$LIVENESS_ROLLOUT_DB_NAME" \
+    < "src/db/migrations/${migration_tag}.sql" \
+    > /dev/null
+done < <(
+  node --input-type=module -e "
+    import fs from 'node:fs';
+    const journal = JSON.parse(
+      fs.readFileSync('src/db/migrations/meta/_journal.json', 'utf8'),
+    );
+    for (const entry of journal.entries.filter((candidate) => candidate.idx < 51)) {
+      console.log(entry.tag);
+    }
+  "
+)
+
+# Seed the two shapes that may already be active when the rollout reaches
+# migration 0051: one tokenless producer and one row that a 0051-aware old
+# binary will claim before 0053 lands.
+docker exec -i "$CONTAINER_NAME" \
+  psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$LIVENESS_ROLLOUT_DB_NAME" \
+  > /dev/null <<'SQL'
+INSERT INTO collections (id, collection_code)
+VALUES ('00000000-0000-0000-0000-000000000054', 'R53');
+
+INSERT INTO letters (
+  id,
+  collection_id,
+  date_raw,
+  type,
+  type_sequence,
+  transcription_status,
+  metadata_status,
+  entity_extraction_status
+) VALUES
+  (
+    '53000000-0000-4000-8000-000000000100',
+    '00000000-0000-0000-0000-000000000054',
+    '19000201',
+    'L',
+    1,
+    'SUCCESS',
+    'SUCCESS',
+    'RUNNING'
+  ),
+  (
+    '53000000-0000-4000-8000-000000000101',
+    '00000000-0000-0000-0000-000000000054',
+    '19000202',
+    'L',
+    1,
+    'SUCCESS',
+    'SUCCESS',
+    'PENDING'
+  ),
+  (
+    '53000000-0000-4000-8000-000000000103',
+    '00000000-0000-0000-0000-000000000054',
+    '19000203',
+    'L',
+    1,
+    'SUCCESS',
+    'SUCCESS',
+    'PENDING'
+  );
+SQL
+
+for migration_tag in \
+  "0051_add_entity_extraction_commit_boundary" \
+  "0052_add_worker_execution_lease"; do
+  docker exec -i "$CONTAINER_NAME" \
+    psql --single-transaction -v ON_ERROR_STOP=1 \
+    -U "$DB_USER" -d "$LIVENESS_ROLLOUT_DB_NAME" \
+    < "src/db/migrations/${migration_tag}.sql" \
+    > /dev/null
+done
+
+owned_rollout_claim_count="$(
+  docker exec "$CONTAINER_NAME" \
+    psql -At -v ON_ERROR_STOP=1 \
+    -U "$DB_USER" -d "$LIVENESS_ROLLOUT_DB_NAME" \
+    -c "WITH claimed AS (
+      UPDATE letters
+      SET entity_extraction_status = 'RUNNING',
+          entity_extraction_run_id =
+            '53000000-0000-4000-8000-000000000102',
+          entity_extraction_run_revision = entity_extraction_revision + 1
+      WHERE id = '53000000-0000-4000-8000-000000000101'
+        AND entity_extraction_status = 'PENDING'
+      RETURNING 1
+    )
+    SELECT count(*) FROM claimed;"
+)"
+if [[ "$owned_rollout_claim_count" != "1" ]]; then
+  echo "Could not seed the 0051-owned pre-liveness entity attempt."
+  exit 1
+fi
+
+docker exec -i "$CONTAINER_NAME" \
+  psql --single-transaction -v ON_ERROR_STOP=1 \
+  -U "$DB_USER" -d "$LIVENESS_ROLLOUT_DB_NAME" \
+  < "src/db/migrations/0053_add_entity_extraction_liveness.sql" \
+  > /dev/null
+
+docker exec -i "$CONTAINER_NAME" \
+  psql -v ON_ERROR_STOP=1 \
+  -U "$DB_USER" -d "$LIVENESS_ROLLOUT_DB_NAME" \
+  < "src/db/__tests__/entity-extraction-liveness-rollout.sql" \
+  > /dev/null
+
+echo "Migration 0053 active-attempt rollout regression passed."

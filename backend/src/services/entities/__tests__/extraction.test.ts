@@ -42,6 +42,15 @@ vi.mock('drizzle-orm', () => ({
   gte: vi.fn((field: unknown, value: unknown) => ({ kind: 'gte', field, value })),
   isNotNull: vi.fn((field: unknown) => ({ kind: 'isNotNull', field })),
   isNull: vi.fn((field: unknown) => ({ kind: 'isNull', field })),
+  ne: vi.fn((field: unknown, value: unknown) => ({ kind: 'ne', field, value })),
+  sql: vi.fn((
+    strings: TemplateStringsArray,
+    ...values: unknown[]
+  ) => ({
+    kind: 'sql',
+    text: strings.join('?'),
+    values,
+  })),
 }));
 
 vi.mock('../../../db/index.js', () => {
@@ -55,7 +64,11 @@ vi.mock('../../../db/index.js', () => {
     'entityExtractionRevision',
     'entityExtractionRunId',
     'entityExtractionRunRevision',
+    'entityExtractionLeaseExpiresAt',
+    'entityExtractionLeaseRunId',
+    'entityExtractionClaimKind',
     'entityExtractionJson',
+    'extraContentJobStatus',
   ]);
   const canonicalPersons = table('canonicalPersons', ['id']);
   const canonicalPlaces = table('canonicalPlaces', ['id']);
@@ -300,12 +313,80 @@ describe('entity extraction commit boundary', () => {
       data.entityExtractionRevision === 7
     )).toBe(true);
 
+    expect(updatePatches[0]).toEqual({
+      entityExtractionLeaseExpiresAt: {
+        kind: 'sql',
+        text: "clock_timestamp() + interval '5 minutes'",
+        values: [],
+      },
+    });
+    const expectedLiveAttemptCondition = {
+      kind: 'and',
+      clauses: [
+        { kind: 'eq', field: 'letters.id', value: 'letter-1' },
+        {
+          kind: 'eq',
+          field: 'letters.entityExtractionStatus',
+          value: 'RUNNING',
+        },
+        {
+          kind: 'eq',
+          field: 'letters.entityExtractionRunId',
+          value: 'run-a',
+        },
+        {
+          kind: 'eq',
+          field: 'letters.entityExtractionRunRevision',
+          value: 7,
+        },
+        {
+          kind: 'eq',
+          field: 'letters.entityExtractionRevision',
+          value: 6,
+        },
+        {
+          kind: 'eq',
+          field: 'letters.entityExtractionLeaseRunId',
+          value: 'run-a',
+        },
+        {
+          kind: 'isNotNull',
+          field: 'letters.entityExtractionLeaseExpiresAt',
+        },
+        {
+          kind: 'isNotNull',
+          field: 'letters.entityExtractionClaimKind',
+        },
+        {
+          kind: 'ne',
+          field: 'letters.extraContentJobStatus',
+          value: 'RUNNING',
+        },
+        {
+          kind: 'gt',
+          field: 'letters.entityExtractionLeaseExpiresAt',
+          value: {
+            kind: 'sql',
+            text: 'clock_timestamp()',
+            values: [],
+          },
+        },
+      ],
+    };
+    expect(updatedRows[0]?.condition).toEqual(expectedLiveAttemptCondition);
+    expect(updatedRows.at(-1)?.condition).toEqual({
+      kind: 'and',
+      clauses: expectedLiveAttemptCondition.clauses.slice(0, -1),
+    });
     expect(updatePatches.at(-1)).toMatchObject({
       entityExtractionJson: extraction,
       entityExtractionStatus: 'SUCCESS',
       entityExtractionRevision: 7,
       entityExtractionRunId: null,
       entityExtractionRunRevision: null,
+      entityExtractionLeaseExpiresAt: null,
+      entityExtractionLeaseRunId: null,
+      entityExtractionClaimKind: null,
       entityExtractionError: null,
     });
     expect(events.at(-1)).toBe('update:letters');
@@ -384,7 +465,9 @@ describe('entity extraction commit boundary', () => {
     )).rejects.toThrow('write failed for canonicalPlaces');
 
     expect(transactionMock).toHaveBeenCalledTimes(1);
-    expect(updatePatches[0]).toMatchObject({ entityExtractionRunId: 'run-a' });
+    expect(updatePatches[0]).toMatchObject({
+      entityExtractionLeaseExpiresAt: expect.any(Object),
+    });
     expect(updatePatches.some((patch) =>
       patch.entityExtractionStatus === 'SUCCESS'
     )).toBe(false);

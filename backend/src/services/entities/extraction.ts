@@ -17,7 +17,13 @@ import {
   type Database,
 } from '../../db/index.js';
 import { createLogger } from '../../utils/logger.js';
-import type { EntityExtractionClaim } from '../letters.js';
+import {
+  activeEntityExtractionAttemptConditions,
+  clearedEntityExtractionOwnership,
+  entityExtractionLeaseRenewalPatch,
+  ownedEntityExtractionAttemptConditions,
+  type EntityExtractionClaim,
+} from '../letter/entity-extraction-job.js';
 import { findMatchingPersons, findMatchingPlaces } from './matching.js';
 import { SYSTEM_BACKFILL_RELATIONSHIP_OWNER } from './relationship-provenance.js';
 
@@ -71,16 +77,12 @@ export async function processEntityExtraction(
 ): Promise<EntityExtractionCommitResult> {
   const result = await db.transaction(async (tx) => {
     // This idempotent owned update both verifies the token and locks the letter
-    // row. Cancellation/retry cannot cross the materialization boundary.
+    // row. Refreshing from the database clock gives materialization a complete
+    // lease window while the external heartbeat waits on this row lock.
     const owned = await tx
       .update(letters)
-      .set({ entityExtractionRunId: claim.runId })
-      .where(and(
-        eq(letters.id, letterId),
-        eq(letters.entityExtractionStatus, 'RUNNING'),
-        eq(letters.entityExtractionRunId, claim.runId),
-        eq(letters.entityExtractionRunRevision, claim.revision),
-      ))
+      .set(entityExtractionLeaseRenewalPatch())
+      .where(and(...activeEntityExtractionAttemptConditions(letterId, claim)))
       .returning({ id: letters.id });
 
     if (owned.length === 0) {
@@ -146,23 +148,22 @@ export async function processEntityExtraction(
       }
     }
 
+    // The verified entry update holds this letter row lock until commit, so
+    // recovery and cancellation cannot cross the boundary. The heartbeat also
+    // cannot renew through that lock; terminal publication therefore checks
+    // the unchanged exact tuple without requiring the deadline to remain live
+    // for the duration of database-only materialization.
     const committed = await tx
       .update(letters)
       .set({
         entityExtractionJson: extraction,
         entityExtractionStatus: 'SUCCESS',
         entityExtractionRevision: claim.revision,
-        entityExtractionRunId: null,
-        entityExtractionRunRevision: null,
+        ...clearedEntityExtractionOwnership(),
         entityExtractionError: null,
         updatedAt: new Date(),
       })
-      .where(and(
-        eq(letters.id, letterId),
-        eq(letters.entityExtractionStatus, 'RUNNING'),
-        eq(letters.entityExtractionRunId, claim.runId),
-        eq(letters.entityExtractionRunRevision, claim.revision),
-      ))
+      .where(and(...ownedEntityExtractionAttemptConditions(letterId, claim)))
       .returning({ id: letters.id });
 
     if (committed.length === 0) {

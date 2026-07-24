@@ -58,7 +58,7 @@ describe('worker execution ownership architecture', () => {
       readFile(`${sourceRoot}/services/letter/transcription-job.ts`, 'utf8'),
       readFile(`${sourceRoot}/services/letter/metadata-job.ts`, 'utf8'),
       readFile(`${sourceRoot}/services/letter/extra-content-job.ts`, 'utf8'),
-      readFile(`${sourceRoot}/services/letters.ts`, 'utf8'),
+      readFile(`${sourceRoot}/services/letter/entity-extraction-job.ts`, 'utf8'),
       readFile(`${sourceRoot}/services/processing-queue.ts`, 'utf8'),
       readFile(`${sourceRoot}/worker.ts`, 'utf8'),
     ]);
@@ -81,6 +81,9 @@ describe('worker execution ownership architecture', () => {
     );
     expect(processingQueue).toContain(
       'recoverExpiredExtraContentJobs(\n      options.workerExecutionToken',
+    );
+    expect(processingQueue).toContain(
+      'recoverExpiredEntityExtractionJobs(\n      options.workerExecutionToken',
     );
     expect(worker).toContain(
       'recoverExpiredProcessingJobs({\n      workerExecutionToken: executionTokenForRecovery',

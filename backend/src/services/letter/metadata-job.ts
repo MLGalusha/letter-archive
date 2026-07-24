@@ -21,6 +21,7 @@ import {
   withLeaseHeartbeat,
   type LeaseHeartbeat,
 } from './lease-heartbeat.js';
+import { clearedEntityExtractionOwnership } from './entity-extraction-job.js';
 import { isMetadataSourceEligible } from '../processing-eligibility.js';
 import { activeWorkerExecutionCondition } from '../worker-state.js';
 
@@ -248,8 +249,7 @@ export async function claimQueuedMetadata(
     // Every replacement metadata result owns a matching entity rebuild. Source
     // invalidation may have left an older entity result FAILED or SUCCESS.
     entityExtractionStatus: 'PENDING',
-    entityExtractionRunId: null,
-    entityExtractionRunRevision: null,
+    ...clearedEntityExtractionOwnership(),
     entityExtractionError: null,
   }, workerExecutionToken);
 }
@@ -274,8 +274,7 @@ export async function claimRequestedMetadata(
     metadataAttemptCount: 0,
     deadLetter: false,
     entityExtractionStatus: 'PENDING',
-    entityExtractionRunId: null,
-    entityExtractionRunRevision: null,
+    ...clearedEntityExtractionOwnership(),
     entityExtractionError: null,
   });
 }
@@ -300,8 +299,7 @@ export async function claimMetadataAfterTranscriptConfirmation(
     metadataAttemptCount: 0,
     deadLetter: false,
     entityExtractionStatus: 'PENDING',
-    entityExtractionRunId: null,
-    entityExtractionRunRevision: null,
+    ...clearedEntityExtractionOwnership(),
     entityExtractionError: null,
   });
 }
@@ -625,8 +623,7 @@ export function buildHumanMetadataJobPatch() {
         THEN ${letters.entityExtractionStatus}
       ELSE 'FAILED'::job_status
     END`,
-    entityExtractionRunId: null,
-    entityExtractionRunRevision: null,
+    ...clearedEntityExtractionOwnership(),
     entityExtractionError: sql<string | null>`CASE
       WHEN ${letters.entityExtractionStatus} = 'PENDING'
         THEN ${letters.entityExtractionError}
@@ -715,8 +712,7 @@ export function buildMetadataSourceInvalidationPatch() {
         THEN ${letters.entityExtractionStatus}
       ELSE 'FAILED'::job_status
     END`,
-    entityExtractionRunId: null,
-    entityExtractionRunRevision: null,
+    ...clearedEntityExtractionOwnership(),
     entityExtractionError: sql<string | null>`CASE
       WHEN ${letters.entityExtractionStatus} = 'PENDING'
         THEN ${letters.entityExtractionError}

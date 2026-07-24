@@ -7,6 +7,9 @@ const {
   updateSetMock,
   updateWhereMock,
   updateReturningMock,
+  dbTransactionMock,
+  txDeleteMock,
+  deleteWhereMock,
   requestBackgroundWorkerRunMock,
   propagateNameMock,
   propagatePlaceholderReplacementMock,
@@ -20,6 +23,9 @@ const {
   updateSetMock: vi.fn(),
   updateWhereMock: vi.fn(),
   updateReturningMock: vi.fn(),
+  dbTransactionMock: vi.fn(),
+  txDeleteMock: vi.fn(),
+  deleteWhereMock: vi.fn(),
   requestBackgroundWorkerRunMock: vi.fn(),
   propagateNameMock: vi.fn(),
   propagatePlaceholderReplacementMock: vi.fn(),
@@ -47,10 +53,19 @@ vi.mock('../../db/index.js', () => {
   dbUpdateMock.mockImplementation(() => ({ set: updateSetMock }));
   updateSetMock.mockImplementation(() => ({ where: updateWhereMock }));
   updateWhereMock.mockImplementation(() => ({ returning: updateReturningMock }));
+  txDeleteMock.mockImplementation(() => ({ where: deleteWhereMock }));
+  const transactionExecutor = {
+    update: dbUpdateMock,
+    delete: txDeleteMock,
+  };
+  dbTransactionMock.mockImplementation(async (
+    callback: (tx: typeof transactionExecutor) => unknown,
+  ) => callback(transactionExecutor));
   return {
     db: {
       query: { letters: { findMany: findManyMock, findFirst: findFirstMock } },
       update: dbUpdateMock,
+      transaction: dbTransactionMock,
     },
     letters: {
       id: 'letters.id',
@@ -70,6 +85,11 @@ vi.mock('../../db/index.js', () => {
       metadataLeaseRunId: 'letters.metadataLeaseRunId',
       metadataClaimKind: 'letters.metadataClaimKind',
       entityExtractionStatus: 'letters.entityExtractionStatus',
+      entityExtractionRunId: 'letters.entityExtractionRunId',
+      entityExtractionRunRevision: 'letters.entityExtractionRunRevision',
+      entityExtractionLeaseExpiresAt: 'letters.entityExtractionLeaseExpiresAt',
+      entityExtractionLeaseRunId: 'letters.entityExtractionLeaseRunId',
+      entityExtractionClaimKind: 'letters.entityExtractionClaimKind',
       extraContentTranscript: 'letters.extraContentTranscript',
       extraContentJobStatus: 'letters.extraContentJobStatus',
       extraContentJobRunId: 'letters.extraContentJobRunId',
@@ -91,9 +111,11 @@ vi.mock('../../db/index.js', () => {
     letterPages: {
       letterId: 'letterPages.letterId',
     },
-    letterPersons: {},
-    letterPlaces: {},
-    personRelationships: {},
+    letterPersons: { letterId: 'letterPersons.letterId' },
+    letterPlaces: { letterId: 'letterPlaces.letterId' },
+    personRelationships: {
+      discoveredInLetterId: 'personRelationships.discoveredInLetterId',
+    },
   };
 });
 
@@ -135,7 +157,13 @@ vi.mock('../letter/shared.js', () => ({
   log: { info: vi.fn(), warn: vi.fn() },
 }));
 
-import { bulkExtractMetadata, bulkTranscribe, bulkUpdateFields } from '../letter/bulk-operations.js';
+import {
+  bulkClearMetadata,
+  bulkClearTranscriptions,
+  bulkExtractMetadata,
+  bulkTranscribe,
+  bulkUpdateFields,
+} from '../letter/bulk-operations.js';
 
 const uploadedLetter = {
   id: 'letter-1',
@@ -160,6 +188,11 @@ const uploadedLetter = {
   metadataVerifiedAt: null,
   metadataVerifiedBy: null,
   entityExtractionStatus: 'PENDING',
+  entityExtractionRunId: null,
+  entityExtractionRunRevision: null,
+  entityExtractionLeaseExpiresAt: null,
+  entityExtractionLeaseRunId: null,
+  entityExtractionClaimKind: null,
   extraContentTranscript: null,
   extraContentJobStatus: 'PENDING',
   extraContentJobRunId: null,
@@ -486,6 +519,45 @@ describe('bulk metadata downstream exclusion', () => {
 
     expect(dbUpdateMock).not.toHaveBeenCalled();
     expect(requestBackgroundWorkerRunMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('bulk clear entity ownership revocation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    updateReturningMock.mockResolvedValue([{ id: 'letter-1' }]);
+    deleteWhereMock.mockResolvedValue(undefined);
+  });
+
+  it.each([
+    ['transcription', bulkClearTranscriptions, 'Transcriptions cleared'],
+    ['metadata', bulkClearMetadata, 'Metadata cleared'],
+  ])('clearing %s revokes the complete entity owner tuple', async (
+    _scope,
+    clear,
+    message,
+  ) => {
+    await expect(clear(['letter-1'])).resolves.toEqual({
+      message,
+      updated: 1,
+    });
+
+    expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
+      entityExtractionStatus: 'FAILED',
+      entityExtractionRunId: null,
+      entityExtractionRunRevision: null,
+      entityExtractionLeaseExpiresAt: null,
+      entityExtractionLeaseRunId: null,
+      entityExtractionClaimKind: null,
+      entityExtractionError: 'Cleared by admin',
+    }));
+    expect(updateWhereMock).toHaveBeenCalledWith({
+      kind: 'and',
+      clauses: expect.arrayContaining([
+        { kind: 'ne', field: 'letters.entityExtractionStatus', value: 'RUNNING' },
+      ]),
+    });
+    expect(txDeleteMock).toHaveBeenCalledTimes(3);
   });
 });
 

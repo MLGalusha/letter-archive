@@ -149,6 +149,7 @@ describe('admin downstream extraction exclusion', () => {
     updateWhereMock.mockReturnValue({ returning: updateReturningMock });
     updateReturningMock.mockResolvedValue([]);
     runMetadataExtractionV2Mock.mockResolvedValue({ kind: 'completed' });
+    runEntityExtractionOnlyMock.mockResolvedValue({ kind: 'completed' });
     observeMetadataStateMock.mockImplementation(letter => ({ letter }));
     claimRequestedMetadataMock.mockResolvedValue(null);
     claimMetadataAfterTranscriptConfirmationMock.mockResolvedValue(null);
@@ -330,7 +331,21 @@ describe('admin downstream extraction exclusion', () => {
     expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
   });
 
-  it('does not reset entity work when transcription wins the atomic race', async () => {
+  it.each([
+    {
+      description: 'entity regeneration',
+      url: '/letter-1/regenerate-entities',
+      body: {},
+    },
+    {
+      description: 'entity-only re-extraction',
+      url: '/letter-1/re-extract',
+      body: { mode: 'entities_only' },
+    },
+  ])('delegates $description ownership to the entity pipeline without a pre-reset', async ({
+    url,
+    body,
+  }) => {
     getLetterByIdMock.mockResolvedValue({
       type: 'L',
       workflow: 'TRANSCRIBED',
@@ -342,33 +357,18 @@ describe('admin downstream extraction exclusion', () => {
 
     const response = await invokeRouter(contentRouter, {
       method: 'POST',
-      url: '/letter-1/regenerate-entities',
-      path: '/letter-1/regenerate-entities',
-      body: {},
+      url,
+      path: url,
+      body,
       headers: { accept: 'application/json' },
     });
 
-    expect(response.statusCode).toBe(400);
-    expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
-      entityExtractionStatus: 'PENDING',
-      deadLetter: false,
-    }));
-    expect(updateWhereMock).toHaveBeenCalledWith({
-      kind: 'and',
-      clauses: [
-        { kind: 'eq', field: 'letters.id', value: 'letter-1' },
-        { kind: 'eq', field: 'letters.workflow', value: 'TRANSCRIBED' },
-        { kind: 'eq', field: 'letters.transcriptionStatus', value: 'SUCCESS' },
-        { kind: 'eq', field: 'letters.transcriptionText', value: 'transcript' },
-        {
-          kind: 'eq',
-          field: 'letters.entityExtractionStatus',
-          value: 'SUCCESS',
-        },
-        { kind: 'eq', field: 'letters.metadataStatus', value: 'SUCCESS' },
-      ],
-    });
-    expect(runEntityExtractionOnlyMock).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(200);
+    expect(dbUpdateMock).not.toHaveBeenCalled();
+    expect(runEntityExtractionOnlyMock).toHaveBeenCalledWith(
+      'letter-1',
+      expect.objectContaining({ claimKind: 'REQUESTED' }),
+    );
   });
 
   it('does not reset entity work when entity extraction wins a metadata re-extraction race', async () => {
@@ -402,7 +402,21 @@ describe('admin downstream extraction exclusion', () => {
     expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
   });
 
-  it('does not reset entity work when metadata extraction wins an entity re-extraction race', async () => {
+  it.each([
+    {
+      description: 'entity regeneration',
+      url: '/letter-1/regenerate-entities',
+      body: {},
+    },
+    {
+      description: 'entity-only re-extraction',
+      url: '/letter-1/re-extract',
+      body: { mode: 'entities_only' },
+    },
+  ])('returns a conflict when $description loses its pipeline claim race', async ({
+    url,
+    body,
+  }) => {
     getLetterByIdMock.mockResolvedValue({
       type: 'L',
       workflow: 'TRANSCRIBED',
@@ -414,32 +428,25 @@ describe('admin downstream extraction exclusion', () => {
       sender: null,
       recipient: null,
     });
+    runEntityExtractionOnlyMock.mockResolvedValueOnce({ kind: 'claim_lost' });
 
     const response = await invokeRouter(contentRouter, {
       method: 'POST',
-      url: '/letter-1/re-extract',
-      path: '/letter-1/re-extract',
-      body: { mode: 'entities_only' },
+      url,
+      path: url,
+      body,
       headers: { accept: 'application/json' },
     });
 
-    expect(response.statusCode).toBe(400);
-    expect(updateWhereMock).toHaveBeenCalledWith({
-      kind: 'and',
-      clauses: [
-        { kind: 'eq', field: 'letters.id', value: 'letter-1' },
-        { kind: 'eq', field: 'letters.workflow', value: 'TRANSCRIBED' },
-        { kind: 'eq', field: 'letters.transcriptionStatus', value: 'SUCCESS' },
-        { kind: 'eq', field: 'letters.transcriptionText', value: 'transcript' },
-        {
-          kind: 'eq',
-          field: 'letters.entityExtractionStatus',
-          value: 'SUCCESS',
-        },
-        { kind: 'eq', field: 'letters.metadataStatus', value: 'SUCCESS' },
-      ],
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({
+      error: expect.stringContaining('claim lost'),
     });
-    expect(runEntityExtractionOnlyMock).not.toHaveBeenCalled();
+    expect(dbUpdateMock).not.toHaveBeenCalled();
+    expect(runEntityExtractionOnlyMock).toHaveBeenCalledWith(
+      'letter-1',
+      expect.objectContaining({ claimKind: 'REQUESTED' }),
+    );
   });
 
   it('rejects transcript confirmation while retranscription is already running', async () => {

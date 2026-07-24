@@ -340,14 +340,22 @@ async function processEntityJobs(
       'entity extraction',
     );
     try {
-      await runEntityExtractionOnly(job.id, {
+      const outcome = await runEntityExtractionOnly(job.id, {
+        claimKind: 'QUEUED',
         workerExecutionToken: control.executionToken,
       });
       const duration = finishJob(control, totalPending, jobStart);
-      log.info(
-        { letterId: job.id, duration },
-        'Entity extraction job completed',
-      );
+      if (outcome.kind === 'completed') {
+        log.info(
+          { letterId: job.id, duration },
+          'Entity extraction job completed',
+        );
+      } else {
+        log.info(
+          { letterId: job.id, duration, reason: outcome.kind },
+          'Entity extraction job skipped',
+        );
+      }
       // Entity success is published inside the pipeline.
     } catch (error) {
       reportJobFailure({

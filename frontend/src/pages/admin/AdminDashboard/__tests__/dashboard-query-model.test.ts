@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  MAX_DASHBOARD_SEARCH_LENGTH,
+  MAX_DASHBOARD_SORT_RULES,
+  SERVER_SORT_FIELDS,
+} from "../constants";
+import {
   buildDashboardLetterQuery,
   createDashboardCommittedQuery,
   type DashboardCommittedQuery,
@@ -144,6 +149,34 @@ describe("dashboard committed query model", () => {
       missing: "sender,date",
       contentShape: "extras,photos",
     });
+  });
+
+  it("never commits or serializes more sort rules than the API accepts", () => {
+    const oversizedSort = SERVER_SORT_FIELDS
+      .slice(0, MAX_DASHBOARD_SORT_RULES + 1)
+      .map((field) => ({ field, direction: "asc" as const }));
+    const committed = createDashboardCommittedQuery(
+      makeFilterSource() as Parameters<typeof createDashboardCommittedQuery>[0],
+      oversizedSort,
+    );
+
+    expect(committed.sortColumns).toHaveLength(MAX_DASHBOARD_SORT_RULES);
+    expect(buildDashboardLetterQuery({
+      ...committed,
+      sortColumns: oversizedSort,
+    }).sortRules?.split(",")).toHaveLength(MAX_DASHBOARD_SORT_RULES);
+  });
+
+  it("bounds committed searches before serializing the request", () => {
+    const source = makeFilterSource();
+    source.searchQuery = "x".repeat(MAX_DASHBOARD_SEARCH_LENGTH + 20);
+    const query = createDashboardCommittedQuery(
+      source as Parameters<typeof createDashboardCommittedQuery>[0],
+      makeSortColumns(),
+    );
+
+    expect(query.searchQuery).toHaveLength(MAX_DASHBOARD_SEARCH_LENGTH);
+    expect(buildDashboardLetterQuery(query).search).toBe(query.searchQuery);
   });
 
   it("uses the dashboard default sort while omitting inactive filters", () => {

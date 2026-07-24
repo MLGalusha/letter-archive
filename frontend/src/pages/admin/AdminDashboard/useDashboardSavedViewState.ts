@@ -1,159 +1,56 @@
 import { useCallback } from "react";
-import type { Dispatch, SetStateAction } from "react";
 import { useToast } from "../../../contexts/ToastContext";
-import type { ContentStatus, WorkflowState } from "../../../types/Letter";
-import { DEFAULT_COLUMN_ORDER } from "./constants";
+import { createDashboardViewState } from "./dashboardStoredStateModel";
 import type {
   ColumnId,
   DashboardViewState,
+  PersistedState,
   SortColumn,
 } from "./types";
-import type { DashboardFilterControls } from "./useDashboardFilters";
 import { useSavedDashboardViews } from "./useSavedDashboardViews";
 
 interface UseDashboardSavedViewStateOptions {
-  filters: DashboardFilterControls;
-  sortColumns: SortColumn[];
-  setSortColumns: Dispatch<SetStateAction<SortColumn[]>>;
-  visibleColumns: Set<ColumnId>;
-  setVisibleColumns: Dispatch<SetStateAction<Set<ColumnId>>>;
-  columnOrder: ColumnId[];
-  setColumnOrder: Dispatch<SetStateAction<ColumnId[]>>;
+  storedState: PersistedState;
+  visibleColumns: ReadonlySet<ColumnId>;
+  columnOrder: readonly ColumnId[];
+  replaceStoredFilters: (state: PersistedState) => void;
+  replaceSortColumns: (columns: readonly SortColumn[]) => void;
+  replaceStoredColumns: (
+    state: Pick<DashboardViewState, "visibleColumns" | "columnOrder">,
+  ) => void;
 }
 
 export function useDashboardSavedViewState({
-  filters,
-  sortColumns,
-  setSortColumns,
+  storedState,
   visibleColumns,
-  setVisibleColumns,
   columnOrder,
-  setColumnOrder,
+  replaceStoredFilters,
+  replaceSortColumns,
+  replaceStoredColumns,
 }: UseDashboardSavedViewStateOptions) {
   const { showToast } = useToast();
-  const {
-    visibilityFilter,
-    setVisibilityFilter,
-    collectionFilter,
-    setCollectionFilter,
-    setCollectionInput,
-    searchQuery,
-    setSearchInput,
-    setSearchQuery,
-    dateMode,
-    setDateMode,
-    yearFilter,
-    setYearFilter,
-    monthFilter,
-    setMonthFilter,
-    dayFilter,
-    setDayFilter,
-    dateFromFilter,
-    setDateFromFilter,
-    dateToFilter,
-    setDateToFilter,
-    transcriptStatusFilters,
-    setTranscriptStatusFilters,
-    metadataStatusFilters,
-    setMetadataStatusFilters,
-    extraContentStatusFilters,
-    setExtraContentStatusFilters,
-    workflowFilters,
-    setWorkflowFilters,
-    flaggedFilter,
-    setFlaggedFilter,
-    missingFilters,
-    setMissingFilters,
-    contentShapeFilters,
-    setContentShapeFilters,
-  } = filters;
 
-  const getCurrentDashboardViewState = useCallback((): DashboardViewState => ({
-    visibilityFilter,
-    collectionFilter,
-    searchQuery,
-    sortColumns,
-    dateMode,
-    year: yearFilter,
-    month: monthFilter,
-    day: dayFilter,
-    dateFrom: dateFromFilter,
-    dateTo: dateToFilter,
-    transcriptStatusFilters,
-    metadataStatusFilters,
-    extraContentStatusFilters,
-    workflowFilters,
-    flaggedFilter,
-    missingFilters,
-    contentShapeFilters,
-    visibleColumns: Array.from(visibleColumns),
-    columnOrder,
-  }), [
-    visibilityFilter,
-    collectionFilter,
-    searchQuery,
-    sortColumns,
-    dateMode,
-    yearFilter,
-    monthFilter,
-    dayFilter,
-    dateFromFilter,
-    dateToFilter,
-    transcriptStatusFilters,
-    metadataStatusFilters,
-    extraContentStatusFilters,
-    workflowFilters,
-    flaggedFilter,
-    missingFilters,
-    contentShapeFilters,
-    visibleColumns,
-    columnOrder,
-  ]);
+  const getCurrentDashboardViewState = useCallback(
+    (): DashboardViewState => createDashboardViewState({
+      storedState,
+      visibleColumns,
+      columnOrder,
+    }),
+    [
+      storedState,
+      visibleColumns,
+      columnOrder,
+    ],
+  );
 
   const applyDashboardViewState = useCallback((state: DashboardViewState) => {
-    setVisibilityFilter(state.visibilityFilter);
-    setCollectionFilter(state.collectionFilter);
-    setCollectionInput("");
-    setSearchInput(state.searchQuery);
-    setSearchQuery(state.searchQuery);
-    setSortColumns(state.sortColumns);
-    setDateMode(state.dateMode);
-    setYearFilter(state.year);
-    setMonthFilter(state.month);
-    setDayFilter(state.day);
-    setDateFromFilter(state.dateFrom);
-    setDateToFilter(state.dateTo);
-    setTranscriptStatusFilters(state.transcriptStatusFilters as ContentStatus[]);
-    setMetadataStatusFilters(state.metadataStatusFilters as ContentStatus[]);
-    setExtraContentStatusFilters((state.extraContentStatusFilters ?? []) as ContentStatus[]);
-    setWorkflowFilters((state.workflowFilters ?? []) as WorkflowState[]);
-    setFlaggedFilter(state.flaggedFilter ?? "ALL");
-    setMissingFilters(state.missingFilters ?? []);
-    setContentShapeFilters(state.contentShapeFilters ?? []);
-    setVisibleColumns(new Set(state.visibleColumns));
-    setColumnOrder(state.columnOrder ?? DEFAULT_COLUMN_ORDER);
+    replaceStoredFilters(state);
+    replaceSortColumns(state.sortColumns);
+    replaceStoredColumns(state);
   }, [
-    setVisibilityFilter,
-    setCollectionFilter,
-    setCollectionInput,
-    setSearchInput,
-    setSearchQuery,
-    setSortColumns,
-    setDateMode,
-    setYearFilter,
-    setMonthFilter,
-    setDayFilter,
-    setDateFromFilter,
-    setDateToFilter,
-    setTranscriptStatusFilters,
-    setMetadataStatusFilters,
-    setExtraContentStatusFilters,
-    setWorkflowFilters,
-    setFlaggedFilter,
-    setMissingFilters,
-    setContentShapeFilters,
-    setVisibleColumns,
-    setColumnOrder,
+    replaceStoredFilters,
+    replaceSortColumns,
+    replaceStoredColumns,
   ]);
 
   return useSavedDashboardViews({

@@ -1,71 +1,9 @@
 import { useEffect } from "react";
-import type { SortColumn } from "./types";
-import type { DashboardFilterControls } from "./useDashboardFilters";
+import type { PersistedState } from "./types";
 import { savePersistedState } from "./utils";
 
-export function useDashboardPersistedState({
-  filters,
-  sortColumns,
-}: {
-  filters: DashboardFilterControls;
-  sortColumns: SortColumn[];
-}) {
-  const {
-    visibilityFilter,
-    collectionFilter,
-    searchQuery,
-    dateMode,
-    yearFilter,
-    monthFilter,
-    dayFilter,
-    dateFromFilter,
-    dateToFilter,
-    transcriptStatusFilters,
-    metadataStatusFilters,
-    extraContentStatusFilters,
-    workflowFilters,
-    flaggedFilter,
-    missingFilters,
-    contentShapeFilters,
-  } = filters;
-
+export function useDashboardPersistedState(state: PersistedState) {
   useEffect(() => {
-    savePersistedState({
-      visibilityFilter,
-      collectionFilter,
-      searchQuery,
-      sortColumns,
-      dateMode,
-      year: yearFilter,
-      month: monthFilter,
-      day: dayFilter,
-      dateFrom: dateFromFilter,
-      dateTo: dateToFilter,
-      transcriptStatusFilters,
-      metadataStatusFilters,
-      extraContentStatusFilters,
-      workflowFilters,
-      flaggedFilter,
-      missingFilters,
-      contentShapeFilters,
-    });
-  }, [
-    visibilityFilter,
-    collectionFilter,
-    searchQuery,
-    sortColumns,
-    dateMode,
-    yearFilter,
-    monthFilter,
-    dayFilter,
-    dateFromFilter,
-    dateToFilter,
-    transcriptStatusFilters,
-    metadataStatusFilters,
-    extraContentStatusFilters,
-    workflowFilters,
-    flaggedFilter,
-    missingFilters,
-    contentShapeFilters,
-  ]);
+    savePersistedState(state);
+  }, [state]);
 }

@@ -3,102 +3,28 @@ import {
   ALL_COLUMNS,
   COLUMN_STORAGE_KEY,
   DEFAULT_COLUMN_ORDER,
-  DEFAULT_VISIBLE_COLUMNS,
 } from './constants';
-import type { ColumnDef, ColumnId } from './types';
-
-interface SavedColumnsState {
-  visible: ColumnId[];
-  known: ColumnId[];
-  order?: ColumnId[];
-}
-
-const LEGACY_DEFAULT_COLUMN_ORDER: ColumnId[] = [
-  'sender',
-  'recipient',
-  'date',
-  'collection',
-  'letters',
-  'extras',
-  'photos',
-  'transcript',
-  'metadata',
-  'visibility',
-  'created',
-  'updated',
-  'lastOpened',
-  'flag',
-  'type_letter',
-  'type_cover',
-  'type_telegram',
-  'type_photo',
-  'type_card',
-  'type_ephemera',
-  'type_voice',
-  'type_article',
-  'type_diary',
-];
-
-function areColumnOrdersEqual(left: ColumnId[], right: ColumnId[]): boolean {
-  return left.length === right.length && left.every((id, index) => id === right[index]);
-}
-
-function normalizeColumnOrder(savedOrder?: ColumnId[]): ColumnId[] {
-  const allColumnIds = new Set(DEFAULT_COLUMN_ORDER);
-  const normalized = (savedOrder ?? [])
-    .filter((id): id is ColumnId => allColumnIds.has(id));
-
-  if (areColumnOrdersEqual(normalized, LEGACY_DEFAULT_COLUMN_ORDER)) {
-    return DEFAULT_COLUMN_ORDER;
-  }
-
-  const savedSet = new Set(normalized);
-  return [
-    ...normalized,
-    ...DEFAULT_COLUMN_ORDER.filter((id) => !savedSet.has(id)),
-  ];
-}
+import { decodeDashboardColumnState } from './dashboardStoredStateModel';
+import type { ColumnDef, ColumnId, DashboardViewState } from './types';
 
 function loadColumnState(): { visibleColumns: Set<ColumnId>; columnOrder: ColumnId[] } {
   try {
     const saved = localStorage.getItem(COLUMN_STORAGE_KEY);
-    if (saved) {
-      const parsed = JSON.parse(saved) as ColumnId[] | SavedColumnsState;
-      let visible: ColumnId[];
-      let known: ColumnId[];
-      let order: ColumnId[] | undefined;
-
-      if (Array.isArray(parsed)) {
-        visible = parsed;
-        known = parsed;
-        order = parsed;
-      } else {
-        visible = parsed.visible ?? [];
-        known = parsed.known ?? [];
-        order = parsed.order;
-      }
-
-      const savedSet = new Set(visible);
-      const knownSet = new Set(known);
-
-      for (const column of ALL_COLUMNS) {
-        if (column.defaultVisible && !knownSet.has(column.id)) {
-          savedSet.add(column.id);
-        }
-      }
-
-      return {
-        visibleColumns: savedSet,
-        columnOrder: normalizeColumnOrder(order),
-      };
-    }
+    const state = decodeDashboardColumnState(
+      saved ? JSON.parse(saved) : undefined,
+    );
+    return {
+      visibleColumns: new Set(state.visibleColumns),
+      columnOrder: state.columnOrder,
+    };
   } catch (error) {
     console.warn('Failed to load column settings:', error);
   }
 
+  const defaults = decodeDashboardColumnState(undefined);
   return {
-    visibleColumns: DEFAULT_VISIBLE_COLUMNS,
-    columnOrder: DEFAULT_COLUMN_ORDER,
+    visibleColumns: new Set(defaults.visibleColumns),
+    columnOrder: defaults.columnOrder,
   };
 }
 
@@ -165,8 +91,16 @@ export function useDashboardColumns() {
     });
   }, []);
 
+  const replaceStoredColumns = useCallback((state: Pick<
+    DashboardViewState,
+    'visibleColumns' | 'columnOrder'
+  >) => {
+    setVisibleColumns(new Set(state.visibleColumns));
+    setColumnOrder([...state.columnOrder]);
+  }, []);
+
   const resetColumnOrder = useCallback(() => {
-    setColumnOrder(DEFAULT_COLUMN_ORDER);
+    setColumnOrder([...DEFAULT_COLUMN_ORDER]);
   }, []);
 
   const toggleColumnMenu = useCallback(() => {
@@ -184,9 +118,8 @@ export function useDashboardColumns() {
 
   return {
     visibleColumns,
-    setVisibleColumns,
     columnOrder,
-    setColumnOrder,
+    replaceStoredColumns,
     orderedColumns,
     showColumnMenu,
     columnMenuRef,

@@ -5,6 +5,7 @@ import type {
 } from "../../../types/Letter";
 import {
   DEFAULT_DASHBOARD_SORT,
+  MAX_DASHBOARD_SORT_RULES,
   SERVER_SORT_FIELDS,
 } from "./constants";
 import type {
@@ -16,6 +17,7 @@ import type {
   SortColumn,
   VisibilityFilter,
 } from "./types";
+import { normalizeDashboardSearchQuery } from "./dashboardStoredStateModel";
 
 export interface DashboardCommittedQuerySource {
   readonly collectionFilter: string;
@@ -47,7 +49,7 @@ export function createDashboardCommittedQuery(
   return {
     collectionFilter: source.collectionFilter,
     visibilityFilter: source.visibilityFilter,
-    searchQuery: source.searchQuery,
+    searchQuery: normalizeDashboardSearchQuery(source.searchQuery),
     yearFilter: source.yearFilter,
     monthFilter: source.monthFilter,
     dayFilter: source.dayFilter,
@@ -60,7 +62,9 @@ export function createDashboardCommittedQuery(
     flaggedFilter: source.flaggedFilter,
     missingFilters: [...source.missingFilters],
     contentShapeFilters: [...source.contentShapeFilters],
-    sortColumns: sortColumns.map((column) => ({ ...column })),
+    sortColumns: sortColumns
+      .slice(0, MAX_DASHBOARD_SORT_RULES)
+      .map((column) => ({ ...column })),
   };
 }
 
@@ -77,13 +81,15 @@ export function buildDashboardLetterQuery(
     limit?: number;
   } = {},
 ): AdminLetterQueryParams {
-  const serverSortColumns = query.sortColumns.filter(
-    (
-      column,
-    ): column is Readonly<SortColumn> & { field: ServerSortField } => (
-      isServerSortField(column.field)
-    ),
-  );
+  const serverSortColumns = query.sortColumns
+    .filter(
+      (
+        column,
+      ): column is Readonly<SortColumn> & { field: ServerSortField } => (
+        isServerSortField(column.field)
+      ),
+    )
+    .slice(0, MAX_DASHBOARD_SORT_RULES);
   const fallbackSortField = isServerSortField(DEFAULT_DASHBOARD_SORT.field)
     ? DEFAULT_DASHBOARD_SORT.field
     : undefined;

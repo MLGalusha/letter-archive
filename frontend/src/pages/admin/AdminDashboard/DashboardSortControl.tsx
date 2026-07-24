@@ -2,6 +2,7 @@ import type { Dispatch, SetStateAction } from "react";
 import { useMemo, useRef, useState } from "react";
 import Icon from "../../../components/common/Icon";
 import DashboardManagerSurface from "./DashboardManagerSurface";
+import { MAX_DASHBOARD_SORT_RULES } from "./constants";
 import {
   areSortColumnsEqual,
   getDefaultDirection,
@@ -29,7 +30,9 @@ export default function DashboardSortControl({
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const [addRulePickerOpen, setAddRulePickerOpen] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
-  const [draftSortColumns, setDraftSortColumns] = useState<SortColumn[]>(sortColumns);
+  const [draftSortColumns, setDraftSortColumns] = useState<SortColumn[]>(
+    sortColumns.slice(0, MAX_DASHBOARD_SORT_RULES),
+  );
   const sortMenuRef = useRef<HTMLDivElement>(null);
   const open = controlledOpen ?? uncontrolledOpen;
 
@@ -41,7 +44,11 @@ export default function DashboardSortControl({
   };
 
   const availableAddOptions = useMemo(
-    () => SORT_OPTIONS.filter((option) => !draftSortColumns.some((column) => column.field === option.value)),
+    () => (
+      draftSortColumns.length < MAX_DASHBOARD_SORT_RULES
+        ? SORT_OPTIONS.filter((option) => !draftSortColumns.some((column) => column.field === option.value))
+        : []
+    ),
     [draftSortColumns],
   );
 
@@ -55,7 +62,7 @@ export default function DashboardSortControl({
       return;
     }
 
-    setDraftSortColumns(sortColumns);
+    setDraftSortColumns(sortColumns.slice(0, MAX_DASHBOARD_SORT_RULES));
     setAddRulePickerOpen(false);
     setOpen(true);
   };
@@ -77,7 +84,10 @@ export default function DashboardSortControl({
 
   const handleAddRule = (field: ExtendedSortField) => {
     setDraftSortColumns((previous) => {
-      if (previous.some((rule) => rule.field === field)) {
+      if (
+        previous.length >= MAX_DASHBOARD_SORT_RULES
+        || previous.some((rule) => rule.field === field)
+      ) {
         return previous;
       }
 
@@ -102,7 +112,7 @@ export default function DashboardSortControl({
   };
 
   const handleApplySorting = () => {
-    setSortColumns(draftSortColumns);
+    setSortColumns(draftSortColumns.slice(0, MAX_DASHBOARD_SORT_RULES));
     setAddRulePickerOpen(false);
     setOpen(false);
   };
@@ -149,7 +159,11 @@ export default function DashboardSortControl({
                   onSelect={handleAddRule}
                 />
               ) : (
-                <span className="sort-field-empty">All sort options have been added</span>
+                <span className="sort-field-empty">
+                  {draftSortColumns.length >= MAX_DASHBOARD_SORT_RULES
+                    ? `Maximum ${MAX_DASHBOARD_SORT_RULES} sort rules`
+                    : "All sort options have been added"}
+                </span>
               )}
               <button
                 type="button"

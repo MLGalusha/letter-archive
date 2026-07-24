@@ -29,6 +29,90 @@ test.describe('@mocked Admin Dashboard', () => {
     await expect(page.locator('.filter-hidden .filter-option-count')).toHaveText('1');
   });
 
+  test('normalizes hostile stored state and safely applies a partial legacy view', async ({
+    page,
+  }) => {
+    await installMockAdminDashboardApi(page, {
+      persistedDashboardState: {
+        visibilityFilter: 'PUBLIC',
+        collectionFilter: 42,
+        searchQuery: { nested: 'query' },
+        sortColumns: [{ field: 'createdAt', direction: 'sideways' }],
+        dateMode: 'weekly',
+        year: '1886',
+        month: 13,
+        day: 0,
+        dateFrom: '1886-01-01',
+        dateTo: [],
+        transcriptStatusFilters: { status: 'VERIFIED' },
+        metadataStatusFilters: 'AI_DRAFT',
+        extraContentStatusFilters: null,
+        workflowFilters: ['NOT_A_WORKFLOW'],
+        flaggedFilter: 'MAYBE',
+        missingFilters: ['not-a-field'],
+        contentShapeFilters: 'photos',
+      },
+      savedDashboardViews: [{
+        id: 'legacy-alice',
+        name: 'Legacy Alice',
+        createdAt: '2025-01-01T00:00:00.000Z',
+        state: {
+          searchQuery: 'alice',
+          visibleColumns: ['sender'],
+        },
+      }],
+    });
+
+    const initialRequestPromise = waitForAdminLettersRequest(
+      page,
+      (url) => url.searchParams.get('limit') === '50',
+    );
+    await page.goto('/admin');
+    const initialRequest = await initialRequestPromise;
+    await waitForAdminDashboardReady(page);
+
+    expect(Object.fromEntries(initialRequest.searchParams.entries())).toEqual({
+      page: '1',
+      limit: '50',
+      sort: 'lastOpenedAt',
+      sortOrder: 'desc',
+      sortRules: 'lastOpenedAt:desc',
+    });
+    await expect(page.locator(SELECTORS.dashboard.tableRow)).toHaveCount(2);
+    await expect(page.locator('.letter-count')).toHaveText('1–2 of 2');
+
+    await page.getByRole('button', { name: 'Save view' }).click();
+    const savedViewsDialog = page.getByRole('dialog', { name: 'Saved views' });
+    await expect(savedViewsDialog).toBeVisible();
+
+    const legacyRequestPromise = waitForAdminLettersRequest(
+      page,
+      (url) => url.searchParams.get('search') === 'alice',
+    );
+    await savedViewsDialog.getByRole('button', {
+      name: 'Legacy Alice',
+      exact: true,
+    }).click();
+    const legacyRequest = await legacyRequestPromise;
+
+    expect(Object.fromEntries(legacyRequest.searchParams.entries())).toEqual({
+      page: '1',
+      limit: '50',
+      search: 'alice',
+      sort: 'lastOpenedAt',
+      sortOrder: 'desc',
+      sortRules: 'lastOpenedAt:desc',
+    });
+    await expect(page.getByRole('searchbox', {
+      name: 'Search letters, senders, recipients...',
+    })).toHaveValue('alice');
+    await expect(page.locator(SELECTORS.dashboard.tableRow)).toHaveCount(1);
+    await expect(page.locator(SELECTORS.dashboard.table)).toContainText('Alice Smith');
+    await expect(page.locator(SELECTORS.dashboard.table)).not.toContainText('Clara Jones');
+    await expect(page.getByRole('columnheader', { name: 'Sender' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Recipient' })).toHaveCount(0);
+  });
+
   test('shows the request id when the dashboard letter list fails to load', async ({
     page,
   }) => {

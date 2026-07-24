@@ -3,6 +3,8 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import DashboardSortControl from "../DashboardSortControl";
+import { MAX_DASHBOARD_SORT_RULES } from "../constants";
+import { SORT_OPTIONS } from "../dashboardSortModel";
 import type { SortColumn } from "../types";
 
 function SortControlHarness({ initialSort }: { initialSort: SortColumn[] }) {
@@ -99,6 +101,25 @@ describe("DashboardSortControl", () => {
     expect(screen.queryByRole("listbox", { name: "Add sort rule" })).not.toBeInTheDocument();
     expect(screen.getByText("then by")).toBeInTheDocument();
     expect(screen.getByText("Letter date")).toBeInTheDocument();
+  });
+
+  it("does not offer a ninth sort rule beyond the server limit", async () => {
+    const user = userEvent.setup();
+    render(
+      <SortControlHarness
+        initialSort={SORT_OPTIONS
+          .slice(0, MAX_DASHBOARD_SORT_RULES)
+          .map((option) => ({
+            field: option.value,
+            direction: "asc",
+          }))}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /Sorted by 8 rules/i }));
+
+    expect(screen.queryByRole("button", { name: "Add sort rule" })).not.toBeInTheDocument();
+    expect(screen.getByText("Maximum 8 sort rules")).toBeInTheDocument();
   });
 
   it("closes when clicking outside the shared manager boundary", async () => {

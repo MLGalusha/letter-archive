@@ -1,4 +1,6 @@
 import Icon from "../../../components/common/Icon";
+import { MAX_DASHBOARD_SEARCH_LENGTH } from "./constants";
+import { normalizeDashboardSearchQuery } from "./dashboardStoredStateModel";
 
 interface DashboardSearchFieldProps {
   searchInput: string;
@@ -17,7 +19,10 @@ export default function DashboardSearchField({
         type="search"
         placeholder="Search letters, senders, recipients..."
         value={searchInput}
-        onChange={(event) => setSearchInput(event.target.value)}
+        maxLength={MAX_DASHBOARD_SEARCH_LENGTH}
+        onChange={(event) => {
+          setSearchInput(normalizeDashboardSearchQuery(event.target.value));
+        }}
       />
       {searchInput && (
         <button

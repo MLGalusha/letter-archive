@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import DashboardToolbar from "../DashboardToolbar";
+import { MAX_DASHBOARD_SEARCH_LENGTH } from "../constants";
 import type { DashboardFilterControls } from "../useDashboardFilters";
 import type { DashboardFilterStats, DashboardView } from "../types";
 
@@ -173,7 +174,9 @@ describe("DashboardToolbar", () => {
     const user = userEvent.setup();
     render(<ToolbarHarness />);
 
-    expect(screen.getByPlaceholderText("Search letters, senders, recipients...")).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText("Search letters, senders, recipients..."),
+    ).toHaveAttribute("maxLength", String(MAX_DASHBOARD_SEARCH_LENGTH));
 
     await user.click(screen.getByRole("button", { name: "Collections" }));
 

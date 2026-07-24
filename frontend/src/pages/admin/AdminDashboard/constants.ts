@@ -49,6 +49,10 @@ export const DEFAULT_DASHBOARD_SORT: SortColumn = {
   direction: "desc",
 };
 
+export const MAX_DASHBOARD_SORT_RULES = 8;
+export const MAX_DASHBOARD_SEARCH_LENGTH = 500;
+export const MAX_SAVED_DASHBOARD_VIEWS = 12;
+
 export const ALL_COLUMNS: ColumnDef[] = [
   { id: "sender", label: "Sender", defaultVisible: true },
   { id: "recipient", label: "Recipient", defaultVisible: true },

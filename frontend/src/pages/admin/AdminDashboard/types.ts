@@ -1,3 +1,5 @@
+import type { ContentStatus, WorkflowState } from "../../../types/Letter";
+
 export type VisibilityFilter = "ALL" | "PUBLISHED" | "HIDDEN";
 
 export type DateMode = "specific" | "range";
@@ -102,10 +104,10 @@ export interface PersistedState {
   day: number | null;
   dateFrom: string | null;
   dateTo: string | null;
-  transcriptStatusFilters: string[];
-  metadataStatusFilters: string[];
-  extraContentStatusFilters: string[];
-  workflowFilters: string[];
+  transcriptStatusFilters: ContentStatus[];
+  metadataStatusFilters: ContentStatus[];
+  extraContentStatusFilters: ContentStatus[];
+  workflowFilters: WorkflowState[];
   flaggedFilter: FlaggedFilter;
   missingFilters: MissingFilter[];
   contentShapeFilters: ContentShapeFilter[];

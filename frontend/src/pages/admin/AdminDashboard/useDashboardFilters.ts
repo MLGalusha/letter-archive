@@ -1,71 +1,69 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ContentStatus, WorkflowState } from '../../../types/Letter';
+import { parseDashboardCollectionFilter } from './dashboardStoredStateModel';
 import { loadPersistedState } from './utils';
-import type { ContentFilterView, ContentShapeFilter, DateMode, FlaggedFilter, MissingFilter, VisibilityFilter } from './types';
-
-function parseCollectionFilter(value: string | null | undefined): string[] {
-  if (!value || value === 'all') return [];
-
-  return Array.from(new Set(
-    value
-      .split(',')
-      .map((code) => code.replace(/\D/g, '').slice(0, 3))
-      .filter((code) => code !== '' && Number(code) !== 0),
-  ));
-}
+import type {
+  ContentFilterView,
+  ContentShapeFilter,
+  DateMode,
+  FlaggedFilter,
+  MissingFilter,
+  PersistedState,
+  VisibilityFilter,
+} from './types';
 
 export function useDashboardFilters() {
   const [persistedState] = useState(loadPersistedState);
 
   const [dateMode, setDateMode] = useState<DateMode>(
-    persistedState.dateMode ?? 'specific',
+    persistedState.dateMode,
   );
   const [contentFilterView, setContentFilterView] = useState<ContentFilterView>('transcript');
   const [collectionInput, setCollectionInput] = useState('');
   const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>(
-    persistedState.visibilityFilter ?? 'ALL',
+    persistedState.visibilityFilter,
   );
   const [transcriptStatusFilters, setTranscriptStatusFilters] = useState<ContentStatus[]>(
-    (persistedState.transcriptStatusFilters as ContentStatus[]) ?? [],
+    persistedState.transcriptStatusFilters,
   );
   const [metadataStatusFilters, setMetadataStatusFilters] = useState<ContentStatus[]>(
-    (persistedState.metadataStatusFilters as ContentStatus[]) ?? [],
+    persistedState.metadataStatusFilters,
   );
   const [extraContentStatusFilters, setExtraContentStatusFilters] = useState<ContentStatus[]>(
-    (persistedState.extraContentStatusFilters as ContentStatus[]) ?? [],
+    persistedState.extraContentStatusFilters,
   );
   const [workflowFilters, setWorkflowFilters] = useState<WorkflowState[]>(
-    (persistedState.workflowFilters as WorkflowState[]) ?? [],
+    persistedState.workflowFilters,
   );
   const [flaggedFilter, setFlaggedFilter] = useState<FlaggedFilter>(
-    persistedState.flaggedFilter ?? 'ALL',
+    persistedState.flaggedFilter,
   );
   const [missingFilters, setMissingFilters] = useState<MissingFilter[]>(
-    persistedState.missingFilters ?? [],
+    persistedState.missingFilters,
   );
   const [contentShapeFilters, setContentShapeFilters] = useState<ContentShapeFilter[]>(
-    persistedState.contentShapeFilters ?? [],
+    persistedState.contentShapeFilters,
   );
   const [collectionFilters, setCollectionFilters] = useState<string[]>(
-    parseCollectionFilter(persistedState.collectionFilter),
+    parseDashboardCollectionFilter(persistedState.collectionFilter),
   );
   const [yearFilter, setYearFilter] = useState<number | null>(
-    persistedState.year ?? null,
+    persistedState.year,
   );
   const [monthFilter, setMonthFilter] = useState<number | null>(
-    persistedState.month ?? null,
+    persistedState.month,
   );
   const [dayFilter, setDayFilter] = useState<number | null>(
-    persistedState.day ?? null,
+    persistedState.day,
   );
   const [dateFromFilter, setDateFromFilter] = useState<string | null>(
-    persistedState.dateFrom ?? null,
+    persistedState.dateFrom,
   );
   const [dateToFilter, setDateToFilter] = useState<string | null>(
-    persistedState.dateTo ?? null,
+    persistedState.dateTo,
   );
-  const [searchInput, setSearchInput] = useState(persistedState.searchQuery ?? '');
-  const [searchQuery, setSearchQuery] = useState(persistedState.searchQuery ?? '');
+  const [searchInput, setSearchInput] = useState(persistedState.searchQuery);
+  const [searchQuery, setSearchQuery] = useState(persistedState.searchQuery);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -109,8 +107,34 @@ export function useDashboardFilters() {
   }, []);
 
   const setCollectionFilter = useCallback((value: string) => {
-    setCollectionFilters(parseCollectionFilter(value));
+    setCollectionFilters(parseDashboardCollectionFilter(value));
     setCollectionInput('');
+  }, []);
+
+  const replaceStoredFilters = useCallback((state: PersistedState) => {
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+      searchDebounceRef.current = null;
+    }
+
+    setVisibilityFilter(state.visibilityFilter);
+    setCollectionFilters(parseDashboardCollectionFilter(state.collectionFilter));
+    setCollectionInput('');
+    setSearchInput(state.searchQuery);
+    setSearchQuery(state.searchQuery);
+    setDateMode(state.dateMode);
+    setYearFilter(state.year);
+    setMonthFilter(state.month);
+    setDayFilter(state.day);
+    setDateFromFilter(state.dateFrom);
+    setDateToFilter(state.dateTo);
+    setTranscriptStatusFilters([...state.transcriptStatusFilters]);
+    setMetadataStatusFilters([...state.metadataStatusFilters]);
+    setExtraContentStatusFilters([...state.extraContentStatusFilters]);
+    setWorkflowFilters([...state.workflowFilters]);
+    setFlaggedFilter(state.flaggedFilter);
+    setMissingFilters([...state.missingFilters]);
+    setContentShapeFilters([...state.contentShapeFilters]);
   }, []);
 
   const toggleVisibilityFilter = useCallback((value: 'PUBLISHED' | 'HIDDEN') => {
@@ -237,6 +261,7 @@ export function useDashboardFilters() {
     toggleContentShapeFilter,
     collectionFilter,
     setCollectionFilter,
+    replaceStoredFilters,
     yearFilter,
     setYearFilter,
     monthFilter,
@@ -254,7 +279,7 @@ export function useDashboardFilters() {
     hasDateFilter,
     clearDateFilters,
     handleClearAllFilters,
-    initialSortColumns: persistedState.sortColumns ?? [],
+    initialSortColumns: persistedState.sortColumns,
   };
 }
 

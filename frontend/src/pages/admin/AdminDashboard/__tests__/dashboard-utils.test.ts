@@ -1,5 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import {
+  DEFAULT_COLUMN_ORDER,
+  DEFAULT_DASHBOARD_SORT,
+} from "../constants";
+import {
   dateRawToDisplay,
   displayToDateRaw,
   formatDashboardDateTime,
@@ -93,11 +97,15 @@ describe("admin dashboard utils", () => {
     expect(loadPersistedState()).toMatchObject(state);
   });
 
-  it("returns empty object when local storage is invalid", () => {
+  it("returns complete defaults when local storage is invalid", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     localStorage.setItem("adminDashboardState", "not-json");
 
-    expect(loadPersistedState()).toEqual({});
+    expect(loadPersistedState()).toMatchObject({
+      visibilityFilter: "ALL",
+      collectionFilter: "all",
+      sortColumns: [{ ...DEFAULT_DASHBOARD_SORT }],
+    });
     expect(warnSpy).toHaveBeenCalled();
 
     warnSpy.mockRestore();
@@ -127,7 +135,18 @@ describe("admin dashboard utils", () => {
         missingFilters: [],
         contentShapeFilters: [],
         visibleColumns: ["date", "collection", "visibility", "lastOpened"],
-        columnOrder: ["date", "collection", "visibility", "lastOpened"],
+        columnOrder: [
+          "date",
+          "collection",
+          "visibility",
+          "lastOpened",
+          ...DEFAULT_COLUMN_ORDER.filter((column) => ![
+            "date",
+            "collection",
+            "visibility",
+            "lastOpened",
+          ].includes(column)),
+        ],
       },
     };
 

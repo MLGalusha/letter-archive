@@ -237,6 +237,8 @@ export interface MockAdminDashboardContext {
 
 interface MockAdminDashboardOptions {
   letterCount?: number;
+  persistedDashboardState?: Record<string, unknown>;
+  savedDashboardViews?: Array<Record<string, unknown>>;
   lettersError?: {
     message: string;
     requestId?: string;
@@ -261,12 +263,36 @@ export async function installMockAdminDashboardApi(
   const bulkTranscriptionRequests: MockAdminDashboardContext[
     'bulkTranscriptionRequests'
   ] = [];
+  const persistedDashboardStateJson = options.persistedDashboardState === undefined
+    ? null
+    : JSON.stringify(options.persistedDashboardState);
+  const savedDashboardViewsJson = options.savedDashboardViews === undefined
+    ? null
+    : JSON.stringify(options.savedDashboardViews);
 
-  await page.addInitScript(() => {
+  await page.addInitScript((storageSeed) => {
     localStorage.setItem('adminToken', 'mock-token');
-    localStorage.removeItem('adminDashboardState');
+    if (storageSeed.persistedDashboardStateJson === null) {
+      localStorage.removeItem('adminDashboardState');
+    } else {
+      localStorage.setItem(
+        'adminDashboardState',
+        storageSeed.persistedDashboardStateJson,
+      );
+    }
+    if (storageSeed.savedDashboardViewsJson !== null) {
+      localStorage.setItem(
+        'adminDashboardSavedViews',
+        storageSeed.savedDashboardViewsJson,
+      );
+    } else {
+      localStorage.removeItem('adminDashboardSavedViews');
+    }
     localStorage.removeItem('adminDashboardColumns');
     sessionStorage.removeItem('adminDashboardState');
+  }, {
+    persistedDashboardStateJson,
+    savedDashboardViewsJson,
   });
 
   await page.route(new RegExp(`${escapeRegex(API_BASE_URL)}/admin/letters(?:\\?.*)?$`), async (route) => {

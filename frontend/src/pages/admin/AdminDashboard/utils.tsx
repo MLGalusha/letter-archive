@@ -2,9 +2,12 @@ import type { ContentStatus } from "../../../types/Letter";
 import {
   MONTH_OPTIONS,
   SAVED_VIEWS_STORAGE_KEY,
-  SERVER_SORT_FIELDS,
   STORAGE_KEY,
 } from "./constants";
+import {
+  decodeDashboardStoredState,
+  decodeSavedDashboardViews,
+} from "./dashboardStoredStateModel";
 import type {
   DateMode,
   PersistedState,
@@ -107,24 +110,16 @@ export function getDashboardDateButtonText({
   return "Date";
 }
 
-export function loadPersistedState(): Partial<PersistedState> {
+export function loadPersistedState(): PersistedState {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const parsed = JSON.parse(saved) as Partial<PersistedState>;
-      // Filter out any unknown sort fields that may be stale in localStorage
-      if (parsed.sortColumns) {
-        const validFields = new Set(SERVER_SORT_FIELDS);
-        parsed.sortColumns = parsed.sortColumns.filter(
-          sc => validFields.has(sc.field)
-        );
-      }
-      return parsed;
-    }
+    return saved
+      ? decodeDashboardStoredState(JSON.parse(saved))
+      : decodeDashboardStoredState(undefined);
   } catch (error) {
     console.warn("Failed to load persisted state:", error);
+    return decodeDashboardStoredState(undefined);
   }
-  return {};
 }
 
 export function savePersistedState(state: PersistedState): void {
@@ -138,26 +133,31 @@ export function savePersistedState(state: PersistedState): void {
 export function loadSavedDashboardViews(): SavedDashboardView[] {
   try {
     const saved = localStorage.getItem(SAVED_VIEWS_STORAGE_KEY);
-    if (!saved) return [];
-    const parsed = JSON.parse(saved);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((view): view is SavedDashboardView =>
-      typeof view?.id === "string" &&
-      typeof view?.name === "string" &&
-      typeof view?.createdAt === "string" &&
-      typeof view?.state === "object" &&
-      Array.isArray(view.state.visibleColumns),
-    );
+    return parseSavedDashboardViews(saved);
   } catch (error) {
     console.warn("Failed to load saved dashboard views:", error);
     return [];
   }
 }
 
-export function saveSavedDashboardViews(views: SavedDashboardView[]): void {
+export function parseSavedDashboardViews(
+  serializedViews: string | null,
+): SavedDashboardView[] {
+  if (!serializedViews) return [];
+  try {
+    return decodeSavedDashboardViews(JSON.parse(serializedViews));
+  } catch (error) {
+    console.warn("Failed to parse saved dashboard views:", error);
+    return [];
+  }
+}
+
+export function saveSavedDashboardViews(views: SavedDashboardView[]): boolean {
   try {
     localStorage.setItem(SAVED_VIEWS_STORAGE_KEY, JSON.stringify(views));
+    return true;
   } catch (error) {
     console.warn("Failed to save dashboard views:", error);
+    return false;
   }
 }

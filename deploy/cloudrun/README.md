@@ -107,7 +107,9 @@ attempt does not mean the worker execution succeeded. `taskCount: 1` and
 `parallelism: 1` constrain tasks within one execution; they do not prevent a manual
 wake, enqueue-time wake, later schedule, or duplicate delivery from creating
 overlapping executions. The worker's database-clock execution lease and token-fenced
-writes must therefore remain the authority for who may process or publish state.
+claims remain the authority for which execution may begin automatic stage work or
+mutate worker/recovery state. Each stage's applicable run/lease or run/revision fences
+remain the authority for terminal content publication.
 
 Monitor the two layers separately:
 

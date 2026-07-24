@@ -7,11 +7,9 @@ Last updated: July 23, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 011C — fence worker availability and move recovery out of the
-  API
-- Last sealed cleanup checkpoint: process-registry retirement at `9e480383`
-- Current slice: 011C — audited; implementation and failure-mode characterization
-  next
+- Current checkpoint: 012 — extract the worker processing-cycle boundary
+- Last sealed cleanup implementation: worker execution ownership at `931ee06d`
+- Current slice: 012 — framed; behavioral characterization and extraction next
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -70,7 +68,8 @@ tree:
   expiry-aware reconciliation path.
 - [x] Add a run- and revision-bound entity-extraction owner with atomic projection
   replacement and explicit rollout compatibility.
-- [ ] Make recovery worker-owned so API startup cannot reset active work.
+- [ ] After the scheduled wake is deployed and proven, remove API startup/periodic
+  recovery so reconciliation is worker-owned.
 - [x] Establish one eligibility definition per processing stage.
 - [x] Make the worker the sole automatic executor; APIs enqueue, cancel, retry, and
   report.
@@ -1375,14 +1374,141 @@ Residuals carried forward:
   and publication boundaries. This slice removes automatic execution duplication, not
   intentionally synchronous admin actions.
 
-## Slice 011C — Fence Worker Availability and Move Recovery
+## Slice 011C — Fence Worker Execution and Prepare Recovery Handoff
 
-Status: audited, not started
+Status: repository implementation complete at `931ee06d`; operational recovery
+contraction remains gated
 
 Target invariant:
 
 Exactly one worker execution owns availability through a database-clock lease and
 token-fenced writes. Producers use persisted PENDING state for low-latency wakes, while
 a scheduled Cloud Run Job invocation provides eventual reconciliation after exhausted
-retries or a quiet API. Once both are in place, API startup and its periodic timer stop
-mutating processing recovery state.
+retries or a quiet API. API startup and its periodic timer stop mutating processing
+recovery state only after the scheduled path is deployed and proven.
+
+Delivered repository invariant:
+
+- The `worker_state` singleton has a paired nullable UUID execution token and
+  PostgreSQL-clock expiry. One atomic compare-and-set acquires it, exact live-token
+  renewal extends it, and exact-token release cannot clear a successor.
+- A contender that loses acquisition exits before recovery or queue discovery. The
+  winner confirms ownership immediately and every 30 seconds through an independent,
+  non-overlapping heartbeat with a local monotonic safety window.
+- Every automatic transcription, extra-content, metadata, and entity claim includes
+  the live worker token in the same SQL statement. Every worker-owned transcription,
+  extra-content, and metadata recovery mutation has the same fence. A preflight that
+  races ownership loss therefore cannot begin or recover new work.
+- Signal handling stops future work but keeps the global lease alive while an already
+  fenced stage settles. Cleanup stops recovery, stops renewal, and releases the exact
+  token. On normal completion after a successful release, it performs a required
+  post-release durable queue recheck/wake. The forced Cloud Run path exits nonzero
+  after eight seconds and leaves the token to expire rather than releasing while an AI
+  call may still be active.
+- Public worker state never exposes the token. `isPolling` is derived from the live
+  database lease; tick, batch, and error values remain exact-owner observations.
+- Cloud Run trigger suppression uses the active database lease instead of a
+  process-clock freshness guess. Cloud Build contains an OAuth-authenticated UTC
+  five-minute Scheduler target with Scheduler retries disabled, but its substitution
+  defaults to `false`.
+- Database shutdown is explicitly owned by the API and worker entry points after their
+  lifecycle cleanup; the shared database module no longer installs signal handlers
+  that can close the pool before a worker drain finishes.
+
+Evidence:
+
+- Focused worker state, heartbeat, claim/recovery ownership, lifecycle, queue, and
+  pipeline suites passed.
+- Definitive `CI=1 ./scripts/verify-all.sh` passed: backend 80 files / 712 tests,
+  backend typecheck, frontend 92 files / 615 tests, production build, and mocked
+  browser 37/37. The existing large-chunk warning remains visible.
+- `drizzle-kit check`, migration-script shell syntax, Cloud Build YAML parsing, both
+  embedded Scheduler shell scripts, and `git diff --check` passed.
+- A disposable native PostgreSQL 17 instance applied the complete migration journal
+  through 0052. It passed the lease SQL contract, a genuinely blocked two-session
+  acquisition race, actual Drizzle acquire/renew/publish/stale-release/release/active
+  behavior, and inspection of the generated stage-admission token predicate.
+- Independent concurrency and failure-mode review found no P0/P1 implementation
+  blocker after fixes for database-close ordering, renewal/report time bounds,
+  stage/recovery fencing, Cloud Run shutdown timing, and concurrent migration proof.
+
+Rollout boundary:
+
+This checkpoint does not deploy migration 0052, replace the worker, enable Scheduler,
+or remove API recovery. The checked-in build flag is only a create/update gate and
+does not pause an existing schedule. The operational sequence is:
+
+1. Apply migration 0052 and deploy the lease-aware API and worker while API recovery
+   remains active.
+2. Drain or terminate executions launched from the pre-lease job definition.
+3. Manually prove lease acquisition, renewal, exact release, and idle exit.
+4. Enable the scheduled target in a later build, observe at least two ticks, and
+   overlap a manual wake with one tick. One execution must own the lease and every
+   contender must exit without processing.
+5. Only in a later deployment remove API startup and periodic recovery.
+
+Residuals:
+
+- Entity extraction is run/revision fenced but still has no stage lease or automatic
+  expiry policy. A killed owner leaves the exact `RUNNING` row visible for manual
+  cancellation.
+- Best-effort state reports are individually bounded, but the complete cleanup queue
+  and required database release do not yet have an aggregate statement deadline.
+- Worker lifecycle tests combine executable heartbeat/state tests with source-order
+  assertions. An import-safe lifecycle/cycle seam should replace the remaining
+  positional assertions with signal and ownership-loss behavior tests.
+- `worker.ts` is 621 lines and repeats the discovery, ownership gate, timing, error,
+  notification, and result envelope across four stages. The next slice isolates that
+  orchestration before adding another stage-level lease.
+
+## Slice 012 — Extract the Worker Processing-Cycle Boundary
+
+Status: framed, not started
+
+Problem:
+
+`worker.ts` currently owns process boot, global execution leasing, recovery scheduling,
+polling, signals, shutdown, final handoff, four queue queries, and four nearly identical
+stage loops. A change to one stage requires editing a large executable module, while
+most lifecycle coverage asserts source ordering because importing the file starts the
+process.
+
+Target invariant:
+
+The executable owns only process lifecycle and the outer poll/drain loop. An
+import-safe processing-cycle module owns one ordered cycle through the four explicit
+stages and can be exercised behaviorally with injected queries and runners. Stage
+eligibility, order, token forwarding, error isolation, notifications, and exit
+semantics remain unchanged.
+
+Scope:
+
+- Characterize transcription → extra content → metadata → entity order and ownership
+  checks after every discovery and before every job.
+- Extract the four queue queries and repeated per-stage execution envelope from the
+  executable behind a small dependency-injected boundary.
+- Keep four explicit stage definitions and stage-specific outcome/log/notification
+  behavior; share only the actually identical orchestration.
+- Replace positional source assertions for cycle behavior with tests for order,
+  ownership loss at scan/job boundaries, worker-token forwarding, skipped outcomes,
+  per-job error isolation, and cycle result calculation.
+- Keep boot, global lease acquisition/renewal, recovery start/stop, polling, signals,
+  release, handoff, and database close in `worker.ts`.
+
+Non-goals:
+
+- No entity-extraction lease or recovery policy yet.
+- No new concurrency, queue semantics, retry policy, notification behavior, or stage
+  eligibility.
+- No generic job framework or abstraction shared with request-owned processing.
+- No frontend or API contract changes.
+
+Acceptance:
+
+- Focused behavioral cycle and lifecycle tests pass without importing an executable
+  that registers signals or exits the process.
+- Existing ownership architecture tests still prove all automatic claims and worker
+  recoveries carry the execution token.
+- Full backend tests/typecheck and aggregate repository verification remain green.
+- The diff removes the four repeated execution envelopes from `worker.ts` and gives
+  stage changes a testable module boundary without hiding their distinct contracts.

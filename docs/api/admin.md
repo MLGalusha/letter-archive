@@ -54,7 +54,9 @@ Soft delete.
 
 ### GET /admin/processing/queue
 Durable active and queued state for transcription, metadata, entity extraction, and
-extra content; recent main-stage activity; and persisted worker observation. Extra
+extra content; recent main-stage activity; and an expiry-aware public worker
+projection. `isPolling` reflects the live database execution lease; report fields are
+observations from that exact owner, and the private token is never returned. Extra
 content has no stage-specific queue/completion timestamp yet, so its queued timestamp
 is `null` and it is not projected into recent activity.
 

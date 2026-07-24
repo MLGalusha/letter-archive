@@ -102,13 +102,21 @@ writer that produced them.
 
 The API and worker run the shared serialized recovery coordinator at startup and every
 60 seconds. It selects only fully bound tuples whose database-clock deadline has
-expired. A queued first extraction returns to `PENDING`/`TRANSCRIBED` and receives a
-new metadata revision; a requested regeneration becomes `FAILED`, restores the
-workflow implied by the committed metadata content, and also advances the revision.
+expired. Worker recovery mutations additionally require the worker's exact live global
+execution token; transitional API recovery omits only that global worker-execution
+predicate until the scheduled wake is deployed and proven. A queued first extraction
+returns to
+`PENDING`/`TRANSCRIBED` and receives a new metadata revision; a requested regeneration
+becomes `FAILED`, restores the workflow implied by the committed metadata content, and
+also advances the revision.
+
 The configured API worker wake is level-triggered from durable queued transcription,
-metadata, or entity-extraction work. An exit-when-empty worker treats queued
-transcription/metadata leases as work it can wait for and drain, and includes
-entity-only pending work in its final exit decision.
+extra-content, metadata, or entity-extraction work and skips a trigger while another
+worker owns a live global lease. An exit-when-empty worker treats queued
+transcription/metadata/extra-content leases as work it can wait for and drain, and
+includes entity-only pending work in its final exit decision. A five-minute scheduled
+fallback is checked in but disabled by default until the worker-lease rollout and
+overlap proof are complete.
 
 Heartbeat renewal, success, and producer failure require the exact run ID, exact bound
 revision, matching lease-run ID, and a lease that is still live according to

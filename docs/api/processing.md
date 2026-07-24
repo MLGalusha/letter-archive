@@ -9,10 +9,12 @@ All routes are prefixed with `/admin/processing`.
 ### GET /queue
 
 Returns durable active and queued transcription, extra-content, metadata, and entity
-state; recent main-stage activity; and persisted worker observation. Extra content does
-not yet have a stage-specific queue/completion timestamp, so its queued timestamp is
-`null` and it is omitted from recent activity rather than borrowing the letter-wide
-timestamp.
+state; recent main-stage activity; and an expiry-aware public worker projection.
+`isPolling` is derived from the live database execution lease, while tick, error, and
+batch fields remain exact-owner reports. The private execution token is never returned.
+Extra content does not yet have a stage-specific queue/completion timestamp, so its
+queued timestamp is `null` and it is omitted from recent activity rather than borrowing
+the letter-wide timestamp.
 
 ### POST /wake
 
@@ -61,8 +63,13 @@ work has its own equivalent lifecycle. Entity extraction has a run/revision publ
 fence but no lease; an orphan remains visible for exact administrative cancellation
 instead of being guessed dead.
 
-The API and worker currently run the shared lease reconciler. A configured-worker wake
-is derived from durable eligible queue state after reconciliation. API reconciliation
-remains transitional even though batch execution is worker-only: worker availability
-still needs a token-fenced execution lease and an external scheduled wake before
-recovery can safely move entirely out of the API process.
+The API and worker currently run the shared lease reconciler. Worker-owned recovery is
+additionally fenced by the worker execution's exact live database token in the same
+mutation that requeues or fails an expired stage. A configured-worker wake is derived
+from durable eligible queue state after reconciliation.
+
+API reconciliation remains transitional during rollout even though batch execution is
+worker-only. The worker execution lease is implemented, and deployment configuration
+contains a default-disabled five-minute scheduled wake. Recovery moves entirely out of
+the API only after that schedule is enabled and both normal ticks and an overlapping
+manual wake prove the new availability path in production.

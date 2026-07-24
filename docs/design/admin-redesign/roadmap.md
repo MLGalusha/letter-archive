@@ -231,10 +231,11 @@ Deferred sort slice:
 
 Deferred processing redesign note:
 
-- Architecture-cleanup Slices 010–011B removed both API-memory batch executors and
-  migrated the Processing page to durable queue/job state. The remaining design debt is
-  narrower: stored workflow stages can still disagree with live queue state, and
-  worker availability still needs an execution-fenced lease.
+- Architecture-cleanup Slices 010–011C removed both API-memory batch executors,
+  migrated the Processing page to durable queue/job state, and fenced worker
+  availability with a database execution lease. The remaining design debt is narrower:
+  stored workflow stages can still disagree with live queue state, while scheduled
+  reconciliation and removal of transitional API recovery remain rollout work.
 - Later redesign work should finish separating durable letter content status, live
   queue/job status, retry/error state, and admin language instead of treating one mixed
   workflow concept as authoritative for everything.
@@ -569,5 +570,7 @@ Progress:
   counted one scope while waking a global drain have been removed.
 - Transcription, extra-content, and metadata attempts have run-bound leases; entity
   extraction has an atomic run/revision projection boundary.
-- Worker availability fencing, scheduled recovery wake, and the remaining workflow
-  versus queue-language cleanup are still open.
+- Worker availability is fenced by a database-clock execution lease, and a
+  default-disabled scheduled recovery wake is checked in. Enabling and proving that
+  schedule before removing transitional API recovery remains operational work; the
+  workflow-versus-queue language cleanup remains design work.

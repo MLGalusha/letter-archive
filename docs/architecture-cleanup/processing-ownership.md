@@ -13,8 +13,9 @@ existing owner remains frictionless, while behavior tests remain the authority.
 
 | Entry point | Runtime owner | Stages | Execution model | Control and recovery |
 | --- | --- | --- | --- | --- |
-| `worker.ts` polling loop | Worker process | Transcription, extra content, metadata, entity extraction | Queries durable eligible `PENDING` rows and invokes the pipeline directly | Worker availability is persisted but does not yet carry an execution owner token. Transcription, extra content, and metadata have run-bound database-clock leases and heartbeats; entity extraction has a run/revision commit fence but no lease. Polling, wake checks, queue snapshots, and both exit checks share stage-specific eligibility. The worker publishes idle before its final recheck so stage-only work cannot disappear in the handoff. |
-| Upload, retry, recovery, and global wake | Worker process | Transcription, extra content, metadata, entity extraction | The API persists or observes durable eligible rows and optionally wakes the configured Cloud Run Job; local development relies on the separately running worker | No process-local execution or controls remain. The explicit admin wake has no stage or filter because every worker execution drains the global queue. All wake paths use the complete four-stage durable predicate. |
+| `worker.ts` polling loop | Worker process | Transcription, extra content, metadata, entity extraction | Acquires the singleton worker execution lease, queries durable eligible `PENDING` rows, and invokes the pipeline directly | Acquisition uses the PostgreSQL clock and a 120-second lease; contenders that lose the atomic claim exit before recovery or queue scans. An independent heartbeat confirms ownership immediately and then every 30 seconds. Every automatic stage claim and worker recovery mutation includes the exact live execution token in the same SQL statement. Transcription, extra content, and metadata also have their own run-bound leases; entity extraction has a run/revision commit fence but no stage lease. |
+| Upload, retry, and global wake | API producer / worker executor | Transcription, extra content, metadata, entity extraction | The API persists or observes durable eligible rows and optionally wakes the configured Cloud Run Job; local development relies on the separately running worker | No process-local execution or controls remain. The explicit admin wake has no stage or filter because every worker execution drains the global queue. All wake paths use the complete four-stage durable predicate and suppress a redundant trigger while a live worker execution lease exists. |
+| Expired-stage recovery | API and worker during rollout | Transcription, extra content, metadata | A shared serialized coordinator applies each stage's queued/requested expiry policy | Worker mutations require its exact live global execution token in addition to the stage lease predicate. Transitional API recovery omits only that global worker-execution predicate until the scheduled worker wake is deployed and proven; stage compare-and-set rules keep concurrent reconcilers idempotent. |
 | Bulk transcription and metadata operations | Worker process | Transcription, metadata | Guarded updates reset only exact observed eligible rows to durable `PENDING`, then optionally wake the configured worker | Full source/job compare-and-set prevents a stale selection from reporting stranded work. Metadata never bypasses transcript confirmation. |
 | Letter content actions | API request process | Letter-only transcription, metadata, entity extraction, extra content | The route awaits pipeline or regeneration functions directly | Transcription, metadata, and extra content share their respective canonical persisted ownership/lease boundaries with batch and automatic work. |
 
@@ -42,31 +43,38 @@ unleased attempts—and any stage's attempts whose lease binding does not match 
 current run—remain visible for exact-run administrative cancellation.
 
 A serialized composite coordinator runs at API and worker startup and every 60
-seconds. It invokes transcription, metadata, and extra reconciliation sequentially with independent error
-containment, so failure in one stage does not suppress the other and same-table recovery
-does not create avoidable lock ordering. Conditional `UPDATE ... RETURNING` operations
-make overlapping API/worker reconcilers report and transition each expiry once.
+seconds. It invokes transcription, metadata, and extra reconciliation sequentially
+with independent error containment, so failure in one stage does not suppress the
+others and same-table recovery does not create avoidable lock ordering. Conditional
+`UPDATE ... RETURNING` operations make overlapping API/worker reconcilers report and
+transition each expiry once. The worker passes its current execution token through the
+coordinator, and every worker recovery `UPDATE` also requires that token's unexpired
+singleton row. The transitional API caller omits that additional predicate.
 
 After API reconciliation, configured-worker wakeup is level-triggered: the API asks the
 database whether eligible transcription, extra-content, metadata, or entity work remains `PENDING`,
 awaits the Cloud Run trigger, and retries on a later tick if the trigger fails. A Cloud
 Run exit-when-empty worker projects queued transcription, metadata, and extra-content
-recovery/leases plus all four stages' current pending state into its exit decision.
-It also waits for a dirty requested extra-content lease because expiry converts that
-attempt into queued worker work. It publishes idle,
-then repeats reconciliation and the durable queue check. A failed required idle write
-propagates so the job exits nonzero, while successful/rejected duplicate cleanup is
-memoized inside one execution. The deployment supplies the worker job identity so a
-final non-empty recheck can request a successor execution.
+recovery/leases plus all four stages' current pending state into its exit decision. It
+also waits for a dirty requested extra-content lease because expiry converts that
+attempt into queued worker work. Once the empty decision is durable, cleanup stops
+periodic recovery, stops the execution heartbeat, and releases only the exact execution
+token. On normal completion after a successful release, it performs a required
+post-release queue recheck/wake. That ordering closes work committed while producers
+still observed the departing lease. Best-effort state reports are individually bounded
+to five seconds and cannot indefinitely hold the required release behind one stuck
+report.
 
-That availability row is not yet fenced across worker executions. A main or metadata
-AI call can outlive the two-minute freshness window because availability is currently
-published around work, not continuously during it. The API can then request an
-overlapping execution, and either execution can overwrite the singleton availability
-row. Stage run IDs still prevent stale content publication, so the residual is
-redundant execution and inaccurate availability rather than an unfenced content
-commit. Slice 011C must add an execution-owned availability compare-and-set or
-equivalent continuously renewed lease.
+The worker execution lease is now the availability authority. If renewal rejects the
+token or the local confirmed lease window elapses, that process stops future scans,
+claims, and recovery. Even if a preflight query raced the loss, every automatic stage
+claim and recovery mutation rejects the stale token atomically. A stage already owned
+when global ownership is lost may settle under its separate run/revision and stage
+lease fence; global ownership is not substituted for the stage's publication contract.
+SIGTERM similarly stops future work while allowing the current stage to settle. If it
+cannot settle inside the eight-second shutdown buffer, the process exits nonzero and
+leaves the global token to expire instead of releasing ownership while AI work may
+still be active.
 
 The old startup reset remains deleted. Entity extraction now has a run token and
 reserved revision, so only its exact owner can publish a replacement projection. It
@@ -86,14 +94,20 @@ metadata attempts are likewise kept manual until old executables have drained.
 | Old entity executor is still running during migration 0051 | It may drain its already-claimed tokenless attempt; new tokenless claims are rejected and its output is database-stamped as one candidate revision |
 | Drained/terminated old entity executor left a tokenless orphan | Exact legacy cancellation discards only its abandoned candidate revision before a current retry can reuse that revision |
 | Two reconcilers overlap | Exact expired-lease compare-and-swap lets only one report and transition an attempt; one stage failure does not suppress the other |
-| A worker AI call outlives the availability freshness window | Stage ownership fences content, but the ownerless availability singleton can cause a redundant worker launch and competing status writes; execution-owned availability remains Slice 011 work |
+| Two worker executions launch concurrently | PostgreSQL grants the singleton execution lease to one; every loser exits before recovery, queue discovery, or a stage claim |
+| A worker AI call runs longer than the old observation window | Independent renewal keeps the execution lease live; trigger paths see the live lease and contenders cannot begin automatic work |
+| Global lease renewal is rejected or its locally confirmed window expires | The worker starts no new scan, claim, or recovery; atomic SQL rejects a stale-token race, while an already-owned stage may settle through its own publication fence |
+| SIGTERM arrives during a long stage | Future work stops and ownership remains live while the stage drains; the eight-second forced path exits nonzero and leaves the token to expire rather than releasing early |
 | Legacy unleased or lease-mismatched transcription/metadata/extra attempt is encountered | It remains visible for deliberate reconciliation or exact-run cancellation; automatic recovery does not invent or misattribute liveness evidence |
 
 API startup still calls the safe processing reconciler even though the worker is now
-the sole automatic executor. Removing it immediately would create a liveness gap:
-worker availability is not yet execution-fenced, and no external scheduled invocation
-guarantees eventual reconciliation after enqueue-time wake failures. Slice 011C closes
-those two boundaries before recovery becomes worker-only.
+the sole automatic executor. The execution-fencing boundary is closed, and an
+OAuth-authenticated five-minute Cloud Scheduler target is checked in. Its build flag
+defaults to `false`, however, and this repository checkpoint has not deployed or
+observed it. API recovery remains the rollout bridge until migration 0052 and the
+lease-aware worker are deployed, old executions drain, the schedule is enabled, and
+at least two ticks plus an overlapping manual wake prove the path. Only a later
+deployment may remove API startup and periodic recovery.
 
 ## Entity-Extraction Ownership Repair
 
@@ -233,9 +247,14 @@ bulk reset paths use conditional updates rather than briefly reopening all stage
     progress/pause/abort/SSE state, duplicate queue CRUD, and filtered-start illusion.
     The Processing page now polls the durable queue and offers only exact mutations
     plus one truthful global wake.
-11. Add a database-clock execution lease to `worker_state`, fence every availability
-    write by the execution token, add an external scheduled reconciliation wake, and
-    then remove API-owned recovery.
+11. **Completed in repository Slice 011C:** add a database-clock execution lease to
+    `worker_state`; fence state reports, release, every automatic stage claim, and every
+    worker recovery mutation by the exact token; renew independently; and check in a
+    default-disabled five-minute scheduled reconciliation target.
+12. **Operational follow-up:** deploy migration 0052 and the lease-aware worker, drain
+    pre-lease executions, enable the schedule, observe at least two ticks plus a manual
+    overlap, and only then remove API startup and periodic recovery in a later
+    deployment.
 
 This order keeps behavior recoverable at each checkpoint while reducing, rather than
 temporarily increasing, the number of ambiguous owners.

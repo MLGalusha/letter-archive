@@ -271,7 +271,7 @@ A few things worth knowing that the diagram glosses:
 - **Storage is filesystem, not the GCS API.** In production the scan bucket is mounted into both the backend and worker containers via `gcsfuse` — see the volume mount in [`deploy/cloudrun/backend-worker-job.yaml`](deploy/cloudrun/backend-worker-job.yaml). In dev it's a local directory. Both processes call `getAbsoluteStoragePath()` and read files; nobody calls the GCS REST API directly.
 - **Image serving goes through the backend, not direct GCS URLs.** `GET /images/:pageId` ([`routes/images.ts`](backend/src/routes/images.ts)) streams the file with on-the-fly Sharp resize keyed by a `?w=` query param, cached in an in-process LRU (max 1000 variants). No signed URLs.
 - **The worker has two modes.** Locally it is normally a long-running polling process. With `EXIT_WHEN_EMPTY=true` it drains transcription, extra-content, metadata, and entity queues and exits, which is the Cloud Run Job shape. Upload, selected-ID bulk, retry, recovery, and the explicit global wake path leave durable work for this worker and optionally wake the configured Cloud Run Job; local development therefore needs `npm run worker` in a separate terminal.
-- **The Processing page is a durable queue observer, not an executor.** It polls PostgreSQL-backed job state and can mutate exact queued or active attempts. The `worker_state` row remains an observation until its execution lease is added; the page labels it as last-reported state rather than authoritative availability.
+- **The Processing page is a durable queue observer, not an executor.** It polls PostgreSQL-backed job state and can mutate exact queued or active attempts. The `worker_state` singleton carries the current worker execution's database-clock lease; its public projection reports expiry-aware availability without exposing the execution token.
 - **Frontend ↔ Backend uses REST plus notification SSE.** REST handles processing
   observation and mutations. Admin notifications use `/admin/notifications/stream`
   through [`useNotificationStream`](frontend/src/hooks/useNotificationStream.ts).
@@ -282,9 +282,11 @@ the Processing page only persist or observe queue state or request a global work
 drain; explicit single-letter actions still await their separately claimed work
 directly. PostgreSQL stores stage state and run ownership; transcription, metadata,
 and extra-content attempts also have database-clock leases. API-side lease
-reconciliation remains temporarily active until worker availability itself has a
-fenced execution lease and an external scheduled wake. The exact paths and remaining
-risks are tracked in
+reconciliation remains temporarily active during rollout. The worker now owns a
+separate fenced execution lease, and the deployment contains a default-disabled
+five-minute reconciliation schedule. API recovery can be removed only after that
+schedule is enabled and overlapping executions are proven to serialize correctly. The
+exact paths and remaining risks are tracked in
 [`docs/architecture-cleanup/processing-ownership.md`](docs/architecture-cleanup/processing-ownership.md).
 
 ## Tech Stack

@@ -7,10 +7,10 @@ Last updated: July 24, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 016 — first Letter Review vertical workspace
-- Last sealed cleanup implementation: photo-description workspace at `fdb7acfd`
+- Current checkpoint: 017 — Letter Review mutation workflow ownership
+- Last sealed cleanup implementation: mutation workflows at `9775a30a`
 - Feedback reliability prerequisite: Express request deadlines at `c8ac080b`
-- Current slice: 017 — characterize shared Letter Review mutation scheduling ownership
+- Current slice: 018 — extract the repeated visit-bound direct-mutation protocol
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -98,6 +98,8 @@ tree:
 - [ ] Delete verified dead dashboard CSS and establish one style owner per surface.
 - [x] Give Photo Description and Extra Content one verified-editor interaction owner
   and remove their unused imperative editor contract.
+- [x] Give Letter Review one route-visit identity, target-wide autosave coordinator,
+  counted saving leases, and ordered identity/retag workflow.
 - [ ] Refactor Letter Review by vertical workspace, one characterized domain at a time.
 - [ ] Extract and test pure geometry, history, and viewport state from interaction-heavy
   React modules.
@@ -1917,13 +1919,107 @@ deployment, or external state changed in this slice.
 
 ## Slice 017 — Letter Review Mutation Scheduling Ownership
 
-Status: characterization next
+Status: complete at `9775a30a`
+
+Problem:
+
+Letter Review used one mutable debounce timer and one Boolean saving flag for unrelated
+domains. Scheduling an Extra Content save could cancel a metadata save; immediate
+verify/delete/direct actions could overtake queued edits; concurrent operations could
+unlock the page when only one finished; and a slow response from an earlier A visit
+could still affect a fresh A visit after A → B → A navigation. Identity changes were
+also split across an identity write and metadata retag without one ordering owner.
+Finally, the visible date, emotional-tone, relationship, and primary-topic editors
+changed local state but did not all persist through the admin update contract.
+
+Delivered invariant:
+
+Every Letter Review mutation belongs to an opaque route visit and a source-revision
+target. Autosaves are cumulative, typed by domain lane, and executed by one
+target-wide serial pump. A direct mutation first flushes every queued lane and stops if
+any unresolved save remains. A lane failure remains unresolved until that producer
+successfully persists the complete intent or the user deliberately returns the field
+to the persisted baseline. Identity compare-and-set and required retagging form one
+ordered workflow. Async completion may update visible state only if its originating
+visit is still active and the returned DTO passes guarded adoption.
+
+What changed:
+
+- `LetterReviewAutosaveCoordinator` owns four explicit lanes—letter fields, identity,
+  Extra Content, and Photo Description—under one per-target serial queue. One domain
+  cannot cancel another, delayed tasks preserve target order, flush is a real barrier,
+  and failures survive unrelated success.
+- Letter-field and identity producers retain failed intent and merge it beneath newer
+  partial edits. Reverting a failed identity edit to the persisted baseline explicitly
+  resolves the lane without issuing a second API mutation.
+- `useIdentityAutoSave` now owns the countdown, compare-and-set payload, pending
+  identity intent, ordered retag continuation, retry, and visible status. A second
+  identity cannot overtake the first retag, a failed retag is repaired before the next
+  identity, and in-app unmount does not interrupt the continuation.
+- `useLetterReviewVisit` replaces route-ID equality with an opaque visit token, so
+  first-A work is stale during a fresh A visit. Guarded DTO adoption, source-conflict
+  ownership, timers, drafts, and delayed delete navigation use that fence.
+- `useLetterSavingState` now returns counted, idempotent operation leases. Explicit
+  mutation controls remain disabled until every overlapping operation releases its
+  own lease.
+- Direct route mutations flush queued saves before executing and adopt/hydrate only a
+  current response. Deletion also uses the flush barrier and visit-fenced navigation.
+- The existing date, emotional-tone, relationship, and primary-topic controls now
+  persist canonical values through the frontend client, validated backend schema,
+  flattened columns, structured metadata projection, version history, and derived
+  participant relationship where applicable. This repairs existing nonfunctional
+  controls; it does not add a new workflow.
+- Browser coverage proves immediate verification waits for structured metadata,
+  immediate Extra Content verification waits for its edit, and independent domains no
+  longer cancel one another.
+
+Evidence:
+
+- Focused autosave, identity, and coordinator coverage passed 3 files / 48 tests,
+  including cumulative failure recovery, A → B → A isolation, ordered retagging,
+  intentional revert, unmount continuation, and flush behavior.
+- Focused backend metadata contract coverage passed 48 tests.
+- Complete backend suite passed 104 files / 1,016 tests; backend typecheck passed.
+- Complete frontend suite passed 118 files / 801 tests. Frontend TypeScript build,
+  production build, and ESLint over every changed/new frontend TypeScript file passed.
+- The complete mocked browser suite passed 47/47; the changed Letter Review spec passed
+  21/21 in isolation.
+- `git diff --check` passed. Independent implementation, UI/test, simplicity, and
+  repeated adversarial reviews found no remaining correctness finding after fixes for
+  cross-lane failure masking, cumulative retry intent, retag ordering, countdown
+  ownership, intentional failure abandonment, and fresh-visit isolation.
+- Existing production-build warnings remain. The Letter Review chunk is 520.37 kB and
+  the Update Editor chunk is 1,182.96 kB after minification.
+
+Residuals:
+
+- `LetterReviewPage.tsx` is now 1,861 lines with 30 `useCallback` owners. The explicit
+  safety protocol exposed rather than removed a repeated pattern across roughly a
+  dozen direct handlers: acquire lease, flush, call API, adopt, hydrate/report, handle
+  error, and release. Extract that protocol before the next vertical workspace.
+- Identity-to-retag continuation survives route changes and React unmounts while the
+  page process remains alive, but it is still client-owned. Closing the tab after the
+  identity commit and before retag completion can leave derived metadata stale. A
+  future backend transaction, durable job, or outbox is the reliable boundary.
+- The identity metadata synchronization callback still uses a ref to bridge hook
+  construction order. Remove that cycle when route mutation/hydration ownership moves.
+- The coordinator and identity modules are intentionally cohesive but substantial.
+  Do not split them by file length alone; first measure whether the direct-mutation
+  extraction produces a clearer caller boundary.
+
+No product feature, visual redesign, database migration, deployment, or external state
+changed in this slice.
+
+## Slice 018 — Letter Review Direct-Mutation Execution Boundary
+
+Status: next
 
 Intent:
 
-Characterize the shared 1,500 ms debounce timer, save-status reporting, route-visit
-identity, and cross-workspace cancellation behavior before moving another vertical
-domain. Preserve queued-write behavior across route transitions unless a new contract
-is proven safer. Establish the smallest explicit coordinator and executable
-interleaving tests first; then use that seam to extract Extra Content without adding a
-generic action layer or duplicating async ownership.
+Characterize the repeated direct-mutation timeline in `LetterReviewPage`: acquire a
+counted lease, flush autosaves, call one source-fenced API operation, reject stale
+completion, adopt and hydrate the returned DTO, report the domain outcome, and release
+exactly once. Extract the smallest visit-bound executor and migrate a coherent family
+of simple direct mutations first. Keep domain-specific payloads, confirmation flows,
+navigation, and success copy outside that executor; do not introduce a command bus,
+generic action framework, or visible behavior change.

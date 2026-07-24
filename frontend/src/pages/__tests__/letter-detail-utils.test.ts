@@ -6,6 +6,7 @@ function buildLetter(overrides: Partial<Letter> = {}): Letter {
   return {
     id: overrides.id || "l1",
     title: overrides.title || "Letter",
+    primarySourceRevision: overrides.primarySourceRevision ?? 0,
     images: overrides.images || [],
     transcript: overrides.transcript || { pages: [], fullText: "", verified: false },
     metadata: overrides.metadata || { verified: false },

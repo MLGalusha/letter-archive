@@ -1,6 +1,7 @@
-import { mkdir, copyFile, access, readFile, stat, unlink } from 'node:fs/promises';
-import { createHash } from 'node:crypto';
-import { join, dirname, resolve } from 'node:path';
+import { mkdir, copyFile, stat, unlink } from 'node:fs/promises';
+import { constants as fsConstants, createReadStream } from 'node:fs';
+import { createHash, randomUUID } from 'node:crypto';
+import { join, dirname, resolve, basename, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { env } from '../config/env.js';
 import { createLogger } from '../utils/logger.js';
@@ -13,10 +14,14 @@ const log = createLogger({ module: 'storage' });
 // Minimum file size for images (10KB) - rejects tiny/corrupt/placeholder files
 const MIN_IMAGE_SIZE = 10 * 1024;
 
-export interface StorageResult {
+export interface ImmutableStorageResult {
   storagePath: string;
   checksumSha256: string;
-  alreadyExists: boolean;
+}
+
+export interface InspectedUploadFile {
+  checksumSha256: string;
+  sizeBytes: number;
 }
 
 /**
@@ -45,96 +50,134 @@ export function buildStoragePath(
  */
 export async function computeChecksum(filePath: string): Promise<string> {
   const start = Date.now();
-  const content = await readFile(filePath);
-  const checksum = createHash('sha256').update(content).digest('hex');
+  const hash = createHash('sha256');
+  let sizeBytes = 0;
+  const checksum = await new Promise<string>((resolveChecksum, reject) => {
+    const stream = createReadStream(filePath);
+    stream.on('data', (chunk) => {
+      sizeBytes += Buffer.byteLength(chunk);
+      hash.update(chunk);
+    });
+    stream.on('error', reject);
+    stream.on('end', () => resolveChecksum(hash.digest('hex')));
+  });
   const duration = Date.now() - start;
   log.debug(
-    { filePath, sizeBytes: content.length, duration, checksum: checksum.substring(0, 12) + '...' },
+    { filePath, sizeBytes, duration, checksum: checksum.substring(0, 12) + '...' },
     'Computed checksum'
   );
   return checksum;
 }
 
-/**
- * Checks if a file exists at the given path.
- */
-export async function fileExists(filePath: string): Promise<boolean> {
-  try {
-    await access(filePath);
-    return true;
-  } catch {
-    return false;
+/** Validates an incoming upload and returns its stable content identity. */
+export async function inspectUploadFile(filePath: string): Promise<InspectedUploadFile> {
+  const fileStats = await stat(filePath);
+  if (fileStats.size < MIN_IMAGE_SIZE) {
+    log.warn(
+      { filePath, sizeBytes: fileStats.size, minSize: MIN_IMAGE_SIZE },
+      'File rejected: too small',
+    );
+    throw new Error(
+      `File too small (${fileStats.size} bytes). Minimum size is ${MIN_IMAGE_SIZE} bytes. `
+      + 'This may indicate a corrupted or placeholder file.',
+    );
   }
+
+  return {
+    checksumSha256: await computeChecksum(filePath),
+    sizeBytes: fileStats.size,
+  };
+}
+
+function buildImmutableStoragePath(
+  logicalPath: string,
+  checksumSha256: string,
+  objectId = randomUUID(),
+): string {
+  const extension = extname(logicalPath);
+  const pageName = basename(logicalPath, extension);
+  return join(
+    dirname(logicalPath),
+    'objects',
+    pageName,
+    `${checksumSha256}-${objectId}${extension.toLowerCase()}`,
+  );
+}
+
+/** Identifies paths materialized by storeImmutableFile rather than legacy live paths. */
+export function isImmutableStoragePath(storagePath: string): boolean {
+  return basename(dirname(dirname(storagePath))) === 'objects';
 }
 
 /**
- * Stores a file from source to destination path.
- * Creates directories if needed.
- * If file exists and force=false, returns alreadyExists: true.
- * If file exists and force=true, deletes existing and replaces.
+ * Materializes a complete upload at a never-before-used path.
+ *
+ * The caller decides whether this source may replace a conceptual page. Storage
+ * never overwrites the currently referenced object, so a failed copy or database
+ * transaction cannot change bytes behind an older page pointer.
  */
-export async function storeFile(
+export async function storeImmutableFile(
   sourcePath: string,
-  destPath: string,
-  force = false
-): Promise<StorageResult> {
+  logicalPath: string,
+  expectedChecksum?: string,
+): Promise<ImmutableStorageResult> {
   const start = Date.now();
-  const context = { sourcePath, destPath, force };
+  const context = { sourcePath, logicalPath };
 
-  log.debug(context, 'Starting file storage');
+  log.debug(context, 'Starting immutable file storage');
 
-  // Check file size first - reject tiny files that are likely placeholders or corrupt
-  const fileStats = await stat(sourcePath);
-  if (fileStats.size < MIN_IMAGE_SIZE) {
-    log.warn(
-      { ...context, sizeBytes: fileStats.size, minSize: MIN_IMAGE_SIZE },
-      'File rejected: too small'
-    );
+  const inspected = expectedChecksum
+    ? { checksumSha256: expectedChecksum, sizeBytes: (await stat(sourcePath)).size }
+    : await inspectUploadFile(sourcePath);
+  if (inspected.sizeBytes < MIN_IMAGE_SIZE) {
     throw new Error(
-      `File too small (${fileStats.size} bytes). Minimum size is ${MIN_IMAGE_SIZE} bytes. ` +
-      `This may indicate a corrupted or placeholder file.`
+      `File too small (${inspected.sizeBytes} bytes). Minimum size is ${MIN_IMAGE_SIZE} bytes. `
+      + 'This may indicate a corrupted or placeholder file.',
     );
   }
+  const { checksumSha256 } = inspected;
 
-  // Compute checksum
-  const checksumSha256 = await computeChecksum(sourcePath);
-
-  // Check if file already exists
-  const exists = await fileExists(destPath);
-  if (exists && !force) {
-    log.debug({ ...context, checksumSha256 }, 'File already exists, skipping');
-    return {
-      storagePath: destPath,
-      checksumSha256,
-      alreadyExists: true,
-    };
-  }
-
-  // If force=true and file exists, delete existing file first
-  if (exists && force) {
-    log.debug(context, 'Deleting existing file (force=true)');
-    await unlink(destPath);
-  }
-
-  // Create directory structure
-  const dir = dirname(destPath);
+  const storagePath = buildImmutableStoragePath(logicalPath, checksumSha256);
+  const absoluteStoragePath = storagePath.startsWith('/')
+    ? storagePath
+    : getAbsoluteStoragePath(storagePath);
+  const dir = dirname(absoluteStoragePath);
   await mkdir(dir, { recursive: true });
-  log.debug({ dir }, 'Created directory structure');
+  let copiedByThisAttempt = false;
+  try {
+    await copyFile(sourcePath, absoluteStoragePath, fsConstants.COPYFILE_EXCL);
+    copiedByThisAttempt = true;
+    const storedChecksum = await computeChecksum(absoluteStoragePath);
+    if (storedChecksum !== checksumSha256) {
+      throw new Error('Stored upload checksum does not match the prepared source');
+    }
 
-  // Copy file
-  await copyFile(sourcePath, destPath);
+    const duration = Date.now() - start;
+    log.info(
+      {
+        ...context,
+        storagePath,
+        sizeBytes: inspected.sizeBytes,
+        duration,
+        checksumSha256: checksumSha256.substring(0, 12) + '...',
+      },
+      'Immutable file stored successfully',
+    );
 
-  const duration = Date.now() - start;
-  log.info(
-    { ...context, sizeBytes: fileStats.size, duration, checksumSha256: checksumSha256.substring(0, 12) + '...' },
-    'File stored successfully'
-  );
+    return { storagePath, checksumSha256 };
+  } catch (error) {
+    if (copiedByThisAttempt) {
+      await unlink(absoluteStoragePath).catch(() => {
+        // An unreferenced partial object is safe to leave for later garbage collection.
+      });
+    }
+    throw error;
+  }
+}
 
-  return {
-    storagePath: destPath,
-    checksumSha256,
-    alreadyExists: false,
-  };
+/** Removes only a path already resolved by the storage layer. */
+export async function removeStoredFile(storagePath: string): Promise<void> {
+  await unlink(getAbsoluteStoragePath(storagePath));
 }
 
 /**

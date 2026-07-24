@@ -55,6 +55,7 @@ vi.mock('../../db/index.js', () => {
   updateWhereMock.mockImplementation(() => ({ returning: updateReturningMock }));
   txDeleteMock.mockImplementation(() => ({ where: deleteWhereMock }));
   const transactionExecutor = {
+    query: { letters: { findFirst: findFirstMock } },
     update: dbUpdateMock,
     delete: txDeleteMock,
   };
@@ -69,6 +70,7 @@ vi.mock('../../db/index.js', () => {
     },
     letters: {
       id: 'letters.id',
+      primarySourceRevision: 'letters.primarySourceRevision',
       type: 'letters.type',
       transcriptionStatus: 'letters.transcriptionStatus',
       workflow: 'letters.workflow',
@@ -138,10 +140,17 @@ vi.mock('../name-propagation.js', () => ({
     return status === 409 || statusCode === 409;
   },
   observeIdentityField: (
-    source: { sender: string | null; recipient: string | null; metadataRevision: number; updatedAt: Date },
+    source: {
+      sender: string | null;
+      recipient: string | null;
+      primarySourceRevision: number;
+      metadataRevision: number;
+      updatedAt: Date;
+    },
     field: 'sender' | 'recipient',
   ) => ({
     value: source[field],
+    primarySourceRevision: source.primarySourceRevision,
     metadataRevision: source.metadataRevision,
     updatedAt: source.updatedAt,
   }),
@@ -167,6 +176,7 @@ import {
 
 const uploadedLetter = {
   id: 'letter-1',
+  primarySourceRevision: 7,
   type: 'L',
   workflow: 'UPLOADED',
   transcriptionStatus: 'PENDING',
@@ -200,6 +210,10 @@ const uploadedLetter = {
   transcriptStatus: 'EMPTY',
   pages: [{ id: 'page-1' }],
 };
+const uploadedSource = {
+  letterId: uploadedLetter.id,
+  primarySourceRevision: uploadedLetter.primarySourceRevision,
+};
 
 describe('bulk transcription ownership', () => {
   beforeEach(() => {
@@ -210,7 +224,8 @@ describe('bulk transcription ownership', () => {
   });
 
   it('queues only rows that are still idle and clears any stale run fence', async () => {
-    await expect(bulkTranscribe(['letter-1'])).resolves.toMatchObject({
+    await expect(bulkTranscribe([uploadedSource])).resolves.toMatchObject({
+      requested: 1,
       queued: 1,
       skipped: 0,
     });
@@ -232,7 +247,13 @@ describe('bulk transcription ownership', () => {
         {
           kind: 'and',
           clauses: [
-            { kind: 'eq', field: 'letters.id', value: 'letter-1' },
+            {
+              kind: 'and',
+              clauses: [
+                { kind: 'eq', field: 'letters.id', value: 'letter-1' },
+                { kind: 'eq', field: 'letters.primarySourceRevision', value: 7 },
+              ],
+            },
             {
               kind: 'inArray',
               field: 'letters.type',
@@ -241,6 +262,7 @@ describe('bulk transcription ownership', () => {
             { kind: 'ne', field: 'letters.metadataStatus', value: 'RUNNING' },
             { kind: 'ne', field: 'letters.entityExtractionStatus', value: 'RUNNING' },
             expect.objectContaining({ kind: 'sql' }),
+            { kind: 'eq', field: 'letters.primarySourceRevision', value: 7 },
             { kind: 'eq', field: 'letters.transcriptionStatus', value: 'PENDING' },
             { kind: 'eq', field: 'letters.workflow', value: 'UPLOADED' },
             { kind: 'isNull', field: 'letters.transcriptionText' },
@@ -264,12 +286,14 @@ describe('bulk transcription ownership', () => {
   it('does not revoke a transcription claimed after the eligibility read', async () => {
     updateReturningMock.mockResolvedValue([]);
 
-    await expect(bulkTranscribe(['letter-1'])).resolves.toEqual({
+    await expect(bulkTranscribe([uploadedSource])).resolves.toEqual({
+      requested: 1,
       queued: 0,
       skipped: 1,
       skipReasons: [{
         letterId: 'letter-1',
-        reason: 'Transcription changed before it could be queued',
+        code: 'SOURCE_CHANGED_OR_INELIGIBLE',
+        reason: 'Transcription eligibility changed before it could be queued',
       }],
     });
 
@@ -286,10 +310,11 @@ describe('bulk transcription ownership', () => {
   ) => {
     findManyMock.mockResolvedValue([{ ...uploadedLetter, ...override }]);
 
-    await expect(bulkTranscribe(['letter-1'], true)).resolves.toEqual({
+    await expect(bulkTranscribe([uploadedSource], true)).resolves.toEqual({
+      requested: 1,
       queued: 0,
       skipped: 1,
-      skipReasons: [{ letterId: 'letter-1', reason }],
+      skipReasons: [{ letterId: 'letter-1', code: 'INELIGIBLE', reason }],
     });
 
     expect(dbUpdateMock).not.toHaveBeenCalled();
@@ -305,7 +330,8 @@ describe('bulk transcription ownership', () => {
       deadLetter: true,
     }]);
 
-    await expect(bulkTranscribe(['letter-1'])).resolves.toMatchObject({
+    await expect(bulkTranscribe([uploadedSource])).resolves.toMatchObject({
+      requested: 1,
       queued: 1,
       skipped: 0,
     });
@@ -337,14 +363,16 @@ describe('bulk transcription ownership', () => {
   it('does not overwrite a newer non-running human transcript revision', async () => {
     updateReturningMock.mockResolvedValue([]);
 
-    const result = await bulkTranscribe(['letter-1']);
+    const result = await bulkTranscribe([uploadedSource]);
 
     expect(result).toEqual({
+      requested: 1,
       queued: 0,
       skipped: 1,
       skipReasons: [{
         letterId: 'letter-1',
-        reason: 'Transcription changed before it could be queued',
+        code: 'SOURCE_CHANGED_OR_INELIGIBLE',
+        reason: 'Transcription eligibility changed before it could be queued',
       }],
     });
     expect(updateWhereMock).toHaveBeenCalledWith(expect.objectContaining({
@@ -365,7 +393,7 @@ describe('bulk transcription ownership', () => {
   it('atomically resets overwrite state in the guarded queue transition', async () => {
     findManyMock.mockResolvedValue([{ ...uploadedLetter, workflow: 'PUBLISHED' }]);
 
-    await bulkTranscribe(['letter-1'], true);
+    await bulkTranscribe([uploadedSource], true);
 
     expect(dbUpdateMock).toHaveBeenCalledTimes(1);
     expect(updateSetMock).toHaveBeenCalledWith({
@@ -408,10 +436,15 @@ describe('bulk metadata downstream exclusion', () => {
       transcriptionStatus: 'RUNNING',
     }]);
 
-    await expect(bulkExtractMetadata(['letter-1'])).resolves.toEqual({
+    await expect(bulkExtractMetadata([uploadedSource])).resolves.toEqual({
+      requested: 1,
       queued: 0,
       skipped: 1,
-      skipReasons: [{ letterId: 'letter-1', reason: 'Transcription already running' }],
+      skipReasons: [{
+        letterId: 'letter-1',
+        code: 'INELIGIBLE',
+        reason: 'Transcription already running',
+      }],
       unconfirmedCount: 0,
     });
     expect(dbUpdateMock).not.toHaveBeenCalled();
@@ -439,10 +472,11 @@ describe('bulk metadata downstream exclusion', () => {
       ...override,
     }]);
 
-    await expect(bulkExtractMetadata(['letter-1'])).resolves.toEqual({
+    await expect(bulkExtractMetadata([uploadedSource])).resolves.toEqual({
+      requested: 1,
       queued: 0,
       skipped: 1,
-      skipReasons: [{ letterId: 'letter-1', reason }],
+      skipReasons: [{ letterId: 'letter-1', code: 'INELIGIBLE', reason }],
       unconfirmedCount: 0,
     });
 
@@ -451,7 +485,8 @@ describe('bulk metadata downstream exclusion', () => {
   });
 
   it('queues metadata through a transcription-idle compare-and-set', async () => {
-    await expect(bulkExtractMetadata(['letter-1'])).resolves.toMatchObject({
+    await expect(bulkExtractMetadata([uploadedSource])).resolves.toMatchObject({
+      requested: 1,
       queued: 1,
       skipped: 0,
     });
@@ -461,7 +496,13 @@ describe('bulk metadata downstream exclusion', () => {
       clauses: [{
         kind: 'and',
         clauses: expect.arrayContaining([
-          { kind: 'eq', field: 'letters.id', value: 'letter-1' },
+          {
+            kind: 'and',
+            clauses: [
+              { kind: 'eq', field: 'letters.id', value: 'letter-1' },
+              { kind: 'eq', field: 'letters.primarySourceRevision', value: 7 },
+            ],
+          },
           { kind: 'eq', field: 'letters.type', value: 'L' },
           { kind: 'eq', field: 'letters.workflow', value: 'TRANSCRIBED' },
           { kind: 'eq', field: 'letters.transcriptionStatus', value: 'SUCCESS' },
@@ -489,12 +530,14 @@ describe('bulk metadata downstream exclusion', () => {
   it('does not report metadata queued when transcription wins after the read', async () => {
     updateReturningMock.mockResolvedValue([]);
 
-    await expect(bulkExtractMetadata(['letter-1'])).resolves.toEqual({
+    await expect(bulkExtractMetadata([uploadedSource])).resolves.toEqual({
+      requested: 1,
       queued: 0,
       skipped: 1,
       skipReasons: [{
         letterId: 'letter-1',
-        reason: 'Letter processing state changed before metadata could be queued',
+        code: 'SOURCE_CHANGED_OR_INELIGIBLE',
+        reason: 'Metadata eligibility changed before it could be queued',
       }],
       unconfirmedCount: 0,
     });
@@ -507,11 +550,13 @@ describe('bulk metadata downstream exclusion', () => {
       transcriptConfirmedAt: null,
     }]);
 
-    await expect(bulkExtractMetadata(['letter-1'])).resolves.toEqual({
+    await expect(bulkExtractMetadata([uploadedSource])).resolves.toEqual({
+      requested: 1,
       queued: 0,
       skipped: 1,
       skipReasons: [{
         letterId: 'letter-1',
+        code: 'INELIGIBLE',
         reason: 'Transcript not yet confirmed',
       }],
       unconfirmedCount: 1,
@@ -525,21 +570,23 @@ describe('bulk metadata downstream exclusion', () => {
 describe('bulk clear entity ownership revocation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    findManyMock.mockResolvedValue([uploadedLetter]);
     updateReturningMock.mockResolvedValue([{ id: 'letter-1' }]);
     deleteWhereMock.mockResolvedValue(undefined);
   });
 
   it.each([
-    ['transcription', bulkClearTranscriptions, 'Transcriptions cleared'],
-    ['metadata', bulkClearMetadata, 'Metadata cleared'],
+    ['transcription', bulkClearTranscriptions],
+    ['metadata', bulkClearMetadata],
   ])('clearing %s revokes the complete entity owner tuple', async (
     _scope,
     clear,
-    message,
   ) => {
-    await expect(clear(['letter-1'])).resolves.toEqual({
-      message,
-      updated: 1,
+    await expect(clear([uploadedSource])).resolves.toEqual({
+      requested: 1,
+      applied: 1,
+      skipped: 0,
+      skipReasons: [],
     });
 
     expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
@@ -554,10 +601,66 @@ describe('bulk clear entity ownership revocation', () => {
     expect(updateWhereMock).toHaveBeenCalledWith({
       kind: 'and',
       clauses: expect.arrayContaining([
+        {
+          kind: 'or',
+          clauses: [{
+            kind: 'and',
+            clauses: [
+              { kind: 'eq', field: 'letters.id', value: 'letter-1' },
+              { kind: 'eq', field: 'letters.primarySourceRevision', value: 7 },
+            ],
+          }],
+        },
         { kind: 'ne', field: 'letters.entityExtractionStatus', value: 'RUNNING' },
       ]),
     });
     expect(txDeleteMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('reports a guarded clear that loses its source-or-idle predicate', async () => {
+    updateReturningMock.mockResolvedValue([]);
+
+    await expect(bulkClearTranscriptions([uploadedSource])).resolves.toEqual({
+      requested: 1,
+      applied: 0,
+      skipped: 1,
+      skipReasons: [{
+        letterId: 'letter-1',
+        code: 'SOURCE_CHANGED_OR_INELIGIBLE',
+        reason: 'Letter source or processing state changed before it could be cleared',
+      }],
+    });
+    expect(txDeleteMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('bulk source revision admission', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    findManyMock.mockResolvedValue([{
+      ...uploadedLetter,
+      primarySourceRevision: uploadedLetter.primarySourceRevision + 1,
+    }]);
+  });
+
+  it.each([
+    ['transcription', () => bulkTranscribe([uploadedSource])],
+    ['metadata extraction', () => bulkExtractMetadata([uploadedSource])],
+    ['transcription clearing', () => bulkClearTranscriptions([uploadedSource])],
+    ['metadata clearing', () => bulkClearMetadata([uploadedSource])],
+  ])('rejects stale source ownership before %s', async (_scope, mutate) => {
+    await expect(mutate()).resolves.toMatchObject({
+      requested: 1,
+      skipped: 1,
+      skipReasons: [{
+        letterId: 'letter-1',
+        code: 'SOURCE_CHANGED',
+        reason: 'Letter source changed; refresh and reselect',
+      }],
+    });
+    expect(dbUpdateMock).not.toHaveBeenCalled();
+    expect(dbTransactionMock).not.toHaveBeenCalled();
+    expect(requestBackgroundWorkerRunMock).not.toHaveBeenCalled();
   });
 });
 
@@ -565,6 +668,7 @@ describe('bulk identity update ownership', () => {
   const observedAt = new Date('2026-07-17T12:00:00.000Z');
   const identityLetter = {
     id: 'letter-1',
+    primarySourceRevision: 7,
     sender: 'Jimmie',
     recipient: 'Molly',
     metadataRevision: 4,
@@ -582,9 +686,16 @@ describe('bulk identity update ownership', () => {
   it('does not mutate lifecycle state or participant links for same-value fields', async () => {
     await expect(bulkUpdateFields([{
       letterId: identityLetter.id,
+      primarySourceRevision: 7,
       sender: identityLetter.sender,
       recipient: identityLetter.recipient,
-    }])).resolves.toEqual({ message: 'Fields updated', updated: 0 });
+    }])).resolves.toEqual({
+      requested: 1,
+      applied: 1,
+      skipped: 0,
+      updated: 0,
+      skipReasons: [],
+    });
 
     expect(propagateNameMock).not.toHaveBeenCalled();
     expect(propagatePlaceholderReplacementMock).not.toHaveBeenCalled();
@@ -606,26 +717,42 @@ describe('bulk identity update ownership', () => {
 
     await expect(bulkUpdateFields([{
       letterId: identityLetter.id,
+      primarySourceRevision: 7,
       sender: 'Jimmy',
       recipient: 'Mary',
-    }])).rejects.toMatchObject({ status: 409 });
-
-    expect(propagateNameMock).toHaveBeenNthCalledWith(2, {
-      letterId: identityLetter.id,
-      field: 'recipient',
-      oldName: 'Molly',
-      newName: 'Mary',
-      observed: {
-        value: 'Molly',
-        metadataRevision: 5,
-        updatedAt: senderCommittedAt,
-      },
+    }])).resolves.toEqual({
+      requested: 1,
+      applied: 0,
+      skipped: 1,
+      updated: 0,
+      skipReasons: [{
+        letterId: identityLetter.id,
+        code: 'WRITE_CONFLICT',
+      }],
     });
+
+    expect(propagateNameMock).toHaveBeenNthCalledWith(
+      2,
+      {
+        letterId: identityLetter.id,
+        field: 'recipient',
+        oldName: 'Molly',
+        newName: 'Mary',
+        observed: {
+          value: 'Molly',
+          primarySourceRevision: 7,
+          metadataRevision: 5,
+          updatedAt: senderCommittedAt,
+        },
+      },
+      expect.any(Object),
+    );
     expect(dbUpdateMock).not.toHaveBeenCalled();
     expect(syncLetterParticipantsFromMetadataMock).toHaveBeenCalledTimes(1);
     expect(syncLetterParticipantsFromMetadataMock).toHaveBeenCalledWith({
       letterId: identityLetter.id,
       sender: 'Jimmy',
+      database: expect.any(Object),
     });
   });
 
@@ -651,22 +778,34 @@ describe('bulk identity update ownership', () => {
 
     await expect(bulkUpdateFields([{
       letterId: identityLetter.id,
+      primarySourceRevision: 7,
       sender: 'Jimmy',
       recipient: 'Mary',
-    }])).resolves.toEqual({ message: 'Fields updated', updated: 1 });
-
-    expect(commitDirectIdentityFieldMock).toHaveBeenCalledWith({
-      letter: senderCommitted,
-      field: 'recipient',
-      value: 'Mary',
+    }])).resolves.toEqual({
+      requested: 1,
+      applied: 1,
+      skipped: 0,
+      updated: 1,
+      skipReasons: [],
     });
+
+    expect(commitDirectIdentityFieldMock).toHaveBeenCalledWith(
+      {
+        letter: senderCommitted,
+        field: 'recipient',
+        value: 'Mary',
+      },
+      expect.any(Object),
+    );
     expect(syncLetterParticipantsFromMetadataMock).toHaveBeenNthCalledWith(1, {
       letterId: identityLetter.id,
       sender: 'Jimmy',
+      database: expect.any(Object),
     });
     expect(syncLetterParticipantsFromMetadataMock).toHaveBeenNthCalledWith(2, {
       letterId: identityLetter.id,
       recipient: 'Mary',
+      database: expect.any(Object),
     });
   });
 
@@ -679,14 +818,73 @@ describe('bulk identity update ownership', () => {
 
     await expect(bulkUpdateFields([{
       letterId: identityLetter.id,
+      primarySourceRevision: 7,
       sender: 'Jimmy',
-    }])).rejects.toMatchObject({ status: 409 });
-
-    expect(commitDirectIdentityFieldMock).toHaveBeenCalledWith({
-      letter: identityLetter,
-      field: 'sender',
-      value: 'Jimmy',
+    }])).resolves.toEqual({
+      requested: 1,
+      applied: 0,
+      skipped: 1,
+      updated: 0,
+      skipReasons: [{
+        letterId: identityLetter.id,
+        code: 'WRITE_CONFLICT',
+      }],
     });
+
+    expect(commitDirectIdentityFieldMock).toHaveBeenCalledWith(
+      {
+        letter: identityLetter,
+        field: 'sender',
+        value: 'Jimmy',
+      },
+      expect.any(Object),
+    );
     expect(syncLetterParticipantsFromMetadataMock).not.toHaveBeenCalled();
+  });
+
+  it('continues after a stale source and reports the mixed result truthfully', async () => {
+    const currentLetter = { ...identityLetter, id: 'letter-current' };
+    const staleLetter = {
+      ...identityLetter,
+      id: 'letter-stale',
+      primarySourceRevision: 8,
+    };
+    const committed = {
+      ...currentLetter,
+      sender: 'Jimmy',
+      metadataRevision: 5,
+    };
+    findFirstMock
+      .mockResolvedValueOnce(currentLetter)
+      .mockResolvedValueOnce(staleLetter)
+      .mockResolvedValueOnce(staleLetter);
+    propagateNameMock.mockResolvedValueOnce({
+      letter: committed,
+      fieldsUpdated: ['sender'],
+    });
+
+    await expect(bulkUpdateFields([
+      {
+        letterId: currentLetter.id,
+        primarySourceRevision: 7,
+        sender: 'Jimmy',
+      },
+      {
+        letterId: staleLetter.id,
+        primarySourceRevision: 7,
+        sender: 'James',
+      },
+    ])).resolves.toEqual({
+      requested: 2,
+      applied: 1,
+      skipped: 1,
+      updated: 1,
+      skipReasons: [{
+        letterId: staleLetter.id,
+        code: 'SOURCE_CHANGED',
+      }],
+    });
+
+    expect(propagateNameMock).toHaveBeenCalledOnce();
   });
 });

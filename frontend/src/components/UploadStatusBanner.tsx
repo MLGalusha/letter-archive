@@ -18,6 +18,15 @@ export default function UploadStatusBanner() {
   const pct = job.totalFiles > 0 ? Math.round((job.completedFiles / job.totalFiles) * 100) : 0;
   const isComplete = job.status === 'complete';
   const hasFailures = job.failedCount > 0;
+  const createdCount = job.results.filter((result) => result.outcome === 'created').length;
+  const replacedCount = job.results.filter((result) => result.outcome === 'replaced').length;
+  const unchangedCount = job.results.filter((result) => result.outcome === 'unchanged').length;
+  const outcomeSummary = [
+    createdCount > 0 ? `${createdCount} created` : null,
+    replacedCount > 0 ? `${replacedCount} replaced` : null,
+    unchangedCount > 0 ? `${unchangedCount} unchanged` : null,
+    hasFailures ? `${job.failedCount} failed` : null,
+  ].filter((part): part is string => part !== null).join(', ');
 
   const className = [
     'upload-status-banner',
@@ -30,7 +39,7 @@ export default function UploadStatusBanner() {
       <div className="banner-info">
         <div className="banner-text">
           {isComplete
-            ? `Upload complete — ${job.successCount} succeeded${hasFailures ? `, ${job.failedCount} failed` : ''}`
+            ? `Upload complete — ${outcomeSummary || 'no files changed'}`
             : `Uploading ${job.completedFiles} of ${job.totalFiles} files…`
           }
         </div>

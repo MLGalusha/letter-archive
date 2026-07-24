@@ -124,6 +124,7 @@ export interface SavedDashboardView {
 }
 
 export interface PendingChange {
+  primarySourceRevision: number;
   sender?: string;
   recipient?: string;
 }

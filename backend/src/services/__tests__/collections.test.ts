@@ -2,39 +2,38 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   collectionFindFirstMock,
+  insertMock,
+  insertValuesMock,
+  insertOnConflictMock,
+  insertReturningMock,
   updateMock,
-  updateSetMock,
-  updateWhereMock,
-  updateReturningMock,
   resolveRepresentativeLetterIdMock,
   pickFeaturedLetterMock,
 } = vi.hoisted(() => ({
   collectionFindFirstMock: vi.fn(),
+  insertMock: vi.fn(),
+  insertValuesMock: vi.fn(),
+  insertOnConflictMock: vi.fn(),
+  insertReturningMock: vi.fn(),
   updateMock: vi.fn(),
-  updateSetMock: vi.fn(),
-  updateWhereMock: vi.fn(),
-  updateReturningMock: vi.fn(),
   resolveRepresentativeLetterIdMock: vi.fn(),
   pickFeaturedLetterMock: vi.fn(),
 }));
 
 vi.mock('drizzle-orm', () => ({
   eq: vi.fn((field: unknown, value: unknown) => ({ kind: 'eq', field, value })),
-  and: vi.fn((...clauses: unknown[]) => ({ kind: 'and', clauses })),
-  isNull: vi.fn((field: unknown) => ({ kind: 'isNull', field })),
 }));
 
 vi.mock('../../db/index.js', () => {
-  updateMock.mockImplementation(() => ({
-    set: updateSetMock,
+  insertMock.mockImplementation(() => ({
+    values: insertValuesMock,
   }));
-  updateSetMock.mockImplementation(() => ({
-    where: updateWhereMock,
+  insertValuesMock.mockImplementation(() => ({
+    onConflictDoNothing: insertOnConflictMock,
   }));
-  updateWhereMock.mockImplementation(() => ({
-    returning: updateReturningMock,
+  insertOnConflictMock.mockImplementation(() => ({
+    returning: insertReturningMock,
   }));
-
   return {
     db: {
       query: {
@@ -42,13 +41,12 @@ vi.mock('../../db/index.js', () => {
           findFirst: collectionFindFirstMock,
         },
       },
+      insert: insertMock,
       update: updateMock,
     },
     collections: {
       id: 'collections.id',
       collectionCode: 'collections.collectionCode',
-      profileStartHereLetterId: 'collections.profileStartHereLetterId',
-      profileStartHereReason: 'collections.profileStartHereReason',
     },
   };
 });
@@ -61,69 +59,61 @@ vi.mock('../pick-featured-letter.js', () => ({
   pickFeaturedLetter: pickFeaturedLetterMock,
 }));
 
-import { resolveCollectionStartHere } from '../collections.js';
+import {
+  findOrCreateCollection,
+  resolveCollectionStartHere,
+} from '../collections.js';
 
 describe('collection featured-letter resolution', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    updateReturningMock.mockResolvedValue([]);
+    insertReturningMock.mockResolvedValue([]);
   });
 
-  it('re-reads and returns the curator winner when auto-pick persistence loses its CAS', async () => {
-    pickFeaturedLetterMock.mockResolvedValueOnce({ id: 'auto-letter' });
-    resolveRepresentativeLetterIdMock
-      .mockResolvedValueOnce('auto-letter')
-      .mockResolvedValueOnce('curator-winner');
-    collectionFindFirstMock.mockResolvedValueOnce({
-      profileStartHereLetterId: 'curator-winner',
-      profileStartHereReason: 'The curator winner reason',
-    });
+  it('returns the concurrent collection winner when its insert loses the race', async () => {
+    const winner = {
+      id: 'collection-winner',
+      collectionCode: '009',
+      title: 'Collection 009',
+    };
+    collectionFindFirstMock
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(winner);
 
+    await expect(findOrCreateCollection('009')).resolves.toBe(winner);
+
+    expect(insertOnConflictMock).toHaveBeenCalledWith({
+      target: 'collections.collectionCode',
+    });
+  });
+
+  it('returns a valid stored curator selection without writing from a read', async () => {
+    resolveRepresentativeLetterIdMock.mockResolvedValueOnce('curator-winner');
     const result = await resolveCollectionStartHere('collection-9', {
-      letterId: null,
-      reason: 'Reason left behind by an old selection',
+      letterId: 'curator-winner',
+      reason: 'The curator winner reason',
     });
 
     expect(result).toEqual({
       letterId: 'curator-winner',
       reason: 'The curator winner reason',
     });
-    expect(updateSetMock).toHaveBeenCalledWith({
-      profileStartHereLetterId: 'auto-letter',
-      profileStartHereReason: null,
-    });
-    expect(updateWhereMock).toHaveBeenCalledWith({
-      kind: 'and',
-      clauses: [
-        { kind: 'eq', field: 'collections.id', value: 'collection-9' },
-        { kind: 'isNull', field: 'collections.profileStartHereLetterId' },
-        {
-          kind: 'eq',
-          field: 'collections.profileStartHereReason',
-          value: 'Reason left behind by an old selection',
-        },
-      ],
-    });
-    expect(resolveRepresentativeLetterIdMock).toHaveBeenNthCalledWith(
-      2,
+    expect(resolveRepresentativeLetterIdMock).toHaveBeenCalledWith(
       'curator-winner',
       {
         publishedOnly: true,
         collectionId: 'collection-9',
       },
     );
-    expect(updateMock).toHaveBeenCalledTimes(1);
+    expect(pickFeaturedLetterMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
   });
 
-  it('clears a stale reason when an invalid saved unit is replaced by an auto-pick', async () => {
+  it('returns a reasonless auto-pick for an invalid saved unit without persisting it', async () => {
     resolveRepresentativeLetterIdMock
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce('auto-letter');
     pickFeaturedLetterMock.mockResolvedValueOnce({ id: 'auto-letter' });
-    updateReturningMock.mockResolvedValueOnce([{
-      profileStartHereLetterId: 'auto-letter',
-      profileStartHereReason: null,
-    }]);
 
     const result = await resolveCollectionStartHere('collection-9', {
       letterId: 'stale-letter',
@@ -134,26 +124,7 @@ describe('collection featured-letter resolution', () => {
       letterId: 'auto-letter',
       reason: null,
     });
-    expect(updateSetMock).toHaveBeenCalledWith({
-      profileStartHereLetterId: 'auto-letter',
-      profileStartHereReason: null,
-    });
-    expect(updateWhereMock).toHaveBeenCalledWith({
-      kind: 'and',
-      clauses: [
-        { kind: 'eq', field: 'collections.id', value: 'collection-9' },
-        {
-          kind: 'eq',
-          field: 'collections.profileStartHereLetterId',
-          value: 'stale-letter',
-        },
-        {
-          kind: 'eq',
-          field: 'collections.profileStartHereReason',
-          value: 'Why the stale letter mattered',
-        },
-      ],
-    });
+    expect(updateMock).not.toHaveBeenCalled();
   });
 
   it('never falls back to an auto-pick that cannot resolve inside the collection', async () => {

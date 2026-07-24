@@ -4,19 +4,28 @@ import { invokeRouter } from '../../../test/express-test-utils.js';
 const {
   dbSelectMock,
   ensureBackgroundWorkerForQueuedProcessingMock,
-  fileExistsMock,
+  findObservedPageSourcesByIdentityMock,
+  unlinkMock,
+  notifyMock,
   processUploadedFileMock,
   uploadedFiles,
 } = vi.hoisted(() => ({
   dbSelectMock: vi.fn(),
   ensureBackgroundWorkerForQueuedProcessingMock: vi.fn(),
-  fileExistsMock: vi.fn(),
+  findObservedPageSourcesByIdentityMock: vi.fn(),
+  unlinkMock: vi.fn(),
+  notifyMock: vi.fn(),
   processUploadedFileMock: vi.fn(),
   uploadedFiles: [{
     path: '/tmp/letter-archive-upload-test.jpg',
     originalname: '003-19320706-L01-01.jpg',
     mimetype: 'image/jpeg',
   }],
+}));
+
+vi.mock('node:fs/promises', async (importOriginal) => ({
+  ...await importOriginal<typeof import('node:fs/promises')>(),
+  unlink: unlinkMock,
 }));
 
 vi.mock('multer', () => ({
@@ -51,30 +60,48 @@ vi.mock('../../../services/processing-queue.js', () => ({
 }));
 
 vi.mock('../../../services/notifications.js', () => ({
-  notify: vi.fn(),
+  notify: notifyMock,
 }));
 
-vi.mock('../../../services/storage.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../../services/storage.js')>();
+vi.mock('../../../services/letter-pages.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../services/letter-pages.js')>();
   return {
     ...actual,
-    fileExists: fileExistsMock,
+    findObservedPageSourcesByIdentity: findObservedPageSourcesByIdentityMock,
   };
 });
 
 import uploadsRouter from '../uploads.js';
+import { sourceRevisionChanged } from '../../../services/letter/source-revision.js';
+
+const sourceExpectation = {
+  pageId: 'page-1',
+  primarySourceRevision: 7,
+  storagePath: 'storage/current.jpg',
+  checksumSha256: 'checksum-current',
+};
 
 describe('admin uploads route integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    uploadedFiles.splice(0, uploadedFiles.length, {
+      path: '/tmp/letter-archive-upload-test.jpg',
+      originalname: '003-19320706-L01-01.jpg',
+      mimetype: 'image/jpeg',
+    });
+    unlinkMock.mockResolvedValue(undefined);
     ensureBackgroundWorkerForQueuedProcessingMock.mockResolvedValue(true);
     processUploadedFileMock.mockResolvedValue({
       letter: { id: 'letter-1' },
       page: { id: 'page-1' },
       collection: { collectionCode: '003' },
       storagePath: '003/19320706/003-19320706-L01-01.jpg',
+      primarySourceRevision: 8,
       alreadyExists: false,
+      outcome: 'created',
+      changed: true,
     });
+    findObservedPageSourcesByIdentityMock.mockResolvedValue(new Map());
   });
 
   it('injects requestId into manual validation errors', async () => {
@@ -97,7 +124,10 @@ describe('admin uploads route integration', () => {
   });
 
   it('checks only valid filenames and returns false for invalid ones', async () => {
-    fileExistsMock.mockResolvedValueOnce(true);
+    findObservedPageSourcesByIdentityMock.mockResolvedValueOnce(new Map([[
+      '003\u000019320706\u0000L\u00001\u00001',
+      sourceExpectation,
+    ]]));
 
     const response = await invokeRouter(uploadsRouter, {
       method: 'POST',
@@ -115,12 +145,18 @@ describe('admin uploads route integration', () => {
         '003-19320706-L01-01.jpg': true,
         'not-valid.jpg': false,
       },
+      sourceExpectations: {
+        '003-19320706-L01-01.jpg': sourceExpectation,
+        'not-valid.jpg': null,
+      },
     });
-    expect(fileExistsMock).toHaveBeenCalledTimes(1);
+    expect(findObservedPageSourcesByIdentityMock).toHaveBeenCalledTimes(1);
   });
 
   it('propagates internal failures through the error handler with request id', async () => {
-    fileExistsMock.mockRejectedValueOnce(new Error('disk offline'));
+    findObservedPageSourcesByIdentityMock.mockRejectedValueOnce(
+      new Error('database offline'),
+    );
 
     const response = await invokeRouter(uploadsRouter, {
       method: 'POST',
@@ -159,10 +195,64 @@ describe('admin uploads route integration', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.body).toMatchObject({ success: 1, failed: 0 });
+    expect(response.body).toMatchObject({
+      success: 1,
+      failed: 0,
+      results: [{
+        filename: '003-19320706-L01-01.jpg',
+        letterId: 'letter-1',
+        pageId: 'page-1',
+        collectionCode: '003',
+        storagePath: '003/19320706/003-19320706-L01-01.jpg',
+        primarySourceRevision: 8,
+        alreadyExists: false,
+        outcome: 'created',
+        changed: true,
+      }],
+      summary: {
+        accepted: 1,
+        failed: 0,
+        changed: 1,
+        unchanged: 0,
+        created: 1,
+        replaced: 0,
+        affectedLetters: 1,
+      },
+    });
     await vi.waitFor(() => {
       expect(ensureBackgroundWorkerForQueuedProcessingMock).toHaveBeenCalledWith('upload');
     });
+  });
+
+  it('does not notify, query settings, or wake for an unchanged-only batch', async () => {
+    processUploadedFileMock.mockResolvedValueOnce({
+      letter: { id: 'letter-1' },
+      page: { id: 'page-1' },
+      collection: { collectionCode: '003' },
+      storagePath: '003/19320706/003-19320706-L01-01.jpg',
+      primarySourceRevision: 8,
+      alreadyExists: true,
+      outcome: 'unchanged',
+      changed: false,
+    });
+
+    const response = await invokeRouter(uploadsRouter, {
+      method: 'POST',
+      url: '/uploads',
+      path: '/uploads',
+      headers: { 'content-type': 'multipart/form-data; boundary=test' },
+    });
+
+    expect(response.body).toMatchObject({
+      success: 1,
+      summary: {
+        changed: 0,
+        unchanged: 1,
+      },
+    });
+    expect(notifyMock).not.toHaveBeenCalled();
+    expect(dbSelectMock).not.toHaveBeenCalled();
+    expect(ensureBackgroundWorkerForQueuedProcessingMock).not.toHaveBeenCalled();
   });
 
   it('preserves the automatic-processing opt-out', async () => {
@@ -186,5 +276,100 @@ describe('admin uploads route integration', () => {
       expect(dbSelectMock).toHaveBeenCalledOnce();
     });
     expect(ensureBackgroundWorkerForQueuedProcessingMock).not.toHaveBeenCalled();
+  });
+
+  it('requires a duplicate-check expectation for force uploads', async () => {
+    const response = await invokeRouter(uploadsRouter, {
+      method: 'POST',
+      url: '/uploads?force=true',
+      path: '/uploads',
+      query: { force: 'true' },
+      body: {},
+      headers: { 'content-type': 'multipart/form-data; boundary=test' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body).toMatchObject({
+      error: expect.stringContaining('requires a duplicate-check source expectation'),
+    });
+    expect(processUploadedFileMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a multi-file force request and cleans every temporary file', async () => {
+    uploadedFiles.push({
+      path: '/tmp/letter-archive-upload-test-02.jpg',
+      originalname: '003-19320706-L01-02.jpg',
+      mimetype: 'image/jpeg',
+    });
+
+    const response = await invokeRouter(uploadsRouter, {
+      method: 'POST',
+      url: '/uploads?force=true',
+      path: '/uploads',
+      query: { force: 'true' },
+      body: {},
+      headers: { 'content-type': 'multipart/form-data; boundary=test' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body).toMatchObject({
+      error: 'Force replacement accepts exactly one file per request',
+    });
+    expect(unlinkMock).toHaveBeenCalledTimes(2);
+    expect(unlinkMock).toHaveBeenCalledWith(
+      '/tmp/letter-archive-upload-test.jpg',
+    );
+    expect(unlinkMock).toHaveBeenCalledWith(
+      '/tmp/letter-archive-upload-test-02.jpg',
+    );
+    expect(processUploadedFileMock).not.toHaveBeenCalled();
+  });
+
+  it('passes the exact per-file expectation into force replacement', async () => {
+    const response = await invokeRouter(uploadsRouter, {
+      method: 'POST',
+      url: '/uploads?force=true',
+      path: '/uploads',
+      query: { force: 'true' },
+      body: {
+        sourceExpectations: JSON.stringify({
+          '003-19320706-L01-01.jpg': sourceExpectation,
+        }),
+      },
+      headers: { 'content-type': 'multipart/form-data; boundary=test' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(processUploadedFileMock).toHaveBeenCalledWith(
+      '/tmp/letter-archive-upload-test.jpg',
+      '003-19320706-L01-01.jpg',
+      true,
+      sourceExpectation,
+    );
+  });
+
+  it('returns the shared source-conflict contract for a stale force confirmation', async () => {
+    processUploadedFileMock.mockRejectedValueOnce(sourceRevisionChanged(
+      'Page source changed after duplicate confirmation',
+    ));
+
+    const response = await invokeRouter(uploadsRouter, {
+      method: 'POST',
+      url: '/uploads?force=true',
+      path: '/uploads',
+      query: { force: 'true' },
+      body: {
+        sourceExpectations: JSON.stringify({
+          '003-19320706-L01-01.jpg': sourceExpectation,
+        }),
+      },
+      headers: { 'content-type': 'multipart/form-data; boundary=test' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({
+      code: 'SOURCE_REVISION_CHANGED',
+      error: expect.stringContaining('source changed'),
+    });
   });
 });

@@ -67,6 +67,7 @@ vi.mock('../../db/index.js', () => {
     },
     letters: {
       id: 'letters.id',
+      primarySourceRevision: 'letters.primarySourceRevision',
       sender: 'letters.sender',
       recipient: 'letters.recipient',
       metadataStatus: 'letters.metadataStatus',
@@ -94,6 +95,7 @@ describe('name propagation', () => {
   it('updates every editable metadata prose field and keeps direct quote text untouched', async () => {
     const existingLetter = {
       id: 'letter-1',
+      primarySourceRevision: 7,
       sender: 'Jimmie',
       recipient: 'Molly',
       hook: 'The sender begs Molly for more time.',
@@ -160,6 +162,7 @@ describe('name propagation', () => {
       newName: 'Jimmy Haller',
       observed: {
         value: 'Jimmie',
+        primarySourceRevision: 7,
         metadataRevision: 2,
         updatedAt: existingLetter.updatedAt,
       },
@@ -196,6 +199,7 @@ describe('name propagation', () => {
         clauses: [
           { kind: 'eq', field: 'letters.id', value: 'letter-1' },
           { kind: 'eq', field: 'letters.metadataRevision', value: 2 },
+          { kind: 'eq', field: 'letters.primarySourceRevision', value: 7 },
           { kind: 'eq', field: 'letters.sender', value: 'Jimmie' },
         ],
       },
@@ -219,6 +223,7 @@ describe('name propagation', () => {
       newName: 'Mary',
       observed: {
         value: 'Molly',
+        primarySourceRevision: 7,
         metadataRevision: 2,
         updatedAt: observedAt,
       },
@@ -230,6 +235,7 @@ describe('name propagation', () => {
   it('propagates through a legacy-only metadata document without inventing V2', async () => {
     const existingLetter = {
       id: 'letter-legacy',
+      primarySourceRevision: 7,
       sender: 'Jimmie',
       recipient: 'Molly',
       hook: 'The sender writes to Molly.',
@@ -268,6 +274,7 @@ describe('name propagation', () => {
       newName: 'Jimmy Haller',
       observed: {
         value: 'Jimmie',
+        primarySourceRevision: 7,
         metadataRevision: 2,
         updatedAt: existingLetter.updatedAt,
       },
@@ -286,6 +293,7 @@ describe('name propagation', () => {
   it('does not mutate lifecycle state for an exact same-value request', async () => {
     const letter = {
       id: 'letter-1',
+      primarySourceRevision: 7,
       sender: 'Jimmie',
       recipient: 'Molly',
       metadataRevision: 2,
@@ -300,6 +308,7 @@ describe('name propagation', () => {
       newName: letter.sender,
       observed: {
         value: letter.sender,
+        primarySourceRevision: 7,
         metadataRevision: letter.metadataRevision,
         updatedAt: letter.updatedAt,
       },
@@ -311,6 +320,7 @@ describe('name propagation', () => {
   it('guards the direct fallback with the observed revision and target value', async () => {
     const letter = {
       id: 'letter-1',
+      primarySourceRevision: 7,
       sender: 'Jimmie',
       recipient: 'Molly',
       metadataRevision: 4,
@@ -343,6 +353,7 @@ describe('name propagation', () => {
       clauses: [
         { kind: 'eq', field: 'letters.id', value: letter.id },
         { kind: 'eq', field: 'letters.metadataRevision', value: 4 },
+        { kind: 'eq', field: 'letters.primarySourceRevision', value: 7 },
         { kind: 'eq', field: 'letters.sender', value: 'Jimmie' },
       ],
     });
@@ -351,6 +362,7 @@ describe('name propagation', () => {
   it('returns a 409 when the direct fallback CAS loses', async () => {
     const letter = {
       id: 'letter-1',
+      primarySourceRevision: 7,
       sender: null,
       recipient: 'Molly',
       metadataRevision: 4,

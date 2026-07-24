@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db, collections, type Collection } from '../db/index.js';
 import { resolveRepresentativeLetterId } from './letters.js';
 import { pickFeaturedLetter } from './pick-featured-letter.js';
@@ -23,9 +23,18 @@ export async function findOrCreateCollection(collectionCode: string): Promise<Co
       collectionCode,
       title: `Collection ${collectionCode}`,
     })
+    .onConflictDoNothing({ target: collections.collectionCode })
     .returning();
 
-  return created;
+  if (created) return created;
+
+  const winner = await db.query.collections.findFirst({
+    where: eq(collections.collectionCode, collectionCode),
+  });
+  if (!winner) {
+    throw new Error(`Collection ${collectionCode} conflicted but could not be reloaded`);
+  }
+  return winner;
 }
 
 /**
@@ -61,9 +70,9 @@ export interface CollectionStartHereSnapshot {
 }
 
 /**
- * Resolve and repair a collection's start-here selection as one coherent
- * snapshot. The letter ID and its explanation share the same CAS boundary, so
- * a concurrent curator update can never return a winner ID with an old reason.
+ * Resolve a collection's start-here selection without mutating profile state.
+ * GET callers may validate or derive a display fallback, but only the guarded
+ * profile mutation route owns persistence and profile revision changes.
  */
 export async function resolveCollectionStartHere(
   collectionId: string,
@@ -72,98 +81,38 @@ export async function resolveCollectionStartHere(
     reason: string | null | undefined;
   },
 ): Promise<CollectionStartHereSnapshot> {
-  const resolveCandidate = async (
-    observed: CollectionStartHereSnapshot,
-  ): Promise<CollectionStartHereSnapshot> => {
-    if (observed.letterId) {
-      const resolvedCurrentId = await resolveRepresentativeLetterId(observed.letterId, {
+  if (current.letterId) {
+    const resolvedCurrentId = await resolveRepresentativeLetterId(
+      current.letterId,
+      {
         publishedOnly: true,
         collectionId,
-      });
-      if (resolvedCurrentId) {
-        return {
-          letterId: resolvedCurrentId,
-          reason: observed.reason,
-        };
-      }
-    }
-
-    const autoPick = await pickFeaturedLetter(collectionId);
-    if (!autoPick?.id) {
-      return {
-        letterId: null,
-        reason: null,
-      };
-    }
-
-    const autoLetterId = await resolveRepresentativeLetterId(autoPick.id, {
-      publishedOnly: true,
-      collectionId,
-    });
-    return {
-      letterId: autoLetterId,
-      // An explanation belongs to one selection. Auto-picking a different
-      // unit must not inherit the explanation for the stale saved unit.
-      reason: null,
-    };
-  };
-
-  let observed: CollectionStartHereSnapshot = {
-    letterId: current.letterId ?? null,
-    reason: current.reason ?? null,
-  };
-
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const resolved = await resolveCandidate(observed);
-    if (
-      resolved.letterId === observed.letterId
-      && resolved.reason === observed.reason
-    ) {
-      return resolved;
-    }
-
-    const observedIdCondition = observed.letterId === null
-      ? isNull(collections.profileStartHereLetterId)
-      : eq(collections.profileStartHereLetterId, observed.letterId);
-    const observedReasonCondition = observed.reason === null
-      ? isNull(collections.profileStartHereReason)
-      : eq(collections.profileStartHereReason, observed.reason);
-    const updated = await db
-      .update(collections)
-      .set({
-        profileStartHereLetterId: resolved.letterId,
-        profileStartHereReason: resolved.reason,
-      })
-      .where(and(
-        eq(collections.id, collectionId),
-        observedIdCondition,
-        observedReasonCondition,
-      ))
-      .returning({
-        profileStartHereLetterId: collections.profileStartHereLetterId,
-        profileStartHereReason: collections.profileStartHereReason,
-      });
-
-    if (updated.length > 0) return resolved;
-
-    const winner = await db.query.collections.findFirst({
-      where: eq(collections.id, collectionId),
-      columns: {
-        profileStartHereLetterId: true,
-        profileStartHereReason: true,
       },
-    });
-    if (!winner) {
+    );
+    if (resolvedCurrentId) {
       return {
-        letterId: null,
-        reason: null,
+        letterId: resolvedCurrentId,
+        reason: current.reason ?? null,
       };
     }
-    observed = {
-      letterId: winner.profileStartHereLetterId ?? null,
-      reason: winner.profileStartHereReason ?? null,
+  }
+
+  const autoPick = await pickFeaturedLetter(collectionId);
+  if (!autoPick?.id) {
+    return {
+      letterId: null,
+      reason: null,
     };
   }
 
-  return resolveCandidate(observed);
+  const autoLetterId = await resolveRepresentativeLetterId(autoPick.id, {
+    publishedOnly: true,
+    collectionId,
+  });
+  return {
+    letterId: autoLetterId,
+    // An explanation belongs to one selection. A display fallback must not
+    // inherit the explanation for a stale saved unit.
+    reason: null,
+  };
 }

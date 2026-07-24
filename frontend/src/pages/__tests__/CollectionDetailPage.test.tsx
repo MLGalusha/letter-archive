@@ -13,7 +13,6 @@ beforeAll(() => {
       readonly root: Element | null = null;
       readonly rootMargin: string = "";
       readonly thresholds: ReadonlyArray<number> = [];
-      constructor(_cb: IntersectionObserverCallback, _opts?: IntersectionObserverInit) {}
       observe() {}
       unobserve() {}
       disconnect() {}
@@ -79,6 +78,7 @@ function createLetter(
     id,
     title: id,
     collectionCode: "009",
+    primarySourceRevision: 0,
     images: [{ id: `image-${id}`, type: "letter", imageUrl: `/images/${id}` }],
     transcript: {
       pages: [],

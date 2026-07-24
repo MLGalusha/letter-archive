@@ -59,6 +59,7 @@ export interface FrontendLetterImage {
   pageNumber?: number;
   imageUrl: string;
   originalFilename?: string;
+  sourceChecksum?: string;
   width?: number;
   height?: number;
   lineSegments?: FrontendLineSegment[];
@@ -177,6 +178,7 @@ export interface FrontendLetter {
   visibility: VisibilityState;
   transcriptPublished: boolean;
   metadataPublished: boolean;
+  primarySourceRevision: number;
   // Two-track content status system
   transcriptStatus: ContentStatus;
   metadataContentStatus: ContentStatus;
@@ -469,6 +471,7 @@ export function transformLetterToDTO(letter: LetterWithRelations): FrontendLette
       pageNumber: page.pageNumber,
       imageUrl: `/images/${page.id}${page.checksumSha256 ? `?v=${page.checksumSha256.slice(0, 8)}` : ''}`,
       originalFilename: page.originalFilename,
+      sourceChecksum: page.checksumSha256 ?? undefined,
       width: page.width ?? undefined,
       height: page.height ?? undefined,
       lineSegments: Array.isArray(page.lineSegments)
@@ -519,6 +522,7 @@ export function transformLetterToDTO(letter: LetterWithRelations): FrontendLette
     visibility: letter.visibility,
     transcriptPublished: letter.transcriptPublished,
     metadataPublished: letter.metadataPublished,
+    primarySourceRevision: letter.primarySourceRevision,
     // Two-track content status
     transcriptStatus: letter.transcriptStatus,
     metadataContentStatus: letter.metadataContentStatus,

@@ -32,6 +32,7 @@ vi.mock('../../db/index.js', () => ({
     transcriptionStatus: 'letters.transcriptionStatus',
     transcriptionText: 'letters.transcriptionText',
     transcriptConfirmedAt: 'letters.transcriptConfirmedAt',
+    primarySourceRevision: 'letters.primarySourceRevision',
     extraContentTranscript: 'letters.extraContentTranscript',
     extraContentJobStatus: 'letters.extraContentJobStatus',
     extraContentJobRunId: 'letters.extraContentJobRunId',
@@ -84,6 +85,7 @@ interface MetadataRow {
   transcriptionText: string | null;
   transcriptConfirmedAt: Date | null;
   transcriptConfirmedBy: string | null;
+  primarySourceRevision: number;
   extraContentTranscript: string | null;
   extraContentJobStatus: Status;
   extraContentJobRunId: string | null;
@@ -240,6 +242,7 @@ describe('metadata job lifecycle', () => {
       transcriptionText: 'Dear Bob',
       transcriptConfirmedAt: new Date('2026-07-17T12:00:00.000Z'),
       transcriptConfirmedBy: 'admin',
+      primarySourceRevision: 7,
       extraContentTranscript: null,
       extraContentJobStatus: 'SUCCESS',
       extraContentJobRunId: null,
@@ -335,7 +338,7 @@ describe('metadata job lifecycle', () => {
     randomUUIDMock.mockReturnValue('run-b');
 
     await expect(
-      claimRequestedMetadata(row.id, observeMetadataState(row)),
+      claimRequestedMetadata(row.id, observeMetadataState(row), row.primarySourceRevision),
     ).resolves.toEqual({ runId: 'run-b', revision: 0 });
     expect(row).toMatchObject({
       workflow: 'METADATA_EXTRACTING',
@@ -361,14 +364,26 @@ describe('metadata job lifecycle', () => {
     await expect(claimQueuedMetadata(row.id, stale)).resolves.toBeNull();
 
     row.type = 'P';
-    await expect(claimRequestedMetadata(row.id, observeMetadataState(row))).resolves.toBeNull();
+    await expect(claimRequestedMetadata(
+      row.id,
+      observeMetadataState(row),
+      row.primarySourceRevision,
+    )).resolves.toBeNull();
     row.type = 'L';
     row.transcriptionText = null;
-    await expect(claimRequestedMetadata(row.id, observeMetadataState(row))).resolves.toBeNull();
+    await expect(claimRequestedMetadata(
+      row.id,
+      observeMetadataState(row),
+      row.primarySourceRevision,
+    )).resolves.toBeNull();
     row.transcriptionText = 'Dear Bob';
     row.transcriptConfirmedAt = null;
     await expect(claimQueuedMetadata(row.id, observeMetadataState(row))).resolves.toBeNull();
-    await expect(claimRequestedMetadata(row.id, observeMetadataState(row))).resolves.toBeNull();
+    await expect(claimRequestedMetadata(
+      row.id,
+      observeMetadataState(row),
+      row.primarySourceRevision,
+    )).resolves.toBeNull();
     row.transcriptConfirmedAt = new Date('2026-07-17T12:00:00.000Z');
     row.entityExtractionStatus = 'RUNNING';
     await expect(claimQueuedMetadata(row.id, observeMetadataState(row))).resolves.toBeNull();
@@ -391,6 +406,7 @@ describe('metadata job lifecycle', () => {
       claimMetadataAfterTranscriptConfirmation(
         row.id,
         observeMetadataState(row),
+        7,
         'reviewer-1',
       ),
     ).resolves.toEqual({ runId: 'run-a', revision: 0 });
@@ -408,6 +424,28 @@ describe('metadata job lifecycle', () => {
       entityExtractionLeaseRunId: null,
       entityExtractionClaimKind: null,
       deadLetter: false,
+    });
+  });
+
+  it('does not confirm or claim metadata from a stale page-source epoch', async () => {
+    row.transcriptConfirmedAt = null;
+    row.transcriptConfirmedBy = null;
+
+    await expect(
+      claimMetadataAfterTranscriptConfirmation(
+        row.id,
+        observeMetadataState(row),
+        6,
+        'reviewer-1',
+      ),
+    ).resolves.toBeNull();
+
+    expect(row).toMatchObject({
+      transcriptConfirmedAt: null,
+      transcriptConfirmedBy: null,
+      workflow: 'TRANSCRIBED',
+      metadataStatus: 'PENDING',
+      metadataRunId: null,
     });
   });
 
@@ -476,7 +514,11 @@ describe('metadata job lifecycle', () => {
     row.metadataContentStatus = 'VERIFIED';
     row.workflow = 'REVIEWED';
     randomUUIDMock.mockReturnValue('run-b');
-    await claimRequestedMetadata(row.id, observeMetadataState(row));
+    await claimRequestedMetadata(
+      row.id,
+      observeMetadataState(row),
+      row.primarySourceRevision,
+    );
     await expect(cancelMetadataAttempt(row.id, 'run-a')).resolves.toBe(false);
     expect(row.metadataRunId).toBe('run-b');
     await expect(cancelMetadataAttempt(row.id, 'run-b')).resolves.toBe(true);
@@ -568,13 +610,25 @@ describe('metadata job lifecycle', () => {
   });
 
   it('revokes the complete entity owner when its metadata source changes', () => {
-    expect(buildMetadataSourceInvalidationPatch()).toMatchObject({
+    const patch = buildMetadataSourceInvalidationPatch();
+    expect(patch).toMatchObject({
       entityExtractionRunId: null,
       entityExtractionRunRevision: null,
       entityExtractionLeaseExpiresAt: null,
       entityExtractionLeaseRunId: null,
       entityExtractionClaimKind: null,
     });
+    expect(patch.workflow).toMatchObject({
+      kind: 'sql',
+      values: expect.arrayContaining([
+        'letters.transcriptionStatus',
+        'letters.transcriptionText',
+        'letters.workflow',
+      ]),
+    });
+    expect((patch.workflow as unknown as { strings: string[] }).strings.join('')).toContain(
+      "= 'SUCCESS'",
+    );
   });
 
   it('does not let unrelated updated-at changes interfere with an exact source claim', async () => {
@@ -646,7 +700,11 @@ describe('metadata job lifecycle', () => {
     row.metadataContentStatus = 'VERIFIED';
     row.sender = 'Committed sender';
     randomUUIDMock.mockReturnValue('run-b');
-    const requested = await claimRequestedMetadata(row.id, observeMetadataState(row));
+    const requested = await claimRequestedMetadata(
+      row.id,
+      observeMetadataState(row),
+      row.primarySourceRevision,
+    );
     expect(requested).toEqual({ runId: 'run-b', revision: 1 });
     databaseTime = new Date('2026-07-17T12:12:00.000Z');
 

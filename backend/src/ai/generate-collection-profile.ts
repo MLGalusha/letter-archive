@@ -11,6 +11,7 @@ import { db, letters, collections } from '../db/index.js';
 import { logApiUsage } from '../services/usage-tracking.js';
 import { createLogger } from '../utils/logger.js';
 import { notify } from '../services/notifications.js';
+import { computeCollectionProfileSourceFingerprint } from '../services/collection-profile-source.js';
 
 const log = createLogger({ module: 'generate-collection-profile' });
 
@@ -27,12 +28,18 @@ export interface ProfileCorrespondent {
 }
 
 export interface CollectionProfileResult {
+  sourceFingerprint: string;
   hook: string;
   narrative: string;
   correspondents: ProfileCorrespondent[];
   isStub: boolean;
   usage?: { inputTokens: number; outputTokens: number };
 }
+
+type GeneratedCollectionProfile = Omit<
+  CollectionProfileResult,
+  'sourceFingerprint'
+>;
 
 export interface CompletenessResult {
   totalLetters: number;
@@ -59,6 +66,7 @@ export async function assessCollectionCompleteness(collectionId: string): Promis
       sender: true,
       recipient: true,
       summary: true,
+      metadataPublished: true,
       emotionalTone: true,
       primaryTopics: true,
       type: true,
@@ -68,9 +76,13 @@ export async function assessCollectionCompleteness(collectionId: string): Promis
   const published = allLetters.filter(l => l.visibility === 'PUBLISHED');
   const typeL = published.filter(l => l.type === 'L');
   const withTranscripts = typeL.filter(l => l.transcriptionText);
-  const withMetadata = typeL.filter(l => l.sender || l.recipient || l.summary);
-  const withTone = typeL.filter(l => l.emotionalTone);
-  const withTopics = typeL.filter(l => l.primaryTopics && l.primaryTopics.length > 0);
+  const withMetadata = typeL.filter(
+    l => l.metadataPublished && (l.sender || l.recipient || l.summary),
+  );
+  const withTone = typeL.filter(l => l.metadataPublished && l.emotionalTone);
+  const withTopics = typeL.filter(
+    l => l.metadataPublished && l.primaryTopics && l.primaryTopics.length > 0,
+  );
 
   const warnings: string[] = [];
   const denominator = typeL.length || 1;
@@ -171,13 +183,45 @@ function extractPersonEntity(
 export async function generateCollectionProfile(collectionId: string): Promise<CollectionProfileResult> {
   const start = Date.now();
 
-  const collection = await db.query.collections.findFirst({
-    where: eq(collections.id, collectionId),
+  const source = await db.transaction(async (tx) => {
+    const collection = await tx.query.collections.findFirst({
+      where: eq(collections.id, collectionId),
+    });
+    if (!collection) return null;
+
+    const collectionLetters = await tx.query.letters.findMany({
+      where: and(
+        eq(letters.collectionId, collectionId),
+        eq(letters.type, 'L'),
+        eq(letters.visibility, 'PUBLISHED'),
+        eq(letters.metadataPublished, true),
+      ),
+      orderBy: [asc(letters.letterDate), asc(letters.dateRaw), asc(letters.id)],
+      columns: {
+        id: true,
+        letterDate: true,
+        dateRaw: true,
+        sender: true,
+        recipient: true,
+        summary: true,
+        hook: true,
+        entityExtractionJson: true,
+      },
+    });
+    const sourceFingerprint =
+      await computeCollectionProfileSourceFingerprint(collectionId, tx);
+    if (!sourceFingerprint) return null;
+
+    return { collection, collectionLetters, sourceFingerprint };
+  }, {
+    isolationLevel: 'repeatable read',
+    accessMode: 'read only',
   });
 
-  if (!collection) {
+  if (!source) {
     throw new Error(`Collection not found: ${collectionId}`);
   }
+  const { collection, collectionLetters, sourceFingerprint } = source;
 
   void notify({
     type: 'collection_profile_started',
@@ -188,29 +232,7 @@ export async function generateCollectionProfile(collectionId: string): Promise<C
     metadata: { collectionCode: collection.collectionCode },
   });
 
-  // Gather published letters with metadata and entity extraction
-  const collectionLetters = await db.query.letters.findMany({
-    where: and(
-      eq(letters.collectionId, collectionId),
-      eq(letters.visibility, 'PUBLISHED'),
-    ),
-    orderBy: [asc(letters.letterDate), asc(letters.dateRaw)],
-    columns: {
-      id: true,
-      letterDate: true,
-      dateRaw: true,
-      sender: true,
-      recipient: true,
-      summary: true,
-      hook: true,
-      type: true,
-      entityExtractionJson: true,
-    },
-  });
-
-  // Only include type='L' letters
   const letterInputs: CollectionProfileLetterInput[] = collectionLetters
-    .filter(l => l.type === 'L')
     .map(l => ({
       id: l.id,
       date: l.letterDate || l.dateRaw,
@@ -225,6 +247,7 @@ export async function generateCollectionProfile(collectionId: string): Promise<C
   if (letterInputs.length === 0) {
     log.warn({ collectionId }, 'No published letters with content for profile generation');
     return {
+      sourceFingerprint,
       hook: '',
       narrative: '',
       correspondents: [],
@@ -235,10 +258,16 @@ export async function generateCollectionProfile(collectionId: string): Promise<C
   // Generate
   if (!hasOpenAI || !openai) {
     log.debug({ collectionId }, 'Using stub profile (no API key)');
-    return generateStubProfile(letterInputs);
+    return {
+      ...generateStubProfile(letterInputs),
+      sourceFingerprint,
+    };
   }
 
-  return callOpenAIForProfile(collection, letterInputs, start);
+  return {
+    ...await callOpenAIForProfile(collection, letterInputs, start),
+    sourceFingerprint,
+  };
 }
 
 // ============================================================================
@@ -249,7 +278,7 @@ async function callOpenAIForProfile(
   collection: { id: string; title: string | null; description: string | null; collectionCode: string },
   letterInputs: CollectionProfileLetterInput[],
   startTime: number,
-): Promise<CollectionProfileResult> {
+): Promise<GeneratedCollectionProfile> {
   const collectionId = collection.id;
 
   log.info(
@@ -308,7 +337,7 @@ async function callOpenAIForProfile(
           }))
       : [];
 
-    const result: CollectionProfileResult = {
+    const result: GeneratedCollectionProfile = {
       hook: typeof parsed.hook === 'string' ? parsed.hook : '',
       narrative: typeof parsed.narrative === 'string' ? parsed.narrative : '',
       correspondents,
@@ -376,7 +405,9 @@ async function callOpenAIForProfile(
 // STUB
 // ============================================================================
 
-function generateStubProfile(letterInputs: CollectionProfileLetterInput[]): CollectionProfileResult {
+function generateStubProfile(
+  letterInputs: CollectionProfileLetterInput[],
+): GeneratedCollectionProfile {
   const senders = new Set(letterInputs.map(l => l.sender).filter(Boolean));
   const recipients = new Set(letterInputs.map(l => l.recipient).filter(Boolean));
   const allNames = [...senders, ...recipients].slice(0, 3).join(', ');

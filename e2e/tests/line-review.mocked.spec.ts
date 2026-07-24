@@ -29,7 +29,9 @@ async function openLineReview(
     await page.locator('.viewer-image').click();
   }
   await page.locator('.line-review-mode').waitFor({ state: 'visible' });
-  await page.locator('.line-review-input-overlay').waitFor({ state: 'visible' });
+  await page.locator(
+    hasStoredSegments ? '.seg-editor-actions' : '.line-review-input-overlay',
+  ).waitFor({ state: 'visible' });
   return mockedApi;
 }
 
@@ -94,6 +96,48 @@ test.describe('@mocked Line Review', () => {
     await page.locator('.line-review-mode').waitFor({ state: 'visible' });
 
     await expect(page.locator('.line-review-analyzing')).toContainText('No line segments');
+  });
+
+  test('sends the complete source snapshot when verifying stored segments', async ({
+    page,
+  }) => {
+    const initialLetter = createLetterWithStoredLineSegments();
+    const mockedApi = await openLineReview(page, initialLetter);
+
+    await page.locator('.segment-editor-rect').first().dispatchEvent(
+      'pointerdown',
+      { pointerId: 1 },
+    );
+    await page.locator(
+      '.segment-editor-toolbar-btn[data-hint="Delete (Del)"]',
+    ).click();
+    await page.locator('.seg-editor-verify-btn').click();
+    await expect
+      .poll(() => mockedApi.letterSegmentTrustRequests.length)
+      .toBe(1);
+
+    expect(mockedApi.saveLineSegmentRequests).toEqual([
+      {
+        url: `${API_BASE_URL}/admin/letters/pages/${initialLetter.images[0].id}/line-segments`,
+        pageId: initialLetter.images[0].id,
+        body: expect.objectContaining({
+          lineSegments: expect.any(Array),
+          primarySourceRevision: 4,
+          sourceChecksum: initialLetter.images[0].sourceChecksum,
+        }),
+      },
+    ]);
+    expect(mockedApi.letterSegmentTrustRequests[0]).toEqual({
+      url: `${API_BASE_URL}/admin/letters/${initialLetter.id}/segment-trust`,
+      body: {
+        trustState: 'trusted',
+        primarySourceRevision: 4,
+        pages: initialLetter.images.map((image) => ({
+          pageId: image.id,
+          sourceChecksum: image.sourceChecksum,
+        })),
+      },
+    });
   });
 
   test('saves edited transcript text and records a transcript version on exit', async ({

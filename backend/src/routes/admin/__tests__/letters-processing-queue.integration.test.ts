@@ -18,7 +18,8 @@ const {
   clearQueueMock,
   retryJobMock,
   cancelActiveJobMock,
-  queueJobTypeParseMock,
+  processingJobActionParseMock,
+  clearProcessingQueueSnapshotParseMock,
 } = vi.hoisted(() => ({
   findFirstMock: vi.fn(),
   dbInsertMock: vi.fn(),
@@ -36,7 +37,8 @@ const {
   clearQueueMock: vi.fn(),
   retryJobMock: vi.fn(),
   cancelActiveJobMock: vi.fn(),
-  queueJobTypeParseMock: vi.fn(),
+  processingJobActionParseMock: vi.fn(),
+  clearProcessingQueueSnapshotParseMock: vi.fn(),
 }));
 
 vi.mock('drizzle-orm', () => ({
@@ -114,6 +116,10 @@ vi.mock('../../../services/storage.js', () => ({
   getAbsoluteStoragePath: vi.fn(),
 }));
 
+vi.mock('../../../services/letter/correspondence-deletion.js', () => ({
+  deleteCorrespondenceGroup: vi.fn(),
+}));
+
 vi.mock('../../../services/letters.js', () => ({
   getLetterById: getLetterByIdMock,
   resetLetterForProcessing: resetLetterForProcessingMock,
@@ -139,7 +145,10 @@ vi.mock('../../../services/processing-queue.js', () => ({
   clearQueue: clearQueueMock,
   retryJob: retryJobMock,
   cancelActiveJob: cancelActiveJobMock,
-  queueJobTypeSchema: { parse: queueJobTypeParseMock },
+  processingJobActionSchema: { parse: processingJobActionParseMock },
+  clearProcessingQueueSnapshotSchema: {
+    parse: clearProcessingQueueSnapshotParseMock,
+  },
 }));
 
 vi.mock('../../../services/letter-operations.js', () => ({
@@ -173,6 +182,12 @@ vi.mock('../../../services/letter-operations.js', () => ({
   addLinkedPlace: vi.fn(),
   removeLinkedPerson: vi.fn(),
   removeLinkedPlace: vi.fn(),
+}));
+vi.mock('../../../services/letter/ai-notes.js', () => ({
+  addAiNote: vi.fn(),
+  resolveAiNotesForChangedFields: vi.fn(() => null),
+  updateAiNotes: vi.fn(),
+  updateAiNoteStatus: vi.fn(),
 }));
 
 import lettersRouter from '../letters.js';
@@ -210,7 +225,8 @@ function createQueueStatus() {
 describe('admin letters processing queue integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    queueJobTypeParseMock.mockImplementation((value) => value);
+    processingJobActionParseMock.mockImplementation((value) => value);
+    clearProcessingQueueSnapshotParseMock.mockImplementation((value) => value);
     requestBackgroundWorkerRunMock.mockResolvedValue(false);
   });
 
@@ -249,7 +265,9 @@ describe('admin letters processing queue integration', () => {
   });
 
   it('rejects cancel requests that do not include a letter id', async () => {
-    queueJobTypeParseMock.mockReturnValue('transcription');
+    processingJobActionParseMock.mockImplementationOnce(() => {
+      throw Object.assign(new Error('letterId required'), { statusCode: 400 });
+    });
 
     const response = await invokeRouter(lettersRouter, {
       method: 'POST',
@@ -268,7 +286,6 @@ describe('admin letters processing queue integration', () => {
   });
 
   it('forwards extra-content cancellation through the durable queue route', async () => {
-    queueJobTypeParseMock.mockReturnValue('extra_content');
     cancelActiveJobMock.mockResolvedValue({ message: 'Job cancelled' });
 
     const response = await invokeRouter(lettersRouter, {
@@ -279,17 +296,30 @@ describe('admin letters processing queue integration', () => {
       body: {
         letterId: 'letter-extra',
         type: 'extra_content',
+        primarySourceRevision: 7,
+        jobStateToken: 'v1.active-extra',
       },
     });
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toEqual({ message: 'Job cancelled' });
-    expect(queueJobTypeParseMock).toHaveBeenCalledWith('extra_content');
-    expect(cancelActiveJobMock).toHaveBeenCalledWith('letter-extra', 'extra_content');
+    expect(processingJobActionParseMock).toHaveBeenCalledWith({
+      letterId: 'letter-extra',
+      type: 'extra_content',
+      primarySourceRevision: 7,
+      jobStateToken: 'v1.active-extra',
+    });
+    expect(cancelActiveJobMock).toHaveBeenCalledWith(
+      'letter-extra',
+      'extra_content',
+      {
+        primarySourceRevision: 7,
+        jobStateToken: 'v1.active-extra',
+      },
+    );
   });
 
   it('removes a queued job after parsing the queue job type', async () => {
-    queueJobTypeParseMock.mockReturnValue('extra_content');
     removeFromQueueMock.mockResolvedValue({ message: 'Removed from queue' });
 
     const response = await invokeRouter(lettersRouter, {
@@ -300,20 +330,35 @@ describe('admin letters processing queue integration', () => {
       body: {
         letterId: 'letter-3',
         type: 'extra_content',
+        primarySourceRevision: 8,
+        jobStateToken: 'v1.queued-extra',
       },
     });
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toEqual({ message: 'Removed from queue' });
-    expect(queueJobTypeParseMock).toHaveBeenCalledWith('extra_content');
-    expect(removeFromQueueMock).toHaveBeenCalledWith('letter-3', 'extra_content');
+    expect(removeFromQueueMock).toHaveBeenCalledWith(
+      'letter-3',
+      'extra_content',
+      {
+        primarySourceRevision: 8,
+        jobStateToken: 'v1.queued-extra',
+      },
+    );
   });
 
-  it('clears an entire queue after validating the job type', async () => {
-    queueJobTypeParseMock.mockReturnValue('extra_content');
+  it('clears only the displayed queue snapshot', async () => {
+    const items = [{
+      letterId: 'letter-extra',
+      primarySourceRevision: 8,
+      jobStateToken: 'v1.queued-extra',
+    }];
     clearQueueMock.mockResolvedValue({
-      message: 'Cleared extra content queue',
-      cleared: 4,
+      message: 'Cleared 1 of 1 displayed extra_content queue items',
+      requested: 1,
+      cleared: 1,
+      skipped: 0,
+      skipReasons: [],
     });
 
     const response = await invokeRouter(lettersRouter, {
@@ -323,19 +368,22 @@ describe('admin letters processing queue integration', () => {
       headers: { accept: 'application/json' },
       body: {
         type: 'extra_content',
+        items,
       },
     });
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toEqual({
-      message: 'Cleared extra content queue',
-      cleared: 4,
+      message: 'Cleared 1 of 1 displayed extra_content queue items',
+      requested: 1,
+      cleared: 1,
+      skipped: 0,
+      skipReasons: [],
     });
-    expect(clearQueueMock).toHaveBeenCalledWith('extra_content');
+    expect(clearQueueMock).toHaveBeenCalledWith('extra_content', items);
   });
 
   it('retries a failed job after validating the job type', async () => {
-    queueJobTypeParseMock.mockReturnValue('extra_content');
     retryJobMock.mockResolvedValue({ message: 'Retrying extra_content for letter letter-7' });
 
     const response = await invokeRouter(lettersRouter, {
@@ -346,6 +394,8 @@ describe('admin letters processing queue integration', () => {
       body: {
         letterId: 'letter-7',
         type: 'extra_content',
+        primarySourceRevision: 9,
+        jobStateToken: 'v1.failed-extra',
       },
     });
 
@@ -353,11 +403,21 @@ describe('admin letters processing queue integration', () => {
     expect(response.body).toEqual({
       message: 'Retrying extra_content for letter letter-7',
     });
-    expect(retryJobMock).toHaveBeenCalledWith('letter-7', 'extra_content');
+    expect(retryJobMock).toHaveBeenCalledWith(
+      'letter-7',
+      'extra_content',
+      {
+        primarySourceRevision: 9,
+        jobStateToken: 'v1.failed-extra',
+      },
+    );
   });
 
   it('re-enqueues an existing letter for processing', async () => {
-    getLetterByIdMock.mockResolvedValue({ id: 'letter-8' });
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-8',
+      primarySourceRevision: 4,
+    });
     resetLetterForProcessingMock.mockResolvedValue(true);
 
     const response = await invokeRouter(lettersRouter, {
@@ -365,6 +425,7 @@ describe('admin letters processing queue integration', () => {
       url: '/letters/letter-8/process',
       path: '/letters/letter-8/process',
       headers: { accept: 'application/json' },
+      body: { primarySourceRevision: 4 },
     });
 
     expect(response.statusCode).toBe(200);
@@ -373,12 +434,15 @@ describe('admin letters processing queue integration', () => {
       letterId: 'letter-8',
     });
     expect(getLetterByIdMock).toHaveBeenCalledWith('letter-8');
-    expect(resetLetterForProcessingMock).toHaveBeenCalledWith('letter-8');
+    expect(resetLetterForProcessingMock).toHaveBeenCalledWith('letter-8', 4);
     expect(requestBackgroundWorkerRunMock).toHaveBeenCalledWith('letter:process');
   });
 
   it('does not re-enqueue a letter when an active job wins the reset race', async () => {
-    getLetterByIdMock.mockResolvedValue({ id: 'letter-8' });
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-8',
+      primarySourceRevision: 4,
+    });
     resetLetterForProcessingMock.mockResolvedValue(false);
 
     const response = await invokeRouter(lettersRouter, {
@@ -386,9 +450,33 @@ describe('admin letters processing queue integration', () => {
       url: '/letters/letter-8/process',
       path: '/letters/letter-8/process',
       headers: { accept: 'application/json' },
+      body: { primarySourceRevision: 4 },
     });
 
     expect(response.statusCode).toBe(409);
+    expect(requestBackgroundWorkerRunMock).not.toHaveBeenCalled();
+  });
+
+  it('returns the stable source-conflict code when the page epoch changes during reset', async () => {
+    getLetterByIdMock
+      .mockResolvedValueOnce({ id: 'letter-8', primarySourceRevision: 4 })
+      .mockResolvedValueOnce({ id: 'letter-8', primarySourceRevision: 5 });
+    resetLetterForProcessingMock.mockResolvedValue(false);
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'POST',
+      url: '/letters/letter-8/process',
+      path: '/letters/letter-8/process',
+      headers: { accept: 'application/json' },
+      body: { primarySourceRevision: 4 },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({
+      error: 'Letter source changed; reload before reprocessing',
+      code: 'SOURCE_REVISION_CHANGED',
+      requestId: expect.any(String),
+    });
     expect(requestBackgroundWorkerRunMock).not.toHaveBeenCalled();
   });
 
@@ -400,6 +488,7 @@ describe('admin letters processing queue integration', () => {
       url: '/letters/missing-letter/process',
       path: '/letters/missing-letter/process',
       headers: { accept: 'application/json' },
+      body: { primarySourceRevision: 4 },
     });
 
     expect(response.statusCode).toBe(404);

@@ -290,6 +290,16 @@ describe('entity extraction commit boundary', () => {
       'personRelationships',
       'entityReviewQueue',
     ]);
+    for (const row of deletedRows.slice(0, 3)) {
+      expect(row.condition).toEqual(expect.objectContaining({
+        kind: 'and',
+        clauses: expect.arrayContaining([{
+          kind: 'gt',
+          field: `${row.table}.entityExtractionRevision`,
+          value: 0,
+        }]),
+      }));
+    }
     expect(deletedRows.at(-1)?.condition).toEqual({
       kind: 'and',
       clauses: [

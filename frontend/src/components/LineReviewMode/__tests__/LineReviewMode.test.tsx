@@ -2,12 +2,14 @@
 
 import { createRef } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
-import LineReviewMode, {
-  computeAutoScrollTop,
-  type LineReviewModeHandle,
-} from '../LineReviewMode';
-import { getPageLineSegments } from '../../../api/admin/letters';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import LineReviewMode, { type LineReviewModeHandle } from '../LineReviewMode';
+import { computeAutoScrollTop } from '../lineReviewUtils';
+import {
+  getPageLineSegments,
+  savePageLineSegments,
+  updateLetterSegmentTrust,
+} from '../../../api/admin/letters';
 import type { Letter } from '../../../types/Letter';
 
 const { getImageUrlMock } = vi.hoisted(() => ({
@@ -27,6 +29,8 @@ vi.mock('../../../api/admin/letters', () => ({
     { line: 2, bbox: [55, 140, 445, 175], baseline: [[55, 175], [445, 175]], boundary: [{ x: 55, y: 140 }, { x: 445, y: 140 }, { x: 445, y: 175 }, { x: 55, y: 175 }] },
     { line: 3, bbox: [50, 180, 450, 215], baseline: [[50, 215], [450, 215]], boundary: [{ x: 50, y: 180 }, { x: 450, y: 180 }, { x: 450, y: 215 }, { x: 50, y: 215 }] },
   ]),
+  savePageLineSegments: vi.fn().mockResolvedValue(undefined),
+  updateLetterSegmentTrust: vi.fn().mockResolvedValue(undefined),
 }));
 
 
@@ -48,6 +52,7 @@ function makeLetter(overrides: Partial<Letter> = {}): Letter {
   return {
     id: 'test-letter-1',
     title: 'Test Letter',
+    primarySourceRevision: 0,
     images: [
       {
         id: 'page-1',
@@ -108,6 +113,97 @@ function makeMultiPageLetter(): Letter {
   });
 }
 
+function makeSegmentTransitionLetter(): Letter {
+  const makeSegments = () => [
+    {
+      line: 1,
+      bbox: [50, 100, 450, 135] as [number, number, number, number],
+      baseline: [[50, 135], [450, 135]],
+      boundary: [
+        { x: 50, y: 100 },
+        { x: 450, y: 100 },
+        { x: 450, y: 135 },
+        { x: 50, y: 135 },
+      ],
+      ocrText: '',
+      words: [],
+    },
+    {
+      line: 2,
+      bbox: [55, 140, 445, 175] as [number, number, number, number],
+      baseline: [[55, 175], [445, 175]],
+      boundary: [
+        { x: 55, y: 140 },
+        { x: 445, y: 140 },
+        { x: 445, y: 175 },
+        { x: 55, y: 175 },
+      ],
+      ocrText: '',
+      words: [],
+    },
+  ];
+
+  return makeLetter({
+    primarySourceRevision: 9,
+    images: [
+      {
+        id: 'page-1',
+        type: 'letter',
+        pageNumber: 1,
+        imageUrl: '/images/page-1',
+        originalFilename: 'page1.jpg',
+        sourceChecksum: 'page-1-checksum',
+        lineSegments: makeSegments(),
+      },
+      {
+        id: 'page-2',
+        type: 'letter',
+        pageNumber: 2,
+        imageUrl: '/images/page-2',
+        originalFilename: 'page2.jpg',
+        sourceChecksum: 'page-2-checksum',
+        lineSegments: makeSegments(),
+      },
+    ],
+    transcript: {
+      pages: [
+        { pageNumber: 1, text: 'Page 1 line A\nPage 1 line B' },
+        { pageNumber: 2, text: 'Page 2 line C\nPage 2 line D' },
+      ],
+      fullText: '--- Page 1 ---\n\nPage 1 line A\nPage 1 line B\n\n--- Page 2 ---\n\nPage 2 line C\nPage 2 line D',
+      verified: false,
+    },
+  });
+}
+
+function deleteFirstVisibleSegment(container: HTMLElement) {
+  const segment = container.querySelector(
+    '.segment-editor-rect, .segment-editor-poly',
+  );
+  expect(segment).toBeTruthy();
+  if (segment) {
+    fireEvent.pointerDown(segment, { pointerId: 1 });
+  }
+
+  const deleteButton = container.querySelector<HTMLButtonElement>(
+    '.segment-editor-toolbar-btn[data-hint="Delete (Del)"]',
+  );
+  expect(deleteButton).toBeTruthy();
+  if (deleteButton) {
+    fireEvent.click(deleteButton);
+  }
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
 // Simulate image load and flush async (API promise + rAF)
 async function simulateImageLoadAsync(container: HTMLElement) {
   const img = container.querySelector('img');
@@ -136,16 +232,22 @@ async function flushEffects() {
 
 describe('LineReviewMode', () => {
   const getPageLineSegmentsMock = vi.mocked(getPageLineSegments);
+  const savePageLineSegmentsMock = vi.mocked(savePageLineSegments);
+  const updateLetterSegmentTrustMock = vi.mocked(updateLetterSegmentTrust);
   const defaultProps = {
     letter: makeLetter(),
     transcript: 'Line one\nLine two\nLine three',
     onTranscriptChange: vi.fn(),
     onExit: vi.fn(),
     onAutoSave: vi.fn(),
+    handleMutationError: vi.fn(),
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
+    defaultProps.handleMutationError.mockReturnValue(false);
+    savePageLineSegmentsMock.mockReset().mockResolvedValue(undefined);
+    updateLetterSegmentTrustMock.mockReset().mockResolvedValue(undefined);
     // Reset requestAnimationFrame to run synchronously
     vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
       cb(0);
@@ -247,7 +349,9 @@ describe('LineReviewMode', () => {
     await simulateImageLoadAsync(container);
 
     fireEvent.click(screen.getByRole('button', { name: 'Exit review mode' }));
-    expect(defaultProps.onExit).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(defaultProps.onExit).toHaveBeenCalled();
+    });
   });
 
   it('shows detecting message before image loads', async () => {
@@ -268,6 +372,395 @@ describe('LineReviewMode', () => {
     const input = getEditable(container);
     expect(input).toBeTruthy();
     expect(input?.textContent).toBe('Line one');
+  });
+
+  it('does not verify segments when saving pending edits fails', async () => {
+    savePageLineSegmentsMock.mockRejectedValueOnce(new Error('source changed'));
+    const letter = makeLetter({
+      primarySourceRevision: 7,
+      images: [
+        {
+          id: 'page-1',
+          type: 'letter',
+          pageNumber: 1,
+          imageUrl: '/images/page-1',
+          originalFilename: 'page1.jpg',
+          sourceChecksum: 'page-1-checksum',
+          lineSegments: [
+            {
+              line: 1,
+              bbox: [50, 100, 450, 135],
+              baseline: [[50, 135], [450, 135]],
+              ocrText: '',
+              words: [],
+            },
+          ],
+        },
+      ],
+    });
+    const { container } = render(
+      <LineReviewMode
+        {...defaultProps}
+        letter={letter}
+        fullViewport
+      />,
+    );
+    await simulateImageLoadAsync(container);
+
+    const segment = container.querySelector('.segment-editor-rect');
+    expect(segment).toBeTruthy();
+    if (segment) {
+      fireEvent.pointerDown(segment, { pointerId: 1 });
+    }
+    const deleteButton = container.querySelector<HTMLButtonElement>(
+      '.segment-editor-toolbar-btn[data-hint="Delete (Del)"]',
+    );
+    expect(deleteButton).toBeTruthy();
+    if (deleteButton) {
+      fireEvent.click(deleteButton);
+    }
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Verify' }));
+      await Promise.resolve();
+    });
+
+    expect(savePageLineSegmentsMock).toHaveBeenCalledWith(
+      'page-1',
+      [],
+      {
+        primarySourceRevision: 7,
+        sourceChecksum: 'page-1-checksum',
+      },
+    );
+    expect(updateLetterSegmentTrustMock).not.toHaveBeenCalled();
+  });
+
+  it('cancels a queued segment save when mutations become terminal', async () => {
+    const letter = makeSegmentTransitionLetter();
+    const { container, rerender } = render(
+      <LineReviewMode
+        {...defaultProps}
+        letter={letter}
+        fullViewport
+      />,
+    );
+    await simulateImageLoadAsync(container);
+
+    vi.useFakeTimers();
+    try {
+      deleteFirstVisibleSegment(container);
+      rerender(
+        <LineReviewMode
+          {...defaultProps}
+          letter={letter}
+          fullViewport
+          mutationsBlocked
+        />,
+      );
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_500);
+      });
+      expect(savePageLineSegmentsMock).not.toHaveBeenCalled();
+      expect(updateLetterSegmentTrustMock).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps segment edit mode, dirty state, and undo history when mode-exit save fails', async () => {
+    savePageLineSegmentsMock.mockRejectedValueOnce(new Error('source changed'));
+    const { container } = render(
+      <LineReviewMode
+        {...defaultProps}
+        letter={makeSegmentTransitionLetter()}
+        fullViewport
+      />,
+    );
+    await simulateImageLoadAsync(container);
+
+    deleteFirstVisibleSegment(container);
+    const undoButton = container.querySelector<HTMLButtonElement>(
+      '.segment-editor-toolbar-btn[data-hint="Undo (⌘Z)"]',
+    );
+    expect(undoButton?.disabled).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Transcript' }));
+
+    await waitFor(() => {
+      expect(savePageLineSegmentsMock).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.getByRole('button', { name: 'Transcript' })).toBeTruthy();
+    expect(
+      container.querySelector<HTMLButtonElement>('.seg-editor-action-btn.danger')?.disabled,
+    ).toBe(false);
+    expect(undoButton?.disabled).toBe(false);
+
+    if (undoButton) {
+      fireEvent.click(undoButton);
+    }
+    expect(
+      container.querySelectorAll('.segment-editor-rect, .segment-editor-poly'),
+    ).toHaveLength(2);
+  });
+
+  it.each([
+    {
+      navigationLabel: 'Next page',
+      initialPageIndex: 0,
+      expectedPageNumber: 1,
+      expectedPageId: 'page-1',
+      expectedChecksum: 'page-1-checksum',
+    },
+    {
+      navigationLabel: 'Previous page',
+      initialPageIndex: 1,
+      expectedPageNumber: 2,
+      expectedPageId: 'page-2',
+      expectedChecksum: 'page-2-checksum',
+    },
+  ])(
+    'keeps the current page and dirty segment mode when $navigationLabel save fails',
+    async ({
+      navigationLabel,
+      initialPageIndex,
+      expectedPageNumber,
+      expectedPageId,
+      expectedChecksum,
+    }) => {
+      savePageLineSegmentsMock.mockRejectedValueOnce(new Error('source changed'));
+      const { container } = render(
+        <LineReviewMode
+          {...defaultProps}
+          letter={makeSegmentTransitionLetter()}
+          transcript="--- Page 1 ---\n\nPage 1 line A\nPage 1 line B\n\n--- Page 2 ---\n\nPage 2 line C\nPage 2 line D"
+          initialPageIndex={initialPageIndex}
+          fullViewport
+        />,
+      );
+      await simulateImageLoadAsync(container);
+
+      deleteFirstVisibleSegment(container);
+      fireEvent.click(screen.getByRole('button', { name: navigationLabel }));
+
+      await waitFor(() => {
+        expect(savePageLineSegmentsMock).toHaveBeenCalledWith(
+          expectedPageId,
+          expect.any(Array),
+          {
+            primarySourceRevision: 9,
+            sourceChecksum: expectedChecksum,
+          },
+        );
+      });
+      expect(defaultProps.handleMutationError).toHaveBeenCalledWith(
+        expect.any(Error),
+        'Failed to save segment edits',
+      );
+      expect(screen.getByAltText(`Page ${expectedPageNumber}`)).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Transcript' })).toBeTruthy();
+      expect(
+        container.querySelector<HTMLButtonElement>('.seg-editor-action-btn.danger')?.disabled,
+      ).toBe(false);
+    },
+  );
+
+  it('keeps the review open with dirty segment history when full-exit save fails', async () => {
+    savePageLineSegmentsMock.mockRejectedValueOnce(new Error('source changed'));
+    const onExit = vi.fn();
+    const { container } = render(
+      <LineReviewMode
+        {...defaultProps}
+        letter={makeSegmentTransitionLetter()}
+        onExit={onExit}
+        fullViewport
+      />,
+    );
+    await simulateImageLoadAsync(container);
+
+    deleteFirstVisibleSegment(container);
+    fireEvent.click(screen.getByRole('button', { name: 'Exit review mode' }));
+
+    await waitFor(() => {
+      expect(savePageLineSegmentsMock).toHaveBeenCalledTimes(1);
+    });
+    expect(defaultProps.handleMutationError).toHaveBeenCalledWith(
+      expect.any(Error),
+      'Failed to save segment edits',
+    );
+    expect(onExit).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Transcript' })).toBeTruthy();
+    expect(
+      container.querySelector<HTMLButtonElement>(
+        '.segment-editor-toolbar-btn[data-hint="Undo (⌘Z)"]',
+      )?.disabled,
+    ).toBe(false);
+  });
+
+  it.each([
+    {
+      navigationLabel: 'Next page',
+      initialPageIndex: 0,
+      initialPageNumber: 1,
+      destinationPageNumber: 2,
+      sourcePageId: 'page-1',
+      sourceChecksum: 'page-1-checksum',
+    },
+    {
+      navigationLabel: 'Previous page',
+      initialPageIndex: 1,
+      initialPageNumber: 2,
+      destinationPageNumber: 1,
+      sourcePageId: 'page-2',
+      sourceChecksum: 'page-2-checksum',
+    },
+  ])(
+    'flushes edits made during a slow save before $navigationLabel navigation',
+    async ({
+      navigationLabel,
+      initialPageIndex,
+      initialPageNumber,
+      destinationPageNumber,
+      sourcePageId,
+      sourceChecksum,
+    }) => {
+      const firstSave = createDeferred<void>();
+      const secondSave = createDeferred<void>();
+      savePageLineSegmentsMock
+        .mockImplementationOnce(() => firstSave.promise)
+        .mockImplementationOnce(() => secondSave.promise);
+      const { container } = render(
+        <LineReviewMode
+          {...defaultProps}
+          letter={makeSegmentTransitionLetter()}
+          transcript="--- Page 1 ---\n\nPage 1 line A\nPage 1 line B\n\n--- Page 2 ---\n\nPage 2 line C\nPage 2 line D"
+          initialPageIndex={initialPageIndex}
+          fullViewport
+        />,
+      );
+      await simulateImageLoadAsync(container);
+
+      deleteFirstVisibleSegment(container);
+      fireEvent.click(screen.getByRole('button', { name: navigationLabel }));
+
+      await waitFor(() => {
+        expect(savePageLineSegmentsMock).toHaveBeenCalledTimes(1);
+      });
+      expect(screen.getByAltText(`Page ${initialPageNumber}`)).toBeTruthy();
+
+      // The first request contains the first edit. Make a second edit before
+      // it resolves; this newer snapshot must be saved before navigation.
+      expect(savePageLineSegmentsMock.mock.calls[0]?.[1]).toHaveLength(1);
+      deleteFirstVisibleSegment(container);
+
+      await act(async () => {
+        firstSave.resolve();
+        await firstSave.promise;
+      });
+      await waitFor(() => {
+        expect(savePageLineSegmentsMock).toHaveBeenCalledTimes(2);
+      });
+      expect(savePageLineSegmentsMock).toHaveBeenLastCalledWith(
+        sourcePageId,
+        [],
+        {
+          primarySourceRevision: 9,
+          sourceChecksum,
+        },
+      );
+      expect(screen.getByAltText(`Page ${initialPageNumber}`)).toBeTruthy();
+
+      await act(async () => {
+        secondSave.resolve();
+        await secondSave.promise;
+      });
+      await waitFor(() => {
+        expect(screen.getByAltText(`Page ${destinationPageNumber}`)).toBeTruthy();
+      });
+    },
+  );
+
+  it('keeps a failed segment mapping active and retryable until it saves', async () => {
+    savePageLineSegmentsMock
+      .mockRejectedValueOnce(new Error('source changed'))
+      .mockResolvedValueOnce(undefined);
+    const onMappingComplete = vi.fn();
+    const letter = makeLetter({
+      primarySourceRevision: 7,
+      images: [
+        {
+          id: 'page-1',
+          type: 'letter',
+          pageNumber: 1,
+          imageUrl: '/images/page-1',
+          originalFilename: 'page1.jpg',
+          sourceChecksum: 'page-1-checksum',
+          lineSegments: [
+            {
+              line: 1,
+              bbox: [50, 100, 450, 135],
+              baseline: [[50, 135], [450, 135]],
+              ocrText: '',
+              words: [],
+              segmentClass: 'continuation',
+              isMapped: false,
+            },
+          ],
+        },
+      ],
+    });
+    const { container } = render(
+      <LineReviewMode
+        {...defaultProps}
+        letter={letter}
+        mappingText="Mapped continuation"
+        onMappingComplete={onMappingComplete}
+        fullViewport
+      />,
+    );
+    await simulateImageLoadAsync(container);
+
+    const firstTarget = container.querySelector('.segment-editor-rect.seg-mappable');
+    expect(firstTarget).toBeTruthy();
+    if (firstTarget) {
+      fireEvent.pointerDown(firstTarget, { pointerId: 1 });
+    }
+
+    await waitFor(() => {
+      expect(savePageLineSegmentsMock).toHaveBeenCalledTimes(1);
+    });
+    expect(savePageLineSegmentsMock).toHaveBeenLastCalledWith(
+      'page-1',
+      expect.arrayContaining([
+        expect.objectContaining({
+          isMapped: true,
+          mappedText: 'Mapped continuation',
+        }),
+      ]),
+      {
+        primarySourceRevision: 7,
+        sourceChecksum: 'page-1-checksum',
+      },
+    );
+    expect(screen.getByText('Map to segment:')).toBeTruthy();
+    expect(onMappingComplete).not.toHaveBeenCalled();
+    expect(defaultProps.handleMutationError).toHaveBeenCalledWith(
+      expect.any(Error),
+      'Failed to save segment mapping',
+    );
+
+    const retryTarget = container.querySelector('.segment-editor-rect');
+    expect(retryTarget).toBeTruthy();
+    if (retryTarget) {
+      fireEvent.pointerDown(retryTarget, { pointerId: 2 });
+    }
+
+    await waitFor(() => {
+      expect(savePageLineSegmentsMock).toHaveBeenCalledTimes(2);
+      expect(onMappingComplete).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.queryByText('Map to segment:')).toBeNull();
   });
 
   it('shows no lines when Kraken returns empty segments', async () => {

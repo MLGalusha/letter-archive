@@ -102,30 +102,59 @@ export function getDocumentTypeFromCode(type: string): string {
   }
 }
 
+export interface BulkSourceEntry {
+  letterId: string;
+  primarySourceRevision: number;
+}
+
+export type BulkSourceSkipCode =
+  | 'NOT_FOUND'
+  | 'SOURCE_CHANGED'
+  | 'INELIGIBLE'
+  | 'SOURCE_CHANGED_OR_INELIGIBLE'
+  | 'MUTATION_FAILED';
+
+export interface BulkSourceSkip {
+  letterId: string;
+  code: BulkSourceSkipCode;
+  reason: string;
+}
+
 export interface BulkResult {
+  requested: number;
   queued: number;
   skipped: number;
-  skipReasons: Array<{ letterId: string; reason: string }>;
+  skipReasons: BulkSourceSkip[];
   unconfirmedCount?: number;
 }
 
 export interface BulkClearResult {
-  message: string;
-  updated: number;
+  requested: number;
+  applied: number;
+  skipped: number;
+  skipReasons: BulkSourceSkip[];
 }
 
 export interface BulkUpdateFieldEntry {
   letterId: string;
+  primarySourceRevision: number;
   sender?: string;
   recipient?: string;
 }
 
 export interface BulkUpdateFieldsResult {
-  message: string;
+  requested: number;
+  applied: number;
+  skipped: number;
   updated: number;
+  skipReasons: Array<{
+    letterId: string;
+    code: 'NOT_FOUND' | 'SOURCE_CHANGED' | 'WRITE_CONFLICT' | 'MUTATION_FAILED';
+  }>;
 }
 
 export interface UpdateLetterInput {
+  primarySourceRevision: number;
   transcriptionText?: string;
   sender?: string | null;
   recipient?: string | null;
@@ -142,6 +171,7 @@ export interface UpdateLetterInput {
 }
 
 export interface VersionInput {
+  primarySourceRevision: number;
   fieldType: 'transcript' | 'metadata';
   content: string | Record<string, unknown>;
   source: 'ai' | 'human';

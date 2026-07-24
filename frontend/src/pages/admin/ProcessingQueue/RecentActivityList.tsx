@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import type {
-  ProcessingJobType,
   ProcessingRecentJob,
 } from "../../../api/admin/processing";
 import { Button } from "../../../components/common";
@@ -10,11 +9,11 @@ import { getProcessingStage, PROCESSING_STAGES } from "./stages";
 
 interface RecentActivityListProps {
   recent: ProcessingRecentJob[];
-  onRetry: (type: ProcessingJobType, letterId: string) => void;
+  onRetry: (job: ProcessingRecentJob) => void;
 }
 
 type StatusFilter = "all" | ProcessingRecentJob["status"];
-type StageFilter = "all" | ProcessingJobType;
+type StageFilter = "all" | ProcessingRecentJob["type"];
 
 export default function RecentActivityList({
   recent,
@@ -102,7 +101,7 @@ export default function RecentActivityList({
                   {job.status === "FAILED" && (
                     <Button
                       size="sm"
-                      onClick={() => onRetry(job.type, job.letterId)}
+                      onClick={() => onRetry(job)}
                     >
                       Retry
                     </Button>

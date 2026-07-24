@@ -37,6 +37,7 @@ vi.mock('../../db/index.js', () => ({
   db: { update: dbUpdateMock },
   letters: {
     id: 'letters.id',
+    primarySourceRevision: 'letters.primarySourceRevision',
     dateRaw: 'letters.dateRaw',
     type: 'letters.type',
     transcriptionStatus: 'letters.transcriptionStatus',
@@ -79,6 +80,7 @@ type Status = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';
 
 interface EntityRow {
   id: string;
+  primarySourceRevision: number;
   dateRaw: string;
   type: 'L' | 'P';
   transcriptionStatus: Status;
@@ -218,6 +220,7 @@ describe('entity extraction job lifecycle', () => {
     vi.clearAllMocks();
     row = {
       id: 'letter-1',
+      primarySourceRevision: 7,
       dateRaw: '19440102',
       type: 'L',
       transcriptionStatus: 'SUCCESS',
@@ -278,7 +281,7 @@ describe('entity extraction job lifecycle', () => {
     row.deadLetter = true;
 
     await expect(
-      claimRequestedEntityExtraction(row.id, observed()),
+      claimRequestedEntityExtraction(row.id, observed(), row.primarySourceRevision),
     ).resolves.toEqual({ runId: 'run-a', revision: 3 });
 
     expect(row).toMatchObject({
@@ -324,13 +327,13 @@ describe('entity extraction job lifecycle', () => {
     row.type = 'L';
     row.metadataStatus = 'FAILED';
     await expect(
-      claimRequestedEntityExtraction(row.id, observed()),
+      claimRequestedEntityExtraction(row.id, observed(), row.primarySourceRevision),
     ).resolves.toBeNull();
 
     row.metadataStatus = 'SUCCESS';
     row.extraContentJobStatus = 'RUNNING';
     await expect(
-      claimRequestedEntityExtraction(row.id, observed()),
+      claimRequestedEntityExtraction(row.id, observed(), row.primarySourceRevision),
     ).resolves.toBeNull();
 
     row.extraContentJobStatus = 'PENDING';
@@ -395,7 +398,11 @@ describe('entity extraction job lifecycle', () => {
   });
 
   it('allows exact administrative cancellation after expiry and for pre-lease runs', async () => {
-    await claimRequestedEntityExtraction(row.id, observed());
+    await claimRequestedEntityExtraction(
+      row.id,
+      observed(),
+      row.primarySourceRevision,
+    );
     const owned = claim();
     databaseTime = new Date('2026-07-17T12:06:00.000Z');
 
@@ -460,7 +467,11 @@ describe('entity extraction job lifecycle', () => {
     row.entityExtractionStatus = 'SUCCESS';
     randomUUIDMock.mockReturnValue('run-b');
     databaseTime = new Date('2026-07-17T12:07:00.000Z');
-    await claimRequestedEntityExtraction(row.id, observed());
+    await claimRequestedEntityExtraction(
+      row.id,
+      observed(),
+      row.primarySourceRevision,
+    );
     databaseTime = new Date('2026-07-17T12:13:00.000Z');
 
     await expect(recoverExpiredEntityExtractionJobs()).resolves.toEqual({

@@ -19,6 +19,7 @@ const {
   describePhotoMock,
   transcribeExtraContentMock,
   getAbsoluteStoragePathMock,
+  applyPublicationMutationMock,
 } = vi.hoisted(() => ({
   findFirstMock: vi.fn(),
   findManyMock: vi.fn(),
@@ -38,6 +39,7 @@ const {
   describePhotoMock: vi.fn(),
   transcribeExtraContentMock: vi.fn(),
   getAbsoluteStoragePathMock: vi.fn((value: string) => value),
+  applyPublicationMutationMock: vi.fn(),
 }));
 
 vi.mock('drizzle-orm', () => ({
@@ -47,6 +49,7 @@ vi.mock('drizzle-orm', () => ({
   inArray: vi.fn((field: unknown, values: unknown[]) => ({ kind: 'inArray', field, values })),
   isNull: vi.fn((field: unknown) => ({ kind: 'isNull', field })),
   isNotNull: vi.fn((field: unknown) => ({ kind: 'isNotNull', field })),
+  or: vi.fn((...clauses: unknown[]) => ({ kind: 'or', clauses })),
   sql: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({
     kind: 'sql',
     strings: Array.from(strings),
@@ -86,6 +89,7 @@ vi.mock('../../db/index.js', () => {
       dateRaw: 'letters.dateRaw',
       typeSequence: 'letters.typeSequence',
       type: 'letters.type',
+      primarySourceRevision: 'letters.primarySourceRevision',
       transcriptionText: 'letters.transcriptionText',
       transcriptionStatus: 'letters.transcriptionStatus',
       metadataRevision: 'letters.metadataRevision',
@@ -166,6 +170,10 @@ vi.mock('../entities/participant-sync.js', () => ({
   syncLetterParticipantsFromMetadata: syncLetterParticipantsFromMetadataMock,
 }));
 
+vi.mock('../letter/publication-mutations.js', () => ({
+  applyPublicationMutation: applyPublicationMutationMock,
+}));
+
 import {
   bulkClearTranscriptions,
   bulkClearMetadata,
@@ -204,6 +212,39 @@ describe('letter operations service', () => {
     });
     getLetterByIdMock.mockResolvedValue(undefined);
     getAbsoluteStoragePathMock.mockImplementation((value: string) => value);
+    applyPublicationMutationMock.mockImplementation(async (request: {
+      intent: {
+        visibility?: string;
+        transcriptPublished?: boolean;
+        metadataPublished?: boolean;
+      };
+      rootPatch?: Record<string, unknown>;
+      rootConditions?: unknown[];
+      afterRootMutation?: (database: unknown) => Promise<void>;
+    }) => {
+      const patch = {
+        ...(request.rootPatch ?? {}),
+        ...(request.intent.visibility !== undefined
+          ? { visibility: request.intent.visibility }
+          : {}),
+        ...(request.intent.transcriptPublished !== undefined
+          ? { transcriptPublished: request.intent.transcriptPublished }
+          : {}),
+        ...(request.intent.metadataPublished !== undefined
+          ? { metadataPublished: request.intent.metadataPublished }
+          : {}),
+      };
+      const updated = await dbUpdateMock()
+        .set(patch)
+        .where({ kind: 'and', clauses: request.rootConditions ?? [] })
+        .returning();
+      if (updated.length > 0) {
+        await request.afterRootMutation?.({ transaction: 'test' });
+      }
+      return updated.length > 0
+        ? { kind: 'applied', publicCorpusChanged: false }
+        : { kind: 'root_conflict' };
+    });
   });
 
   it('normalizes common AI relationship variants', () => {
@@ -213,13 +254,39 @@ describe('letter operations service', () => {
   });
 
   it('clears stored metadata JSON when metadata is bulk-cleared', async () => {
+    const sources = [
+      { letterId: 'letter-1', primarySourceRevision: 4 },
+      { letterId: 'letter-2', primarySourceRevision: 8 },
+    ];
+    findManyMock.mockResolvedValue([
+      {
+        id: 'letter-1',
+        primarySourceRevision: 4,
+        transcriptionStatus: 'SUCCESS',
+        metadataStatus: 'SUCCESS',
+        entityExtractionStatus: 'SUCCESS',
+      },
+      {
+        id: 'letter-2',
+        primarySourceRevision: 8,
+        transcriptionStatus: 'SUCCESS',
+        metadataStatus: 'SUCCESS',
+        entityExtractionStatus: 'SUCCESS',
+      },
+    ]);
     updateReturningMock.mockResolvedValueOnce([{ id: 'letter-1' }]);
 
-    const result = await bulkClearMetadata(['letter-1', 'letter-2']);
+    const result = await bulkClearMetadata(sources);
 
     expect(result).toEqual({
-      message: 'Metadata cleared',
-      updated: 1,
+      requested: 2,
+      applied: 1,
+      skipped: 1,
+      skipReasons: [{
+        letterId: 'letter-2',
+        code: 'SOURCE_CHANGED_OR_INELIGIBLE',
+        reason: 'Letter source or processing state changed before metadata could be cleared',
+      }],
     });
     expect(updateSetMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -240,9 +307,18 @@ describe('letter operations service', () => {
       kind: 'and',
       clauses: [
         {
-          kind: 'inArray',
-          field: 'letters.id',
-          values: ['letter-1', 'letter-2'],
+          kind: 'or',
+          clauses: sources.map(({ letterId, primarySourceRevision }) => ({
+            kind: 'and',
+            clauses: [
+              { kind: 'eq', field: 'letters.id', value: letterId },
+              {
+                kind: 'eq',
+                field: 'letters.primarySourceRevision',
+                value: primarySourceRevision,
+              },
+            ],
+          })),
         },
         { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
         { kind: 'ne', field: 'letters.metadataStatus', value: 'RUNNING' },
@@ -258,23 +334,55 @@ describe('letter operations service', () => {
   });
 
   it('does not delete entity links for metadata rows that lose the idle-state claim', async () => {
-    const result = await bulkClearMetadata(['letter-active']);
+    const source = { letterId: 'letter-active', primarySourceRevision: 5 };
+    findManyMock.mockResolvedValue([{
+      id: source.letterId,
+      primarySourceRevision: source.primarySourceRevision,
+      transcriptionStatus: 'SUCCESS',
+      metadataStatus: 'SUCCESS',
+      entityExtractionStatus: 'SUCCESS',
+    }]);
+    const result = await bulkClearMetadata([source]);
 
     expect(result).toEqual({
-      message: 'Metadata cleared',
-      updated: 0,
+      requested: 1,
+      applied: 0,
+      skipped: 1,
+      skipReasons: [{
+        letterId: source.letterId,
+        code: 'SOURCE_CHANGED_OR_INELIGIBLE',
+        reason: 'Letter source or processing state changed before metadata could be cleared',
+      }],
     });
     expect(deleteWhereMock).not.toHaveBeenCalled();
   });
 
   it('bulk-clears only idle letters and clears extra-content ownership state', async () => {
+    const sources = [
+      { letterId: 'letter-1', primarySourceRevision: 4 },
+      { letterId: 'letter-2', primarySourceRevision: 8 },
+    ];
+    findManyMock.mockResolvedValue(sources.map((source) => ({
+      id: source.letterId,
+      primarySourceRevision: source.primarySourceRevision,
+      transcriptionStatus: 'SUCCESS',
+      metadataStatus: 'SUCCESS',
+      entityExtractionStatus: 'SUCCESS',
+      extraContentJobStatus: 'SUCCESS',
+    })));
     updateReturningMock.mockResolvedValue([{ id: 'letter-1' }]);
 
-    const result = await bulkClearTranscriptions(['letter-1', 'letter-2']);
+    const result = await bulkClearTranscriptions(sources);
 
     expect(result).toEqual({
-      message: 'Transcriptions cleared',
-      updated: 1,
+      requested: 2,
+      applied: 1,
+      skipped: 1,
+      skipReasons: [{
+        letterId: 'letter-2',
+        code: 'SOURCE_CHANGED_OR_INELIGIBLE',
+        reason: 'Letter source or processing state changed before it could be cleared',
+      }],
     });
     expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
       transcriptionStatus: 'FAILED',
@@ -292,7 +400,20 @@ describe('letter operations service', () => {
     expect(updateWhereMock).toHaveBeenCalledWith({
       kind: 'and',
       clauses: [
-        { kind: 'inArray', field: 'letters.id', values: ['letter-1', 'letter-2'] },
+        {
+          kind: 'or',
+          clauses: sources.map(({ letterId, primarySourceRevision }) => ({
+            kind: 'and',
+            clauses: [
+              { kind: 'eq', field: 'letters.id', value: letterId },
+              {
+                kind: 'eq',
+                field: 'letters.primarySourceRevision',
+                value: primarySourceRevision,
+              },
+            ],
+          })),
+        },
         { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
         { kind: 'ne', field: 'letters.metadataStatus', value: 'RUNNING' },
         { kind: 'ne', field: 'letters.entityExtractionStatus', value: 'RUNNING' },
@@ -308,36 +429,51 @@ describe('letter operations service', () => {
   });
 
   it('does not delete related records when every requested letter is active', async () => {
-    updateReturningMock.mockResolvedValue([]);
+    const source = { letterId: 'letter-running', primarySourceRevision: 6 };
+    findManyMock.mockResolvedValue([{
+      id: source.letterId,
+      primarySourceRevision: source.primarySourceRevision,
+      transcriptionStatus: 'RUNNING',
+      metadataStatus: 'SUCCESS',
+      entityExtractionStatus: 'SUCCESS',
+      extraContentJobStatus: 'SUCCESS',
+    }]);
 
-    await expect(bulkClearTranscriptions(['letter-running'])).resolves.toEqual({
-      message: 'Transcriptions cleared',
-      updated: 0,
+    await expect(bulkClearTranscriptions([source])).resolves.toEqual({
+      requested: 1,
+      applied: 0,
+      skipped: 1,
+      skipReasons: [{
+        letterId: source.letterId,
+        code: 'INELIGIBLE',
+        reason: 'Transcription is running',
+      }],
     });
 
     expect(deleteWhereMock).not.toHaveBeenCalled();
+    expect(dbTransactionMock).not.toHaveBeenCalled();
   });
 
   it('does not reset transcription state when letter-only transcription is rejected for missing pages', async () => {
     runRequestedTranscriptionMock.mockResolvedValue({ kind: 'no_pages' });
 
-    await expect(transcribeLetterOnly('letter-3')).rejects.toMatchObject({
+    await expect(transcribeLetterOnly('letter-3', 4)).rejects.toMatchObject({
       message: 'Letter has no pages to transcribe',
       status: 400,
     });
     expect(dbUpdateMock).not.toHaveBeenCalled();
-    expect(runRequestedTranscriptionMock).toHaveBeenCalledWith('letter-3');
+    expect(runRequestedTranscriptionMock).toHaveBeenCalledWith('letter-3', 4);
   });
 
   it('does not reset transcription state when regeneration is rejected for missing pages', async () => {
     runRequestedTranscriptionMock.mockResolvedValue({ kind: 'no_pages' });
 
-    await expect(regenerateTranscription('letter-4', false)).rejects.toMatchObject({
+    await expect(regenerateTranscription('letter-4', false, 4)).rejects.toMatchObject({
       message: 'Letter has no pages to transcribe',
       status: 400,
     });
     expect(dbUpdateMock).not.toHaveBeenCalled();
-    expect(runRequestedTranscriptionMock).toHaveBeenCalledWith('letter-4');
+    expect(runRequestedTranscriptionMock).toHaveBeenCalledWith('letter-4', 4);
   });
 
   it('returns canonical metrics for letter-only transcription without extras', async () => {
@@ -347,36 +483,49 @@ describe('letter operations service', () => {
       textLength: 42,
     });
 
-    await expect(transcribeLetterOnly('letter-3')).resolves.toEqual({
+    await expect(transcribeLetterOnly('letter-3', 4)).resolves.toEqual({
       pageCount: 2,
       textLength: 42,
     });
-    expect(runRequestedTranscriptionMock).toHaveBeenCalledWith('letter-3');
+    expect(runRequestedTranscriptionMock).toHaveBeenCalledWith('letter-3', 4);
     expect(runRegeneratedExtraContentMock).not.toHaveBeenCalled();
   });
 
   it('returns a conflict when direct transcription loses or outlives its claim', async () => {
     runRequestedTranscriptionMock.mockResolvedValueOnce({ kind: 'claim_lost' });
-    await expect(transcribeLetterOnly('letter-3')).rejects.toMatchObject({
+    await expect(transcribeLetterOnly('letter-3', 4)).rejects.toMatchObject({
       status: 409,
       message: 'Transcription conflicted with another job update',
     });
 
     runRequestedTranscriptionMock.mockResolvedValueOnce({ kind: 'superseded' });
-    await expect(transcribeLetterOnly('letter-3')).rejects.toMatchObject({
+    await expect(transcribeLetterOnly('letter-3', 4)).rejects.toMatchObject({
       status: 409,
       message: 'Transcription was cancelled or superseded',
+    });
+  });
+
+  it('maps a source change during requested transcription to the stable conflict code', async () => {
+    runRequestedTranscriptionMock.mockResolvedValue({ kind: 'superseded' });
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-3',
+      primarySourceRevision: 5,
+    });
+
+    await expect(transcribeLetterOnly('letter-3', 4)).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'SOURCE_REVISION_CHANGED',
     });
   });
 
   it('suppresses automatic extras and runs the regeneration producer exactly once', async () => {
     runRegeneratedExtraContentMock.mockResolvedValue({ kind: 'completed', value: 2 });
 
-    const result = await regenerateTranscription('letter-4', true);
+    const result = await regenerateTranscription('letter-4', true, 4);
 
-    expect(runRequestedTranscriptionMock).toHaveBeenCalledWith('letter-4');
+    expect(runRequestedTranscriptionMock).toHaveBeenCalledWith('letter-4', 4);
     expect(runRegeneratedExtraContentMock).toHaveBeenCalledTimes(1);
-    expect(runRegeneratedExtraContentMock).toHaveBeenCalledWith('letter-4');
+    expect(runRegeneratedExtraContentMock).toHaveBeenCalledWith('letter-4', 4);
     expect(result).toEqual({
       mainTranscript: true,
       extras: true,
@@ -385,9 +534,9 @@ describe('letter operations service', () => {
   });
 
   it('does not run any extra-content producer when regeneration excludes extras', async () => {
-    const result = await regenerateTranscription('letter-4', false);
+    const result = await regenerateTranscription('letter-4', false, 4);
 
-    expect(runRequestedTranscriptionMock).toHaveBeenCalledWith('letter-4');
+    expect(runRequestedTranscriptionMock).toHaveBeenCalledWith('letter-4', 4);
     expect(runRegeneratedExtraContentMock).not.toHaveBeenCalled();
     expect(result).toEqual({
       mainTranscript: true,
@@ -399,7 +548,7 @@ describe('letter operations service', () => {
   it('returns a conflict when regeneration loses the extra-content claim', async () => {
     runRegeneratedExtraContentMock.mockResolvedValue({ kind: 'claim_lost' });
 
-    await expect(regenerateTranscription('letter-4', true)).rejects.toMatchObject({
+    await expect(regenerateTranscription('letter-4', true, 4)).rejects.toMatchObject({
       status: 409,
       message: 'Extra content transcription conflicted with another job update',
     });
@@ -422,6 +571,7 @@ describe('letter operations service', () => {
     });
 
     const result = await updateLetter('letter-verified-transcript', {
+      primarySourceRevision: 0,
       transcriptionText: 'Corrected transcript text',
     });
 
@@ -474,6 +624,7 @@ describe('letter operations service', () => {
     });
 
     const result = await updateLetter('letter-running-transcript', {
+      primarySourceRevision: 0,
       transcriptionText: 'Typed by an admin',
     });
 
@@ -525,6 +676,7 @@ describe('letter operations service', () => {
     });
 
     const result = await updateLetter('letter-cleared-transcript', {
+      primarySourceRevision: 0,
       transcriptionText: '   ',
     });
 
@@ -571,6 +723,7 @@ describe('letter operations service', () => {
     });
 
     const result = await updateLetter('letter-verified-metadata', {
+      primarySourceRevision: 0,
       sender: 'Alicia Smith',
     });
 
@@ -597,6 +750,68 @@ describe('letter operations service', () => {
     );
   });
 
+  it('commits matching note auto-resolutions with the triggering field edit', async () => {
+    updateReturningMock.mockResolvedValueOnce([{ id: 'letter-note-resolution' }]);
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-note-resolution',
+      sender: null,
+      workflow: 'METADATA_DRAFTED',
+      transcriptStatus: 'EDITED',
+      metadataContentStatus: 'AI_DRAFT',
+      metadataStatus: 'SUCCESS',
+      metadataRunId: null,
+      metadataRevision: 7,
+      entityExtractionStatus: 'SUCCESS',
+      aiNotes: [
+        {
+          id: 'sender-note',
+          content: 'Confirm the sender',
+          category: 'identity',
+          priority: 'high',
+          status: 'open',
+          resolves_when: 'sender_filled',
+          resolved_at: null,
+          resolved_by: null,
+          source: 'ai',
+        },
+        {
+          id: 'recipient-note',
+          content: 'Confirm the recipient',
+          category: 'identity',
+          priority: 'medium',
+          status: 'open',
+          resolves_when: 'recipient_filled',
+          resolved_at: null,
+          resolved_by: null,
+          source: 'ai',
+        },
+      ],
+    });
+
+    await expect(updateLetter('letter-note-resolution', {
+      primarySourceRevision: 0,
+      sender: 'Alice',
+    })).resolves.toBe(true);
+
+    expect(updateSetMock).toHaveBeenCalledTimes(1);
+    expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
+      sender: 'Alice',
+      aiNotes: [
+        expect.objectContaining({
+          id: 'sender-note',
+          status: 'resolved',
+          resolved_by: 'auto',
+          resolved_at: expect.any(String),
+        }),
+        expect.objectContaining({
+          id: 'recipient-note',
+          status: 'open',
+        }),
+      ],
+      metadataRevision: expect.objectContaining({ kind: 'sql' }),
+    }));
+  });
+
   it('preserves the queued empty lifecycle when saving metadata prefills', async () => {
     updateReturningMock.mockResolvedValueOnce([{ id: 'letter-prefill' }]);
     getLetterByIdMock.mockResolvedValue({
@@ -611,7 +826,10 @@ describe('letter operations service', () => {
       updatedAt: new Date('2026-07-17T12:00:00.000Z'),
     });
 
-    await expect(updateLetter('letter-prefill', { sender: 'Alice' })).resolves.toBe(true);
+    await expect(updateLetter('letter-prefill', {
+      primarySourceRevision: 0,
+      sender: 'Alice',
+    })).resolves.toBe(true);
 
     const saved = updateSetMock.mock.calls[0]![0] as Record<string, unknown>;
     expect(saved).toMatchObject({
@@ -647,7 +865,10 @@ describe('letter operations service', () => {
       updatedAt: new Date('2026-07-17T12:00:00.000Z'),
     });
 
-    await expect(updateLetter('letter-noop', { sender: 'Alice' })).resolves.toBe(true);
+    await expect(updateLetter('letter-noop', {
+      primarySourceRevision: 0,
+      sender: 'Alice',
+    })).resolves.toBe(true);
 
     expect(dbUpdateMock).not.toHaveBeenCalled();
     expect(syncLetterParticipantsFromMetadataMock).not.toHaveBeenCalled();
@@ -677,6 +898,7 @@ describe('letter operations service', () => {
     });
 
     await updateLetter('letter-coherent', {
+      primarySourceRevision: 0,
       summary: 'Reviewer summary',
       tags: ['family'],
     });
@@ -714,13 +936,24 @@ describe('letter operations service', () => {
       updatedAt: new Date('2026-07-17T12:00:00.000Z'),
     });
 
-    await updateLetter('letter-legacy-metadata', { sender: 'Alicia' });
+    await updateLetter('letter-legacy-metadata', {
+      primarySourceRevision: 0,
+      sender: 'Alicia',
+    });
 
     expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
       sender: 'Alicia',
       metadataJson: { sender: 'Alicia', summary: 'Legacy summary' },
     }));
     expect(updateSetMock.mock.calls[0]![0]).not.toHaveProperty('metadataV2Json');
+    expect(syncLetterParticipantsFromMetadataMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        letterId: 'letter-legacy-metadata',
+        sender: 'Alicia',
+        actor: 'admin',
+        database: { transaction: 'test' },
+      }),
+    );
   });
 
   it('does not auto-publish content invalidated by the same visibility update', async () => {
@@ -741,16 +974,34 @@ describe('letter operations service', () => {
     });
 
     await updateLetter('letter-publish-edit', {
+      primarySourceRevision: 0,
       visibility: 'PUBLISHED',
       transcriptionText: 'Corrected transcript',
       sender: 'Corrected sender',
     });
 
     expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
-      visibility: 'PUBLISHED',
       transcriptPublished: false,
       metadataPublished: false,
     }));
+    expect(applyPublicationMutationMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: {
+          letterId: 'letter-publish-edit',
+          primarySourceRevision: 0,
+        },
+        intent: expect.objectContaining({
+          visibility: 'PUBLISHED',
+        }),
+        blocksTranscriptGrant: true,
+        blocksMetadataGrant: true,
+      }),
+    );
+    const publicationRequest =
+      applyPublicationMutationMock.mock.calls[0]?.[0] as {
+        rootPatch?: Record<string, unknown>;
+      };
+    expect(publicationRequest.rootPatch).not.toHaveProperty('visibility');
   });
 
   it('gives a compound transcript and metadata save source-invalidation precedence', async () => {
@@ -769,6 +1020,7 @@ describe('letter operations service', () => {
     });
 
     await expect(updateLetter('letter-compound', {
+      primarySourceRevision: 0,
       transcriptionText: 'A corrected source transcript',
       sender: 'A corrected sender',
     })).resolves.toBe(true);
@@ -804,7 +1056,10 @@ describe('letter operations service', () => {
     });
     updateReturningMock.mockResolvedValueOnce([]);
 
-    await expect(updateLetter('letter-raced', { sender: 'A newer value' }))
+    await expect(updateLetter('letter-raced', {
+      primarySourceRevision: 0,
+      sender: 'A newer value',
+    }))
       .rejects.toMatchObject({
         status: 409,
         message: expect.stringContaining('changed before this update could be saved'),
@@ -823,6 +1078,7 @@ describe('letter operations service', () => {
     });
 
     await expect(updateLetter('letter-unverified-transcript', {
+      primarySourceRevision: 0,
       transcriptPublished: true,
     })).rejects.toMatchObject({
       status: 400,
@@ -847,6 +1103,7 @@ describe('letter operations service', () => {
     });
 
     await expect(updateLetter('letter-failed-replacement', {
+      primarySourceRevision: 0,
       transcriptPublished: true,
       metadataPublished: true,
     })).resolves.toBe(true);
@@ -855,6 +1112,12 @@ describe('letter operations service', () => {
       transcriptPublished: true,
       metadataPublished: true,
     }));
+    expect(applyPublicationMutationMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rootPatch: undefined,
+        rootConditions: undefined,
+      }),
+    );
   });
 
   it('atomically applies a manual extra-content edit and revokes the active AI attempt', async () => {
@@ -871,10 +1134,15 @@ describe('letter operations service', () => {
       metadataRunId: null,
       metadataContentStatus: 'EMPTY',
       entityExtractionStatus: 'PENDING',
+      primarySourceRevision: 6,
       updatedAt: new Date('2026-07-17T12:00:00.000Z'),
     });
 
-    const result = await updateExtraContent('letter-5', 'Typed by an admin');
+    const result = await updateExtraContent(
+      'letter-5',
+      'Typed by an admin',
+      6,
+    );
 
     expect(result).toBe(true);
     expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
@@ -900,6 +1168,13 @@ describe('letter operations service', () => {
       transcriptPublished: false,
       updatedAt: expect.any(Date),
     }));
+    expect(updateWhereMock).toHaveBeenCalledWith(expect.objectContaining({
+      clauses: expect.arrayContaining([{
+        kind: 'eq',
+        field: 'letters.primarySourceRevision',
+        value: 6,
+      }]),
+    }));
   });
 
   it('resets extra-content to empty and clears verification metadata when content is removed', async () => {
@@ -913,10 +1188,11 @@ describe('letter operations service', () => {
       metadataRunId: null,
       metadataContentStatus: 'VERIFIED',
       entityExtractionStatus: 'SUCCESS',
+      primarySourceRevision: 6,
       updatedAt: new Date('2026-07-17T12:00:00.000Z'),
     });
 
-    const result = await updateExtraContent('letter-6', '   ');
+    const result = await updateExtraContent('letter-6', '   ', 6);
 
     expect(result).toBe(true);
     expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
@@ -955,10 +1231,15 @@ describe('letter operations service', () => {
       metadataRunId: null,
       metadataContentStatus: 'VERIFIED',
       entityExtractionStatus: 'SUCCESS',
+      primarySourceRevision: 6,
       updatedAt: new Date('2026-07-17T12:00:00.000Z'),
     });
 
-    const result = await updateExtraContent('letter-7', 'Corrected note text');
+    const result = await updateExtraContent(
+      'letter-7',
+      'Corrected note text',
+      6,
+    );
 
     expect(result).toBe(true);
     expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
@@ -996,27 +1277,54 @@ describe('letter operations service', () => {
       metadataRunId: null,
       metadataContentStatus: 'AI_DRAFT',
       entityExtractionStatus: 'PENDING',
+      primarySourceRevision: 6,
       updatedAt: new Date('2026-07-17T12:00:00.000Z'),
     });
     updateReturningMock.mockResolvedValueOnce([]);
 
-    await expect(updateExtraContent('letter-extra-raced', 'Stale enclosure text'))
+    await expect(updateExtraContent(
+      'letter-extra-raced',
+      'Stale enclosure text',
+      6,
+    ))
       .rejects.toMatchObject({
         status: 409,
         message: expect.stringContaining('changed before extra content could be saved'),
       });
   });
 
+  it('does not restore extra content loaded before a page-source change', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-extra-source-raced',
+      extraContentStatus: 'EDITED',
+      metadataRevision: 4,
+      primarySourceRevision: 7,
+    });
+
+    await expect(updateExtraContent(
+      'letter-extra-source-raced',
+      'Text from the previous page source',
+      6,
+    )).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'SOURCE_REVISION_CHANGED',
+      message: expect.stringContaining('source changed'),
+    });
+    expect(dbUpdateMock).not.toHaveBeenCalled();
+  });
+
   it('marks manual photo-description edits as edited when content is added from an empty state', async () => {
+    updateReturningMock.mockResolvedValueOnce([{ id: 'photo-1' }]);
     getLetterByIdMock.mockResolvedValue({
       id: 'photo-1',
       type: 'P',
       photoDescriptionStatus: 'EMPTY',
+      primarySourceRevision: 9,
     });
 
     const result = await updatePhotoDescription('photo-1', {
       photoDescription: 'Two children standing on a porch.',
-    });
+    }, 9);
 
     expect(result).toBe(true);
     expect(updateSetMock).toHaveBeenCalledWith({
@@ -1024,18 +1332,45 @@ describe('letter operations service', () => {
       photoDescriptionStatus: 'EDITED',
       updatedAt: expect.any(Date),
     });
+    expect(updateWhereMock).toHaveBeenCalledWith(expect.objectContaining({
+      clauses: expect.arrayContaining([{
+        kind: 'eq',
+        field: 'letters.primarySourceRevision',
+        value: 9,
+      }]),
+    }));
+  });
+
+  it('does not restore a photo description loaded before its page source changed', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      id: 'photo-source-raced',
+      type: 'P',
+      photoDescriptionStatus: 'EDITED',
+      primarySourceRevision: 10,
+    });
+
+    await expect(updatePhotoDescription('photo-source-raced', {
+      photoDescription: 'Description of the replaced image.',
+    }, 9)).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'SOURCE_REVISION_CHANGED',
+      message: expect.stringContaining('source changed'),
+    });
+    expect(dbUpdateMock).not.toHaveBeenCalled();
   });
 
   it('resets photo-description verification metadata when content is removed', async () => {
+    updateReturningMock.mockResolvedValueOnce([{ id: 'photo-2' }]);
     getLetterByIdMock.mockResolvedValue({
       id: 'photo-2',
       type: 'P',
       photoDescriptionStatus: 'VERIFIED',
+      primarySourceRevision: 9,
     });
 
     const result = await updatePhotoDescription('photo-2', {
       photoDescription: '   ',
-    });
+    }, 9);
 
     expect(result).toBe(true);
     expect(updateSetMock).toHaveBeenCalledWith({
@@ -1048,6 +1383,7 @@ describe('letter operations service', () => {
   });
 
   it('generates photo descriptions with reviewer and linked-letter context', async () => {
+    updateReturningMock.mockResolvedValueOnce([{ id: 'photo-3' }]);
     findFirstMock
       .mockResolvedValueOnce({
         id: 'photo-3',
@@ -1055,6 +1391,7 @@ describe('letter operations service', () => {
         collectionId: 'collection-1',
         dateRaw: '19470810',
         typeSequence: 1,
+        primarySourceRevision: 9,
         collection: { collectionCode: '009' },
         pages: [
           {
@@ -1075,7 +1412,11 @@ describe('letter operations service', () => {
       isStub: false,
     });
 
-    const result = await describePhotoWorkflow('photo-3', 'Likely Jimmy and Molly');
+    const result = await describePhotoWorkflow(
+      'photo-3',
+      'Likely Jimmy and Molly',
+      9,
+    );
 
     expect(getAbsoluteStoragePathMock).toHaveBeenCalledWith(
       'collections/009/19470810/P01/009-19470810-P01-01.jpg',
@@ -1104,5 +1445,46 @@ describe('letter operations service', () => {
       describedCount: 1,
       photoDescriptionStatus: 'AI_DRAFT',
     });
+  });
+
+  it('does not commit a generated photo description after its page source changes', async () => {
+    findFirstMock
+      .mockResolvedValueOnce({
+        id: 'photo-source-raced',
+        type: 'P',
+        collectionId: 'collection-1',
+        dateRaw: '19470810',
+        typeSequence: 1,
+        primarySourceRevision: 9,
+        collection: { collectionCode: '009' },
+        pages: [{
+          id: 'photo-page-1',
+          pageNumber: 1,
+          storagePath: 'collections/009/19470810/P01/photo.jpg',
+        }],
+      })
+      .mockResolvedValueOnce(null);
+    describePhotoMock.mockResolvedValue({
+      text: 'A description generated from the old photo bytes.',
+      isStub: false,
+    });
+    updateReturningMock.mockResolvedValueOnce([]);
+
+    await expect(describePhotoWorkflow(
+      'photo-source-raced',
+      null,
+      9,
+    )).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'SOURCE_REVISION_CHANGED',
+      message: expect.stringContaining('source changed'),
+    });
+    expect(updateWhereMock).toHaveBeenCalledWith(expect.objectContaining({
+      clauses: expect.arrayContaining([{
+        kind: 'eq',
+        field: 'letters.primarySourceRevision',
+        value: 9,
+      }]),
+    }));
   });
 });

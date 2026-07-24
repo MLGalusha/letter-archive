@@ -8,6 +8,7 @@ function makeLetter(overrides: Partial<Letter> & Pick<Letter, "id">): Letter {
     id: overrides.id,
     title: overrides.title ?? overrides.id,
     collectionCode: overrides.collectionCode ?? "001",
+    primarySourceRevision: overrides.primarySourceRevision ?? 0,
     images: overrides.images ?? [],
     transcript: overrides.transcript ?? { pages: [], fullText: "", verified: false },
     metadata: overrides.metadata ?? { sender: undefined, recipient: undefined, dateRaw: undefined, verified: false },

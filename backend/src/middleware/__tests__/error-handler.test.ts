@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ZodError, z } from 'zod';
 import { errorHandler } from '../error-handler.js';
+import { SourceRevisionChangedError } from '../../services/letter/source-revision.js';
+import { AppError } from '../../utils/response-helpers.js';
 
 const log = {
   warn: vi.fn(),
@@ -70,6 +72,35 @@ describe('errorHandler', () => {
       }),
     );
     expect(log.warn).toHaveBeenCalled();
+  });
+
+  it('serializes the stable code only for source-epoch conflicts', () => {
+    const req = createReq();
+    const sourceResponse = createRes();
+    const ordinaryResponse = createRes();
+
+    errorHandler(
+      new SourceRevisionChangedError('Primary source changed'),
+      req,
+      sourceResponse,
+      vi.fn(),
+    );
+    errorHandler(
+      new AppError(409, 'Version history changed'),
+      req,
+      ordinaryResponse,
+      vi.fn(),
+    );
+
+    expect(sourceResponse.status).toHaveBeenCalledWith(409);
+    expect(sourceResponse.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: 'Primary source changed',
+        code: 'SOURCE_REVISION_CHANGED',
+      }),
+    );
+    expect(ordinaryResponse.status).toHaveBeenCalledWith(409);
+    expect(ordinaryResponse.json.mock.calls[0]?.[0]).not.toHaveProperty('code');
   });
 
   it('honors express-style status properties on thrown errors', () => {

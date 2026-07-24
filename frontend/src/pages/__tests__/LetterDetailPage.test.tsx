@@ -34,6 +34,7 @@ function createLetter(overrides: Partial<Letter> = {}): Letter {
     id: "letter-1",
     title: "letter-1",
     collectionCode: "009",
+    primarySourceRevision: 0,
     images: [
       {
         id: "img-1",

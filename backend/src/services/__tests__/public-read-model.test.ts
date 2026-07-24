@@ -12,6 +12,7 @@ function makeLetter(overrides: Partial<FrontendLetter> = {}): FrontendLetter {
     id: 'letter-1',
     title: 'Secret title from Alice to Bob',
     collectionCode: '009',
+    primarySourceRevision: 0,
     images: [{
       id: 'page-1',
       type: 'letter',
@@ -300,7 +301,7 @@ describe('public collection read model', () => {
       profileThemes: ['private'],
     };
 
-    expect(toPublicCollection(source)).toEqual({
+    expect(toPublicCollection(source, false)).toEqual({
       id: 'collection-9',
       collectionCode: '009',
       title: 'Collection Nine',
@@ -308,6 +309,13 @@ describe('public collection read model', () => {
       createdAt: '2026-01-01T00:00:00.000Z',
       hook: null,
     });
-    expect(toPublicCollection({ ...source, profileStatus: 'VERIFIED' }).hook).toBe('Profile hook');
+    expect(toPublicCollection(
+      { ...source, profileStatus: 'VERIFIED' },
+      true,
+    ).hook).toBe('Profile hook');
+    expect(toPublicCollection(
+      { ...source, profileStatus: 'VERIFIED' },
+      false,
+    ).hook).toBeNull();
   });
 });

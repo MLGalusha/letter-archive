@@ -1,7 +1,6 @@
 import { eq, and, ne, sql } from 'drizzle-orm';
 import {
   db,
-  type Database,
   letters,
   type Letter,
   type LetterType,
@@ -9,7 +8,6 @@ import {
 } from '../db/index.js';
 import { isPlaceholderValue } from '../utils/placeholders.js';
 import { clearedEntityExtractionOwnership } from './letter/entity-extraction-job.js';
-import { buildExtraContentSourceInvalidationPatch } from './letter/extra-content-job.js';
 import { transcriptionPrerequisiteConditions } from './processing-eligibility.js';
 import {
   isPublicCatalogueLetterType,
@@ -28,13 +26,6 @@ export interface CreateLetterParams extends LetterIdentity {
   letterDate: string | null;
   dateConfidence: DateConfidence;
 }
-
-export type ExtraContentGroupIdentity = Pick<
-  LetterIdentity,
-  'collectionId' | 'dateRaw' | 'typeSequence'
->;
-
-export type LetterUpdateDatabase = Pick<Database, 'update'>;
 
 /**
  * Finds an existing letter by its identity, or creates a new one.
@@ -63,9 +54,30 @@ export async function findOrCreateLetter(params: CreateLetterParams): Promise<Le
       letterDate: params.letterDate,
       dateConfidence: params.dateConfidence,
     })
+    .onConflictDoNothing({
+      target: [
+        letters.collectionId,
+        letters.dateRaw,
+        letters.type,
+        letters.typeSequence,
+      ],
+    })
     .returning();
 
-  return created;
+  if (created) return created;
+
+  const winner = await db.query.letters.findFirst({
+    where: and(
+      eq(letters.collectionId, params.collectionId),
+      eq(letters.dateRaw, params.dateRaw),
+      eq(letters.type, params.type),
+      eq(letters.typeSequence, params.typeSequence),
+    ),
+  });
+  if (!winner) {
+    throw new Error('Letter identity conflicted but could not be reloaded');
+  }
+  return winner;
 }
 
 /**
@@ -153,32 +165,12 @@ export async function resolveRepresentativeLetterId(
 }
 
 /**
- * Invalidates the primary letter's derived extra-content job after one of its
- * T/C/E source pages changes. A running owner keeps its attempt ID and is marked
- * dirty so it can reconcile the newer source; idle jobs return to PENDING.
- */
-export async function invalidateExtraContentJobForSourceChange(
-  identity: ExtraContentGroupIdentity,
-  database: LetterUpdateDatabase = db,
-): Promise<void> {
-  await database
-    .update(letters)
-    .set({
-      ...buildExtraContentSourceInvalidationPatch(),
-      updatedAt: new Date(),
-    })
-    .where(and(
-      eq(letters.collectionId, identity.collectionId),
-      eq(letters.dateRaw, identity.dateRaw),
-      eq(letters.type, 'L'),
-      eq(letters.typeSequence, identity.typeSequence),
-    ));
-}
-
-/**
  * Resets a letter for re-processing.
  */
-export async function resetLetterForProcessing(letterId: string): Promise<boolean> {
+export async function resetLetterForProcessing(
+  letterId: string,
+  expectedPrimarySourceRevision: number,
+): Promise<boolean> {
   const reset = await db
     .update(letters)
     .set({
@@ -219,6 +211,7 @@ export async function resetLetterForProcessing(letterId: string): Promise<boolea
     })
     .where(and(
       eq(letters.id, letterId),
+      eq(letters.primarySourceRevision, expectedPrimarySourceRevision),
       ...transcriptionPrerequisiteConditions(),
       ne(letters.transcriptionStatus, 'RUNNING'),
     ))

@@ -68,10 +68,18 @@ test.describe('@mocked Upload Page', () => {
 
     await page.getByRole('button', { name: 'Upload' }).click();
 
-    await expect(page.locator('.upload-banner')).toContainText('Upload Complete');
-    await expect(page.locator('.upload-banner')).toContainText('2 files');
-    await expect(page.locator('.upload-banner')).toContainText('1 collection');
-    expect(mockedApi.uploadRequests).toHaveLength(1);
+    await expect.poll(() => mockedApi.uploadRequests.length).toBe(1);
+    expect(mockedApi.uploadRequests).toEqual([
+      {
+        url: expect.stringMatching(/\/admin\/uploads$/),
+        filenames: [
+          '009-19470810-L01-01.jpg',
+          '009-19470810-L01-02.jpg',
+        ],
+      },
+    ]);
+    await expect(page.locator('.upload-banner')).toHaveCount(0);
+    await expect(page.locator('.upload-drop-zone')).toContainText('Drag images here');
   });
 
   test('shows request ids in upload failures for the real browser workflow', async ({
@@ -143,13 +151,15 @@ test.describe('@mocked Upload Page', () => {
     await expect(page.locator('.duplicate-dialog')).toContainText('Duplicates Found');
     await page.getByRole('button', { name: /Skip Duplicates/i }).click();
 
-    await expect(page.locator('.upload-banner')).toContainText('1 skipped');
+    await expect.poll(() => mockedApi.uploadRequests.length).toBe(1);
     expect(mockedApi.uploadRequests).toEqual([
       {
         url: expect.stringMatching(/\/admin\/uploads$/),
         filenames: ['009-19470810-L01-02.jpg'],
       },
     ]);
+    await expect(page.locator('.upload-banner')).toHaveCount(0);
+    await expect(page.locator('.upload-drop-zone')).toContainText('Drag images here');
   });
 
   test('replaces duplicate files through the real browser upload workflow', async ({
@@ -170,7 +180,6 @@ test.describe('@mocked Upload Page', () => {
     await expect(page.locator('.duplicate-dialog')).toContainText('Duplicates Found');
     await page.getByRole('button', { name: /Replace Duplicates/i }).click();
 
-    await expect(page.locator('.upload-banner')).toContainText('1 replaced');
     // Wait for both batch requests to complete (new files + force replacements)
     await expect.poll(() => mockedApi.uploadRequests.length, { timeout: 5000 }).toBe(2);
     expect(mockedApi.uploadRequests).toEqual([
@@ -183,5 +192,15 @@ test.describe('@mocked Upload Page', () => {
         filenames: ['009-19470810-L01-01.jpg'],
       },
     ]);
+    expect(mockedApi.forceSourceExpectations).toEqual([{
+      '009-19470810-L01-01.jpg': {
+        pageId: 'page-009-19470810-L01-01.jpg',
+        primarySourceRevision: 8,
+        storagePath: '/uploads/009-19470810-L01-01.jpg',
+        checksumSha256: 'checksum-009-19470810-L01-01.jpg',
+      },
+    }]);
+    await expect(page.locator('.upload-banner')).toHaveCount(0);
+    await expect(page.locator('.upload-drop-zone')).toContainText('Drag images here');
   });
 });

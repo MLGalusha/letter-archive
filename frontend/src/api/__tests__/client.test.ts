@@ -62,6 +62,26 @@ describe('api client', () => {
     expect(result).toBeUndefined();
   });
 
+  it('sends an optional JSON body with DELETE requests', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    await apiDelete<void>('/admin/letters/letter-1', {
+      primarySourceRevision: 7,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:3002/admin/letters/letter-1',
+      expect.objectContaining({
+        method: 'DELETE',
+        credentials: 'include',
+        headers: expect.objectContaining({
+          'Content-Type': 'application/json',
+        }),
+        body: JSON.stringify({ primarySourceRevision: 7 }),
+      }),
+    );
+  });
+
   it('captures request id from headers when an error response is not json', async () => {
     fetchMock.mockResolvedValueOnce(new Response('Bad gateway upstream', {
       status: 502,

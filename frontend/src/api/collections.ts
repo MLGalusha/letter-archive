@@ -2,7 +2,7 @@
  * Collections API service
  */
 
-import { apiGet, apiPut, apiPost, apiPatch } from './client';
+import { apiGet, apiPut, apiPost } from './client';
 import type { Letter, PublicLetter } from '../types/Letter';
 
 export interface CollectionInfo {
@@ -33,6 +33,8 @@ export interface AdminCollectionWithLetters {
   title: string | null;
   description: string | null;
   createdAt: string;
+  profileRevision: number;
+  identityFingerprint: string;
   letterCount: number;
   hook?: string | null;
   letters: Letter[];
@@ -48,6 +50,7 @@ export interface AdminCollectionInfo {
   title: string | null;
   description: string | null;
   createdAt: string;
+  profileRevision: number;
   letterCount?: number;
   publishedCount: number;
   hiddenCount: number;
@@ -107,16 +110,6 @@ export async function getAdminCollections(): Promise<AdminCollectionInfo[]> {
  */
 export async function getAdminCollectionByCode(code: string): Promise<AdminCollectionWithLetters> {
   return apiGet<AdminCollectionWithLetters>(`/admin/collections/${code}`);
-}
-
-/**
- * Update collection metadata (admin only)
- */
-export async function updateCollection(
-  code: string,
-  data: { title?: string; description?: string | null }
-): Promise<CollectionInfo> {
-  return apiPut<CollectionInfo>(`/admin/collections/${code}`, data);
 }
 
 // ============================================================================
@@ -236,7 +229,45 @@ export interface GenerateProfileResult {
   narrative: string;
   correspondents: CollectionProfileCorrespondent[];
   profileStatus: ContentStatus;
+  profileRevision: number;
   isStub: boolean;
+}
+
+export interface CollectionProfileMutationResult {
+  profileRevision: number;
+}
+
+export interface CollectionEditorMutation {
+  profileRevision: number;
+  identityFingerprint: string;
+  hook?: string | null;
+  profileNarrative?: string;
+  profileStartHereLetterId?: string | null;
+  profileCorrespondents?: CollectionProfileCorrespondent[];
+  description?: string | null;
+  correspondentRenames: Array<{
+    oldName: string;
+    newName: string;
+    roles: Array<'sender' | 'recipient'>;
+  }>;
+}
+
+export interface CollectionEditorMutationResult {
+  profileRevision: number;
+  identityFingerprint: string;
+  updatedLetterCount: number;
+  changed: boolean;
+}
+
+/** Persist the collection editor's complete Update action atomically. */
+export async function updateCollectionEditor(
+  code: string,
+  data: CollectionEditorMutation,
+): Promise<CollectionEditorMutationResult> {
+  return apiPut<CollectionEditorMutationResult>(
+    `/admin/collections/${code}/editor`,
+    data,
+  );
 }
 
 /** Get data completeness before generating profile */
@@ -245,14 +276,22 @@ export async function getCollectionCompleteness(code: string): Promise<Collectio
 }
 
 /** Generate (or regenerate) a collection profile via AI */
-export async function generateCollectionProfile(code: string, force = false): Promise<GenerateProfileResult> {
-  return apiPost<GenerateProfileResult>(`/admin/collections/${code}/generate-profile`, { force });
+export async function generateCollectionProfile(
+  code: string,
+  profileRevision: number,
+  force = false,
+): Promise<GenerateProfileResult> {
+  return apiPost<GenerateProfileResult>(`/admin/collections/${code}/generate-profile`, {
+    force,
+    profileRevision,
+  });
 }
 
 /** Update profile content and/or status */
 export async function updateCollectionProfile(
   code: string,
   data: {
+    profileRevision: number;
     hook?: string | null;
     profileNarrative?: string;
     profileStartHereLetterId?: string | null;
@@ -264,24 +303,16 @@ export async function updateCollectionProfile(
     profileStatus?: 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
     highlightImageId?: string | null;
   },
-): Promise<AdminCollectionInfo> {
-  return apiPut<AdminCollectionInfo>(`/admin/collections/${code}/profile`, data);
+): Promise<CollectionProfileMutationResult> {
+  return apiPut<CollectionProfileMutationResult>(`/admin/collections/${code}/profile`, data);
 }
 
 /** Reset a collection profile back to EMPTY, clearing all generated content */
-export async function resetCollectionProfile(code: string): Promise<AdminCollectionInfo> {
-  return updateCollectionProfile(code, { profileStatus: 'EMPTY' });
-}
-
-export async function renameCollectionCorrespondent(
+export async function resetCollectionProfile(
   code: string,
-  data: {
-    oldName: string;
-    newName: string;
-    roles: Array<'sender' | 'recipient'>;
-  },
-): Promise<{ updatedCount: number; message: string }> {
-  return apiPatch<{ updatedCount: number; message: string }>(`/admin/collections/${code}/correspondents`, data);
+  profileRevision: number,
+): Promise<CollectionProfileMutationResult> {
+  return updateCollectionProfile(code, { profileRevision, profileStatus: 'EMPTY' });
 }
 
 /** Get the full public collection profile (AI + aggregations) */

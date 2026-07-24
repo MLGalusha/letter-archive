@@ -5,6 +5,7 @@ const {
   findManyMock,
   dbInsertMock,
   insertValuesMock,
+  insertOnConflictMock,
   insertReturningMock,
   dbUpdateMock,
   updateSetMock,
@@ -15,6 +16,7 @@ const {
   findManyMock: vi.fn(),
   dbInsertMock: vi.fn(),
   insertValuesMock: vi.fn(),
+  insertOnConflictMock: vi.fn(),
   insertReturningMock: vi.fn(),
   dbUpdateMock: vi.fn(),
   updateSetMock: vi.fn(),
@@ -47,6 +49,9 @@ vi.mock('../../db/index.js', () => {
     values: insertValuesMock,
   }));
   insertValuesMock.mockImplementation(() => ({
+    onConflictDoNothing: insertOnConflictMock,
+  }));
+  insertOnConflictMock.mockImplementation(() => ({
     returning: insertReturningMock,
   }));
   dbUpdateMock.mockImplementation(() => ({
@@ -69,6 +74,7 @@ vi.mock('../../db/index.js', () => {
     },
     letters: {
       id: 'letters.id',
+      primarySourceRevision: 'letters.primarySourceRevision',
       collectionId: 'letters.collectionId',
       dateRaw: 'letters.dateRaw',
       type: 'letters.type',
@@ -98,7 +104,6 @@ vi.mock('../../db/index.js', () => {
 
 import {
   findOrCreateLetter,
-  invalidateExtraContentJobForSourceChange,
   resolveRepresentativeLetterId,
   resetLetterForProcessing,
 } from '../letters.js';
@@ -142,6 +147,38 @@ describe('letters service', () => {
 
     expect(result).toBe(existing);
     expect(dbInsertMock).not.toHaveBeenCalled();
+  });
+
+  it('returns the concurrent identity winner when its insert loses the race', async () => {
+    const winner = {
+      id: 'letter-winner',
+      collectionId: 'collection-1',
+      dateRaw: '19470810',
+      type: 'L',
+      typeSequence: 1,
+    };
+    findFirstMock
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(winner);
+    insertReturningMock.mockResolvedValueOnce([]);
+
+    await expect(findOrCreateLetter({
+      collectionId: 'collection-1',
+      dateRaw: '19470810',
+      type: 'L',
+      typeSequence: 1,
+      letterDate: '1947-08-10',
+      dateConfidence: 'exact',
+    })).resolves.toBe(winner);
+
+    expect(insertOnConflictMock).toHaveBeenCalledWith({
+      target: [
+        'letters.collectionId',
+        'letters.dateRaw',
+        'letters.type',
+        'letters.typeSequence',
+      ],
+    });
   });
 
   it('resolves a companion row to the primary L-type representative', async () => {
@@ -215,70 +252,10 @@ describe('letters service', () => {
     expect(findManyMock).not.toHaveBeenCalled();
   });
 
-  it('invalidates only the matching L-type extra-content job identity', async () => {
-    await invalidateExtraContentJobForSourceChange({
-      collectionId: 'collection-1',
-      dateRaw: '19470810',
-      typeSequence: 2,
-    });
-
-    expect(updateWhereMock).toHaveBeenCalledWith({
-      kind: 'and',
-      clauses: [
-        { kind: 'eq', field: 'letters.collectionId', value: 'collection-1' },
-        { kind: 'eq', field: 'letters.dateRaw', value: '19470810' },
-        { kind: 'eq', field: 'letters.type', value: 'L' },
-        { kind: 'eq', field: 'letters.typeSequence', value: 2 },
-      ],
-    });
-
-    const updates = updateSetMock.mock.calls[0]?.[0];
-    expect(updates).toMatchObject({
-      extraContentJobStatus: {
-        kind: 'sql',
-        values: ['letters.extraContentJobStatus', 'letters.extraContentJobStatus'],
-      },
-      extraContentJobError: {
-        kind: 'sql',
-        values: ['letters.extraContentJobStatus', 'letters.extraContentJobError'],
-      },
-      extraContentJobRunId: {
-        kind: 'sql',
-        values: ['letters.extraContentJobStatus', 'letters.extraContentJobRunId'],
-      },
-      extraContentJobLeaseExpiresAt: {
-        kind: 'sql',
-        values: ['letters.extraContentJobStatus', 'letters.extraContentJobLeaseExpiresAt'],
-      },
-      extraContentJobClaimKind: {
-        kind: 'sql',
-        values: ['letters.extraContentJobStatus', 'letters.extraContentJobClaimKind'],
-      },
-      extraContentJobDirty: {
-        kind: 'sql',
-        values: ['letters.extraContentJobStatus'],
-      },
-      updatedAt: expect.any(Date),
-    });
-
-    const statusSql = updates.extraContentJobStatus.strings.join('?').replace(/\s+/g, ' ');
-    const errorSql = updates.extraContentJobError.strings.join('?').replace(/\s+/g, ' ');
-    const runIdSql = updates.extraContentJobRunId.strings.join('?').replace(/\s+/g, ' ');
-    const leaseSql = updates.extraContentJobLeaseExpiresAt.strings.join('?').replace(/\s+/g, ' ');
-    const claimKindSql = updates.extraContentJobClaimKind.strings.join('?').replace(/\s+/g, ' ');
-    const dirtySql = updates.extraContentJobDirty.strings.join('?').replace(/\s+/g, ' ');
-    expect(statusSql).toContain("WHEN ? = 'RUNNING' THEN ? ELSE 'PENDING'::job_status");
-    expect(errorSql).toContain("WHEN ? = 'RUNNING' THEN ? ELSE NULL");
-    expect(runIdSql).toContain("WHEN ? = 'RUNNING' THEN ? ELSE NULL");
-    expect(leaseSql).toContain("WHEN ? = 'RUNNING' THEN ? ELSE NULL");
-    expect(claimKindSql).toContain("WHEN ? = 'RUNNING' THEN ? ELSE NULL");
-    expect(dirtySql).toContain("WHEN ? = 'RUNNING' THEN true ELSE false");
-  });
-
   it('resets entity extraction state when re-enqueuing a letter for processing', async () => {
     updateReturningMock.mockResolvedValueOnce([{ id: 'letter-3' }]);
 
-    await expect(resetLetterForProcessing('letter-3')).resolves.toBe(true);
+    await expect(resetLetterForProcessing('letter-3', 4)).resolves.toBe(true);
 
     expect(updateSetMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -311,6 +288,7 @@ describe('letters service', () => {
       kind: 'and',
       clauses: [
         { kind: 'eq', field: 'letters.id', value: 'letter-3' },
+        { kind: 'eq', field: 'letters.primarySourceRevision', value: 4 },
         {
           kind: 'inArray',
           field: 'letters.type',

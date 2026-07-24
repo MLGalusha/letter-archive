@@ -278,10 +278,14 @@ export async function getAdminLetterById(id: string): Promise<Letter> {
 }
 
 /**
- * Delete a letter (soft delete)
+ * Delete a complete correspondence group at the source revision shown to the
+ * operator.
  */
-export async function deleteLetter(id: string): Promise<void> {
-  await apiDelete(`/admin/letters/${id}`);
+export async function deleteLetter(
+  id: string,
+  primarySourceRevision: number,
+): Promise<void> {
+  await apiDelete(`/admin/letters/${id}`, { primarySourceRevision });
 }
 
 /**

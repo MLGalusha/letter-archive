@@ -6,6 +6,7 @@ DB_PORT=5434
 DB_NAME="migration_test"
 LEGACY_DB_NAME="migration_0051_legacy_test"
 LIVENESS_ROLLOUT_DB_NAME="migration_0053_rollout_test"
+SOURCE_REVISION_ROLLOUT_DB_NAME="migration_0054_rollout_test"
 DB_USER="test"
 DB_PASS="test"
 
@@ -59,6 +60,9 @@ docker exec -i "$CONTAINER_NAME" \
   > /dev/null
 
 echo "Entity extraction liveness semantics regression passed."
+
+DATABASE_URL="postgres://$DB_USER:$DB_PASS@localhost:$DB_PORT/$DB_NAME" \
+  node scripts/test-page-source-boundary.mjs
 
 recovery_first_setup_count="$(
   docker exec "$CONTAINER_NAME" \
@@ -802,3 +806,97 @@ docker exec -i "$CONTAINER_NAME" \
   > /dev/null
 
 echo "Migration 0053 active-attempt rollout regression passed."
+
+echo "Replaying migration 0054 over an existing correspondence..."
+docker exec "$CONTAINER_NAME" \
+  createdb -U "$DB_USER" "$SOURCE_REVISION_ROLLOUT_DB_NAME"
+
+while IFS= read -r migration_tag; do
+  docker exec -i "$CONTAINER_NAME" \
+    psql -v ON_ERROR_STOP=1 -U "$DB_USER" \
+    -d "$SOURCE_REVISION_ROLLOUT_DB_NAME" \
+    < "src/db/migrations/${migration_tag}.sql" \
+    > /dev/null
+done < <(
+  node --input-type=module -e "
+    import fs from 'node:fs';
+    const journal = JSON.parse(
+      fs.readFileSync('src/db/migrations/meta/_journal.json', 'utf8'),
+    );
+    for (const entry of journal.entries.filter((candidate) => candidate.idx < 54)) {
+      console.log(entry.tag);
+    }
+  "
+)
+
+docker exec -i "$CONTAINER_NAME" \
+  psql -v ON_ERROR_STOP=1 -U "$DB_USER" \
+  -d "$SOURCE_REVISION_ROLLOUT_DB_NAME" \
+  > /dev/null <<'SQL'
+INSERT INTO collections (id, collection_code, profile_status)
+VALUES (
+  '54000000-0000-4000-8000-000000000010',
+  'R54',
+  'VERIFIED'
+);
+
+INSERT INTO letters (
+  id,
+  collection_id,
+  date_raw,
+  type,
+  type_sequence,
+  visibility
+) VALUES (
+  '54000000-0000-4000-8000-000000000011',
+  '54000000-0000-4000-8000-000000000010',
+  '19470810',
+  'L',
+  1,
+  'PUBLISHED'
+);
+
+INSERT INTO letter_versions (
+  letter_id,
+  field_type,
+  version_number,
+  content,
+  source
+) VALUES (
+  '54000000-0000-4000-8000-000000000011',
+  'transcript',
+  1,
+  '{"text":"legacy source transcript"}'::jsonb,
+  'human'
+);
+SQL
+
+docker exec -i "$CONTAINER_NAME" \
+  psql --single-transaction -v ON_ERROR_STOP=1 \
+  -U "$DB_USER" -d "$SOURCE_REVISION_ROLLOUT_DB_NAME" \
+  < "src/db/migrations/0054_add_page_source_revisions.sql" \
+  > /dev/null
+
+source_revision_upgrade_count="$(
+  docker exec "$CONTAINER_NAME" \
+    psql -At -v ON_ERROR_STOP=1 -U "$DB_USER" \
+    -d "$SOURCE_REVISION_ROLLOUT_DB_NAME" \
+    -c "SELECT count(*)
+        FROM collections c
+        JOIN letters l ON l.collection_id = c.id
+        JOIN letter_versions v ON v.letter_id = l.id
+        WHERE c.id = '54000000-0000-4000-8000-000000000010'
+          AND c.profile_revision = 0
+          AND c.profile_source_fingerprint IS NULL
+          AND l.primary_source_revision = 0
+          AND v.primary_source_revision = 0;"
+)"
+if [[ "$source_revision_upgrade_count" != "1" ]]; then
+  echo "Migration 0054 did not initialize source epochs while leaving legacy profile provenance unbound."
+  exit 1
+fi
+
+DATABASE_URL="postgres://$DB_USER:$DB_PASS@localhost:$DB_PORT/$SOURCE_REVISION_ROLLOUT_DB_NAME" \
+  node scripts/test-page-source-boundary.mjs
+
+echo "Migration 0054 upgraded correspondence regression passed."

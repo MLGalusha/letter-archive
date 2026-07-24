@@ -1,10 +1,30 @@
 import { parseFilename, isValidFilename } from './filename-parser.js';
-import { buildStoragePath, storeFile } from './storage.js';
+import sharp from 'sharp';
+import {
+  buildStoragePath,
+  computeChecksum,
+  getAbsoluteStoragePath,
+  inspectUploadFile,
+  isImmutableStoragePath,
+  removeStoredFile,
+  storeImmutableFile,
+} from './storage.js';
 import { findOrCreateCollection } from './collections.js';
 import { findOrCreateLetter } from './letters.js';
-import { findOrCreatePage } from './letter-pages.js';
+import {
+  findOrCreatePage,
+  getPage,
+  type ExistingPagePolicy,
+  type PageMutationOutcome,
+  type PageMutationResult,
+  type UploadSourceExpectation,
+} from './letter-pages.js';
 import type { Collection, Letter, LetterPage } from '../db/index.js';
 import { createLogger } from '../utils/logger.js';
+import {
+  SourceRevisionChangedError,
+  sourceRevisionChanged,
+} from './letter/source-revision.js';
 
 const log = createLogger({ module: 'upload' });
 
@@ -13,12 +33,29 @@ export interface UploadResult {
   letter: Letter;
   page: LetterPage;
   storagePath: string;
+  primarySourceRevision: number;
   alreadyExists: boolean;
+  outcome: UploadOutcome;
+  changed: boolean;
 }
 
-export interface UploadError {
-  filename: string;
-  error: string;
+export type UploadOutcome = 'created' | 'replaced' | 'unchanged';
+
+async function readImageDimensions(
+  storagePath: string,
+): Promise<{ width: number; height: number } | null> {
+  try {
+    const { width, height } = await sharp(getAbsoluteStoragePath(storagePath)).metadata();
+    return width && height ? { width, height } : null;
+  } catch {
+    return null;
+  }
+}
+
+function uploadOutcome(outcome: PageMutationOutcome): UploadOutcome {
+  if (outcome === 'created') return 'created';
+  if (outcome === 'replaced') return 'replaced';
+  return 'unchanged';
 }
 
 /**
@@ -34,7 +71,8 @@ export interface UploadError {
 export async function processUploadedFile(
   tempPath: string,
   originalFilename: string,
-  force = false
+  force = false,
+  expectedReplacementSource?: UploadSourceExpectation,
 ): Promise<UploadResult> {
   const start = Date.now();
   const context = { originalFilename, force };
@@ -82,36 +120,229 @@ export async function processUploadedFile(
   });
   log.debug({ ...context, letterId: letter.id }, 'Letter resolved');
 
-  // Build storage path and store file
-  const destPath = buildStoragePath(
+  const logicalPath = buildStoragePath(
     parsed.collectionCode,
     parsed.dateRaw,
     parsed.type,
     parsed.typeSequence,
     originalFilename
   );
-
-  const { storagePath, checksumSha256, alreadyExists } = await storeFile(tempPath, destPath, force);
-
-  // Get or create page record (pass force to update checksum if replacing)
-  const extraContentSource = parsed.type === 'T' || parsed.type === 'C' || parsed.type === 'E'
+  const existing = await getPage(letter.id, parsed.pageNumber);
+  if (force) {
+    if (!expectedReplacementSource) {
+      throw new Error(
+        'Force replacement requires the source expectation returned by duplicate checking',
+      );
+    }
+    if (
+      !existing
+      || existing.id !== expectedReplacementSource.pageId
+      || existing.storagePath !== expectedReplacementSource.storagePath
+      || existing.checksumSha256 !== expectedReplacementSource.checksumSha256
+    ) {
+      throw sourceRevisionChanged(
+        'Page source changed after duplicate confirmation; check duplicates again before replacing it',
+      );
+    }
+  }
+  const expectedExistingSource = existing
     ? {
-        collectionId: collection.id,
-        dateRaw: parsed.dateRaw,
-        typeSequence: parsed.typeSequence,
+        storagePath: existing.storagePath,
+        checksumSha256: existing.checksumSha256,
       }
     : undefined;
-  const { page } = await findOrCreatePage(
-    {
+
+  let pageResult: PageMutationResult;
+  let preparedStoragePath: string | null = null;
+  const commitObservedSource = async (
+    checksumSha256: string,
+    policy: Extract<ExistingPagePolicy, 'keep' | 'replace'>,
+  ) => {
+    if (!existing) {
+      throw new Error('Cannot confirm a page source that was not observed');
+    }
+    return findOrCreatePage({
+      collectionId: collection.id,
       letterId: letter.id,
       pageNumber: parsed.pageNumber,
-      storagePath,
+      storagePath: existing.storagePath,
       originalFilename,
       checksumSha256,
-      force,
-    },
-    { extraContentSource },
-  );
+      width: existing.width ?? null,
+      height: existing.height ?? null,
+      existingPagePolicy: policy,
+      ...(force && expectedReplacementSource
+        ? { expectedReplacementSource }
+        : {}),
+      ...(!force && expectedExistingSource
+        ? { expectedExistingSource }
+        : {}),
+    });
+  };
+  const commitPreparedSource = async (
+    stored: { storagePath: string; checksumSha256: string },
+    policy: ExistingPagePolicy,
+    committedOriginalFilename = originalFilename,
+  ) => {
+    preparedStoragePath = stored.storagePath;
+    const dimensions = await readImageDimensions(stored.storagePath);
+    try {
+      return await findOrCreatePage({
+        collectionId: collection.id,
+        letterId: letter.id,
+        pageNumber: parsed.pageNumber,
+        storagePath: stored.storagePath,
+        originalFilename: committedOriginalFilename,
+        checksumSha256: stored.checksumSha256,
+        width: dimensions?.width ?? null,
+        height: dimensions?.height ?? null,
+        existingPagePolicy: policy,
+        ...(force && expectedReplacementSource
+          ? { expectedReplacementSource }
+          : {}),
+        ...(!force && policy !== 'replace' && expectedExistingSource
+          ? { expectedExistingSource }
+          : {}),
+      });
+    } catch (error) {
+      if (error instanceof SourceRevisionChangedError) {
+        await removeStoredFile(stored.storagePath).catch((cleanupError) => {
+          log.warn(
+            { ...context, storagePath: stored.storagePath, err: cleanupError },
+            'Failed to remove a stale force-upload candidate',
+          );
+        });
+        preparedStoragePath = null;
+        throw error;
+      }
+      log.error(
+        { ...context, storagePath: stored.storagePath, err: error },
+        'Immutable file stored but database page commit failed',
+      );
+      throw new Error(
+        `File stored at ${stored.storagePath}, but database reconciliation failed; retry the upload`,
+        { cause: error },
+      );
+    }
+  };
+
+  if (existing && !force) {
+    let actualChecksum: string | null = null;
+    try {
+      actualChecksum = await computeChecksum(
+        getAbsoluteStoragePath(existing.storagePath),
+      );
+    } catch {
+      // A matching upload can repair a missing legacy or immutable object.
+    }
+
+    if (
+      actualChecksum !== null
+      && actualChecksum === existing.checksumSha256
+    ) {
+      pageResult = await commitObservedSource(actualChecksum, 'keep');
+    } else {
+      const inspected = await inspectUploadFile(tempPath);
+      if (inspected.checksumSha256 === existing.checksumSha256) {
+        const stored = await storeImmutableFile(
+          tempPath,
+          logicalPath,
+          inspected.checksumSha256,
+        );
+        pageResult = await commitPreparedSource(
+          stored,
+          actualChecksum === null ? 'repair' : 'invalidate',
+        );
+      } else if (actualChecksum !== null) {
+        if (isImmutableStoragePath(existing.storagePath)) {
+          throw new Error(
+            'The committed immutable page object failed checksum verification; '
+            + 'upload matching bytes or retry with force=true',
+          );
+        }
+        const stored = await storeImmutableFile(
+          getAbsoluteStoragePath(existing.storagePath),
+          existing.storagePath,
+          actualChecksum,
+        );
+        pageResult = await commitPreparedSource(
+          stored,
+          'invalidate',
+          existing.originalFilename,
+        );
+      } else {
+        throw new Error(
+          'The committed page file is missing; upload matching bytes or retry with force=true',
+        );
+      }
+    }
+  } else {
+    const inspected = await inspectUploadFile(tempPath);
+
+    if (existing) {
+      let actualChecksum: string | null = null;
+      try {
+        actualChecksum = await computeChecksum(
+          getAbsoluteStoragePath(existing.storagePath),
+        );
+      } catch {
+        // A unique replacement object can repair a missing current pointer.
+      }
+
+      if (
+        actualChecksum === inspected.checksumSha256
+        && existing.checksumSha256 === inspected.checksumSha256
+      ) {
+        pageResult = await commitObservedSource(
+          inspected.checksumSha256,
+          'replace',
+        );
+      } else if (
+        actualChecksum === inspected.checksumSha256
+        && actualChecksum !== existing.checksumSha256
+      ) {
+        const stored = await storeImmutableFile(
+          tempPath,
+          logicalPath,
+          inspected.checksumSha256,
+        );
+        pageResult = await commitPreparedSource(stored, 'invalidate');
+      } else {
+        const stored = await storeImmutableFile(
+          tempPath,
+          logicalPath,
+          inspected.checksumSha256,
+        );
+        const policy: ExistingPagePolicy =
+          existing.checksumSha256 === stored.checksumSha256
+            ? actualChecksum === null ? 'reconcile' : 'invalidate'
+            : 'replace';
+        pageResult = await commitPreparedSource(stored, policy);
+      }
+    } else {
+      const stored = await storeImmutableFile(
+        tempPath,
+        logicalPath,
+        inspected.checksumSha256,
+      );
+      pageResult = await commitPreparedSource(stored, force ? 'replace' : 'keep');
+    }
+  }
+
+  if (
+    preparedStoragePath
+    && pageResult.page.storagePath !== preparedStoragePath
+  ) {
+    await removeStoredFile(preparedStoragePath).catch((error) => {
+      log.warn(
+        { ...context, storagePath: preparedStoragePath, err: error },
+        'Failed to remove an unused immutable upload object',
+      );
+    });
+  }
+
+  const outcome = uploadOutcome(pageResult.outcome);
+  const alreadyExists = outcome !== 'created';
 
   const duration = Date.now() - start;
   log.info(
@@ -119,62 +350,23 @@ export async function processUploadedFile(
       ...context,
       collectionId: collection.id,
       letterId: letter.id,
-      pageId: page.id,
+      pageId: pageResult.page.id,
       alreadyExists,
+      outcome,
+      changed: pageResult.sourceChanged,
       duration,
     },
-    alreadyExists ? 'File already exists, skipped' : 'File processed successfully'
+    outcome === 'unchanged' ? 'Upload source unchanged' : 'Upload source committed',
   );
 
   return {
     collection,
     letter,
-    page,
-    storagePath,
+    page: pageResult.page,
+    storagePath: pageResult.page.storagePath,
+    primarySourceRevision: pageResult.primarySourceRevision,
     alreadyExists,
+    outcome,
+    changed: pageResult.sourceChanged,
   };
-}
-
-/**
- * Processes multiple uploaded files.
- * Returns successful results and errors separately.
- */
-export async function processUploadedFiles(
-  files: Array<{ tempPath: string; originalFilename: string }>
-): Promise<{ results: UploadResult[]; errors: UploadError[] }> {
-  const start = Date.now();
-  const results: UploadResult[] = [];
-  const errors: UploadError[] = [];
-
-  log.info({ fileCount: files.length }, 'Starting batch upload processing');
-
-  for (const file of files) {
-    try {
-      const result = await processUploadedFile(file.tempPath, file.originalFilename);
-      results.push(result);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      log.error(
-        { filename: file.originalFilename, err: error },
-        'Failed to process uploaded file'
-      );
-      errors.push({
-        filename: file.originalFilename,
-        error: errorMessage,
-      });
-    }
-  }
-
-  const duration = Date.now() - start;
-  log.info(
-    {
-      totalFiles: files.length,
-      successCount: results.length,
-      errorCount: errors.length,
-      duration,
-    },
-    'Batch upload processing completed'
-  );
-
-  return { results, errors };
 }

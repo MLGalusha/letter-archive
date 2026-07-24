@@ -21,6 +21,7 @@ function makeLetter(params: {
     id: params.id,
     title: `Letter ${params.id}`,
     collectionCode: "009",
+    primarySourceRevision: 0,
     images: mediaTypes.map((type, index) => ({
       id: `${params.id}-${type}-${index}`,
       type,

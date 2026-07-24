@@ -75,8 +75,53 @@ test.describe("@mocked Processing Queue", () => {
 
     await expect(metadataSection).toContainText("Queue is empty.");
     expect(mockedApi.removeRequests).toEqual([
-      { letterId: "letter-3", type: "metadata" },
+      {
+        letterId: "letter-3",
+        type: "metadata",
+        primarySourceRevision: 6,
+        jobStateToken: "v1.queued-metadata-letter-3",
+      },
     ]);
+  });
+
+  test("clear sends only the displayed snapshot and preserves unseen newer work", async ({
+    page,
+  }) => {
+    const mockedApi = await openMockProcessingQueue(page);
+    mockedApi.state.queued.extraContent.push({
+      letterId: "letter-extra-new",
+      primarySourceRevision: 10,
+      jobStateToken: "v1.queued-extra-letter-new",
+      letterTitle: "19470817",
+      collectionCode: "009",
+      sender: null,
+      recipient: null,
+      queuedAt: null,
+    });
+    page.on("dialog", (dialog) => dialog.accept());
+
+    const extraSection = page
+      .locator(".proc-queue-section")
+      .filter({
+        has: page.getByText("Extra content transcription queue", {
+          exact: true,
+        }),
+      });
+    await extraSection.getByRole("button", { name: "Clear queue" }).click();
+
+    expect(mockedApi.clearRequests).toEqual([{
+      type: "extra_content",
+      items: [{
+        letterId: "letter-extra",
+        primarySourceRevision: 7,
+        jobStateToken: "v1.queued-extra-letter-extra",
+      }],
+    }]);
+    expect(mockedApi.state.queued.extraContent.map(({ letterId }) => letterId))
+      .toEqual(["letter-extra-new"]);
+    await expect(page.locator(".toast-info")).toContainText(
+      "Cleared 1 displayed queue item",
+    );
   });
 
   test("shows the request id when durable cancellation fails", async ({
@@ -107,7 +152,12 @@ test.describe("@mocked Processing Queue", () => {
     await expect(toast).toContainText("Job queue stalled");
     await expect(toast).toContainText("req-queue-500");
     expect(mockedApi.cancelRequests).toEqual([
-      { letterId: "letter-1", type: "transcription" },
+      {
+        letterId: "letter-1",
+        type: "transcription",
+        primarySourceRevision: 3,
+        jobStateToken: "v1.active-transcription-letter-1",
+      },
     ]);
   });
 
@@ -127,7 +177,12 @@ test.describe("@mocked Processing Queue", () => {
     await expect(toast).toContainText("Retry wake failed");
     await expect(toast).toContainText("req-retry-503");
     expect(mockedApi.retryRequests).toEqual([
-      { letterId: "letter-4", type: "metadata" },
+      {
+        letterId: "letter-4",
+        type: "metadata",
+        primarySourceRevision: 9,
+        jobStateToken: "v1.recent-metadata-letter-4",
+      },
     ]);
   });
 

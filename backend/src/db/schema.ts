@@ -158,26 +158,48 @@ export const personRelationshipTypeEnum = pgEnum('person_relationship_type', [
 // ============================================================================
 
 // Collections table
-export const collections = pgTable('collections', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  collectionCode: text('collection_code').notNull().unique(),
-  title: text('title'),
-  description: text('description'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+export const collections = pgTable(
+  'collections',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    collectionCode: text('collection_code').notNull().unique(),
+    title: text('title'),
+    description: text('description'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 
-  // AI-generated collection profile
-  profileNarrative: text('profile_narrative'),
-  profileStartHereLetterId: uuid('profile_start_here_letter_id'), // FK to letters(id) added in migration
-  profileStartHereReason: text('profile_start_here_reason'),
-  profileReadingPaths: jsonb('profile_reading_paths'), // Array<{ title, description, letterIds[] }>
-  profileGapAnalysis: jsonb('profile_gap_analysis'),   // Array<{ startDate, endDate, description }>
-  profileThemes: jsonb('profile_themes'),               // Array<{ name, description, letterIds[] }>
-  profileCorrespondents: jsonb('profile_correspondents'), // Array<{ name, hook, biography }>
-  profileStatus: contentStatusEnum('profile_status').notNull().default('EMPTY'),
-  profileGeneratedAt: timestamp('profile_generated_at', { withTimezone: true }),
-  hook: text('hook'),
-  highlightImageId: uuid('highlight_image_id'), // FK to letter_pages(id) — the featured image for this collection
-});
+    // Optimistic-concurrency epoch for the derived collection profile. Source
+    // invalidation and every profile mutation advance it.
+    profileRevision: integer('profile_revision').notNull().default(0),
+    // Exact database-derived fingerprint of the public corpus approved with
+    // the current profile. This is the final read-time guard for profile input
+    // writers that do not own the collection revision directly.
+    profileSourceFingerprint: text('profile_source_fingerprint'),
+
+    // AI-generated collection profile
+    profileNarrative: text('profile_narrative'),
+    profileStartHereLetterId: uuid('profile_start_here_letter_id'), // FK to letters(id) added in migration
+    profileStartHereReason: text('profile_start_here_reason'),
+    profileReadingPaths: jsonb('profile_reading_paths'), // Array<{ title, description, letterIds[] }>
+    profileGapAnalysis: jsonb('profile_gap_analysis'),   // Array<{ startDate, endDate, description }>
+    profileThemes: jsonb('profile_themes'),               // Array<{ name, description, letterIds[] }>
+    profileCorrespondents: jsonb('profile_correspondents'), // Array<{ name, hook, biography }>
+    profileStatus: contentStatusEnum('profile_status').notNull().default('EMPTY'),
+    profileGeneratedAt: timestamp('profile_generated_at', { withTimezone: true }),
+    hook: text('hook'),
+    highlightImageId: uuid('highlight_image_id'), // FK to letter_pages(id) — the featured image for this collection
+  },
+  (table) => [
+    check(
+      'collection_profile_revision_nonnegative',
+      sql`${table.profileRevision} >= 0`,
+    ),
+    check(
+      'collection_profile_source_fingerprint_valid',
+      sql`${table.profileSourceFingerprint} IS NULL
+        OR ${table.profileSourceFingerprint} ~ '^[0-9a-f]{32}$'`,
+    ),
+  ],
+);
 
 // Letters table
 export const letters = pgTable(
@@ -197,6 +219,10 @@ export const letters = pgTable(
 
     // Pipeline + visibility (legacy workflow kept for backward compat)
     workflow: workflowStateEnum('workflow').notNull().default('UPLOADED'),
+    // Monotonic source epoch for a correspondence unit. L and source-bearing
+    // companion page changes advance every member so source-bound admin writes
+    // from an older browser cannot restore stale derived state.
+    primarySourceRevision: integer('primary_source_revision').notNull().default(0),
     visibility: visibilityStateEnum('visibility').notNull().default('HIDDEN'),
     transcriptPublished: boolean('transcript_published').notNull().default(false),
     metadataPublished: boolean('metadata_published').notNull().default(false),
@@ -366,6 +392,7 @@ export const letters = pgTable(
     check('transcription_attempt_count_positive', sql`transcription_attempt_count >= 0`),
     check('metadata_attempt_count_positive', sql`metadata_attempt_count >= 0`),
     check('metadata_revision_nonnegative', sql`metadata_revision >= 0`),
+    check('primary_source_revision_nonnegative', sql`${table.primarySourceRevision} >= 0`),
     check(
       'entity_extraction_revision_nonnegative',
       sql`${table.entityExtractionRevision} >= 0`,
@@ -487,6 +514,7 @@ export const letterVersions = pgTable(
     versionNumber: integer('version_number').notNull(),
     content: jsonb('content').notNull(), // { text: "..." } for transcript, { sender, recipient, ... } for metadata
     source: text('source').notNull(), // 'ai' or 'human'
+    primarySourceRevision: integer('primary_source_revision').notNull().default(0),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -498,6 +526,10 @@ export const letterVersions = pgTable(
     check('field_type_valid', sql`field_type IN ('transcript', 'metadata')`),
     check('source_valid', sql`source IN ('ai', 'human')`),
     check('version_number_positive', sql`version_number >= 1`),
+    check(
+      'letter_version_primary_source_revision_nonnegative',
+      sql`${table.primarySourceRevision} >= 0`,
+    ),
   ]
 );
 

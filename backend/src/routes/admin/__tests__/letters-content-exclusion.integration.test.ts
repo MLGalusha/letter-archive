@@ -13,8 +13,13 @@ const {
   observeMetadataStateMock,
   claimRequestedMetadataMock,
   claimMetadataAfterTranscriptConfirmationMock,
+  generateAndSaveReadingViewMock,
   dbTransactionMock,
   syncLetterParticipantsFromMetadataMock,
+  addAiNoteMock,
+  resolveAiNotesForChangedFieldsMock,
+  updateAiNotesMock,
+  updateAiNoteStatusMock,
 } = vi.hoisted(() => ({
   getLetterByIdMock: vi.fn(),
   fetchLetterWithRelatedAndTransformMock: vi.fn(),
@@ -27,8 +32,13 @@ const {
   observeMetadataStateMock: vi.fn(),
   claimRequestedMetadataMock: vi.fn(),
   claimMetadataAfterTranscriptConfirmationMock: vi.fn(),
+  generateAndSaveReadingViewMock: vi.fn(),
   dbTransactionMock: vi.fn(),
   syncLetterParticipantsFromMetadataMock: vi.fn(),
+  addAiNoteMock: vi.fn(),
+  resolveAiNotesForChangedFieldsMock: vi.fn(),
+  updateAiNotesMock: vi.fn(),
+  updateAiNoteStatusMock: vi.fn(),
 }));
 
 vi.mock('drizzle-orm', () => ({
@@ -61,6 +71,7 @@ vi.mock('../../../db/index.js', () => {
       entityExtractionStatus: 'letters.entityExtractionStatus',
       transcriptionStatus: 'letters.transcriptionStatus',
       transcriptionText: 'letters.transcriptionText',
+      primarySourceRevision: 'letters.primarySourceRevision',
       workflow: 'letters.workflow',
     },
     canonicalPersons: { id: 'canonicalPersons.id' },
@@ -118,15 +129,20 @@ vi.mock('../../../services/letter-operations.js', () => ({
   updateExtraContent: vi.fn(),
   updatePhotoDescription: vi.fn(),
 }));
+vi.mock('../../../services/letter/ai-notes.js', () => ({
+  addAiNote: addAiNoteMock,
+  resolveAiNotesForChangedFields: resolveAiNotesForChangedFieldsMock,
+  updateAiNotes: updateAiNotesMock,
+  updateAiNoteStatus: updateAiNoteStatusMock,
+}));
 
 vi.mock('../../../services/line-segments.js', () => ({
   savePageLineSegments: vi.fn(),
+  updatePageSegmentTrust: vi.fn(),
+  updateLetterSegmentTrust: vi.fn(),
 }));
 vi.mock('../../../services/metadata-update.js', () => ({
   executeRetagForLetter: vi.fn(),
-}));
-vi.mock('../../../services/note-resolution.js', () => ({
-  checkNoteAutoResolutions: vi.fn(),
 }));
 vi.mock('../../../services/processing-queue.js', () => ({
   requestBackgroundWorkerRun: vi.fn(),
@@ -139,6 +155,12 @@ vi.mock('../../../services/entities/participant-sync.js', () => ({
 }));
 vi.mock('../../../services/storage.js', () => ({
   getAbsoluteStoragePath: vi.fn(),
+}));
+vi.mock('../../../services/letter/correspondence-deletion.js', () => ({
+  deleteCorrespondenceGroup: vi.fn(),
+}));
+vi.mock('../../../services/letter/readingView.js', () => ({
+  generateAndSaveReadingView: generateAndSaveReadingViewMock,
 }));
 
 import contentRouter from '../letters/content.js';
@@ -153,6 +175,11 @@ describe('admin downstream extraction exclusion', () => {
     observeMetadataStateMock.mockImplementation(letter => ({ letter }));
     claimRequestedMetadataMock.mockResolvedValue(null);
     claimMetadataAfterTranscriptConfirmationMock.mockResolvedValue(null);
+    generateAndSaveReadingViewMock.mockResolvedValue('Reading view');
+    addAiNoteMock.mockResolvedValue(true);
+    resolveAiNotesForChangedFieldsMock.mockReturnValue(null);
+    updateAiNotesMock.mockResolvedValue(true);
+    updateAiNoteStatusMock.mockResolvedValue(true);
     fetchLetterWithRelatedAndTransformMock.mockResolvedValue({
       id: 'letter-1',
     });
@@ -160,8 +187,296 @@ describe('admin downstream extraction exclusion', () => {
 
   it.each([
     {
+      method: 'PUT',
+      route: '/letter-1/ai-notes',
+      body: { aiNotes: [] },
+    },
+    {
+      method: 'POST',
+      route: '/letter-1/notes',
+      body: {
+        content: 'Check the sender',
+        category: 'identity',
+        priority: 'high',
+      },
+    },
+    {
+      method: 'PATCH',
+      route: '/letter-1/notes/note-1',
+      body: { status: 'resolved' },
+    },
+  ])('requires source authority for $method $route', async ({
+    method,
+    route,
+    body,
+  }) => {
+    const response = await invokeRouter(contentRouter, {
+      method,
+      url: route,
+      path: route,
+      body,
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({
+      code: 'SOURCE_REVISION_CHANGED',
+      error: expect.stringContaining('source version is missing'),
+    });
+    expect(addAiNoteMock).not.toHaveBeenCalled();
+    expect(updateAiNotesMock).not.toHaveBeenCalled();
+    expect(updateAiNoteStatusMock).not.toHaveBeenCalled();
+  });
+
+  it('passes the observed source revision to every note mutation owner', async () => {
+    const replaceResponse = await invokeRouter(contentRouter, {
+      method: 'PUT',
+      url: '/letter-1/ai-notes',
+      path: '/letter-1/ai-notes',
+      body: {
+        primarySourceRevision: 7,
+        aiNotes: [],
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+    const addResponse = await invokeRouter(contentRouter, {
+      method: 'POST',
+      url: '/letter-1/notes',
+      path: '/letter-1/notes',
+      body: {
+        primarySourceRevision: 7,
+        content: 'Check the sender',
+        category: 'identity',
+        priority: 'high',
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+    const statusResponse = await invokeRouter(contentRouter, {
+      method: 'PATCH',
+      url: '/letter-1/notes/note-1',
+      path: '/letter-1/notes/note-1',
+      body: {
+        primarySourceRevision: 7,
+        status: 'dismissed',
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect([
+      replaceResponse.statusCode,
+      addResponse.statusCode,
+      statusResponse.statusCode,
+    ]).toEqual([200, 200, 200]);
+    expect(updateAiNotesMock).toHaveBeenCalledWith('letter-1', [], 7);
+    expect(addAiNoteMock).toHaveBeenCalledWith(
+      'letter-1',
+      expect.objectContaining({
+        content: 'Check the sender',
+        category: 'identity',
+        priority: 'high',
+      }),
+      7,
+      'admin',
+    );
+    expect(updateAiNoteStatusMock).toHaveBeenCalledWith(
+      'letter-1',
+      'note-1',
+      'dismissed',
+      7,
+      'admin',
+    );
+  });
+
+  it.each([
+    {
       route: '/letter-1/regenerate-metadata',
       body: {},
+    },
+    {
+      route: '/letter-1/regenerate-entities',
+      body: {},
+    },
+    {
+      route: '/letter-1/re-extract',
+      body: { mode: 'metadata_only' },
+    },
+    {
+      route: '/letter-1/generate-reading-view',
+      body: {},
+    },
+  ])('requires an observed page-source revision for $route', async ({
+    route,
+    body,
+  }) => {
+    const response = await invokeRouter(contentRouter, {
+      method: 'POST',
+      url: route,
+      path: route,
+      body,
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({
+      error: expect.stringContaining('source version is missing'),
+      code: 'SOURCE_REVISION_CHANGED',
+    });
+    expect(getLetterByIdMock).not.toHaveBeenCalled();
+    expect(claimRequestedMetadataMock).not.toHaveBeenCalled();
+    expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
+    expect(runEntityExtractionOnlyMock).not.toHaveBeenCalled();
+    expect(generateAndSaveReadingViewMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      route: '/letter-1/regenerate-metadata',
+      body: { primarySourceRevision: 7 },
+    },
+    {
+      route: '/letter-1/regenerate-entities',
+      body: { primarySourceRevision: 7 },
+    },
+    {
+      route: '/letter-1/re-extract',
+      body: { mode: 'metadata_only', primarySourceRevision: 7 },
+    },
+    {
+      route: '/letter-1/generate-reading-view',
+      body: { primarySourceRevision: 7 },
+    },
+  ])('rejects stale page-source authority before starting $route', async ({
+    route,
+    body,
+  }) => {
+    getLetterByIdMock.mockResolvedValueOnce({
+      id: 'letter-1',
+      primarySourceRevision: 8,
+    });
+
+    const response = await invokeRouter(contentRouter, {
+      method: 'POST',
+      url: route,
+      path: route,
+      body,
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({
+      error: expect.stringContaining('source changed'),
+      code: 'SOURCE_REVISION_CHANGED',
+    });
+    expect(claimRequestedMetadataMock).not.toHaveBeenCalled();
+    expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
+    expect(runEntityExtractionOnlyMock).not.toHaveBeenCalled();
+    expect(generateAndSaveReadingViewMock).not.toHaveBeenCalled();
+  });
+
+  it('passes the observed source revision through manual reading-view generation', async () => {
+    getLetterByIdMock.mockResolvedValueOnce({
+      id: 'letter-1',
+      transcriptionText: 'Reviewed transcript',
+      transcriptionStatus: 'SUCCESS',
+      primarySourceRevision: 7,
+    });
+
+    const response = await invokeRouter(contentRouter, {
+      method: 'POST',
+      url: '/letter-1/generate-reading-view',
+      path: '/letter-1/generate-reading-view',
+      body: { primarySourceRevision: 7 },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(generateAndSaveReadingViewMock).toHaveBeenCalledWith(
+      'letter-1',
+      7,
+    );
+  });
+
+  it('classifies a metadata race-to-claim source change as terminal', async () => {
+    getLetterByIdMock
+      .mockResolvedValueOnce({
+        id: 'letter-1',
+        type: 'L',
+        transcriptConfirmedAt: new Date(),
+        transcriptionStatus: 'SUCCESS',
+        transcriptionText: 'transcript',
+        metadataStatus: 'SUCCESS',
+        entityExtractionStatus: 'SUCCESS',
+        primarySourceRevision: 7,
+      })
+      .mockResolvedValueOnce({
+        id: 'letter-1',
+        primarySourceRevision: 8,
+      });
+
+    const response = await invokeRouter(contentRouter, {
+      method: 'POST',
+      url: '/letter-1/regenerate-metadata',
+      path: '/letter-1/regenerate-metadata',
+      body: { primarySourceRevision: 7 },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({
+      error: expect.stringContaining('source changed'),
+      code: 'SOURCE_REVISION_CHANGED',
+    });
+    expect(claimRequestedMetadataMock).toHaveBeenCalledWith(
+      'letter-1',
+      expect.any(Object),
+      7,
+    );
+    expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
+  });
+
+  it('classifies an entity race-to-claim source change as terminal', async () => {
+    getLetterByIdMock
+      .mockResolvedValueOnce({
+        id: 'letter-1',
+        type: 'L',
+        transcriptionStatus: 'SUCCESS',
+        transcriptionText: 'transcript',
+        metadataStatus: 'SUCCESS',
+        entityExtractionStatus: 'SUCCESS',
+        primarySourceRevision: 7,
+      })
+      .mockResolvedValueOnce({
+        id: 'letter-1',
+        primarySourceRevision: 8,
+      });
+    runEntityExtractionOnlyMock.mockResolvedValueOnce({ kind: 'claim_lost' });
+
+    const response = await invokeRouter(contentRouter, {
+      method: 'POST',
+      url: '/letter-1/regenerate-entities',
+      path: '/letter-1/regenerate-entities',
+      body: { primarySourceRevision: 7 },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({
+      error: expect.stringContaining('source changed'),
+      code: 'SOURCE_REVISION_CHANGED',
+    });
+    expect(runEntityExtractionOnlyMock).toHaveBeenCalledWith(
+      'letter-1',
+      expect.objectContaining({
+        claimKind: 'REQUESTED',
+        expectedPrimarySourceRevision: 7,
+      }),
+    );
+  });
+
+  it.each([
+    {
+      route: '/letter-1/regenerate-metadata',
+      body: { primarySourceRevision: 0 },
       letter: {
         transcriptConfirmedAt: new Date(),
         transcriptionStatus: 'RUNNING',
@@ -170,7 +485,7 @@ describe('admin downstream extraction exclusion', () => {
     },
     {
       route: '/letter-1/regenerate-entities',
-      body: {},
+      body: { primarySourceRevision: 0 },
       letter: {
         transcriptionText: 'transcript',
         transcriptionStatus: 'RUNNING',
@@ -179,7 +494,7 @@ describe('admin downstream extraction exclusion', () => {
     },
     {
       route: '/letter-1/re-extract',
-      body: { mode: 'metadata_only' },
+      body: { mode: 'metadata_only', primarySourceRevision: 0 },
       letter: {
         transcriptionText: 'transcript',
         transcriptionStatus: 'RUNNING',
@@ -210,7 +525,7 @@ describe('admin downstream extraction exclusion', () => {
     {
       description: 'metadata regeneration while entity extraction is running',
       route: '/letter-1/regenerate-metadata',
-      body: {},
+      body: { primarySourceRevision: 0 },
       letter: {
         transcriptConfirmedAt: new Date(),
         transcriptionStatus: 'SUCCESS',
@@ -222,7 +537,7 @@ describe('admin downstream extraction exclusion', () => {
     {
       description: 'metadata re-extraction while entity extraction is running',
       route: '/letter-1/re-extract',
-      body: { mode: 'metadata_only' },
+      body: { mode: 'metadata_only', primarySourceRevision: 0 },
       letter: {
         transcriptionText: 'transcript',
         transcriptConfirmedAt: new Date(),
@@ -235,7 +550,7 @@ describe('admin downstream extraction exclusion', () => {
     {
       description: 'entity regeneration while metadata extraction is running',
       route: '/letter-1/regenerate-entities',
-      body: {},
+      body: { primarySourceRevision: 0 },
       letter: {
         transcriptionText: 'transcript',
         transcriptionStatus: 'SUCCESS',
@@ -247,7 +562,7 @@ describe('admin downstream extraction exclusion', () => {
     {
       description: 'entity re-extraction while metadata extraction is running',
       route: '/letter-1/re-extract',
-      body: { mode: 'entities_only' },
+      body: { mode: 'entities_only', primarySourceRevision: 0 },
       letter: {
         transcriptionText: 'transcript',
         transcriptionStatus: 'SUCCESS',
@@ -289,7 +604,7 @@ describe('admin downstream extraction exclusion', () => {
       method: 'POST',
       url: '/letter-1/re-extract',
       path: '/letter-1/re-extract',
-      body: { mode: 'metadata_only' },
+      body: { mode: 'metadata_only', primarySourceRevision: 0 },
       headers: { accept: 'application/json' },
     });
 
@@ -318,7 +633,7 @@ describe('admin downstream extraction exclusion', () => {
       method: 'POST',
       url: '/letter-1/regenerate-metadata',
       path: '/letter-1/regenerate-metadata',
-      body: {},
+      body: { primarySourceRevision: 0 },
       headers: { accept: 'application/json' },
     });
 
@@ -326,6 +641,7 @@ describe('admin downstream extraction exclusion', () => {
     expect(claimRequestedMetadataMock).toHaveBeenCalledWith(
       'letter-1',
       { letter: expect.objectContaining({ transcriptionText: 'transcript' }) },
+      0,
     );
     expect(dbUpdateMock).not.toHaveBeenCalled();
     expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
@@ -335,12 +651,12 @@ describe('admin downstream extraction exclusion', () => {
     {
       description: 'entity regeneration',
       url: '/letter-1/regenerate-entities',
-      body: {},
+      body: { primarySourceRevision: 0 },
     },
     {
       description: 'entity-only re-extraction',
       url: '/letter-1/re-extract',
-      body: { mode: 'entities_only' },
+      body: { mode: 'entities_only', primarySourceRevision: 0 },
     },
   ])('delegates $description ownership to the entity pipeline without a pre-reset', async ({
     url,
@@ -389,7 +705,7 @@ describe('admin downstream extraction exclusion', () => {
       method: 'POST',
       url: '/letter-1/re-extract',
       path: '/letter-1/re-extract',
-      body: { mode: 'metadata_only' },
+      body: { mode: 'metadata_only', primarySourceRevision: 0 },
       headers: { accept: 'application/json' },
     });
 
@@ -397,6 +713,7 @@ describe('admin downstream extraction exclusion', () => {
     expect(claimRequestedMetadataMock).toHaveBeenCalledWith(
       'letter-1',
       { letter: expect.objectContaining({ entityExtractionStatus: 'PENDING' }) },
+      0,
     );
     expect(dbUpdateMock).not.toHaveBeenCalled();
     expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
@@ -406,12 +723,12 @@ describe('admin downstream extraction exclusion', () => {
     {
       description: 'entity regeneration',
       url: '/letter-1/regenerate-entities',
-      body: {},
+      body: { primarySourceRevision: 0 },
     },
     {
       description: 'entity-only re-extraction',
       url: '/letter-1/re-extract',
-      body: { mode: 'entities_only' },
+      body: { mode: 'entities_only', primarySourceRevision: 0 },
     },
   ])('returns a conflict when $description loses its pipeline claim race', async ({
     url,
@@ -456,19 +773,37 @@ describe('admin downstream extraction exclusion', () => {
       transcriptionText: 'transcript',
       metadataStatus: 'PENDING',
       entityExtractionStatus: 'PENDING',
+      primarySourceRevision: 7,
     });
 
     const response = await invokeRouter(contentRouter, {
       method: 'POST',
       url: '/letter-1/confirm-transcript',
       path: '/letter-1/confirm-transcript',
-      body: {},
+      body: { primarySourceRevision: 7 },
       headers: { accept: 'application/json' },
     });
 
     expect(response.statusCode).toBe(400);
     expect(dbUpdateMock).not.toHaveBeenCalled();
     expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
+  });
+
+  it('requires a page-source revision before confirming a transcript', async () => {
+    const response = await invokeRouter(contentRouter, {
+      method: 'POST',
+      url: '/letter-1/confirm-transcript',
+      path: '/letter-1/confirm-transcript',
+      body: {},
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({
+      error: expect.stringContaining('source version is missing'),
+      code: 'SOURCE_REVISION_CHANGED',
+    });
+    expect(getLetterByIdMock).not.toHaveBeenCalled();
   });
 
   it('binds the validated transcript snapshot when confirmation claims metadata', async () => {
@@ -479,6 +814,7 @@ describe('admin downstream extraction exclusion', () => {
       transcriptionText: 'transcript',
       metadataStatus: 'PENDING',
       entityExtractionStatus: 'PENDING',
+      primarySourceRevision: 7,
     });
     claimMetadataAfterTranscriptConfirmationMock.mockResolvedValueOnce({
       runId: 'run-a',
@@ -489,7 +825,7 @@ describe('admin downstream extraction exclusion', () => {
       method: 'POST',
       url: '/letter-1/confirm-transcript',
       path: '/letter-1/confirm-transcript',
-      body: {},
+      body: { primarySourceRevision: 7 },
       headers: { accept: 'application/json' },
     });
 
@@ -497,6 +833,7 @@ describe('admin downstream extraction exclusion', () => {
     expect(claimMetadataAfterTranscriptConfirmationMock).toHaveBeenCalledWith(
       'letter-1',
       { letter: expect.objectContaining({ transcriptionText: 'transcript' }) },
+      7,
       'admin',
     );
     expect(runMetadataExtractionV2Mock).toHaveBeenCalledWith(
@@ -528,7 +865,7 @@ describe('admin downstream extraction exclusion', () => {
       method: 'POST',
       url: '/letter-1/regenerate-metadata',
       path: '/letter-1/regenerate-metadata',
-      body: {},
+      body: { primarySourceRevision: 0 },
       headers: { accept: 'application/json' },
     });
 
@@ -546,6 +883,7 @@ describe('admin downstream extraction exclusion', () => {
       transcriptionText: 'transcript',
       metadataStatus: 'PENDING',
       entityExtractionStatus: 'PENDING',
+      primarySourceRevision: 7,
     });
     updateReturningMock.mockResolvedValueOnce([{ id: 'letter-1' }]);
 
@@ -553,7 +891,7 @@ describe('admin downstream extraction exclusion', () => {
       method: 'POST',
       url: '/letter-1/confirm-transcript',
       path: '/letter-1/confirm-transcript',
-      body: {},
+      body: { primarySourceRevision: 7 },
       headers: { accept: 'application/json' },
     });
 
@@ -565,6 +903,7 @@ describe('admin downstream extraction exclusion', () => {
         { kind: 'eq', field: 'letters.workflow', value: 'TRANSCRIBED' },
         { kind: 'eq', field: 'letters.transcriptionStatus', value: 'SUCCESS' },
         { kind: 'eq', field: 'letters.transcriptionText', value: 'transcript' },
+        { kind: 'eq', field: 'letters.primarySourceRevision', value: 7 },
       ],
     });
     expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
@@ -578,6 +917,7 @@ describe('admin downstream extraction exclusion', () => {
       transcriptionText: 'transcript',
       metadataStatus: 'PENDING',
       entityExtractionStatus: 'PENDING',
+      primarySourceRevision: 7,
     });
     updateReturningMock.mockResolvedValueOnce([]);
 
@@ -585,7 +925,7 @@ describe('admin downstream extraction exclusion', () => {
       method: 'POST',
       url: '/letter-1/confirm-transcript',
       path: '/letter-1/confirm-transcript',
-      body: {},
+      body: { primarySourceRevision: 7 },
       headers: { accept: 'application/json' },
     });
 
@@ -597,9 +937,69 @@ describe('admin downstream extraction exclusion', () => {
         { kind: 'eq', field: 'letters.workflow', value: 'TRANSCRIBED' },
         { kind: 'eq', field: 'letters.transcriptionStatus', value: 'SUCCESS' },
         { kind: 'eq', field: 'letters.transcriptionText', value: 'transcript' },
+        { kind: 'eq', field: 'letters.primarySourceRevision', value: 7 },
       ],
     });
     expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
+  });
+
+  it('rejects transcript confirmation from a stale page-source epoch', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      type: 'L',
+      workflow: 'TRANSCRIBED',
+      transcriptionStatus: 'SUCCESS',
+      transcriptionText: 'newer source transcript',
+      metadataStatus: 'PENDING',
+      entityExtractionStatus: 'PENDING',
+      primarySourceRevision: 8,
+    });
+
+    const response = await invokeRouter(contentRouter, {
+      method: 'POST',
+      url: '/letter-1/confirm-transcript',
+      path: '/letter-1/confirm-transcript',
+      body: { primarySourceRevision: 7 },
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({
+      error: expect.stringContaining('source changed'),
+    });
+    expect(dbUpdateMock).not.toHaveBeenCalled();
+    expect(claimMetadataAfterTranscriptConfirmationMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a delayed identity edit that was based on an older same-source name', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-1',
+      sender: 'Newer Sender',
+      recipient: 'Existing Recipient',
+      metadataRevision: 5,
+      primarySourceRevision: 6,
+      metadataV2Json: null,
+      metadataJson: null,
+    });
+
+    const response = await invokeRouter(contentRouter, {
+      method: 'PATCH',
+      url: '/letter-1/identity',
+      path: '/letter-1/identity',
+      body: {
+        primarySourceRevision: 6,
+        expectedSender: 'Older Sender',
+        sender: 'Delayed Sender',
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toEqual({
+      error: 'Letter identity changed; reload before saving names',
+      requestId: expect.any(String),
+    });
+    expect(dbTransactionMock).not.toHaveBeenCalled();
+    expect(syncLetterParticipantsFromMetadataMock).not.toHaveBeenCalled();
   });
 
   it('rolls back identity metadata and does not report success when participant projection fails', async () => {
@@ -642,6 +1042,7 @@ describe('admin downstream extraction exclusion', () => {
       sender: null,
       recipient: 'Existing Recipient',
       metadataRevision: 4,
+      primarySourceRevision: 6,
       metadataV2Json: null,
       metadataJson: null,
     });
@@ -650,7 +1051,11 @@ describe('admin downstream extraction exclusion', () => {
       method: 'PATCH',
       url: '/letter-1/identity',
       path: '/letter-1/identity',
-      body: { sender: 'Corrected Sender' },
+      body: {
+        primarySourceRevision: 6,
+        expectedSender: null,
+        sender: 'Corrected Sender',
+      },
       headers: { 'content-type': 'application/json' },
     });
 

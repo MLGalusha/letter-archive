@@ -4,31 +4,40 @@ import {
   bulkTranscribe,
   confirmTranscript,
   regenerateMetadata,
+  type BulkProcessResponse,
+  type BulkSource,
 } from "../../../api/admin";
 import { useToast } from "../../../contexts/ToastContext";
 import type { Letter } from "../../../types/Letter";
+import {
+  includeUnobservedSelections,
+  summarizeSourceSkips,
+} from "./sourceBoundBulk";
 
 type SingleMetadataMode = "extract" | "regenerate";
 
 interface UseDashboardProcessingActionsOptions {
   selectedIds: Set<string>;
+  selectedSources: BulkSource[];
   singleSelectedLetter: Letter | null;
   exitEditMode: () => void;
   fetchLetters: () => Promise<void>;
 }
 
-function summarizeSkipReasons(reasons: Array<{ reason: string }>) {
-  const counts = new Map<string, number>();
-  for (const { reason } of reasons) {
-    counts.set(reason, (counts.get(reason) || 0) + 1);
-  }
-  return Array.from(counts.entries())
-    .map(([reason, count]) => count > 1 ? `${count} ${reason}` : reason)
-    .join(", ");
+const emptyProcessOutcome = (): BulkProcessResponse => ({
+  requested: 0,
+  queued: 0,
+  skipped: 0,
+  skipReasons: [],
+});
+
+function processLabel(count: number) {
+  return `${count} letter${count === 1 ? "" : "s"}`;
 }
 
 export function useDashboardProcessingActions({
   selectedIds,
+  selectedSources,
   singleSelectedLetter,
   exitEditMode,
   fetchLetters,
@@ -52,48 +61,81 @@ export function useDashboardProcessingActions({
   const handleStartTranscription = useCallback(async (overwriteExisting = false) => {
     if (selectedIds.size === 0) return;
     try {
-      const result = await bulkTranscribe(
-        Array.from(selectedIds),
-        overwriteExisting,
+      const mutation = selectedSources.length > 0
+        ? await bulkTranscribe(selectedSources, overwriteExisting)
+        : emptyProcessOutcome();
+      const result = includeUnobservedSelections(
+        mutation,
+        selectedIds,
+        selectedSources,
       );
       if (result.queued === 0 && result.skipped > 0) {
-        const summary = result.skipReasons ? summarizeSkipReasons(result.skipReasons) : `${result.skipped} skipped`;
+        const summary = summarizeSourceSkips(result.skipReasons);
         showToast(`No letters processed: ${summary}`, "error");
       } else if (result.skipped > 0) {
-        const summary = result.skipReasons ? summarizeSkipReasons(result.skipReasons) : `${result.skipped} skipped`;
-        showToast(`Queued ${result.queued} for transcription. Skipped: ${summary}`, "info");
+        const summary = summarizeSourceSkips(result.skipReasons);
+        showToast(`Queued ${processLabel(result.queued)} for transcription. Skipped: ${summary}`, "info");
       } else {
-        showToast(`Queued ${result.queued} letters for transcription`, "success");
+        showToast(`Queued ${processLabel(result.queued)} for transcription`, "success");
+        exitEditMode();
       }
-      exitEditMode();
-      await fetchLetters();
     } catch (err) {
       console.error("Failed to start transcription:", err);
       showToast(err instanceof Error ? err.message : "Failed to start transcription", "error");
+    } finally {
+      try {
+        await fetchLetters();
+      } catch (err) {
+        console.error("Failed to refresh letters after transcription attempt:", err);
+      }
     }
-  }, [exitEditMode, fetchLetters, selectedIds, showToast]);
+  }, [
+    exitEditMode,
+    fetchLetters,
+    selectedIds,
+    selectedSources,
+    showToast,
+  ]);
 
   const handleStartMetadataExtraction = useCallback(async () => {
     if (selectedIds.size === 0) return;
     try {
-      const result = await bulkExtractMetadata(Array.from(selectedIds));
+      const mutation = selectedSources.length > 0
+        ? await bulkExtractMetadata(selectedSources)
+        : emptyProcessOutcome();
+      const result = includeUnobservedSelections(
+        mutation,
+        selectedIds,
+        selectedSources,
+      );
 
       if (result.queued === 0 && result.skipped > 0) {
-        const summary = result.skipReasons ? summarizeSkipReasons(result.skipReasons) : `${result.skipped} skipped`;
+        const summary = summarizeSourceSkips(result.skipReasons);
         showToast(`No letters processed: ${summary}`, "error");
       } else if (result.skipped > 0) {
-        const summary = result.skipReasons ? summarizeSkipReasons(result.skipReasons) : `${result.skipped} skipped`;
-        showToast(`Queued ${result.queued} for metadata extraction. Skipped: ${summary}`, "info");
+        const summary = summarizeSourceSkips(result.skipReasons);
+        showToast(`Queued ${processLabel(result.queued)} for metadata extraction. Skipped: ${summary}`, "info");
       } else {
-        showToast(`Queued ${result.queued} letters for metadata extraction`, "success");
+        showToast(`Queued ${processLabel(result.queued)} for metadata extraction`, "success");
+        exitEditMode();
       }
-      exitEditMode();
-      await fetchLetters();
     } catch (err) {
       console.error("Failed to start metadata extraction:", err);
       showToast(err instanceof Error ? err.message : "Failed to start metadata extraction", "error");
+    } finally {
+      try {
+        await fetchLetters();
+      } catch (err) {
+        console.error("Failed to refresh letters after metadata attempt:", err);
+      }
     }
-  }, [exitEditMode, fetchLetters, selectedIds, showToast]);
+  }, [
+    exitEditMode,
+    fetchLetters,
+    selectedIds,
+    selectedSources,
+    showToast,
+  ]);
 
   const handleOpenTranscription = useCallback(() => {
     if (selectedIds.size === 0) return;
@@ -132,6 +174,7 @@ export function useDashboardProcessingActions({
       if (!singleSelectedLetter.transcriptConfirmedAt) {
         updatedLetter = await confirmTranscript(
           singleSelectedLetter.id,
+          singleSelectedLetter.primarySourceRevision,
           extractionOptions,
         );
 
@@ -142,12 +185,14 @@ export function useDashboardProcessingActions({
           didRefresh = true;
           updatedLetter = await regenerateMetadata(
             singleSelectedLetter.id,
+            updatedLetter.primarySourceRevision,
             extractionOptions,
           );
         }
       } else {
         updatedLetter = await regenerateMetadata(
           singleSelectedLetter.id,
+          singleSelectedLetter.primarySourceRevision,
           extractionOptions,
         );
       }

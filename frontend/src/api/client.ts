@@ -80,6 +80,7 @@ export class ApiError extends Error {
   data?: unknown;
   requestId?: string;
   responseMessage: string;
+  code?: string;
 
   constructor(status: number, message: string, data?: unknown, requestId?: string) {
     const resolvedRequestId = requestId ?? (data as { requestId?: string } | undefined)?.requestId;
@@ -92,8 +93,12 @@ export class ApiError extends Error {
     this.data = data;
     this.requestId = resolvedRequestId;
     this.responseMessage = message;
+    const responseCode = (data as { code?: unknown } | undefined)?.code;
+    this.code = typeof responseCode === 'string' ? responseCode : undefined;
   }
 }
+
+export const SOURCE_REVISION_CHANGED_ERROR_CODE = 'SOURCE_REVISION_CHANGED';
 
 export function getErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof ApiError) {
@@ -352,11 +357,17 @@ export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
 /**
  * DELETE request
  */
-export async function apiDelete<T>(path: string): Promise<T> {
+export async function apiDelete<T>(path: string, body?: unknown): Promise<T> {
   const url = new URL(path, API_BASE_URL).toString();
   log.debug('DELETE request', { path });
   return performRequest<T>('DELETE', path, url, {
     method: 'DELETE',
+    ...(body === undefined
+      ? {}
+      : {
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        }),
   });
 }
 

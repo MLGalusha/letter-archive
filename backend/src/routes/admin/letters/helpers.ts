@@ -2,6 +2,7 @@ import type { Request } from 'express';
 import { z } from 'zod';
 import { fetchLetterWithRelatedAndTransform } from '../../../services/letter-queries.js';
 import { getLetterById } from '../../../services/letters.js';
+import { sourceRevisionChanged } from '../../../services/letter/source-revision.js';
 import { AppError, BadRequestError, NotFoundError } from '../../../utils/response-helpers.js';
 
 export function parseOrThrow<T extends z.ZodTypeAny>(
@@ -36,6 +37,23 @@ export function requirePositiveInt(value: string, message = 'Invalid version num
     throw new BadRequestError(message);
   }
   return parsed;
+}
+
+export function requirePrimarySourceRevision(
+  body: unknown,
+  message: string,
+): number {
+  const revision = typeof body === 'object' && body !== null
+    ? (body as { primarySourceRevision?: unknown }).primarySourceRevision
+    : undefined;
+  if (
+    typeof revision !== 'number'
+    || !Number.isInteger(revision)
+    || revision < 0
+  ) {
+    throw sourceRevisionChanged(message);
+  }
+  return revision;
 }
 
 export async function requireLetter(letterId: string, message = 'Letter not found') {

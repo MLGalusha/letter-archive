@@ -5,10 +5,11 @@
  * to smaller modules under `services/letter/`.
  */
 
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db, letters } from '../db/index.js';
 import { syncLetterParticipantsFromMetadata } from './entities/participant-sync.js';
 import { getLetterById } from './letters.js';
+import { resolveAiNotesForChangedFields } from './letter/ai-notes.js';
 import { log, type UpdateLetterInput } from './letter/shared.js';
 import {
   buildHumanMetadataJobPatch,
@@ -22,6 +23,10 @@ import {
   canPublishMetadata,
   canPublishTranscript,
 } from './letter/publication.js';
+import { applyPublicationMutation } from './letter/publication-mutations.js';
+import {
+  assertCurrentPrimarySourceRevision,
+} from './letter/source-revision.js';
 
 export * from './letter/index.js';
 
@@ -41,6 +46,12 @@ export async function updateLetter(
 ): Promise<boolean> {
   const existingLetter = await getLetterById(letterId);
   if (!existingLetter) return false;
+  const currentSourceRevision = existingLetter.primarySourceRevision ?? 0;
+  assertCurrentPrimarySourceRevision(
+    currentSourceRevision,
+    updates.primarySourceRevision,
+    'Letter source changed before this update could be saved; reload and try again',
+  );
 
   const dbUpdates: Record<string, unknown> = {};
   const transcriptChanged = updates.transcriptionText !== undefined
@@ -125,19 +136,6 @@ export async function updateLetter(
   if (updates.readingText !== undefined && updates.readingText !== existingLetter.readingText) {
     dbUpdates.readingText = updates.readingText;
   }
-  if (updates.visibility !== undefined && updates.visibility !== existingLetter.visibility) {
-    dbUpdates.visibility = updates.visibility;
-    if (updates.visibility === 'PUBLISHED') {
-      dbUpdates.reviewedAt = new Date();
-      dbUpdates.reviewedBy = userId;
-      // Auto-set content publish flags based on verification status
-      dbUpdates.transcriptPublished = !transcriptChanged
-        && canPublishTranscript(existingLetter);
-      dbUpdates.metadataPublished = !transcriptChanged
-        && !hasMetadataUpdate
-        && canPublishMetadata(existingLetter);
-    }
-  }
   if (updates.transcriptPublished !== undefined) {
     if (
       updates.transcriptPublished
@@ -151,9 +149,6 @@ export async function updateLetter(
       ) as Error & { status: number };
       error.status = 400;
       throw error;
-    }
-    if (updates.transcriptPublished !== existingLetter.transcriptPublished) {
-      dbUpdates.transcriptPublished = updates.transcriptPublished;
     }
   }
   if (updates.metadataPublished !== undefined) {
@@ -170,9 +165,6 @@ export async function updateLetter(
       ) as Error & { status: number };
       error.status = 400;
       throw error;
-    }
-    if (updates.metadataPublished !== existingLetter.metadataPublished) {
-      dbUpdates.metadataPublished = updates.metadataPublished;
     }
   }
 
@@ -201,6 +193,20 @@ export async function updateLetter(
     );
   }
 
+  const noteAutoResolution = resolveAiNotesForChangedFields(
+    existingLetter.aiNotes,
+    [
+      ...(senderChanged && updates.sender ? ['sender'] : []),
+      ...(recipientChanged && updates.recipient ? ['recipient'] : []),
+      ...(locationChanged && updates.locationWritten ? ['locationWritten'] : []),
+      ...(extractedDateChanged && normalizedExtractedDate ? ['extractedDate'] : []),
+      ...(transcriptChanged ? ['transcriptionText'] : []),
+    ],
+  );
+  if (noteAutoResolution) {
+    dbUpdates.aiNotes = noteAutoResolution.notes;
+  }
+
   const currentWorkflow = existingLetter.workflow;
 
   // A transcript is the primary metadata source. When one request also edits
@@ -216,49 +222,112 @@ export async function updateLetter(
     }
   }
 
-  if (Object.keys(dbUpdates).length === 0) return true;
-  dbUpdates.updatedAt = new Date();
-
-  const updated = await db
-    .update(letters)
-    .set(dbUpdates)
-    .where(and(...observedMetadataRevisionConditions(letterId, existingLetter)))
-    .returning({ id: letters.id });
-  if (updated.length === 0) {
-    const error = new Error(
-      'Letter content changed before this update could be saved; reload and try again',
-    ) as Error & { status: number };
-    error.status = 409;
-    throw error;
+  const hasPublicationIntent = updates.visibility !== undefined
+    || updates.transcriptPublished !== undefined
+    || updates.metadataPublished !== undefined;
+  const hasPublicationBearingPatch = Object.hasOwn(
+    dbUpdates,
+    'transcriptPublished',
+  ) || Object.hasOwn(dbUpdates, 'metadataPublished');
+  const hasRootContentPatch = Object.keys(dbUpdates).length > 0;
+  if (!hasRootContentPatch && !hasPublicationIntent) {
+    return true;
+  }
+  if (hasRootContentPatch) {
+    dbUpdates.updatedAt = new Date();
   }
 
-  // When publishing or hiding, sync companion types (C, T, etc.) on the same date
-  // so covers and telegrams are always visible alongside their letter
-  if (dbUpdates.visibility) {
-    const companionUpdated = await db.update(letters).set({
-      visibility: updates.visibility,
-      ...(updates.visibility === 'PUBLISHED' ? { reviewedAt: new Date(), reviewedBy: userId } : {}),
-    }).where(and(
-      eq(letters.collectionId, existingLetter.collectionId),
-      eq(letters.dateRaw, existingLetter.dateRaw),
-      eq(letters.typeSequence, existingLetter.typeSequence),
-      ne(letters.id, letterId),
-    ));
-
-    if (companionUpdated.length > 0) {
-      log.info(
-        { letterId, companions: companionUpdated.length, visibility: updates.visibility },
-        'Companion types visibility synced',
-      );
-    }
-  }
-
-  if (senderChanged || recipientChanged) {
-    await syncLetterParticipantsFromMetadata({
-      letterId,
-      sender: senderChanged ? updates.sender : undefined,
-      recipient: recipientChanged ? updates.recipient : undefined,
+  if (hasPublicationIntent || hasPublicationBearingPatch) {
+    const publicationOutcome = await applyPublicationMutation({
+      source: {
+        letterId,
+        primarySourceRevision: updates.primarySourceRevision,
+      },
+      intent: {
+        visibility: updates.visibility,
+        transcriptPublished: updates.transcriptPublished,
+        metadataPublished: updates.metadataPublished,
+        autoPublishVerifiedContentOnVisibilityTransition: true,
+      },
+      userId,
+      requireCurrentSourceRevision: true,
+      rootPatch: hasRootContentPatch ? dbUpdates : undefined,
+      rootConditions: hasRootContentPatch
+        ? [
+            ...observedMetadataRevisionConditions(letterId, existingLetter),
+            eq(letters.primarySourceRevision, updates.primarySourceRevision),
+          ]
+        : undefined,
+      afterRootMutation: hasRootContentPatch && (senderChanged || recipientChanged)
+        ? async (database) => {
+            await syncLetterParticipantsFromMetadata({
+              letterId,
+              sender: senderChanged ? updates.sender : undefined,
+              recipient: recipientChanged ? updates.recipient : undefined,
+              actor: userId,
+              database,
+            });
+          }
+        : undefined,
+      blocksTranscriptGrant: transcriptChanged,
+      blocksMetadataGrant: transcriptChanged || hasMetadataUpdate,
     });
+
+    if (publicationOutcome.kind === 'not_found') return false;
+    if (publicationOutcome.kind === 'source_changed_or_ineligible') {
+      const latest = await getLetterById(letterId);
+      if (latest) {
+        assertCurrentPrimarySourceRevision(
+          latest.primarySourceRevision ?? 0,
+          updates.primarySourceRevision,
+          'Letter source changed before this update could be saved; reload and try again',
+        );
+      }
+      const error = new Error(
+        'Letter publication eligibility or source changed before this update could be saved; reload and try again',
+      ) as Error & { status: number };
+      error.status = 409;
+      throw error;
+    }
+    if (publicationOutcome.kind === 'root_conflict') {
+      const latest = await getLetterById(letterId);
+      if (latest) {
+        assertCurrentPrimarySourceRevision(
+          latest.primarySourceRevision ?? 0,
+          updates.primarySourceRevision,
+          'Letter source changed before this update could be saved; reload and try again',
+        );
+      }
+      const error = new Error(
+        'Letter content changed before this update could be saved; reload and try again',
+      ) as Error & { status: number };
+      error.status = 409;
+      throw error;
+    }
+  } else {
+    const updated = await db
+      .update(letters)
+      .set(dbUpdates)
+      .where(and(
+        ...observedMetadataRevisionConditions(letterId, existingLetter),
+        eq(letters.primarySourceRevision, updates.primarySourceRevision),
+      ))
+      .returning({ id: letters.id });
+    if (updated.length === 0) {
+      const latest = await getLetterById(letterId);
+      if (latest) {
+        assertCurrentPrimarySourceRevision(
+          latest.primarySourceRevision ?? 0,
+          updates.primarySourceRevision,
+          'Letter source changed before this update could be saved; reload and try again',
+        );
+      }
+      const error = new Error(
+        'Letter content changed before this update could be saved; reload and try again',
+      ) as Error & { status: number };
+      error.status = 409;
+      throw error;
+    }
   }
 
   const workflowChange = typeof dbUpdates.workflow === 'string'
@@ -266,7 +335,12 @@ export async function updateLetter(
     : undefined;
 
   log.info(
-    { letterId, workflowChange, visibilityChange: updates.visibility },
+    {
+      letterId,
+      workflowChange,
+      visibilityChange: updates.visibility,
+      notesAutoResolved: noteAutoResolution?.resolvedCount ?? 0,
+    },
     'Letter updated',
   );
 

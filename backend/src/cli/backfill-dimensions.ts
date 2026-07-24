@@ -8,9 +8,10 @@
  */
 
 import 'dotenv/config';
-import { eq, isNull, or } from 'drizzle-orm';
+import { isNull, or } from 'drizzle-orm';
 import sharp from 'sharp';
 import { db, letterPages } from '../db/index.js';
+import { updatePageDimensionsIfSourceCurrent } from '../services/letter-pages.js';
 import { getAbsoluteStoragePath } from '../services/storage.js';
 
 async function backfillDimensions() {
@@ -23,6 +24,7 @@ async function backfillDimensions() {
   console.log(`Found ${pages.length} pages missing dimensions\n`);
 
   let updated = 0;
+  let skipped = 0;
   let errors = 0;
 
   for (const page of pages) {
@@ -31,13 +33,24 @@ async function backfillDimensions() {
       const metadata = await sharp(absolutePath).metadata();
 
       if (metadata.width && metadata.height) {
-        await db
-          .update(letterPages)
-          .set({ width: metadata.width, height: metadata.height })
-          .where(eq(letterPages.id, page.id));
-        updated++;
-        if (updated % 50 === 0) {
-          console.log(`  Progress: ${updated}/${pages.length} updated`);
+        const committed = await updatePageDimensionsIfSourceCurrent(
+          {
+            pageId: page.id,
+            storagePath: page.storagePath,
+            checksumSha256: page.checksumSha256,
+          },
+          { width: metadata.width, height: metadata.height },
+        );
+        if (committed) {
+          updated++;
+          if (updated % 50 === 0) {
+            console.log(`  Progress: ${updated}/${pages.length} updated`);
+          }
+        } else {
+          console.warn(
+            `  Page ${page.id.slice(0, 8)}...: Source changed while dimensions were read`,
+          );
+          skipped++;
         }
       } else {
         console.warn(`  Page ${page.id.slice(0, 8)}...: No dimensions in metadata`);
@@ -49,7 +62,7 @@ async function backfillDimensions() {
     }
   }
 
-  console.log(`\nDone. Updated: ${updated}, Errors: ${errors}`);
+  console.log(`\nDone. Updated: ${updated}, Source changed: ${skipped}, Errors: ${errors}`);
   process.exit(0);
 }
 

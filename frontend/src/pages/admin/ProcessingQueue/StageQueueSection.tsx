@@ -13,9 +13,13 @@ interface StageQueueSectionProps {
   stage: ProcessingStageDescriptor;
   queued: ProcessingQueueItem[];
   active: ProcessingActiveJob[];
-  onRemove: (type: ProcessingJobType, letterId: string) => void;
-  onClear: (type: ProcessingJobType, label: string) => void;
-  onCancel: (type: ProcessingJobType, letterId: string) => void;
+  onRemove: (type: ProcessingJobType, item: ProcessingQueueItem) => void;
+  onClear: (
+    type: ProcessingJobType,
+    label: string,
+    items: ProcessingQueueItem[],
+  ) => void;
+  onCancel: (type: ProcessingJobType, job: ProcessingActiveJob) => void;
 }
 
 function letterMeta(
@@ -73,7 +77,7 @@ export default function StageQueueSection({
           <Button
             size="sm"
             variant="secondary"
-            onClick={() => onClear(stage.type, stage.label)}
+            onClick={() => onClear(stage.type, stage.label, queued)}
           >
             Clear queue
           </Button>
@@ -94,7 +98,7 @@ export default function StageQueueSection({
               <Button
                 size="sm"
                 variant="danger"
-                onClick={() => onCancel(stage.type, job.letterId)}
+                onClick={() => onCancel(stage.type, job)}
               >
                 Cancel
               </Button>
@@ -126,7 +130,7 @@ export default function StageQueueSection({
                 <Button
                   size="sm"
                   variant="secondary"
-                  onClick={() => onRemove(stage.type, item.letterId)}
+                  onClick={() => onRemove(stage.type, item)}
                 >
                   Remove
                 </Button>

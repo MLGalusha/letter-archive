@@ -1,7 +1,5 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { and, eq, inArray, type SQL } from 'drizzle-orm';
-import { db, letters } from '../../../db/index.js';
 import {
   bulkClearMetadata,
   bulkClearTranscriptions,
@@ -10,36 +8,52 @@ import {
   bulkUpdateFields,
 } from '../../../services/letter-operations.js';
 import {
-  metadataPublicationConditions,
-  transcriptPublicationConditions,
-} from '../../../services/letter/publication.js';
+  applyBulkPublicationAction,
+  PUBLICATION_ACTIONS,
+} from '../../../services/letter/publication-mutations.js';
 import {
-  bulkLetterIdsSchema,
+  bulkSourceRequestSchema,
+  bulkSourcesSchema,
   bulkUpdateFieldsSchema,
 } from './shared.js';
-import { parseOrThrow } from './helpers.js';
+import { getUserId, parseOrThrow } from './helpers.js';
+import { sourceRevisionChanged } from '../../../services/letter/source-revision.js';
+
+const publicationActionSchema = z.enum(PUBLICATION_ACTIONS);
 
 const bulkContentVisibilitySchema = z.object({
-  letterIds: z.array(z.string().uuid()).min(1),
-  visibility: z.enum(['PUBLISHED', 'HIDDEN']).optional(),
-  transcriptPublished: z.boolean().optional(),
-  metadataPublished: z.boolean().optional(),
-}).refine(
-  (data) => data.transcriptPublished !== undefined || data.metadataPublished !== undefined || data.visibility !== undefined,
-  { message: 'At least one of visibility, transcriptPublished, or metadataPublished must be provided' },
-);
+  sources: bulkSourcesSchema,
+  action: publicationActionSchema,
+});
 
 const router = Router();
 
-const bulkTranscribeSchema = z.object({
-  letterIds: z.array(z.string().uuid()).min(1),
+const bulkTranscribeSchema = bulkSourceRequestSchema.extend({
   overwrite: z.boolean().optional().default(false),
 });
 
+function rejectLegacyLetterIds(body: unknown, action: string): void {
+  if (
+    body
+    && typeof body === 'object'
+    && !Object.hasOwn(body, 'sources')
+    && Array.isArray((body as { letterIds?: unknown }).letterIds)
+  ) {
+    throw sourceRevisionChanged(
+      `Letter source versions are missing; reload the dashboard before ${action}`,
+    );
+  }
+}
+
 router.post('/transcribe', async (req, res, next) => {
   try {
-    const { letterIds, overwrite } = parseOrThrow(bulkTranscribeSchema, req.body, 'Invalid request');
-    const result = await bulkTranscribe(letterIds, overwrite);
+    rejectLegacyLetterIds(req.body, 'starting transcription');
+    const { sources, overwrite } = parseOrThrow(
+      bulkTranscribeSchema,
+      req.body,
+      'Invalid request',
+    );
+    const result = await bulkTranscribe(sources, overwrite);
     res.json(result);
   } catch (error) {
     next(error);
@@ -48,8 +62,13 @@ router.post('/transcribe', async (req, res, next) => {
 
 router.post('/extract-metadata', async (req, res, next) => {
   try {
-    const { letterIds } = parseOrThrow(bulkLetterIdsSchema, req.body, 'Invalid request');
-    const result = await bulkExtractMetadata(letterIds);
+    rejectLegacyLetterIds(req.body, 'starting metadata extraction');
+    const { sources } = parseOrThrow(
+      bulkSourceRequestSchema,
+      req.body,
+      'Invalid request',
+    );
+    const result = await bulkExtractMetadata(sources);
     res.json(result);
   } catch (error) {
     next(error);
@@ -58,8 +77,13 @@ router.post('/extract-metadata', async (req, res, next) => {
 
 router.post('/clear-transcriptions', async (req, res, next) => {
   try {
-    const { letterIds } = parseOrThrow(bulkLetterIdsSchema, req.body, 'Invalid request');
-    const result = await bulkClearTranscriptions(letterIds);
+    rejectLegacyLetterIds(req.body, 'clearing transcriptions');
+    const { sources } = parseOrThrow(
+      bulkSourceRequestSchema,
+      req.body,
+      'Invalid request',
+    );
+    const result = await bulkClearTranscriptions(sources);
     res.json(result);
   } catch (error) {
     next(error);
@@ -68,6 +92,18 @@ router.post('/clear-transcriptions', async (req, res, next) => {
 
 router.patch('/update-fields', async (req, res, next) => {
   try {
+    if (
+      Array.isArray(req.body?.updates)
+      && req.body.updates.some((update: unknown) => (
+        typeof update === 'object'
+        && update !== null
+        && !Object.hasOwn(update, 'primarySourceRevision')
+      ))
+    ) {
+      throw sourceRevisionChanged(
+        'Letter source versions are missing; reload the dashboard before saving names',
+      );
+    }
     const { updates } = parseOrThrow(bulkUpdateFieldsSchema, req.body, 'Invalid request');
     const result = await bulkUpdateFields(updates);
     res.json(result);
@@ -78,8 +114,13 @@ router.patch('/update-fields', async (req, res, next) => {
 
 router.post('/clear-metadata', async (req, res, next) => {
   try {
-    const { letterIds } = parseOrThrow(bulkLetterIdsSchema, req.body, 'Invalid request');
-    const result = await bulkClearMetadata(letterIds);
+    rejectLegacyLetterIds(req.body, 'clearing metadata');
+    const { sources } = parseOrThrow(
+      bulkSourceRequestSchema,
+      req.body,
+      'Invalid request',
+    );
+    const result = await bulkClearMetadata(sources);
     res.json(result);
   } catch (error) {
     next(error);
@@ -88,50 +129,19 @@ router.post('/clear-metadata', async (req, res, next) => {
 
 router.patch('/content-visibility', async (req, res, next) => {
   try {
-    const { letterIds, visibility, transcriptPublished, metadataPublished } = parseOrThrow(
+    if (!req.body?.sources && Array.isArray(req.body?.letterIds)) {
+      throw sourceRevisionChanged(
+        'Letter source versions are missing; reload the dashboard before publishing',
+      );
+    }
+    const { sources, action } = parseOrThrow(
       bulkContentVisibilitySchema, req.body, 'Invalid request',
     );
-    const updatedLetterIds = new Set<string>();
-    const updateMatchingLetters = async (
-      updates: {
-        visibility?: 'PUBLISHED' | 'HIDDEN';
-        transcriptPublished?: boolean;
-        metadataPublished?: boolean;
-      },
-      eligibility: SQL[] = [],
-    ) => {
-      const selectedLetters = inArray(letters.id, letterIds);
-      const condition = eligibility.length > 0
-        ? and(selectedLetters, ...eligibility)
-        : selectedLetters;
-      const updated = await db
-        .update(letters)
-        .set({ ...updates, updatedAt: new Date() })
-        .where(condition)
-        .returning({ id: letters.id });
-
-      for (const { id } of updated) updatedLetterIds.add(id);
-    };
-
-    if (visibility !== undefined) {
-      await updateMatchingLetters({ visibility });
-    }
-    if (transcriptPublished !== undefined) {
-      await updateMatchingLetters(
-        { transcriptPublished },
-        transcriptPublished ? transcriptPublicationConditions() : [],
-      );
-    }
-    if (metadataPublished !== undefined) {
-      await updateMatchingLetters(
-        { metadataPublished },
-        metadataPublished
-          ? metadataPublicationConditions()
-          : [],
-      );
-    }
-
-    res.json({ updated: updatedLetterIds.size });
+    res.json(await applyBulkPublicationAction(
+      sources,
+      action,
+      getUserId(req),
+    ));
   } catch (error) {
     next(error);
   }

@@ -52,6 +52,7 @@ vi.mock('../../db/index.js', () => {
     },
     letters: {
       id: 'letters.id',
+      primarySourceRevision: 'letters.primarySourceRevision',
       collectionId: 'letters.collectionId',
       dateRaw: 'letters.dateRaw',
       typeSequence: 'letters.typeSequence',
@@ -102,6 +103,7 @@ import {
 
 const parent = {
   id: 'letter-1',
+  primarySourceRevision: 4,
   collectionId: 'collection-1',
   dateRaw: '19470810',
   typeSequence: 1,
@@ -213,7 +215,10 @@ describe('extra-content producers', () => {
     findManyMock.mockResolvedValue([cover]);
     transcribeExtraContentMock.mockResolvedValue({ text: ' Envelope note ' });
 
-    const result = await runRegeneratedExtraContent(parent.id);
+    const result = await runRegeneratedExtraContent(
+      parent.id,
+      parent.primarySourceRevision,
+    );
 
     expect(result).toEqual({ kind: 'completed', value: 1 });
     expect(checkExtraContentForTextMock).toHaveBeenCalledOnce();
@@ -232,7 +237,7 @@ describe('extra-content producers', () => {
     findManyMock.mockResolvedValue([cover]);
     transcribeExtraContentMock.mockResolvedValue({ text: 'Envelope note' });
 
-    const result = await transcribeExtras(parent.id);
+    const result = await transcribeExtras(parent.id, parent.primarySourceRevision);
 
     expect(result).toEqual({
       transcribedCount: 1,
@@ -250,7 +255,7 @@ describe('extra-content producers', () => {
   });
 
   it('clears empty standalone content without claiming a nonexistent job', async () => {
-    const result = await transcribeExtras(parent.id);
+    const result = await transcribeExtras(parent.id, parent.primarySourceRevision);
 
     expect(result).toEqual({
       transcribedCount: 0,
@@ -277,7 +282,9 @@ describe('extra-content producers', () => {
   it('does not clear empty content when the preflight revision lost ownership', async () => {
     updateReturningMock.mockResolvedValue([]);
 
-    await expect(transcribeExtras(parent.id)).rejects.toMatchObject({
+    await expect(
+      transcribeExtras(parent.id, parent.primarySourceRevision),
+    ).rejects.toMatchObject({
       status: 409,
       message: 'Extra content transcription conflicted with another job update',
     });
@@ -287,10 +294,28 @@ describe('extra-content producers', () => {
     findManyMock.mockResolvedValue([cover]);
     runExtraContentJobMock.mockResolvedValue({ kind: 'claim_lost' });
 
-    await expect(transcribeExtras(parent.id)).rejects.toMatchObject({
+    await expect(
+      transcribeExtras(parent.id, parent.primarySourceRevision),
+    ).rejects.toMatchObject({
       status: 409,
       message: 'Extra content transcription conflicted with another job update',
     });
+  });
+
+  it('rejects stale direct extra-content requests before claiming or calling AI', async () => {
+    findFirstMock.mockResolvedValue({
+      ...parent,
+      primarySourceRevision: 5,
+    });
+    findManyMock.mockResolvedValue([cover]);
+
+    await expect(transcribeExtras(parent.id, 4)).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'SOURCE_REVISION_CHANGED',
+    });
+
+    expect(runExtraContentJobMock).not.toHaveBeenCalled();
+    expect(transcribeExtraContentMock).not.toHaveBeenCalled();
   });
 
   it('lets dashboard work require the PENDING status explicitly', async () => {

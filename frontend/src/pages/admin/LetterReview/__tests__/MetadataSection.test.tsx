@@ -8,6 +8,7 @@ import type { Letter } from "../../../../types/Letter";
 const buildLetter = (overrides: Partial<Letter> = {}): Letter => ({
   id: "letter-1",
   title: "Test Letter",
+  primarySourceRevision: 0,
   images: [],
   transcript: { pages: [], fullText: "sample transcript", verified: false },
   metadata: { verified: false, notableQuotes: [] },

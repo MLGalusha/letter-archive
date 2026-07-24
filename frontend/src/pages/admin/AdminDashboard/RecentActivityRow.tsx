@@ -60,7 +60,13 @@ function CopyableTextCell({
       `}
       onClick={(event) =>
         copyModeActive
-          ? onCellClick(letter.id, column, value ?? null, event)
+          ? onCellClick(
+              letter.id,
+              letter.primarySourceRevision,
+              column,
+              value ?? null,
+              event,
+            )
           : undefined
       }
     >

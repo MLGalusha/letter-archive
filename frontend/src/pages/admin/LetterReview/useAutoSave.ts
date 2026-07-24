@@ -7,7 +7,6 @@ import {
   type SetStateAction,
 } from 'react';
 import { createVersion, updateLetter } from '../../../api/admin';
-import { getErrorMessage } from '../../../api/client';
 import {
   retagMetadata,
   type RetagMetadataChange,
@@ -16,8 +15,7 @@ import {
 import type { Letter } from '../../../types/Letter';
 import { trackEdit } from '../../../utils/recentEdits';
 
-type ToastType = 'success' | 'error' | 'info';
-type ShowToast = (message: string, type: ToastType) => void;
+type HandleMutationError = (error: unknown, fallback: string) => boolean;
 
 export interface AutoSaveData {
   transcriptionText?: string;
@@ -34,7 +32,9 @@ interface UseAutoSaveOptions {
   letterId?: string;
   letter: Letter | null;
   setLetter: Dispatch<SetStateAction<Letter | null>>;
-  showToast: ShowToast;
+  handleMutationError: HandleMutationError;
+  isMutationBlocked: () => boolean;
+  mutationsBlocked: boolean;
   syncIdentityMetadata: (updatedLetter: Letter) => void;
 }
 
@@ -47,6 +47,7 @@ interface DebouncedSaveOptions {
 type IdentityUpdateState = 'idle' | 'pending' | 'saving';
 
 interface PendingIdentityUpdate {
+  primarySourceRevision: number;
   oldSender: string | null;
   oldRecipient: string | null;
   sender?: string | null;
@@ -67,7 +68,9 @@ export function useAutoSave({
   letterId,
   letter,
   setLetter,
-  showToast,
+  handleMutationError,
+  isMutationBlocked,
+  mutationsBlocked,
   syncIdentityMetadata,
 }: UseAutoSaveOptions) {
   const [autoSaveStatus, setAutoSaveStatus] = useState<
@@ -172,11 +175,38 @@ export function useAutoSave({
     clearRetagTimeout();
   }, [clearRetagTimeout]);
 
+  const recordVersion = useCallback(async (
+    id: string,
+    primarySourceRevision: number,
+    fieldType: 'transcript' | 'metadata',
+    content: string | Record<string, unknown>,
+  ) => {
+    if (isMutationBlocked()) return;
+    try {
+      await createVersion(
+        id,
+        primarySourceRevision,
+        fieldType,
+        content,
+        'human',
+      );
+    } catch (error) {
+      console.error('Version history save error:', error);
+      handleMutationError(
+        error,
+        'Changes saved, but version history could not be recorded',
+      );
+    }
+  }, [handleMutationError, isMutationBlocked]);
+
   const scheduleDebouncedSave = useCallback(
     (task: () => Promise<void>, options: DebouncedSaveOptions) => {
       clearPendingAutoSave();
+      if (isMutationBlocked()) return;
 
       autoSaveTimerRef.current = setTimeout(async () => {
+        autoSaveTimerRef.current = null;
+        if (isMutationBlocked()) return;
         setAutoSaveStatus('saving');
 
         try {
@@ -185,16 +215,16 @@ export function useAutoSave({
         } catch (error) {
           setAutoSaveStatus('error');
           options.onError?.(error);
-          showToast(getErrorMessage(error, options.errorMessage), 'error');
+          handleMutationError(error, options.errorMessage);
         }
       }, options.delayMs ?? 1500);
     },
-    [clearPendingAutoSave, showToast],
+    [clearPendingAutoSave, handleMutationError, isMutationBlocked],
   );
 
   const triggerAutoSave = useCallback(
     async (data: AutoSaveData) => {
-      if (!letterId || !letter) {
+      if (!letterId || !letter || isMutationBlocked()) {
         return;
       }
 
@@ -213,6 +243,7 @@ export function useAutoSave({
               ...(hasRecipientChange ? { recipient: data.recipient ?? null } : {}),
             }
           : {
+              primarySourceRevision: letter.primarySourceRevision,
               oldSender: letter.metadata.sender ?? null,
               oldRecipient: letter.metadata.recipient ?? null,
               ...(hasSenderChange ? { sender: data.sender ?? null } : {}),
@@ -233,6 +264,10 @@ export function useAutoSave({
         startIdentityCountdown(IDENTITY_SAVE_DELAY_MS);
 
         identitySaveTimerRef.current = setTimeout(async () => {
+          if (isMutationBlocked()) {
+            resetIdentityPendingState();
+            return;
+          }
           const pending = pendingIdentityUpdateRef.current;
           pendingIdentityUpdateRef.current = null;
           clearIdentityCountdown();
@@ -258,11 +293,21 @@ export function useAutoSave({
           setAutoSaveStatus('saving');
 
           try {
-            const identityData: { sender?: string; recipient?: string } = {};
+            const identityData: {
+              primarySourceRevision: number;
+              expectedSender?: string | null;
+              expectedRecipient?: string | null;
+              sender?: string;
+              recipient?: string;
+            } = {
+              primarySourceRevision: pending.primarySourceRevision,
+            };
             if (pending.sender !== undefined) {
+              identityData.expectedSender = pending.oldSender;
               identityData.sender = pending.sender ?? '';
             }
             if (pending.recipient !== undefined) {
+              identityData.expectedRecipient = pending.oldRecipient;
               identityData.recipient = pending.recipient ?? '';
             }
 
@@ -273,10 +318,16 @@ export function useAutoSave({
             setIdentityUpdateSecondsRemaining(0);
             setAutoSaveStatus('saved');
 
+            if (isMutationBlocked()) return;
             abortInFlightRetag();
             setRetagState('retagging');
 
             const change: RetagMetadataChange = {
+              // The refreshed DTO is fetched after the identity transaction
+              // commits, so a page replacement can win between those two
+              // operations. Keep the re-tag bound to the source that actually
+              // accepted this identity edit.
+              primarySourceRevision: pending.primarySourceRevision,
               field: senderChanged && recipientChanged ? 'both' : senderChanged ? 'sender' : 'recipient',
               ...(senderChanged ? { oldSender: pending.oldSender, newSender: nextSender } : {}),
               ...(recipientChanged ? { oldRecipient: pending.oldRecipient, newRecipient: nextRecipient } : {}),
@@ -309,7 +360,10 @@ export function useAutoSave({
               }
 
               setRetagState('idle');
-              showToast(getErrorMessage(error, 'Failed to update metadata references'), 'error');
+              handleMutationError(
+                error,
+                'Failed to update metadata references',
+              );
             } finally {
               if (retagAbortRef.current === controller) {
                 retagAbortRef.current = null;
@@ -319,7 +373,7 @@ export function useAutoSave({
             setIdentityUpdateState('idle');
             setIdentityUpdateSecondsRemaining(0);
             setAutoSaveStatus('error');
-            showToast(getErrorMessage(error, 'Failed to update name'), 'error');
+            handleMutationError(error, 'Failed to update name');
           }
         }, IDENTITY_SAVE_DELAY_MS);
 
@@ -330,15 +384,18 @@ export function useAutoSave({
 
       scheduleDebouncedSave(
         async () => {
-          const updated = await updateLetter(letterId, data);
+          const updated = await updateLetter(letterId, {
+            ...data,
+            primarySourceRevision: letter.primarySourceRevision,
+          });
           setLetter(updated);
 
           if (data.transcriptionText !== undefined) {
-            await createVersion(
+            await recordVersion(
               letterId,
+              letter.primarySourceRevision,
               'transcript',
               data.transcriptionText,
-              'human',
             );
           }
 
@@ -349,18 +406,27 @@ export function useAutoSave({
             data.hook !== undefined ||
             data.summary !== undefined
           ) {
-            await createVersion(
+            await recordVersion(
               letterId,
+              letter.primarySourceRevision,
               'metadata',
               {
-                sender: data.sender ?? letter.metadata.sender,
-                recipient: data.recipient ?? letter.metadata.recipient,
-                locationWritten:
-                  data.locationWritten ?? letter.metadata.location,
-                hook: data.hook ?? letter.metadata.hook,
-                summary: data.summary ?? letter.metadata.description,
+                sender: data.sender !== undefined
+                  ? data.sender
+                  : updated.metadata.sender,
+                recipient: data.recipient !== undefined
+                  ? data.recipient
+                  : updated.metadata.recipient,
+                locationWritten: data.locationWritten !== undefined
+                  ? data.locationWritten
+                  : updated.metadata.location,
+                hook: data.hook !== undefined
+                  ? data.hook
+                  : updated.metadata.hook,
+                summary: data.summary !== undefined
+                  ? data.summary
+                  : updated.metadata.description,
               },
-              'human',
             );
           }
 
@@ -386,12 +452,28 @@ export function useAutoSave({
       clearRetagTimeout,
       letter,
       letterId,
+      isMutationBlocked,
+      recordVersion,
+      resetIdentityPendingState,
       scheduleDebouncedSave,
       setLetter,
-      showToast,
+      handleMutationError,
+      startIdentityCountdown,
       syncIdentityMetadata,
     ],
   );
+
+  useEffect(() => {
+    if (!mutationsBlocked) return;
+    clearPendingAutoSave();
+    resetIdentityPendingState();
+    abortInFlightRetag();
+  }, [
+    abortInFlightRetag,
+    clearPendingAutoSave,
+    mutationsBlocked,
+    resetIdentityPendingState,
+  ]);
 
   useEffect(
     () => () => {

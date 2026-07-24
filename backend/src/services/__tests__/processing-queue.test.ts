@@ -93,6 +93,7 @@ vi.mock('../../db/index.js', () => {
       typeSequence: 'letters.typeSequence',
       createdAt: 'letters.createdAt',
       updatedAt: 'letters.updatedAt',
+      primarySourceRevision: 'letters.primarySourceRevision',
       transcriptionStatus: 'letters.transcriptionStatus',
       transcriptionRunId: 'letters.transcriptionRunId',
       transcriptionLeaseExpiresAt: 'letters.transcriptionLeaseExpiresAt',
@@ -191,6 +192,63 @@ import {
   queueJobTypeSchema,
   wakeBackgroundWorkerForQueuedProcessing,
 } from '../processing-queue.js';
+import {
+  processingJobStateToken,
+  type ProcessingJobPhase,
+  type ProcessingJobStateSource,
+  type QueueJobType,
+} from '../processing-queue-snapshot.js';
+
+let currentObservedLetter:
+  | (ProcessingJobStateSource & {
+    id: string;
+    primarySourceRevision: number;
+    updatedAt: Date;
+  })
+  | null = null;
+
+function observedLetter(
+  overrides: ProcessingJobStateSource & {
+    id: string;
+    primarySourceRevision?: number;
+    updatedAt?: Date;
+    [key: string]: unknown;
+  },
+) {
+  return {
+    primarySourceRevision: 4,
+    updatedAt: new Date('2026-07-17T12:00:00.000Z'),
+    ...overrides,
+  };
+}
+
+function mockLetter(
+  overrides: Parameters<typeof observedLetter>[0],
+): void {
+  currentObservedLetter = observedLetter(overrides);
+  findFirstMock.mockResolvedValue(currentObservedLetter);
+}
+
+function currentSnapshot(
+  type: QueueJobType,
+  phase: ProcessingJobPhase,
+) {
+  if (!currentObservedLetter) {
+    throw new Error('Call mockLetter before requesting a job snapshot');
+  }
+  return snapshotFor(currentObservedLetter, type, phase);
+}
+
+function snapshotFor(
+  letter: ProcessingJobStateSource & { primarySourceRevision: number },
+  type: QueueJobType,
+  phase: ProcessingJobPhase,
+) {
+  return {
+    primarySourceRevision: letter.primarySourceRevision,
+    jobStateToken: processingJobStateToken(letter, type, phase),
+  };
+}
 
 describe('processing queue service', () => {
   beforeEach(() => {
@@ -246,8 +304,10 @@ describe('processing queue service', () => {
         collection,
         sender: 'Alice',
         recipient: 'Bob',
+        primarySourceRevision: 6,
         updatedAt: activeAt,
         extraContentJobStatus: 'RUNNING',
+        extraContentJobRunId: '00000000-0000-4000-8000-000000000001',
       }])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
@@ -258,7 +318,10 @@ describe('processing queue service', () => {
         collection,
         sender: 'Carol',
         recipient: 'David',
+        primarySourceRevision: 7,
         createdAt: queuedAt,
+        updatedAt: queuedAt,
+        extraContentJobStatus: 'PENDING',
       }])
       .mockResolvedValueOnce([{
         id: 'extra-recent',
@@ -278,6 +341,8 @@ describe('processing queue service', () => {
       sender: 'Alice',
       recipient: 'Bob',
       type: 'extra_content',
+      primarySourceRevision: 6,
+      jobStateToken: expect.stringMatching(/^v1\./),
       startedAt: activeAt.toISOString(),
     }]);
     expect(status.queued.extraContent).toEqual([{
@@ -286,6 +351,8 @@ describe('processing queue service', () => {
       collectionCode: '009',
       sender: 'Carol',
       recipient: 'David',
+      primarySourceRevision: 7,
+      jobStateToken: expect.stringMatching(/^v1\./),
       queuedAt: null,
     }]);
     expect(status.recent).toEqual([]);
@@ -304,6 +371,42 @@ describe('processing queue service', () => {
         ]),
       },
     });
+  });
+
+  it('returns source and opaque state tokens for retryable recent rows', async () => {
+    const completedAt = new Date('2026-07-24T12:02:00.000Z');
+    findManyLettersMock
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{
+        id: 'metadata-failed',
+        dateRaw: '19470812',
+        collection: { collectionCode: '009' },
+        primarySourceRevision: 11,
+        updatedAt: completedAt,
+        metadataStatus: 'FAILED',
+        metadataRevision: 6,
+        metadataError: 'metadata unavailable',
+        entityExtractionStatus: 'PENDING',
+        transcriptionStatus: 'SUCCESS',
+      }]);
+
+    const status = await getQueueStatus();
+
+    expect(status.recent).toEqual([{
+      letterId: 'metadata-failed',
+      letterTitle: '19470812',
+      collectionCode: '009',
+      type: 'metadata',
+      status: 'FAILED',
+      primarySourceRevision: 11,
+      jobStateToken: expect.stringMatching(/^v1\.[A-Za-z0-9_-]+$/),
+      error: 'metadata unavailable',
+      completedAt: completedAt.toISOString(),
+    }]);
   });
 
   it('hides retranscribing letters from durable downstream queue snapshots', async () => {
@@ -328,12 +431,16 @@ describe('processing queue service', () => {
   });
 
   it('marks removed transcription jobs so they no longer stay queued', async () => {
-    findFirstMock.mockResolvedValue({
+    mockLetter({
       id: 'letter-1',
       transcriptionStatus: 'PENDING',
     });
 
-    const result = await removeFromQueue('letter-1', 'transcription');
+    const result = await removeFromQueue(
+      'letter-1',
+      'transcription',
+      currentSnapshot('transcription', 'queued'),
+    );
 
     expect(result).toEqual({ message: 'Removed from queue' });
     expect(dbUpdateMock).toHaveBeenCalledWith(expect.objectContaining({
@@ -350,34 +457,109 @@ describe('processing queue service', () => {
     });
     expect(updateWhereMock).toHaveBeenCalledWith({
       kind: 'and',
-      clauses: [
+      clauses: expect.arrayContaining([
         { kind: 'eq', field: 'letters.id', value: 'letter-1' },
+        { kind: 'eq', field: 'letters.primarySourceRevision', value: 4 },
         { kind: 'eq', field: 'letters.transcriptionStatus', value: 'PENDING' },
-      ],
+      ]),
     });
   });
 
   it('rejects removal when a worker claims the queued transcription first', async () => {
-    findFirstMock.mockResolvedValue({
+    mockLetter({
       id: 'letter-1',
       transcriptionStatus: 'PENDING',
     });
     updateReturningMock.mockResolvedValue([]);
 
-    await expect(removeFromQueue('letter-1', 'transcription')).rejects.toMatchObject({
+    await expect(removeFromQueue(
+      'letter-1',
+      'transcription',
+      currentSnapshot('transcription', 'queued'),
+    )).rejects.toMatchObject({
       statusCode: 409,
-      message: 'Cannot remove: transcription is no longer pending',
+      code: 'PROCESSING_JOB_CHANGED',
+    });
+  });
+
+  it('classifies source changes before stale queue tokens', async () => {
+    mockLetter({
+      id: 'letter-source-changed',
+      primarySourceRevision: 5,
+      transcriptionStatus: 'PENDING',
+    });
+
+    await expect(removeFromQueue(
+      'letter-source-changed',
+      'transcription',
+      {
+        primarySourceRevision: 4,
+        jobStateToken: 'v1.stale-token',
+      },
+    )).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'SOURCE_REVISION_CHANGED',
+    });
+    expect(dbUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it('reports a narrower conflict when only the displayed job changed', async () => {
+    mockLetter({
+      id: 'letter-job-changed',
+      primarySourceRevision: 4,
+      transcriptionStatus: 'PENDING',
+    });
+
+    await expect(removeFromQueue(
+      'letter-job-changed',
+      'transcription',
+      {
+        primarySourceRevision: 4,
+        jobStateToken: 'v1.stale-token',
+      },
+    )).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'PROCESSING_JOB_CHANGED',
+    });
+    expect(dbUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it('rechecks the source epoch when the SQL queue CAS loses its race', async () => {
+    const observed = observedLetter({
+      id: 'letter-raced',
+      primarySourceRevision: 4,
+      transcriptionStatus: 'PENDING',
+    });
+    findFirstMock
+      .mockResolvedValueOnce(observed)
+      .mockResolvedValueOnce({
+        ...observed,
+        primarySourceRevision: 5,
+      });
+    updateReturningMock.mockResolvedValue([]);
+
+    await expect(removeFromQueue(
+      'letter-raced',
+      'transcription',
+      snapshotFor(observed, 'transcription', 'queued'),
+    )).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'SOURCE_REVISION_CHANGED',
     });
   });
 
   it('removes a queued entity job with the complete ownership tuple cleared', async () => {
-    findFirstMock.mockResolvedValue({
+    mockLetter({
       id: 'letter-entity',
       entityExtractionStatus: 'PENDING',
     });
 
     await expect(
-      removeFromQueue('letter-entity', 'entity_extraction'),
+      removeFromQueue(
+        'letter-entity',
+        'entity_extraction',
+        currentSnapshot('entity_extraction', 'queued'),
+      ),
     ).resolves.toEqual({ message: 'Removed from queue' });
 
     expect(updateSetMock).toHaveBeenCalledWith({
@@ -394,13 +576,17 @@ describe('processing queue service', () => {
 
   it('removes only the exact observed queued extra-content job', async () => {
     const observedAt = new Date('2026-07-23T12:00:00.000Z');
-    findFirstMock.mockResolvedValue({
+    mockLetter({
       id: 'letter-extra',
       extraContentJobStatus: 'PENDING',
       updatedAt: observedAt,
     });
 
-    await expect(removeFromQueue('letter-extra', 'extra_content')).resolves.toEqual({
+    await expect(removeFromQueue(
+      'letter-extra',
+      'extra_content',
+      currentSnapshot('extra_content', 'queued'),
+    )).resolves.toEqual({
       message: 'Removed from queue',
     });
 
@@ -430,12 +616,20 @@ describe('processing queue service', () => {
   });
 
   it('clears only transcriptions that remain pending and reports the actual count', async () => {
-    findManyLettersMock.mockResolvedValue([{ id: 'letter-1' }, { id: 'letter-2' }]);
-    updateReturningMock.mockResolvedValue([{ id: 'letter-2' }]);
+    mockLetter({
+      id: 'letter-1',
+      transcriptionStatus: 'PENDING',
+    });
 
-    await expect(clearQueue('transcription')).resolves.toEqual({
-      message: 'Cleared 1 items from transcription queue',
+    await expect(clearQueue('transcription', [{
+      letterId: 'letter-1',
+      ...currentSnapshot('transcription', 'queued'),
+    }])).resolves.toEqual({
+      message: 'Cleared 1 of 1 displayed transcription queue items',
+      requested: 1,
       cleared: 1,
+      skipped: 0,
+      skipReasons: [],
     });
     expect(updateSetMock).toHaveBeenCalledWith({
       transcriptionStatus: 'FAILED',
@@ -449,11 +643,8 @@ describe('processing queue service', () => {
     expect(updateWhereMock).toHaveBeenCalledWith({
       kind: 'and',
       clauses: expect.arrayContaining([
-        {
-          kind: 'inArray',
-          field: 'letters.id',
-          values: ['letter-1', 'letter-2'],
-        },
+        { kind: 'eq', field: 'letters.id', value: 'letter-1' },
+        { kind: 'eq', field: 'letters.primarySourceRevision', value: 4 },
         { kind: 'eq', field: 'letters.transcriptionStatus', value: 'PENDING' },
         { kind: 'eq', field: 'letters.deadLetter', value: false },
       ]),
@@ -461,17 +652,27 @@ describe('processing queue service', () => {
   });
 
   it('clears only metadata rows that remain queued outside retranscription', async () => {
-    findManyLettersMock.mockResolvedValue([{ id: 'letter-1' }, { id: 'letter-2' }]);
-    updateReturningMock.mockResolvedValue([{ id: 'letter-2' }]);
+    mockLetter({
+      id: 'letter-1',
+      metadataStatus: 'PENDING',
+      metadataRevision: 3,
+    });
 
-    await expect(clearQueue('metadata')).resolves.toEqual({
-      message: 'Cleared 1 items from metadata queue',
+    await expect(clearQueue('metadata', [{
+      letterId: 'letter-1',
+      ...currentSnapshot('metadata', 'queued'),
+    }])).resolves.toEqual({
+      message: 'Cleared 1 of 1 displayed metadata queue items',
+      requested: 1,
       cleared: 1,
+      skipped: 0,
+      skipReasons: [],
     });
     expect(updateWhereMock).toHaveBeenCalledWith({
       kind: 'and',
       clauses: expect.arrayContaining([
-        { kind: 'inArray', field: 'letters.id', values: ['letter-1', 'letter-2'] },
+        { kind: 'eq', field: 'letters.id', value: 'letter-1' },
+        { kind: 'eq', field: 'letters.primarySourceRevision', value: 4 },
         { kind: 'eq', field: 'letters.metadataStatus', value: 'PENDING' },
         { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
         { kind: 'isNotNull', field: 'letters.transcriptConfirmedAt' },
@@ -482,12 +683,21 @@ describe('processing queue service', () => {
   });
 
   it('clears only entity rows that remain queued outside retranscription', async () => {
-    findManyLettersMock.mockResolvedValue([{ id: 'letter-1' }, { id: 'letter-2' }]);
-    updateReturningMock.mockResolvedValue([{ id: 'letter-1' }]);
+    mockLetter({
+      id: 'letter-1',
+      entityExtractionStatus: 'PENDING',
+      entityExtractionRevision: 5,
+    });
 
-    await expect(clearQueue('entity_extraction')).resolves.toEqual({
-      message: 'Cleared 1 items from entity_extraction queue',
+    await expect(clearQueue('entity_extraction', [{
+      letterId: 'letter-1',
+      ...currentSnapshot('entity_extraction', 'queued'),
+    }])).resolves.toEqual({
+      message: 'Cleared 1 of 1 displayed entity_extraction queue items',
+      requested: 1,
       cleared: 1,
+      skipped: 0,
+      skipReasons: [],
     });
     expect(updateSetMock).toHaveBeenCalledWith({
       entityExtractionStatus: 'FAILED',
@@ -502,7 +712,8 @@ describe('processing queue service', () => {
     expect(updateWhereMock).toHaveBeenCalledWith({
       kind: 'and',
       clauses: expect.arrayContaining([
-        { kind: 'inArray', field: 'letters.id', values: ['letter-1', 'letter-2'] },
+        { kind: 'eq', field: 'letters.id', value: 'letter-1' },
+        { kind: 'eq', field: 'letters.primarySourceRevision', value: 4 },
         { kind: 'eq', field: 'letters.entityExtractionStatus', value: 'PENDING' },
         { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
         { kind: 'eq', field: 'letters.metadataStatus', value: 'SUCCESS' },
@@ -512,12 +723,20 @@ describe('processing queue service', () => {
   });
 
   it('clears only rows that remain in the durable extra-content queue', async () => {
-    findManyLettersMock.mockResolvedValue([{ id: 'extra-1' }, { id: 'extra-2' }]);
-    updateReturningMock.mockResolvedValue([{ id: 'extra-2' }]);
+    mockLetter({
+      id: 'extra-1',
+      extraContentJobStatus: 'PENDING',
+    });
 
-    await expect(clearQueue('extra_content')).resolves.toEqual({
-      message: 'Cleared 1 items from extra_content queue',
+    await expect(clearQueue('extra_content', [{
+      letterId: 'extra-1',
+      ...currentSnapshot('extra_content', 'queued'),
+    }])).resolves.toEqual({
+      message: 'Cleared 1 of 1 displayed extra_content queue items',
+      requested: 1,
       cleared: 1,
+      skipped: 0,
+      skipReasons: [],
     });
     expect(updateSetMock).toHaveBeenCalledWith({
       extraContentJobStatus: 'FAILED',
@@ -532,20 +751,57 @@ describe('processing queue service', () => {
     expect(updateWhereMock).toHaveBeenCalledWith({
       kind: 'and',
       clauses: expect.arrayContaining([
-        {
-          kind: 'inArray',
-          field: 'letters.id',
-          values: ['extra-1', 'extra-2'],
-        },
+        { kind: 'eq', field: 'letters.id', value: 'extra-1' },
+        { kind: 'eq', field: 'letters.primarySourceRevision', value: 4 },
         { kind: 'eq', field: 'letters.type', value: 'L' },
         { kind: 'eq', field: 'letters.extraContentJobStatus', value: 'PENDING' },
       ]),
     });
   });
 
+  it('returns truthful per-row outcomes for a frozen clear snapshot', async () => {
+    const current = observedLetter({
+      id: 'current-row',
+      primarySourceRevision: 4,
+      transcriptionStatus: 'PENDING',
+    });
+    const staleSnapshot = observedLetter({
+      id: 'stale-row',
+      primarySourceRevision: 4,
+      transcriptionStatus: 'PENDING',
+    });
+    findFirstMock
+      .mockResolvedValueOnce(current)
+      .mockResolvedValueOnce({
+        ...staleSnapshot,
+        primarySourceRevision: 5,
+      });
+
+    await expect(clearQueue('transcription', [
+      {
+        letterId: current.id,
+        ...snapshotFor(current, 'transcription', 'queued'),
+      },
+      {
+        letterId: staleSnapshot.id,
+        ...snapshotFor(staleSnapshot, 'transcription', 'queued'),
+      },
+    ])).resolves.toEqual({
+      message: 'Cleared 1 of 2 displayed transcription queue items',
+      requested: 2,
+      cleared: 1,
+      skipped: 1,
+      skipReasons: [{
+        letterId: 'stale-row',
+        code: 'SOURCE_REVISION_CHANGED',
+      }],
+    });
+    expect(dbUpdateMock).toHaveBeenCalledTimes(1);
+  });
+
   it('retries a transcription only while it remains failed', async () => {
     const observedAt = new Date('2026-07-17T12:00:00.000Z');
-    findFirstMock.mockResolvedValue({
+    mockLetter({
       id: 'letter-1',
       type: 'L',
       transcriptionStatus: 'FAILED',
@@ -554,7 +810,11 @@ describe('processing queue service', () => {
       updatedAt: observedAt,
     });
 
-    await expect(retryJob('letter-1', 'transcription')).resolves.toEqual({
+    await expect(retryJob(
+      'letter-1',
+      'transcription',
+      currentSnapshot('transcription', 'recent'),
+    )).resolves.toEqual({
       message: 'Retrying transcription for letter letter-1',
     });
     expect(updateSetMock).toHaveBeenCalledWith({
@@ -571,8 +831,9 @@ describe('processing queue service', () => {
     });
     expect(updateWhereMock).toHaveBeenCalledWith({
       kind: 'and',
-      clauses: [
+      clauses: expect.arrayContaining([
         { kind: 'eq', field: 'letters.id', value: 'letter-1' },
+        { kind: 'eq', field: 'letters.primarySourceRevision', value: 4 },
         { kind: 'eq', field: 'letters.transcriptionStatus', value: 'FAILED' },
         {
           kind: 'inArray',
@@ -597,7 +858,7 @@ describe('processing queue service', () => {
           strings: ["date_trunc('milliseconds', ", ') = ', '::timestamptz'],
           values: ['letters.updatedAt', observedAt.toISOString()],
         },
-      ],
+      ]),
     });
   });
 
@@ -606,7 +867,7 @@ describe('processing queue service', () => {
     ['running metadata', { metadataStatus: 'RUNNING' }],
     ['running entity extraction', { entityExtractionStatus: 'RUNNING' }],
   ])('rejects a transcription retry with %s', async (_label, overrides) => {
-    findFirstMock.mockResolvedValue({
+    mockLetter({
       id: 'letter-1',
       type: 'L',
       transcriptionStatus: 'FAILED',
@@ -616,7 +877,11 @@ describe('processing queue service', () => {
       ...overrides,
     });
 
-    await expect(retryJob('letter-1', 'transcription')).rejects.toMatchObject({
+    await expect(retryJob(
+      'letter-1',
+      'transcription',
+      currentSnapshot('transcription', 'recent'),
+    )).rejects.toMatchObject({
       statusCode: 400,
       message: 'Cannot retry: transcription prerequisites are not satisfied',
     });
@@ -624,7 +889,7 @@ describe('processing queue service', () => {
   });
 
   it('rejects retry when another owner moves the failed transcription first', async () => {
-    findFirstMock.mockResolvedValue({
+    mockLetter({
       id: 'letter-1',
       type: 'L',
       transcriptionStatus: 'FAILED',
@@ -634,15 +899,19 @@ describe('processing queue service', () => {
     });
     updateReturningMock.mockResolvedValue([]);
 
-    await expect(retryJob('letter-1', 'transcription')).rejects.toMatchObject({
+    await expect(retryJob(
+      'letter-1',
+      'transcription',
+      currentSnapshot('transcription', 'recent'),
+    )).rejects.toMatchObject({
       statusCode: 409,
-      message: 'Cannot retry: transcription prerequisites changed since it was loaded',
+      code: 'PROCESSING_JOB_CHANGED',
     });
   });
 
   it('retries failed metadata jobs by clearing the error', async () => {
     const observedAt = new Date('2026-07-17T12:00:00.000Z');
-    findFirstMock.mockResolvedValue({
+    mockLetter({
       id: 'letter-2',
       type: 'L',
       transcriptionStatus: 'SUCCESS',
@@ -655,7 +924,11 @@ describe('processing queue service', () => {
       updatedAt: observedAt,
     });
 
-    const result = await retryJob('letter-2', 'metadata');
+    const result = await retryJob(
+      'letter-2',
+      'metadata',
+      currentSnapshot('metadata', 'recent'),
+    );
 
     expect(result).toEqual({ message: 'Retrying metadata for letter letter-2' });
     expect(updateSetMock).toHaveBeenCalledWith(
@@ -675,8 +948,9 @@ describe('processing queue service', () => {
     );
     expect(updateWhereMock).toHaveBeenCalledWith({
       kind: 'and',
-      clauses: [
+      clauses: expect.arrayContaining([
         { kind: 'eq', field: 'letters.id', value: 'letter-2' },
+        { kind: 'eq', field: 'letters.primarySourceRevision', value: 4 },
         { kind: 'eq', field: 'letters.metadataStatus', value: 'FAILED' },
         { kind: 'eq', field: 'letters.type', value: 'L' },
         { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
@@ -695,7 +969,7 @@ describe('processing queue service', () => {
           strings: ["date_trunc('milliseconds', ", ') = ', '::timestamptz'],
           values: ['letters.updatedAt', observedAt.toISOString()],
         },
-      ],
+      ]),
     });
   });
 
@@ -706,7 +980,7 @@ describe('processing queue service', () => {
     ['running entity extraction', { entityExtractionStatus: 'RUNNING' }],
     ['running extra-content work', { extraContentJobStatus: 'RUNNING' }],
   ])('rejects a metadata retry with %s', async (_label, overrides) => {
-    findFirstMock.mockResolvedValue({
+    mockLetter({
       id: 'letter-2',
       type: 'L',
       transcriptionStatus: 'SUCCESS',
@@ -720,7 +994,11 @@ describe('processing queue service', () => {
       ...overrides,
     });
 
-    await expect(retryJob('letter-2', 'metadata')).rejects.toMatchObject({
+    await expect(retryJob(
+      'letter-2',
+      'metadata',
+      currentSnapshot('metadata', 'recent'),
+    )).rejects.toMatchObject({
       statusCode: 400,
       message: 'Cannot retry: metadata prerequisites are not satisfied',
     });
@@ -728,7 +1006,7 @@ describe('processing queue service', () => {
   });
 
   it('makes an explicitly retried entity job claimable again', async () => {
-    findFirstMock.mockResolvedValue({
+    mockLetter({
       id: 'letter-entity',
       type: 'L',
       transcriptionStatus: 'SUCCESS',
@@ -739,7 +1017,11 @@ describe('processing queue service', () => {
     });
 
     await expect(
-      retryJob('letter-entity', 'entity_extraction'),
+      retryJob(
+        'letter-entity',
+        'entity_extraction',
+        currentSnapshot('entity_extraction', 'recent'),
+      ),
     ).resolves.toEqual({
       message: 'Retrying entity_extraction for letter letter-entity',
     });
@@ -757,7 +1039,7 @@ describe('processing queue service', () => {
   });
 
   it('does not clear dead-letter state for an ineligible entity retry', async () => {
-    findFirstMock.mockResolvedValue({
+    mockLetter({
       id: 'letter-entity',
       type: 'L',
       transcriptionStatus: 'SUCCESS',
@@ -768,7 +1050,11 @@ describe('processing queue service', () => {
     });
 
     await expect(
-      retryJob('letter-entity', 'entity_extraction'),
+      retryJob(
+        'letter-entity',
+        'entity_extraction',
+        currentSnapshot('entity_extraction', 'recent'),
+      ),
     ).rejects.toMatchObject({
       statusCode: 400,
       message: 'Cannot retry: entity extraction prerequisites are not satisfied',
@@ -779,14 +1065,18 @@ describe('processing queue service', () => {
 
   it('retries failed extra-content work with a fresh durable ownership tuple', async () => {
     const observedAt = new Date('2026-07-23T12:00:00.000Z');
-    findFirstMock.mockResolvedValue({
+    mockLetter({
       id: 'letter-extra',
       type: 'L',
       extraContentJobStatus: 'FAILED',
       updatedAt: observedAt,
     });
 
-    await expect(retryJob('letter-extra', 'extra_content')).resolves.toEqual({
+    await expect(retryJob(
+      'letter-extra',
+      'extra_content',
+      currentSnapshot('extra_content', 'recent'),
+    )).resolves.toEqual({
       message: 'Retrying extra_content for letter letter-extra',
     });
 
@@ -802,8 +1092,9 @@ describe('processing queue service', () => {
     });
     expect(updateWhereMock).toHaveBeenCalledWith({
       kind: 'and',
-      clauses: [
+      clauses: expect.arrayContaining([
         { kind: 'eq', field: 'letters.id', value: 'letter-extra' },
+        { kind: 'eq', field: 'letters.primarySourceRevision', value: 4 },
         { kind: 'eq', field: 'letters.extraContentJobStatus', value: 'FAILED' },
         { kind: 'eq', field: 'letters.type', value: 'L' },
         expect.objectContaining({
@@ -817,12 +1108,12 @@ describe('processing queue service', () => {
           strings: ["date_trunc('milliseconds', ", ') = ', '::timestamptz'],
           values: ['letters.updatedAt', observedAt.toISOString()],
         },
-      ],
+      ]),
     });
   });
 
   it('rejects an extra-content retry whose durable prerequisites lose the CAS', async () => {
-    findFirstMock.mockResolvedValue({
+    mockLetter({
       id: 'letter-extra',
       type: 'L',
       extraContentJobStatus: 'FAILED',
@@ -830,21 +1121,29 @@ describe('processing queue service', () => {
     });
     updateReturningMock.mockResolvedValue([]);
 
-    await expect(retryJob('letter-extra', 'extra_content')).rejects.toMatchObject({
+    await expect(retryJob(
+      'letter-extra',
+      'extra_content',
+      currentSnapshot('extra_content', 'recent'),
+    )).rejects.toMatchObject({
       statusCode: 409,
-      message: 'Cannot retry: extra content changed since it was loaded',
+      code: 'PROCESSING_JOB_CHANGED',
     });
   });
 
   it('rejects an extra-content retry for a non-letter record', async () => {
-    findFirstMock.mockResolvedValue({
+    mockLetter({
       id: 'cover-extra',
       type: 'C',
       extraContentJobStatus: 'FAILED',
       updatedAt: new Date('2026-07-23T12:00:00.000Z'),
     });
 
-    await expect(retryJob('cover-extra', 'extra_content')).rejects.toMatchObject({
+    await expect(retryJob(
+      'cover-extra',
+      'extra_content',
+      currentSnapshot('extra_content', 'recent'),
+    )).rejects.toMatchObject({
       statusCode: 400,
       message: 'Cannot retry: extra content prerequisites are not satisfied',
     });
@@ -852,70 +1151,99 @@ describe('processing queue service', () => {
   });
 
   it('delegates transcription cancellation to the canonical exact-run lifecycle owner', async () => {
-    findFirstMock.mockResolvedValue({
+    mockLetter({
       id: 'letter-3',
       transcriptionStatus: 'RUNNING',
       transcriptionRunId: 'run-a',
     });
-    const result = await cancelActiveJob('letter-3', 'transcription');
+    const result = await cancelActiveJob(
+      'letter-3',
+      'transcription',
+      currentSnapshot('transcription', 'active'),
+    );
 
     expect(result).toEqual({ message: 'Job cancelled' });
-    expect(cancelTranscriptionAttemptMock).toHaveBeenCalledWith('letter-3', 'run-a');
+    expect(cancelTranscriptionAttemptMock).toHaveBeenCalledWith(
+      'letter-3',
+      'run-a',
+      'Cancelled by admin',
+      4,
+    );
   });
 
   it('delegates metadata cancellation to the canonical exact-run lifecycle owner', async () => {
-    findFirstMock.mockResolvedValue({
+    mockLetter({
       id: 'letter-4',
       metadataStatus: 'RUNNING',
       metadataRunId: 'metadata-run-a',
     });
-    await expect(cancelActiveJob('letter-4', 'metadata')).resolves.toEqual({
+    await expect(cancelActiveJob(
+      'letter-4',
+      'metadata',
+      currentSnapshot('metadata', 'active'),
+    )).resolves.toEqual({
       message: 'Job cancelled',
     });
 
     expect(cancelMetadataAttemptMock).toHaveBeenCalledWith(
       'letter-4',
       'metadata-run-a',
+      'Cancelled by admin',
+      4,
     );
   });
 
   it('delegates extra-content cancellation to the canonical exact-run lifecycle owner', async () => {
+    const letter = observedLetter({
+      id: 'letter-extra',
+      extraContentJobStatus: 'RUNNING',
+      extraContentJobRunId: 'extra-run-a',
+    });
     findFirstMock
-      .mockResolvedValueOnce({
-        id: 'letter-extra',
-        extraContentJobStatus: 'RUNNING',
-        extraContentJobRunId: 'extra-run-a',
-      })
+      .mockResolvedValueOnce(letter)
       .mockResolvedValueOnce(null);
 
-    await expect(cancelActiveJob('letter-extra', 'extra_content')).resolves.toEqual({
+    await expect(cancelActiveJob(
+      'letter-extra',
+      'extra_content',
+      snapshotFor(letter, 'extra_content', 'active'),
+    )).resolves.toEqual({
       message: 'Job cancelled',
     });
 
     expect(cancelExtraContentAttemptMock).toHaveBeenCalledWith(
       'letter-extra',
       'extra-run-a',
+      'Cancelled by admin',
+      4,
     );
     expect(triggerWorkerJobMock).not.toHaveBeenCalled();
   });
 
   it('requests a worker when extra-content cancellation leaves durable queued work', async () => {
     shouldUseCloudRunWorkerJobMock.mockReturnValue(true);
+    const letter = observedLetter({
+      id: 'letter-extra',
+      extraContentJobStatus: 'RUNNING',
+      extraContentJobRunId: 'extra-run-a',
+    });
     findFirstMock
-      .mockResolvedValueOnce({
-        id: 'letter-extra',
-        extraContentJobStatus: 'RUNNING',
-        extraContentJobRunId: 'extra-run-a',
-      })
+      .mockResolvedValueOnce(letter)
       .mockResolvedValueOnce({ id: 'letter-extra' });
 
-    await expect(cancelActiveJob('letter-extra', 'extra_content')).resolves.toEqual({
+    await expect(cancelActiveJob(
+      'letter-extra',
+      'extra_content',
+      snapshotFor(letter, 'extra_content', 'active'),
+    )).resolves.toEqual({
       message: 'Job cancelled',
     });
 
     expect(cancelExtraContentAttemptMock).toHaveBeenCalledWith(
       'letter-extra',
       'extra-run-a',
+      'Cancelled by admin',
+      4,
     );
     expect(findFirstMock.mock.calls[1]?.[0]).toMatchObject({
       where: {
@@ -932,48 +1260,63 @@ describe('processing queue service', () => {
 
   it('keeps a committed extra-content cancellation successful when the wake check fails', async () => {
     shouldUseCloudRunWorkerJobMock.mockReturnValue(true);
+    const letter = observedLetter({
+      id: 'letter-extra',
+      extraContentJobStatus: 'RUNNING',
+      extraContentJobRunId: 'extra-run-a',
+    });
     findFirstMock
-      .mockResolvedValueOnce({
-        id: 'letter-extra',
-        extraContentJobStatus: 'RUNNING',
-        extraContentJobRunId: 'extra-run-a',
-      })
+      .mockResolvedValueOnce(letter)
       .mockRejectedValueOnce(new Error('queue observation failed'));
 
-    await expect(cancelActiveJob('letter-extra', 'extra_content')).resolves.toEqual({
+    await expect(cancelActiveJob(
+      'letter-extra',
+      'extra_content',
+      snapshotFor(letter, 'extra_content', 'active'),
+    )).resolves.toEqual({
       message: 'Job cancelled',
     });
 
     expect(cancelExtraContentAttemptMock).toHaveBeenCalledWith(
       'letter-extra',
       'extra-run-a',
+      'Cancelled by admin',
+      4,
     );
     expect(triggerWorkerJobMock).not.toHaveBeenCalled();
   });
 
   it('rejects extra-content cancellation after the observed run loses ownership', async () => {
-    findFirstMock.mockResolvedValue({
+    mockLetter({
       id: 'letter-extra',
       extraContentJobStatus: 'RUNNING',
       extraContentJobRunId: 'extra-run-a',
     });
     cancelExtraContentAttemptMock.mockResolvedValue(false);
 
-    await expect(cancelActiveJob('letter-extra', 'extra_content')).rejects.toMatchObject({
+    await expect(cancelActiveJob(
+      'letter-extra',
+      'extra_content',
+      currentSnapshot('extra_content', 'active'),
+    )).rejects.toMatchObject({
       statusCode: 409,
-      message: 'Cannot cancel: extra content attempt changed since it was loaded',
+      code: 'PROCESSING_JOB_CHANGED',
     });
   });
 
   it('cancels only the exact observed entity-extraction run', async () => {
-    findFirstMock.mockResolvedValue({
+    mockLetter({
       id: 'letter-5',
       entityExtractionStatus: 'RUNNING',
       entityExtractionRunId: 'entity-run-a',
       entityExtractionRunRevision: 4,
     });
 
-    await expect(cancelActiveJob('letter-5', 'entity_extraction')).resolves.toEqual({
+    await expect(cancelActiveJob(
+      'letter-5',
+      'entity_extraction',
+      currentSnapshot('entity_extraction', 'active'),
+    )).resolves.toEqual({
       message: 'Job cancelled',
     });
 
@@ -981,11 +1324,12 @@ describe('processing queue service', () => {
       'letter-5',
       { runId: 'entity-run-a', revision: 4 },
       'Cancelled by admin',
+      4,
     );
   });
 
   it('cancels an observed tokenless legacy entity run after rollout drain', async () => {
-    findFirstMock.mockResolvedValue({
+    mockLetter({
       id: 'letter-legacy',
       entityExtractionStatus: 'RUNNING',
       entityExtractionRunId: null,
@@ -995,17 +1339,19 @@ describe('processing queue service', () => {
     await expect(cancelActiveJob(
       'letter-legacy',
       'entity_extraction',
+      currentSnapshot('entity_extraction', 'active'),
     )).resolves.toEqual({ message: 'Job cancelled' });
 
     expect(cancelLegacyEntityExtractionMock).toHaveBeenCalledWith(
       'letter-legacy',
       'Cancelled by admin',
+      4,
     );
     expect(cancelEntityExtractionAttemptMock).not.toHaveBeenCalled();
   });
 
   it('cannot let a cancellation waiting behind commit overwrite SUCCESS', async () => {
-    findFirstMock.mockResolvedValue({
+    mockLetter({
       id: 'letter-5',
       entityExtractionStatus: 'RUNNING',
       entityExtractionRunId: 'entity-run-a',
@@ -1016,10 +1362,14 @@ describe('processing queue service', () => {
     cancelEntityExtractionAttemptMock.mockResolvedValue(false);
 
     await expect(
-      cancelActiveJob('letter-5', 'entity_extraction'),
+      cancelActiveJob(
+        'letter-5',
+        'entity_extraction',
+        currentSnapshot('entity_extraction', 'active'),
+      ),
     ).rejects.toMatchObject({
       statusCode: 409,
-      message: 'Cannot cancel: entity extraction attempt changed since it was loaded',
+      code: 'PROCESSING_JOB_CHANGED',
     });
 
     expect(dbUpdateMock).not.toHaveBeenCalled();
@@ -1140,7 +1490,7 @@ describe('processing queue service', () => {
 
   it('awaits a worker wake whenever any durable queued stage exists', async () => {
     shouldUseCloudRunWorkerJobMock.mockReturnValue(true);
-    findFirstMock.mockResolvedValue({ id: 'queued-letter' });
+    mockLetter({ id: 'queued-letter' });
 
     await expect(
       ensureBackgroundWorkerForQueuedProcessing('lease-recovery'),
@@ -1266,7 +1616,7 @@ describe('processing queue service', () => {
   it('propagates a failed worker wake so periodic recovery can retry it', async () => {
     const failure = new Error('Cloud Run unavailable');
     shouldUseCloudRunWorkerJobMock.mockReturnValue(true);
-    findFirstMock.mockResolvedValue({ id: 'queued-letter' });
+    mockLetter({ id: 'queued-letter' });
     triggerWorkerJobMock.mockRejectedValue(failure);
 
     await expect(
@@ -1275,16 +1625,20 @@ describe('processing queue service', () => {
   });
 
   it('rejects cancellation when the observed transcription attempt loses ownership', async () => {
-    findFirstMock.mockResolvedValue({
+    mockLetter({
       id: 'letter-3',
       transcriptionStatus: 'RUNNING',
       transcriptionRunId: 'run-a',
     });
     cancelTranscriptionAttemptMock.mockResolvedValue(false);
 
-    await expect(cancelActiveJob('letter-3', 'transcription')).rejects.toMatchObject({
+    await expect(cancelActiveJob(
+      'letter-3',
+      'transcription',
+      currentSnapshot('transcription', 'active'),
+    )).rejects.toMatchObject({
       statusCode: 409,
-      message: 'Cannot cancel: transcription attempt changed since it was loaded',
+      code: 'PROCESSING_JOB_CHANGED',
     });
   });
 

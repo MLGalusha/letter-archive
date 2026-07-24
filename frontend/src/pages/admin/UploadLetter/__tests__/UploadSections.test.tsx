@@ -23,6 +23,7 @@ function makeImage(id: string, overrides?: Partial<UploadedImage>): UploadedImag
       dateConfidence: "exact",
     },
     isDuplicate: false,
+    sourceExpectation: null,
     ...overrides,
   };
 }

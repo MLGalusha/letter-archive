@@ -12,13 +12,16 @@ interface MockLetterImage {
   imageUrl: string;
   pageNumber?: number;
   originalFilename?: string;
+  sourceChecksum?: string;
   lineSegments?: unknown[];
+  segmentTrustState?: 'trusted' | 'unverified';
 }
 
 interface MockLetterReviewLetter {
   id: string;
   title: string;
   collectionCode?: string;
+  primarySourceRevision: number;
   images: MockLetterImage[];
   transcript: {
     pages: Array<{ pageNumber: number; text: string }>;
@@ -59,6 +62,7 @@ interface MockLetterReviewLetter {
 interface MockUpdateLetterRequest {
   url: string;
   body: {
+    primarySourceRevision?: number;
     transcriptionText?: string;
     sender?: string | null;
     recipient?: string | null;
@@ -66,6 +70,38 @@ interface MockUpdateLetterRequest {
     hook?: string | null;
     summary?: string | null;
     notes?: string | null;
+  };
+}
+
+interface MockPageLineSegmentsRequest {
+  url: string;
+  pageId: string;
+  body: {
+    lineSegments?: unknown[];
+    primarySourceRevision?: number;
+    sourceChecksum?: string | null;
+  };
+}
+
+interface MockPageSegmentTrustRequest {
+  url: string;
+  pageId: string;
+  body: {
+    trustState?: 'trusted' | 'unverified';
+    primarySourceRevision?: number;
+    sourceChecksum?: string | null;
+  };
+}
+
+interface MockLetterSegmentTrustRequest {
+  url: string;
+  body: {
+    trustState?: 'trusted' | 'unverified';
+    primarySourceRevision?: number;
+    pages?: Array<{
+      pageId?: string;
+      sourceChecksum?: string | null;
+    }>;
   };
 }
 
@@ -96,6 +132,7 @@ interface MockAiNotesRequest {
 interface MockApiFailure {
   status?: number;
   error: string;
+  code?: string;
   requestId?: string;
 }
 
@@ -119,6 +156,7 @@ const collection009ImageFixtures = [
     imageUrl: '/mock-assets/collection-009/19470810/L01/009-19470810-L01-01.jpg',
     pageNumber: 1,
     originalFilename: '009-19470810-L01-01.jpg',
+    sourceChecksum: '1111111111111111111111111111111111111111111111111111111111111111',
     filePath: path.join(
       COLLECTION_009_ROOT,
       '19470810/L01/009-19470810-L01-01.jpg',
@@ -130,6 +168,7 @@ const collection009ImageFixtures = [
     imageUrl: '/mock-assets/collection-009/19470810/L01/009-19470810-L01-02.jpg',
     pageNumber: 2,
     originalFilename: '009-19470810-L01-02.jpg',
+    sourceChecksum: '2222222222222222222222222222222222222222222222222222222222222222',
     filePath: path.join(
       COLLECTION_009_ROOT,
       '19470810/L01/009-19470810-L01-02.jpg',
@@ -218,6 +257,7 @@ const baseLetter: MockLetterReviewLetter = {
   id: 'letter-review-1',
   title: 'Review Letter One',
   collectionCode: '009',
+  primarySourceRevision: 4,
   images: collection009ImageFixtures.map(({ filePath: _filePath, ...image }) => image),
   transcript: {
     pages: [
@@ -314,8 +354,15 @@ export interface MockLetterReviewContext {
   unverifyExtraContentRequests: string[];
   flagRequests: Array<{ url: string; body: unknown }>;
   detectLineRequests: string[];
+  saveLineSegmentRequests: MockPageLineSegmentsRequest[];
+  pageSegmentTrustRequests: MockPageSegmentTrustRequest[];
+  letterSegmentTrustRequests: MockLetterSegmentTrustRequest[];
   updateLetterRequests: MockUpdateLetterRequest[];
   versionRequests: MockVersionRequest[];
+  transcribeLetterRequests: Array<{
+    url: string;
+    body: { primarySourceRevision?: number };
+  }>;
 }
 
 export async function installMockLetterReviewApi(
@@ -337,6 +384,7 @@ export async function installMockLetterReviewApi(
         | 'loadLetter'
         | 'updateLetter'
         | 'verifyTranscript'
+        | 'transcribeLetter'
         | 'verifyMetadata'
         | 'extraContent'
         | 'aiNotes'
@@ -361,8 +409,12 @@ export async function installMockLetterReviewApi(
   const unverifyExtraContentRequests: string[] = [];
   const flagRequests: Array<{ url: string; body: unknown }> = [];
   const detectLineRequests: string[] = [];
+  const saveLineSegmentRequests: MockPageLineSegmentsRequest[] = [];
+  const pageSegmentTrustRequests: MockPageSegmentTrustRequest[] = [];
+  const letterSegmentTrustRequests: MockLetterSegmentTrustRequest[] = [];
   const updateLetterRequests: MockUpdateLetterRequest[] = [];
   const versionRequests: MockVersionRequest[] = [];
+  const transcribeLetterRequests: MockLetterReviewContext['transcribeLetterRequests'] = [];
   const letterPath = `${API_BASE_URL}/admin/letters/${letter.id}`;
   const detectLinesByPageId = options.detectLinesByPageId
     ? clone(options.detectLinesByPageId)
@@ -377,6 +429,7 @@ export async function installMockLetterReviewApi(
       headers: failure.requestId ? { 'x-request-id': failure.requestId } : undefined,
       body: JSON.stringify({
         error: failure.error,
+        code: failure.code,
         requestId: failure.requestId,
       }),
     });
@@ -425,6 +478,13 @@ export async function installMockLetterReviewApi(
       updateLetterRequests.push({ url: route.request().url(), body });
       if (routeFailures.updateLetter) {
         await fulfillFailure(route, routeFailures.updateLetter);
+        return;
+      }
+      if (body.primarySourceRevision !== letter.primarySourceRevision) {
+        await fulfillFailure(route, {
+          status: 409,
+          error: 'Letter source changed; reload before saving',
+        });
         return;
       }
 
@@ -514,6 +574,27 @@ export async function installMockLetterReviewApi(
       body: JSON.stringify({
         versionNumber: versionRequests.length,
         createdAt: '2025-03-03T00:00:00.000Z',
+      }),
+    });
+  });
+
+  await page.route(new RegExp(`${escapeRegex(letterPath)}/transcribe-letter$`), async (route) => {
+    const body = route.request().postDataJSON() as { primarySourceRevision?: number };
+    transcribeLetterRequests.push({ url: route.request().url(), body });
+    if (routeFailures.transcribeLetter) {
+      await fulfillFailure(route, routeFailures.transcribeLetter);
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        letter,
+        transcribed: {
+          pageCount: letter.transcript.pages.length,
+          textLength: letter.transcript.fullText.length,
+        },
       }),
     });
   });
@@ -684,6 +765,43 @@ export async function installMockLetterReviewApi(
 
   await page.route(new RegExp(`${escapeRegex(API_BASE_URL)}/admin/letters/pages/[^/]+/line-segments$`), async (route) => {
     const pageId = route.request().url().split('/').slice(-2)[0];
+    const image = letter.images.find((candidate) => candidate.id === pageId);
+
+    if (route.request().method() === 'PATCH') {
+      const body = route.request().postDataJSON() as MockPageLineSegmentsRequest['body'];
+      saveLineSegmentRequests.push({
+        url: route.request().url(),
+        pageId,
+        body,
+      });
+      if (
+        !image ||
+        body.primarySourceRevision !== letter.primarySourceRevision ||
+        body.sourceChecksum !== (image.sourceChecksum ?? null)
+      ) {
+        await fulfillFailure(route, {
+          status: 409,
+          error: 'Page source changed; reload before saving segments',
+        });
+        return;
+      }
+      if (!Array.isArray(body.lineSegments)) {
+        await fulfillFailure(route, {
+          status: 400,
+          error: 'lineSegments must be an array',
+        });
+        return;
+      }
+
+      image.lineSegments = clone(body.lineSegments);
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ lineSegments: image.lineSegments }),
+      });
+      return;
+    }
+
     detectLineRequests.push(route.request().url());
 
     const failure = detectLinesFailuresByPageId[pageId];
@@ -712,6 +830,87 @@ export async function installMockLetterReviewApi(
     });
   });
 
+  await page.route(new RegExp(`${escapeRegex(API_BASE_URL)}/admin/letters/pages/[^/]+/segment-trust$`), async (route) => {
+    const pageId = route.request().url().split('/').slice(-2)[0];
+    const image = letter.images.find((candidate) => candidate.id === pageId);
+    const body = route.request().postDataJSON() as MockPageSegmentTrustRequest['body'];
+    pageSegmentTrustRequests.push({
+      url: route.request().url(),
+      pageId,
+      body,
+    });
+
+    if (
+      !image ||
+      body.primarySourceRevision !== letter.primarySourceRevision ||
+      body.sourceChecksum !== (image.sourceChecksum ?? null)
+    ) {
+      await fulfillFailure(route, {
+        status: 409,
+        error: 'Page source changed; reload before changing segment trust',
+      });
+      return;
+    }
+    if (body.trustState !== 'trusted' && body.trustState !== 'unverified') {
+      await fulfillFailure(route, {
+        status: 400,
+        error: 'Invalid segment trust state',
+      });
+      return;
+    }
+
+    image.segmentTrustState = body.trustState;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true }),
+    });
+  });
+
+  await page.route(new RegExp(`${escapeRegex(letterPath)}/segment-trust$`), async (route) => {
+    const body = route.request().postDataJSON() as MockLetterSegmentTrustRequest['body'];
+    letterSegmentTrustRequests.push({
+      url: route.request().url(),
+      body,
+    });
+    const letterPages = letter.images.filter((image) => image.type === 'letter');
+    const expectedPages = body.pages ?? [];
+    const hasExactPageSources =
+      expectedPages.length === letterPages.length &&
+      letterPages.every((image) => expectedPages.some(
+        (pageExpectation) =>
+          pageExpectation.pageId === image.id &&
+          pageExpectation.sourceChecksum === (image.sourceChecksum ?? null),
+      ));
+
+    if (
+      body.primarySourceRevision !== letter.primarySourceRevision ||
+      !hasExactPageSources
+    ) {
+      await fulfillFailure(route, {
+        status: 409,
+        error: 'Letter source changed; reload before changing segment trust',
+      });
+      return;
+    }
+    if (body.trustState !== 'trusted' && body.trustState !== 'unverified') {
+      await fulfillFailure(route, {
+        status: 400,
+        error: 'Invalid segment trust state',
+      });
+      return;
+    }
+
+    for (const image of letterPages) {
+      image.segmentTrustState = body.trustState;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true }),
+    });
+  });
+
   return {
     verifyTranscriptRequests,
     unverifyTranscriptRequests,
@@ -723,7 +922,11 @@ export async function installMockLetterReviewApi(
     unverifyExtraContentRequests,
     flagRequests,
     detectLineRequests,
+    saveLineSegmentRequests,
+    pageSegmentTrustRequests,
+    letterSegmentTrustRequests,
     updateLetterRequests,
     versionRequests,
+    transcribeLetterRequests,
   };
 }

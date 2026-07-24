@@ -96,6 +96,7 @@ export default function AdminDashboard() {
 
   const {
     selectedIds,
+    selectedSources,
     setSelectedIds,
     allFilteredSelected,
     setAllFilteredSelected,
@@ -173,6 +174,8 @@ export default function AdminDashboard() {
 
   const bulkActions = useDashboardBulkActions({
     selectedIds,
+    selectedSources,
+    setSelectedIds,
     exitEditMode,
     fetchLetters,
   });
@@ -188,6 +191,7 @@ export default function AdminDashboard() {
 
   const processingActions = useDashboardProcessingActions({
     selectedIds,
+    selectedSources,
     singleSelectedLetter,
     exitEditMode,
     fetchLetters,

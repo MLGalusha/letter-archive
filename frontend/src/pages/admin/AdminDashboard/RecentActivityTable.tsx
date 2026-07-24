@@ -26,6 +26,7 @@ export interface TableCopyEditModel {
   pendingChanges: Map<string, PendingChange>;
   onCellClick: (
     letterId: string,
+    primarySourceRevision: number,
     column: "sender" | "recipient",
     value: string | null,
     e: React.MouseEvent,

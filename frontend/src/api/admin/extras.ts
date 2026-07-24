@@ -7,11 +7,14 @@ export interface TranscribeExtrasResponse {
   extraContentStatus: "EMPTY" | "AI_DRAFT";
 }
 
-export async function transcribeExtras(letterId: string): Promise<TranscribeExtrasResponse> {
+export async function transcribeExtras(
+  letterId: string,
+  primarySourceRevision: number,
+): Promise<TranscribeExtrasResponse> {
   // Synchronous AI call — needs more than the default 20s client timeout.
   return apiPost<TranscribeExtrasResponse>(
     `/admin/letters/${letterId}/transcribe-extras`,
-    undefined,
+    { primarySourceRevision },
     { timeoutMs: 5 * 60 * 1000 },
   );
 }
@@ -19,20 +22,39 @@ export async function transcribeExtras(letterId: string): Promise<TranscribeExtr
 export async function updateExtraContent(
   letterId: string,
   extraContentTranscript: string,
+  primarySourceRevision: number,
 ): Promise<Letter> {
   return apiPut<Letter>(`/admin/letters/${letterId}/extra-content`, {
     extraContent: extraContentTranscript,
+    primarySourceRevision,
   });
 }
 
-export async function verifyExtraContent(letterId: string): Promise<Letter> {
-  return apiPost<Letter>(`/admin/letters/${letterId}/verify-extra-content`);
+export async function verifyExtraContent(
+  letterId: string,
+  primarySourceRevision: number,
+): Promise<Letter> {
+  return apiPost<Letter>(`/admin/letters/${letterId}/verify-extra-content`, {
+    primarySourceRevision,
+  });
 }
 
-export async function unverifyExtraContent(letterId: string): Promise<Letter> {
-  return apiPost<Letter>(`/admin/letters/${letterId}/unverify-extra-content`);
+export async function unverifyExtraContent(
+  letterId: string,
+  primarySourceRevision: number,
+): Promise<Letter> {
+  return apiPost<Letter>(`/admin/letters/${letterId}/unverify-extra-content`, {
+    primarySourceRevision,
+  });
 }
 
-export async function updateAiNotes(letterId: string, aiNotes: string): Promise<Letter> {
-  return apiPut<Letter>(`/admin/letters/${letterId}/ai-notes`, { aiNotes });
+export async function updateAiNotes(
+  letterId: string,
+  aiNotes: unknown[],
+  primarySourceRevision: number,
+): Promise<Letter> {
+  return apiPut<Letter>(`/admin/letters/${letterId}/ai-notes`, {
+    aiNotes,
+    primarySourceRevision,
+  });
 }

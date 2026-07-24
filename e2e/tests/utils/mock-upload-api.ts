@@ -8,14 +8,17 @@ function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function makeUploadResult(filename: string) {
+function makeUploadResult(filename: string, force: boolean) {
   return {
     filename,
     letterId: `letter-${filename}`,
     pageId: `page-${filename}`,
     collectionCode: filename.slice(0, 3),
     storagePath: `/uploads/${filename}`,
-    alreadyExists: false,
+    primarySourceRevision: 8,
+    alreadyExists: force,
+    outcome: force ? 'replaced' as const : 'created' as const,
+    changed: true,
   };
 }
 
@@ -35,6 +38,24 @@ function extractUploadedFilenames(body: Buffer | null): string[] {
   return Array.from(filenames);
 }
 
+interface UploadSourceExpectation {
+  pageId: string;
+  primarySourceRevision: number;
+  storagePath: string;
+  checksumSha256: string | null;
+}
+
+function extractSourceExpectations(
+  body: Buffer | null,
+): Record<string, UploadSourceExpectation> | undefined {
+  if (!body) return undefined;
+  const match = body
+    .toString('utf8')
+    .match(/name="sourceExpectations"\r?\n\r?\n([^\r\n]+)/);
+  if (!match?.[1]) return undefined;
+  return JSON.parse(match[1]) as Record<string, UploadSourceExpectation>;
+}
+
 export async function installMockUploadApi(
   page: Page,
   options: {
@@ -51,6 +72,9 @@ export async function installMockUploadApi(
 
   const duplicateRequests: string[][] = [];
   const uploadRequests: Array<{ url: string; filenames: string[] }> = [];
+  const forceSourceExpectations: Array<
+    Record<string, UploadSourceExpectation>
+  > = [];
 
   await page.route(
     new RegExp(`${escapeRegex(API_BASE_URL)}/admin/uploads/check-duplicates$`),
@@ -81,6 +105,19 @@ export async function installMockUploadApi(
           duplicates: Object.fromEntries(
             filenames.map((filename) => [filename, options.duplicateMap?.[filename] ?? false]),
           ),
+          sourceExpectations: Object.fromEntries(
+            filenames.map((filename) => [
+              filename,
+              options.duplicateMap?.[filename]
+                ? {
+                    pageId: `page-${filename}`,
+                    primarySourceRevision: 7,
+                    storagePath: `/uploads/${filename}`,
+                    checksumSha256: `checksum-${filename}`,
+                  }
+                : null,
+            ]),
+          ),
         }),
       });
     },
@@ -90,6 +127,13 @@ export async function installMockUploadApi(
     new RegExp(`${escapeRegex(API_BASE_URL)}/admin/uploads(?:\\?force=true)?$`),
     async (route) => {
       const filenames = extractUploadedFilenames(route.request().postDataBuffer());
+      const force = new URL(route.request().url()).searchParams.get('force') === 'true';
+      if (force) {
+        const sourceExpectations = extractSourceExpectations(
+          route.request().postDataBuffer(),
+        );
+        if (sourceExpectations) forceSourceExpectations.push(sourceExpectations);
+      }
       uploadRequests.push({
         url: route.request().url(),
         filenames,
@@ -116,8 +160,17 @@ export async function installMockUploadApi(
         body: JSON.stringify({
           success: filenames.length,
           failed: 0,
-          results: filenames.map(makeUploadResult),
+          results: filenames.map((filename) => makeUploadResult(filename, force)),
           errors: [],
+          summary: {
+            accepted: filenames.length,
+            failed: 0,
+            changed: filenames.length,
+            unchanged: 0,
+            created: force ? 0 : filenames.length,
+            replaced: force ? filenames.length : 0,
+            affectedLetters: filenames.length,
+          },
         }),
       });
     },
@@ -126,5 +179,6 @@ export async function installMockUploadApi(
   return {
     duplicateRequests,
     uploadRequests,
+    forceSourceExpectations,
   };
 }

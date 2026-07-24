@@ -39,7 +39,7 @@ import {
 import { trackEdit } from "../../utils/recentEdits";
 import { highlightTranscriptMarkers } from "../../utils/transcriptHighlight";
 import { useTooltip } from "../../hooks/useTooltip";
-import type { Letter, LetterImage, VisibilityState } from "../../types/Letter";
+import type { LetterImage, VisibilityState } from "../../types/Letter";
 import {
   getPrimaryImageType,
   hasPrimaryTranscriptContent,
@@ -59,6 +59,9 @@ import {
 } from "./LetterReview/useAutoSave";
 import { useMetadataEditing } from "./LetterReview/useMetadataEditing";
 import { useTranscriptEditing } from "./LetterReview/useTranscriptEditing";
+import { useLetterSourceConflict } from "./LetterReview/useLetterSourceConflict";
+import { useGuardedLetterState } from "./LetterReview/useGuardedLetterState";
+import { loadCurrentLetter } from "./LetterReview/loadCurrentLetter";
 import { usePretextFontSize } from "../../hooks/usePretextFontSize";
 import LineReviewMode, {
   type LineReviewModeHandle,
@@ -71,8 +74,21 @@ export default function LetterReviewPage() {
   const navigate = useNavigate();
   const routeLocation = useLocation();
   const { showToast } = useToast();
-  const [letter, setLetter] = useState<Letter | null>(null);
   const [loading, setLoading] = useState(true);
+  const {
+    handleMutationError,
+    isMutationBlocked,
+    markSourceConflict,
+    mutationsBlocked,
+    sourceConflict,
+  } = useLetterSourceConflict(showToast, {
+    letterId,
+  });
+  const {
+    letter,
+    setAuthoritativeLetter,
+    setLetter,
+  } = useGuardedLetterState(markSourceConflict, letterId);
 
   const [transcript, setTranscript] = useState("");
   const [transcriptViewMode, setTranscriptViewMode] = useState<"edit" | "preview">("edit");
@@ -96,7 +112,7 @@ export default function LetterReviewPage() {
       // Backend has newer reading text (e.g. from auto-generation on verify)
       setReaderText(letter.readingText);
     }
-  }, [letter?.readingText]);
+  }, [letter?.readingText, readerText]);
 
   // Photo description state
   const [photoDescription, setPhotoDescription] = useState("");
@@ -232,6 +248,7 @@ export default function LetterReviewPage() {
     letter,
     setLetter,
     setSaving,
+    handleMutationError,
     showToast,
   });
   const {
@@ -246,7 +263,9 @@ export default function LetterReviewPage() {
     letterId,
     letter,
     setLetter,
-    showToast,
+    handleMutationError,
+    isMutationBlocked,
+    mutationsBlocked,
     syncIdentityMetadata,
   });
   const {
@@ -268,6 +287,7 @@ export default function LetterReviewPage() {
     setLetter,
     setSaving,
     setTranscript,
+    handleMutationError,
     showToast,
     editorRef,
     triggerAutoSave,
@@ -280,31 +300,43 @@ export default function LetterReviewPage() {
     }
 
     if (letterId) {
+      let requestIsCurrent = true;
+      const requestedLetterId = letterId;
       async function fetchLetter() {
         setLoading(true);
         try {
-          const foundLetter = await getAdminLetterById(letterId!);
-          setLetter(foundLetter);
-          setTranscript(foundLetter.transcript.fullText);
-          applyLetterMetadata(foundLetter);
-          setPhotoDescription(foundLetter.photoDescription || "");
-          setPhotoDescriptionContext(foundLetter.photoDescriptionContext || "");
-          setDraftPhotoDescriptionContext(foundLetter.photoDescriptionContext || "");
-          setIsPhotoDescriptionEditing(false);
-          // Extra content
-          setExtraContent(foundLetter.extraContentTranscript || "");
-          // Reset extra content editing state for new letter
-          setIsExtraContentEditing(false);
+          await loadCurrentLetter({
+            requestedLetterId,
+            isCurrent: () => requestIsCurrent,
+            getLetter: getAdminLetterById,
+            adoptAndHydrate: (foundLetter) => {
+              setAuthoritativeLetter(foundLetter);
+              setTranscript(foundLetter.transcript.fullText);
+              applyLetterMetadata(foundLetter);
+              setPhotoDescription(foundLetter.photoDescription || "");
+              setPhotoDescriptionContext(foundLetter.photoDescriptionContext || "");
+              setDraftPhotoDescriptionContext(foundLetter.photoDescriptionContext || "");
+              setIsPhotoDescriptionEditing(false);
+              // Extra content
+              setExtraContent(foundLetter.extraContentTranscript || "");
+              // Reset extra content editing state for new letter
+              setIsExtraContentEditing(false);
+            },
+          });
         } catch (err) {
+          if (!requestIsCurrent) return;
           setMessage(err instanceof Error ? err.message : "Letter not found");
           console.error("Failed to fetch letter:", err);
         } finally {
-          setLoading(false);
+          if (requestIsCurrent) setLoading(false);
         }
       }
-      fetchLetter();
+      void fetchLetter();
+      return () => {
+        requestIsCurrent = false;
+      };
     }
-  }, [applyLetterMetadata, letterId, navigate]);
+  }, [applyLetterMetadata, letterId, navigate, setAuthoritativeLetter]);
 
   // Segment-first entry: auto-enter full-viewport segment review when pages
   // have unverified segments with data. Only triggers once per letter visit.
@@ -386,7 +418,10 @@ export default function LetterReviewPage() {
       setLetterTranscribeMessage("Transcribing letter...");
 
       try {
-        const result = await transcribeLetter(letterId);
+        const result = await transcribeLetter(
+          letterId,
+          letter.primarySourceRevision,
+        );
 
         // Update local state with transcribed letter
         setLetter(result.letter);
@@ -408,14 +443,18 @@ export default function LetterReviewPage() {
       } catch (err) {
         setLetterTranscribeState("idle");
         setLetterTranscribeMessage(null);
-        showToast(
-          err instanceof Error ? err.message : "Transcription failed",
-          "error",
-        );
+        handleMutationError(err, "Transcription failed");
         console.error("Letter transcription error:", err);
       }
     },
-    [letterId, letter, scheduleStatusReset, showToast],
+    [
+      handleMutationError,
+      letterId,
+      letter,
+      scheduleStatusReset,
+      setLetter,
+      showToast,
+    ],
   );
 
   const handleOpenPhotoContextModal = useCallback(() => {
@@ -430,11 +469,15 @@ export default function LetterReviewPage() {
   }, [photoDescriptionGenerating]);
 
   const handleDescribePhoto = useCallback(async () => {
-    if (!letterId) return;
+    if (!letterId || !letter) return;
 
     setPhotoDescriptionGenerating(true);
     try {
-      const result = await describePhoto(letterId, draftPhotoDescriptionContext);
+      const result = await describePhoto(
+        letterId,
+        draftPhotoDescriptionContext,
+        letter.primarySourceRevision,
+      );
       setLetter(result.letter);
       setPhotoDescription(result.letter.photoDescription || "");
       setPhotoDescriptionContext(result.letter.photoDescriptionContext || "");
@@ -451,14 +494,18 @@ export default function LetterReviewPage() {
         showToast("No photo description was generated", "info");
       }
     } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "Failed to describe photo",
-        "error",
-      );
+      handleMutationError(err, "Failed to describe photo");
     } finally {
       setPhotoDescriptionGenerating(false);
     }
-  }, [draftPhotoDescriptionContext, letterId, showToast]);
+  }, [
+    draftPhotoDescriptionContext,
+    handleMutationError,
+    letter,
+    letterId,
+    setLetter,
+    showToast,
+  ]);
 
   // Extra content transcription handler with confirmation
   const handleTranscribeExtrasWithConfirm = useCallback(
@@ -472,7 +519,10 @@ export default function LetterReviewPage() {
 
       setExtraContentTranscribing(true);
       try {
-        const result = await transcribeExtras(letterId);
+        const result = await transcribeExtras(
+          letterId,
+          letter.primarySourceRevision,
+        );
         setLetter(result.letter);
         setExtraContent(result.letter.extraContentTranscript || "");
         if (result.transcribedCount > 0) {
@@ -484,15 +534,12 @@ export default function LetterReviewPage() {
           showToast("No transcribable extra content found", "info");
         }
       } catch (err) {
-        showToast(
-          err instanceof Error ? err.message : "Failed to transcribe extras",
-          "error",
-        );
+        handleMutationError(err, "Failed to transcribe extras");
       } finally {
         setExtraContentTranscribing(false);
       }
     },
-    [letterId, letter, showToast],
+    [handleMutationError, letterId, letter, setLetter, showToast],
   );
 
   const handleVisibilityChange = useCallback(async (newVisibility: VisibilityState) => {
@@ -503,6 +550,7 @@ export default function LetterReviewPage() {
 
     try {
       const updated = await updateLetter(letterId, {
+        primarySourceRevision: letter.primarySourceRevision,
         visibility: newVisibility,
       });
       setLetter(updated);
@@ -511,15 +559,12 @@ export default function LetterReviewPage() {
         "success",
       );
     } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "Failed to update visibility",
-        "error",
-      );
+      handleMutationError(err, "Failed to update visibility");
       console.error("Visibility change error:", err);
     } finally {
       setSaving(false);
     }
-  }, [letter, letterId, showToast]);
+  }, [handleMutationError, letter, letterId, setLetter, showToast]);
 
   const handleContentPublishToggle = useCallback(async (
     field: 'transcriptPublished' | 'metadataPublished',
@@ -528,19 +573,19 @@ export default function LetterReviewPage() {
     if (!letterId || !letter) return;
     setSaving(true);
     try {
-      const updated = await updateLetter(letterId, { [field]: value });
+      const updated = await updateLetter(letterId, {
+        primarySourceRevision: letter.primarySourceRevision,
+        [field]: value,
+      });
       setLetter(updated);
       const label = field === 'transcriptPublished' ? 'Transcript' : 'Metadata';
       showToast(`${label} ${value ? 'published' : 'hidden'}`, 'success');
     } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : 'Failed to update content visibility',
-        'error',
-      );
+      handleMutationError(err, 'Failed to update content visibility');
     } finally {
       setSaving(false);
     }
-  }, [letter, letterId, showToast]);
+  }, [handleMutationError, letter, letterId, setLetter, showToast]);
 
   const handleConfirmTranscript = useCallback(() => {
     if (!letterId) return;
@@ -550,15 +595,19 @@ export default function LetterReviewPage() {
   }, [letterId, recipient, sender]);
 
   const executeConfirmTranscript = useCallback(async () => {
-    if (!letterId) return;
+    if (!letterId || !letter) return;
     setShowExtractionPopup(false);
     setSaving(true);
 
     try {
-      const updated = await confirmTranscript(letterId, {
-        confirmedSender: extractionSender || undefined,
-        confirmedRecipient: extractionRecipient || undefined,
-      });
+      const updated = await confirmTranscript(
+        letterId,
+        letter.primarySourceRevision,
+        {
+          confirmedSender: extractionSender || undefined,
+          confirmedRecipient: extractionRecipient || undefined,
+        },
+      );
       setLetter(updated);
       applyLetterMetadata(updated, { includeNotes: false });
       showToast(
@@ -566,15 +615,21 @@ export default function LetterReviewPage() {
         "success",
       );
     } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "Failed to confirm transcript",
-        "error",
-      );
+      handleMutationError(err, "Failed to confirm transcript");
       console.error("Confirm transcript error:", err);
     } finally {
       setSaving(false);
     }
-  }, [applyLetterMetadata, extractionRecipient, extractionSender, letterId, showToast]);
+  }, [
+    applyLetterMetadata,
+    extractionRecipient,
+    extractionSender,
+    handleMutationError,
+    letter,
+    letterId,
+    setLetter,
+    showToast,
+  ]);
 
   // Regenerate metadata handler — shows popup for options
   const handleRegenerateMetadata = useCallback(() => {
@@ -586,14 +641,18 @@ export default function LetterReviewPage() {
 
   // Execute metadata regeneration (metadata only)
   const executeMetadataRegenerate = useCallback(async () => {
-    if (!letterId) return;
-      setShowMetadataRegeneratePopup(false);
-      setRegenerateState("regenerating");
+    if (!letterId || !letter) return;
+    setShowMetadataRegeneratePopup(false);
+    setRegenerateState("regenerating");
     try {
-      const updated = await regenerateMetadata(letterId, {
-        confirmedSender: extractionSender || undefined,
-        confirmedRecipient: extractionRecipient || undefined,
-      });
+      const updated = await regenerateMetadata(
+        letterId,
+        letter.primarySourceRevision,
+        {
+          confirmedSender: extractionSender || undefined,
+          confirmedRecipient: extractionRecipient || undefined,
+        },
+      );
       setLetter(updated);
       applyLetterMetadata(updated, { includeNotes: false });
       setRegenerateState("done");
@@ -604,13 +663,20 @@ export default function LetterReviewPage() {
       }, 2000);
     } catch (err) {
       setRegenerateState("idle");
-      showToast(
-        err instanceof Error ? err.message : "Failed to regenerate metadata",
-        "error",
-      );
+      handleMutationError(err, "Failed to regenerate metadata");
       console.error("Regenerate metadata error:", err);
     }
-  }, [applyLetterMetadata, extractionRecipient, extractionSender, letterId, scheduleStatusReset, showToast]);
+  }, [
+    applyLetterMetadata,
+    extractionRecipient,
+    extractionSender,
+    handleMutationError,
+    letter,
+    letterId,
+    scheduleStatusReset,
+    setLetter,
+    showToast,
+  ]);
 
   // Re-extract handler — calls the re-extract API with corrected sender/recipient
   const handleReExtract = useCallback(
@@ -637,6 +703,7 @@ export default function LetterReviewPage() {
 
       try {
         const updated = await reExtractLetter(letterId, {
+          primarySourceRevision: letter.primarySourceRevision,
           confirmedSender: nameOverrides?.sender || sender || undefined,
           confirmedRecipient: nameOverrides?.recipient || recipient || undefined,
           mode,
@@ -675,26 +742,26 @@ export default function LetterReviewPage() {
         } else {
           setReExtractState("idle");
         }
-        showToast(
-          err instanceof Error ? err.message : "Re-extraction failed",
-          "error",
-        );
+        handleMutationError(err, "Re-extraction failed");
         console.error("Re-extract error:", err);
       }
     },
     [
       applyLetterMetadata,
+      handleMutationError,
       letterId,
       letter,
       recipient,
       scheduleStatusReset,
       sender,
+      setLetter,
       showToast,
     ],
   );
 
   const handleDelete = useCallback(async () => {
-    if (!letterId) return;
+    if (!letterId || !letter) return;
+    const primarySourceRevision = letter.primarySourceRevision;
     if (!window.confirm("Are you sure you want to delete this letter?")) {
       return;
     }
@@ -702,19 +769,22 @@ export default function LetterReviewPage() {
     setSaving(true);
 
     try {
-      await deleteLetter(letterId);
+      await deleteLetter(letterId, primarySourceRevision);
       showToast("Letter deleted", "success");
       setTimeout(() => navigate("/admin"), 1500);
     } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "Failed to delete",
-        "error",
-      );
+      handleMutationError(err, "Failed to delete");
       console.error("Delete error:", err);
     } finally {
       setSaving(false);
     }
-  }, [letterId, navigate, showToast]);
+  }, [
+    handleMutationError,
+    letter,
+    letterId,
+    navigate,
+    showToast,
+  ]);
 
   const handlePageChange = useCallback((index: number, image: LetterImage) => {
     setCurrentFilename(image.originalFilename);
@@ -811,22 +881,22 @@ export default function LetterReviewPage() {
   }, []);
 
   const handleVerifyPhotoDescription = useCallback(async () => {
-    if (!letterId) return;
+    if (!letterId || !letter) return;
     setSaving(true);
     try {
-      const updated = await verifyPhotoDescription(letterId);
+      const updated = await verifyPhotoDescription(
+        letterId,
+        letter.primarySourceRevision,
+      );
       setLetter(updated);
       setIsPhotoDescriptionEditing(false);
       showToast("Photo description verified", "success");
     } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "Failed to verify photo description",
-        "error",
-      );
+      handleMutationError(err, "Failed to verify photo description");
     } finally {
       setSaving(false);
     }
-  }, [letterId, showToast]);
+  }, [handleMutationError, letter, letterId, setLetter, showToast]);
 
   const handleUnverifyPhotoDescription = useCallback(async () => {
     if (!letterId || !letter) return;
@@ -834,19 +904,19 @@ export default function LetterReviewPage() {
 
     setSaving(true);
     try {
-      const updated = await unverifyPhotoDescription(letterId);
+      const updated = await unverifyPhotoDescription(
+        letterId,
+        letter.primarySourceRevision,
+      );
       setLetter(updated);
       setIsPhotoDescriptionEditing(true);
       showToast("Photo description verification removed", "info");
     } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "Failed to unverify photo description",
-        "error",
-      );
+      handleMutationError(err, "Failed to unverify photo description");
     } finally {
       setSaving(false);
     }
-  }, [letter, letterId, showToast]);
+  }, [handleMutationError, letter, letterId, setLetter, showToast]);
 
   const handlePhotoDescriptionClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -880,22 +950,25 @@ export default function LetterReviewPage() {
 
     setSaving(true);
     try {
-      const updated = await unverifyPhotoDescription(letterId);
+      const updated = await unverifyPhotoDescription(
+        letterId,
+        letter.primarySourceRevision,
+      );
       setLetter(updated);
       setIsPhotoDescriptionEditing(true);
       showToast("Photo description verification removed", "info");
     } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "Failed to unverify photo description",
-        "error",
-      );
+      handleMutationError(err, "Failed to unverify photo description");
     } finally {
       setSaving(false);
     }
   }, [
     closePhotoDescriptionTooltip,
+    handleMutationError,
+    letter?.primarySourceRevision,
     letter?.photoDescriptionStatus,
     letterId,
+    setLetter,
     showToast,
   ]);
 
@@ -904,11 +977,15 @@ export default function LetterReviewPage() {
       startTransition(() => {
         setPhotoDescription(newContent);
       });
-      if (!letterId) return;
+      if (!letterId || !letter) return;
 
       scheduleDebouncedSave(
         async () => {
-          const updated = await updatePhotoDescription(letterId, newContent);
+          const updated = await updatePhotoDescription(
+            letterId,
+            newContent,
+            letter.primarySourceRevision,
+          );
           setLetter(updated);
           setPhotoDescriptionContext(updated.photoDescriptionContext || "");
         },
@@ -920,27 +997,27 @@ export default function LetterReviewPage() {
         },
       );
     },
-    [letterId, scheduleDebouncedSave],
+    [letter, letterId, scheduleDebouncedSave, setLetter],
   );
 
   // Extra content verification handlers
   const handleVerifyExtraContent = useCallback(async () => {
-    if (!letterId) return;
+    if (!letterId || !letter) return;
     setSaving(true);
     try {
-      const updated = await verifyExtraContent(letterId);
+      const updated = await verifyExtraContent(
+        letterId,
+        letter.primarySourceRevision,
+      );
       setLetter(updated);
       setIsExtraContentEditing(false);
       showToast("Extra content verified", "success");
     } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "Failed to verify extra content",
-        "error",
-      );
+      handleMutationError(err, "Failed to verify extra content");
     } finally {
       setSaving(false);
     }
-  }, [letterId, showToast]);
+  }, [handleMutationError, letter, letterId, setLetter, showToast]);
 
   const handleUnverifyExtraContent = useCallback(async () => {
     if (!letterId || !letter) return;
@@ -948,19 +1025,19 @@ export default function LetterReviewPage() {
 
     setSaving(true);
     try {
-      const updated = await unverifyExtraContent(letterId);
+      const updated = await unverifyExtraContent(
+        letterId,
+        letter.primarySourceRevision,
+      );
       setLetter(updated);
       setIsExtraContentEditing(true);
       showToast("Extra content verification removed", "info");
     } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "Failed to unverify extra content",
-        "error",
-      );
+      handleMutationError(err, "Failed to unverify extra content");
     } finally {
       setSaving(false);
     }
-  }, [letterId, letter, showToast]);
+  }, [handleMutationError, letterId, letter, setLetter, showToast]);
 
   // Extra content click/double-click handlers for verified state
   const handleExtraContentClick = useCallback(
@@ -990,19 +1067,27 @@ export default function LetterReviewPage() {
     // Unverify via API
     setSaving(true);
     try {
-      const updated = await unverifyExtraContent(letterId);
+      const updated = await unverifyExtraContent(
+        letterId,
+        letter.primarySourceRevision,
+      );
       setLetter(updated);
       setIsExtraContentEditing(true);
       showToast("Extra content verification removed", "info");
     } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "Failed to unverify extra content",
-        "error",
-      );
+      handleMutationError(err, "Failed to unverify extra content");
     } finally {
       setSaving(false);
     }
-  }, [letter?.extraContentStatus, letterId, showToast, closeExtraContentTooltip]);
+  }, [
+    closeExtraContentTooltip,
+    handleMutationError,
+    letter?.extraContentStatus,
+    letter?.primarySourceRevision,
+    letterId,
+    setLetter,
+    showToast,
+  ]);
 
   // Extra content auto-save
   const handleExtraContentChange = useCallback(
@@ -1010,11 +1095,15 @@ export default function LetterReviewPage() {
       startTransition(() => {
         setExtraContent(newContent);
       });
-      if (!letterId) return;
+      if (!letterId || !letter) return;
 
       scheduleDebouncedSave(
         async () => {
-          const updated = await updateExtraContent(letterId, newContent);
+          const updated = await updateExtraContent(
+            letterId,
+            newContent,
+            letter.primarySourceRevision,
+          );
           setLetter(updated);
         },
         {
@@ -1025,36 +1114,45 @@ export default function LetterReviewPage() {
         },
       );
     },
-    [letterId, scheduleDebouncedSave],
+    [letter, letterId, scheduleDebouncedSave, setLetter],
   );
 
   // Structured note handlers
   const handleNoteStatusChange = useCallback(
     async (noteId: string, status: 'resolved' | 'dismissed') => {
-      if (!letterId) return;
+      if (!letterId || !letter) return;
       try {
-        const updated = await updateNoteStatus(letterId, noteId, status);
+        const updated = await updateNoteStatus(
+          letterId,
+          letter.primarySourceRevision,
+          noteId,
+          status,
+        );
         setLetter(updated);
         showToast(`Note ${status}`, 'success');
       } catch (err) {
-        showToast(getErrorMessage(err, `Failed to ${status} note`), 'error');
+        handleMutationError(err, `Failed to ${status} note`);
       }
     },
-    [letterId, showToast],
+    [handleMutationError, letter, letterId, setLetter, showToast],
   );
 
   const handleAddNote = useCallback(
     async (note: { content: string; category: string; priority: string }) => {
-      if (!letterId) return;
+      if (!letterId || !letter) return;
       try {
-        const updated = await addNote(letterId, note);
+        const updated = await addNote(
+          letterId,
+          letter.primarySourceRevision,
+          note,
+        );
         setLetter(updated);
         showToast('Note added', 'success');
       } catch (err) {
-        showToast(getErrorMessage(err, 'Failed to add note'), 'error');
+        handleMutationError(err, 'Failed to add note');
       }
     },
-    [letterId, showToast],
+    [handleMutationError, letter, letterId, setLetter, showToast],
   );
 
   const handleImageClick = useCallback((pageIndex: number) => {
@@ -1079,21 +1177,24 @@ export default function LetterReviewPage() {
   }, [triggerAutoSave]);
 
   const handleGenerateReadingView = useCallback(async () => {
-    if (!letterId) return;
+    if (!letterId || !letter) return;
     setReadingViewGenerating(true);
     try {
-      const updated = await generateReadingView(letterId);
+      const updated = await generateReadingView(
+        letterId,
+        letter.primarySourceRevision,
+      );
       setLetter(updated);
       if (updated.readingText) {
         setReaderText(updated.readingText);
       }
       showToast("Reading view generated", "success");
-    } catch {
-      showToast("Failed to generate reading view", "error");
+    } catch (error) {
+      handleMutationError(error, "Failed to generate reading view");
     } finally {
       setReadingViewGenerating(false);
     }
-  }, [letterId, showToast]);
+  }, [handleMutationError, letter, letterId, setLetter, showToast]);
 
   const handleMetadataAutoSave = useCallback((updates: Record<string, unknown>) => {
     void triggerAutoSave(updates as AutoSaveData);
@@ -1289,6 +1390,8 @@ export default function LetterReviewPage() {
               setMappingText(undefined);
             }}
             onAutoSave={handleLineReviewAutoSave}
+            handleMutationError={handleMutationError}
+            mutationsBlocked={mutationsBlocked}
             debugMode={debugMode}
             onDebugModeChange={setDebugMode}
             initialPageIndex={viewerPageIndex}
@@ -1864,6 +1967,37 @@ export default function LetterReviewPage() {
           />
         </div>
       </Modal>
+
+      {sourceConflict && (
+        <div
+          className="confirm-dialog-overlay"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="letter-source-conflict-title"
+        >
+          <div className="confirm-dialog" onClick={(event) => event.stopPropagation()}>
+            <h3 id="letter-source-conflict-title">Letter source changed</h3>
+            <p>
+              Another session replaced or changed the source pages. Your local
+              draft remains on this screen, but it cannot be saved against the
+              new source.
+            </p>
+            <p>{sourceConflict.detail}</p>
+            <div className="confirm-dialog-actions">
+              <button
+                className="btn-confirm"
+                onClick={() => {
+                  // A full reload reconstructs every draft from the authoritative
+                  // DTO before the terminal mutation owner is reset.
+                  window.location.reload();
+                }}
+              >
+                Reload latest source
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
     </AdminLayout>

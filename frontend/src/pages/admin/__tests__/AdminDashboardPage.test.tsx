@@ -159,6 +159,7 @@ function makeLetter(overrides: Partial<Letter> = {}): Letter {
     id: "letter-1",
     title: "Test Letter",
     collectionCode: "009",
+    primarySourceRevision: 0,
     images: [{ id: "img-1", type: "letter", imageUrl: "test.jpg" }],
     transcript: { pages: [], fullText: "hello", verified: false },
     metadata: { sender: "Alice", recipient: "Bob", dateRaw: "19470810", verified: false },
@@ -384,10 +385,14 @@ describe("AdminDashboard processing", () => {
     ).not.toBeInTheDocument();
 
     await waitFor(() => {
-      expect(confirmTranscriptMock).toHaveBeenCalledWith("letter-1", {
-        confirmedSender: "Mabel",
-        confirmedRecipient: "Theo",
-      });
+      expect(confirmTranscriptMock).toHaveBeenCalledWith(
+        "letter-1",
+        0,
+        {
+          confirmedSender: "Mabel",
+          confirmedRecipient: "Theo",
+        },
+      );
     });
     expect(regenerateMetadataMock).not.toHaveBeenCalled();
   });
@@ -433,7 +438,14 @@ describe("AdminDashboard processing", () => {
     await user.click(screen.getByRole("button", { name: "Generate Metadata" }));
 
     await waitFor(() => {
-      expect(regenerateMetadataMock).toHaveBeenCalledWith("letter-1", {});
+      expect(regenerateMetadataMock).toHaveBeenCalledWith(
+        "letter-1",
+        0,
+        {
+          confirmedRecipient: undefined,
+          confirmedSender: undefined,
+        },
+      );
     });
     expect(showToastMock).toHaveBeenCalledWith("Metadata generated", "success");
   });

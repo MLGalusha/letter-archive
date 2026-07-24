@@ -67,17 +67,50 @@ export function useDashboardCopyPasteEdit({
         ...changes,
       }));
 
-      await bulkUpdateFields(updates);
-
-      showToast(`Updated ${pendingChanges.size} letter${pendingChanges.size === 1 ? "" : "s"}`, "success");
-
-      exitEditMode();
-
-      await fetchLetters();
+      const result = await bulkUpdateFields(updates);
+      const skippedIds = new Set(
+        result.skipReasons.map(({ letterId }) => letterId),
+      );
+      if (result.skipped === 0) {
+        showToast(
+          `Updated ${result.updated} letter${result.updated === 1 ? "" : "s"}`,
+          "success",
+        );
+        exitEditMode();
+      } else {
+        setPendingChanges((previous) => new Map(
+          Array.from(previous).filter(([letterId]) => skippedIds.has(letterId)),
+        ));
+        const sourceChanged = result.skipReasons.filter(
+          ({ code }) => code === "SOURCE_CHANGED",
+        ).length;
+        const missing = result.skipReasons.filter(
+          ({ code }) => code === "NOT_FOUND",
+        ).length;
+        const conflictedOrFailed = result.skipped - sourceChanged - missing;
+        const reasons = [
+          sourceChanged > 0
+            ? `${sourceChanged} source ${sourceChanged === 1 ? "changed" : "versions changed"}`
+            : null,
+          missing > 0 ? `${missing} no longer ${missing === 1 ? "exists" : "exist"}` : null,
+          conflictedOrFailed > 0
+            ? `${conflictedOrFailed} had newer edits or failed`
+            : null,
+        ].filter((reason): reason is string => reason !== null);
+        showToast(
+          `Updated ${result.updated}; kept ${result.skipped} unsaved (${reasons.join(", ")})`,
+          result.applied > 0 ? "info" : "error",
+        );
+      }
     } catch (err) {
       console.error("Failed to save changes:", err);
       showToast(err instanceof Error ? err.message : "Failed to save changes", "error");
     } finally {
+      try {
+        await fetchLetters();
+      } catch (err) {
+        console.error("Failed to refresh letters after saving changes:", err);
+      }
       setIsSaving(false);
     }
   }, [exitEditMode, fetchLetters, pendingChanges, showToast]);
@@ -98,6 +131,7 @@ export function useDashboardCopyPasteEdit({
 
   const handleCellClick = useCallback((
     letterId: string,
+    primarySourceRevision: number,
     column: CopyPasteColumn,
     value: string | null,
     event: MouseEvent,
@@ -122,10 +156,10 @@ export function useDashboardCopyPasteEdit({
         if (existing) {
           const rest = { ...existing };
           delete rest[column];
-          if (Object.keys(rest).length === 0) {
+          if (rest.sender === undefined && rest.recipient === undefined) {
             next.delete(letterId);
           } else {
-            next.set(letterId, rest as PendingChange);
+            next.set(letterId, rest);
           }
         }
         return next;
@@ -133,8 +167,13 @@ export function useDashboardCopyPasteEdit({
     } else {
       setPendingChanges(prev => {
         const next = new Map(prev);
-        const existing = next.get(letterId) || {};
-        next.set(letterId, { ...existing, [column]: copiedValue || "" });
+        const existing = next.get(letterId);
+        next.set(letterId, {
+          primarySourceRevision:
+            existing?.primarySourceRevision ?? primarySourceRevision,
+          ...existing,
+          [column]: copiedValue || "",
+        });
         return next;
       });
     }

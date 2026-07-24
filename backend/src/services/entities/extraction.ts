@@ -42,6 +42,48 @@ export interface EntityExtractionCommitResult {
 }
 
 /**
+ * Removes only replaceable AI-owned projections for one letter.
+ *
+ * NULL revisions and confirmed rows are human/system-owned. Non-null revision
+ * zero is legacy AI output and is replaceable just like current revisions.
+ */
+export async function deleteReplaceableEntityProjection(
+  database: Pick<Database, 'delete'>,
+  letterId: string,
+  options: { preservePromotableLegacyRows?: boolean } = {},
+): Promise<void> {
+  const preserveLegacy = options.preservePromotableLegacyRows === true;
+  await database.delete(letterPersons).where(and(
+    eq(letterPersons.letterId, letterId),
+    preserveLegacy
+      ? gt(letterPersons.entityExtractionRevision, 0)
+      : isNotNull(letterPersons.entityExtractionRevision),
+    isNull(letterPersons.confirmedAt),
+  ));
+  await database.delete(letterPlaces).where(and(
+    eq(letterPlaces.letterId, letterId),
+    preserveLegacy
+      ? gt(letterPlaces.entityExtractionRevision, 0)
+      : isNotNull(letterPlaces.entityExtractionRevision),
+    isNull(letterPlaces.confirmedAt),
+  ));
+  await database.delete(personRelationships).where(and(
+    eq(personRelationships.discoveredInLetterId, letterId),
+    preserveLegacy
+      ? gt(personRelationships.entityExtractionRevision, 0)
+      : isNotNull(personRelationships.entityExtractionRevision),
+    isNull(personRelationships.confirmedAt),
+  ));
+  await database.delete(entityReviewQueue).where(and(
+    eq(entityReviewQueue.letterId, letterId),
+    preserveLegacy
+      ? gte(entityReviewQueue.entityExtractionRevision, 0)
+      : isNotNull(entityReviewQueue.entityExtractionRevision),
+    eq(entityReviewQueue.status, 'pending'),
+  ));
+}
+
+/**
  * Signals that a cancelled, retried, or otherwise superseded producer reached
  * the commit boundary after its ownership token stopped being authoritative.
  */
@@ -89,31 +131,13 @@ export async function processEntityExtraction(
       throw new EntityExtractionClaimLostError();
     }
 
-    // Confirmed and NULL-revision rows are human-owned. Only the prior
-    // extraction projection for this letter is replaced.
-    await tx.delete(letterPersons).where(and(
-      eq(letterPersons.letterId, letterId),
-      gt(letterPersons.entityExtractionRevision, 0),
-      isNull(letterPersons.confirmedAt),
-    ));
-    await tx.delete(letterPlaces).where(and(
-      eq(letterPlaces.letterId, letterId),
-      gt(letterPlaces.entityExtractionRevision, 0),
-      isNull(letterPlaces.confirmedAt),
-    ));
-    await tx.delete(personRelationships).where(and(
-      eq(personRelationships.discoveredInLetterId, letterId),
-      gt(personRelationships.entityExtractionRevision, 0),
-      isNull(personRelationships.confirmedAt),
-    ));
-    // Unresolved suggestions are another replaceable output of the run.
-    // Matched legacy revision-0 suggestions are known AI output and are
-    // replaced too; ambiguous NULL rows and resolved history remain intact.
-    await tx.delete(entityReviewQueue).where(and(
-      eq(entityReviewQueue.letterId, letterId),
-      gte(entityReviewQueue.entityExtractionRevision, 0),
-      eq(entityReviewQueue.status, 'pending'),
-    ));
+    // Revision-0 links are rollout-era AI rows that this exact extraction can
+    // safely promote after proving a matching entity. A source replacement,
+    // by contrast, calls the helper's default mode and removes them because
+    // they derive from bytes that are no longer authoritative.
+    await deleteReplaceableEntityProjection(tx, letterId, {
+      preservePromotableLegacyRows: true,
+    });
 
     const resolvedPersonIds = new Map<string, string>();
     for (const person of extraction.people) {

@@ -221,18 +221,22 @@ export default function CollectionsDashboard() {
     if (collection) navigate(`/admin/collections/${collection.collectionCode}`);
   };
 
-  const selectedCodes = collections
-    .filter((c) => selectedIds.has(c.id))
-    .map((c) => c.collectionCode);
+  const selectedCollections = collections.filter((collection) => (
+    selectedIds.has(collection.id)
+  ));
 
   const handleGenerateProfiles = async () => {
-    if (selectedCodes.length === 0) return;
+    if (selectedCollections.length === 0) return;
     setProcessing(true);
     let successCount = 0;
     let failCount = 0;
-    for (const code of selectedCodes) {
+    for (const collection of selectedCollections) {
       try {
-        await generateCollectionProfile(code, true);
+        await generateCollectionProfile(
+          collection.collectionCode,
+          collection.profileRevision,
+          true,
+        );
         successCount++;
       } catch {
         failCount++;
@@ -249,13 +253,16 @@ export default function CollectionsDashboard() {
 
   const handleResetProfiles = async () => {
     setShowResetConfirm(false);
-    if (selectedCodes.length === 0) return;
+    if (selectedCollections.length === 0) return;
     setProcessing(true);
     let successCount = 0;
     let failCount = 0;
-    for (const code of selectedCodes) {
+    for (const collection of selectedCollections) {
       try {
-        await resetCollectionProfile(code);
+        await resetCollectionProfile(
+          collection.collectionCode,
+          collection.profileRevision,
+        );
         successCount++;
       } catch {
         failCount++;

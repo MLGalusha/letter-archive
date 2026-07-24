@@ -19,6 +19,11 @@ import {
   retainRowsWithPublicCatalogueRoot,
   selectPublicCatalogueRepresentative,
 } from '../services/public-catalogue-unit.js';
+import {
+  collectionProfilePublicationIsCurrent,
+  collectionProfileSourceIsCurrent,
+  getCurrentCollectionProfilePublicationIds,
+} from '../services/collection-profile-source.js';
 
 const router = Router();
 
@@ -159,10 +164,17 @@ router.get('/collections', async (req, res, next) => {
     const dateMap = new Map(dateRanges.map(r => [r.collectionId, { min: r.minDate, max: r.maxDate }]));
     const senderMap = new Map((topSenders as unknown as Array<{ collection_id: string; name: string }>).map(r => [r.collection_id, r.name]));
     const recipientMap = new Map((topRecipients as unknown as Array<{ collection_id: string; name: string }>).map(r => [r.collection_id, r.name]));
+    const currentProfilePublicationIds =
+      await getCurrentCollectionProfilePublicationIds(
+        allCollections.map((collection) => collection.id),
+      );
 
     const collectionsWithDetails = allCollections
       .map((collection) => ({
-        ...toPublicCollection(collection),
+        ...toPublicCollection(
+          collection,
+          currentProfilePublicationIds.has(collection.id),
+        ),
         letterCount: countMap.get(collection.id) || 0,
         dateRange: dateMap.get(collection.id) || null,
         primarySender: senderMap.get(collection.id) || null,
@@ -254,8 +266,10 @@ router.get('/collections/:code', async (req, res, next) => {
       'Collection fetched with letters'
     );
 
+    const profileSourceCurrent = isVerifiedPublicContent(collection.profileStatus)
+      && await collectionProfilePublicationIsCurrent(collection.id);
     const result = {
-      ...toPublicCollection(collection),
+      ...toPublicCollection(collection, profileSourceCurrent),
       letters: collectionLetters,
       letterCount: collectionLetters.length,
     };
@@ -293,10 +307,23 @@ router.get('/collections/:code/profile', async (req, res, next) => {
       return;
     }
 
-    const profilePublished = isVerifiedPublicContent(collection.profileStatus);
+    const profilePublishedAtStart = isVerifiedPublicContent(collection.profileStatus)
+      && await collectionProfileSourceIsCurrent(
+        collection.id,
+        collection.profileSourceFingerprint,
+      );
+    if (
+      isVerifiedPublicContent(collection.profileStatus)
+      && !profilePublishedAtStart
+    ) {
+      req.log.info(
+        { collectionId: collection.id },
+        'Withholding collection profile whose public source corpus changed',
+      );
+    }
     const [aggregations, publishedProfileRows] = await Promise.all([
       getCollectionAggregations(collection.id),
-      profilePublished
+      profilePublishedAtStart
         ? db.query.letters.findMany({
             where: and(
               eq(letters.collectionId, collection.id),
@@ -318,10 +345,10 @@ router.get('/collections/:code/profile', async (req, res, next) => {
         .filter((letter) => letter.metadataPublished)
         .map((letter) => letter.id),
     );
-    const profileCorrespondents = profilePublished
+    const profileCorrespondents = profilePublishedAtStart
       ? normalizeProfileCorrespondents(collection.profileCorrespondents)
       : [];
-    const resolvedStartHere = profilePublished
+    const resolvedStartHere = profilePublishedAtStart
       ? await resolveCollectionStartHere(
           collection.id,
           {
@@ -360,12 +387,24 @@ router.get('/collections/:code/profile', async (req, res, next) => {
       }
     }
 
+    const profilePublished = profilePublishedAtStart
+      && await collectionProfilePublicationIsCurrent(collection.id);
+    if (profilePublishedAtStart && !profilePublished) {
+      req.log.info(
+        { collectionId: collection.id },
+        'Withholding collection profile revoked during public profile read',
+      );
+    }
+    const publicProfileCorrespondents = profilePublished
+      ? profileCorrespondents
+      : [];
+
     res.json({
       // AI-generated content
       hook: profilePublished ? collection.hook : null,
       narrative: profilePublished ? collection.profileNarrative : null,
       profileStatus: profilePublished ? 'VERIFIED' : 'EMPTY',
-      startHere,
+      startHere: profilePublished ? startHere : null,
       readingPaths: profilePublished
         ? filterProfileLetterReferences(collection.profileReadingPaths, publicMetadataLetterIds)
         : [],
@@ -373,10 +412,13 @@ router.get('/collections/:code/profile', async (req, res, next) => {
       themes: profilePublished
         ? filterProfileLetterReferences(collection.profileThemes, publicMetadataLetterIds)
         : [],
-      profileCorrespondents,
+      profileCorrespondents: publicProfileCorrespondents,
       // Computed aggregations
       ...aggregations,
-      keyPeople: applyProfileCorrespondentOverrides(aggregations.keyPeople, profileCorrespondents),
+      keyPeople: applyProfileCorrespondentOverrides(
+        aggregations.keyPeople,
+        publicProfileCorrespondents,
+      ),
     });
   } catch (error) {
     next(error);

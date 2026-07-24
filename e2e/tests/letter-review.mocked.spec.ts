@@ -153,6 +153,43 @@ test.describe('@mocked Letter Review', () => {
     ]);
   });
 
+  test('owns a coded source conflict from direct transcription until reload', async ({ page }) => {
+    const mockedApi = await openMockLetterReviewWithOptions(
+      page,
+      createMockLetterReviewLetter(),
+      {
+        routeFailures: {
+          transcribeLetter: {
+            status: 409,
+            error: 'Letter source changed while transcription was running',
+            code: 'SOURCE_REVISION_CHANGED',
+            requestId: 'req-transcribe-source-409',
+          },
+        },
+      },
+    );
+
+    await page.locator('.editor-section').first().locator('.transcribe-btn').click();
+    await page.locator('.regenerate-popup .btn-option', {
+      hasText: 'Letter Transcript',
+    }).click();
+
+    const conflict = page.getByRole('alertdialog', {
+      name: 'Letter source changed',
+    });
+    await expect(conflict).toBeVisible();
+    await expect(conflict).toContainText(
+      'Letter source changed while transcription was running',
+    );
+    await expect(conflict.getByRole('button', {
+      name: 'Reload latest source',
+    })).toBeVisible();
+    expect(mockedApi.transcribeLetterRequests).toEqual([{
+      url: `${API_BASE_URL}/admin/letters/letter-review-1/transcribe-letter`,
+      body: { primarySourceRevision: 4 },
+    }]);
+  });
+
   test('removes transcript verification on double-click', async ({ page }) => {
     const initialLetter = createMockLetterReviewLetter({
       transcriptStatus: 'VERIFIED',
@@ -229,7 +266,10 @@ test.describe('@mocked Letter Review', () => {
     expect(mockedApi.updateExtraContentRequests).toEqual([
       {
         url: `${API_BASE_URL}/admin/letters/letter-review-1/extra-content`,
-        body: { extraContent: 'Corrected cover note for the review record.' },
+        body: {
+          extraContent: 'Corrected cover note for the review record.',
+          primarySourceRevision: 4,
+        },
       },
     ]);
 

@@ -110,6 +110,7 @@ function letter() {
   return {
     id: 'letter-1',
     type: 'L',
+    primarySourceRevision: 0,
     transcriptionText: 'A complete transcript',
     transcriptionStatus: 'SUCCESS',
     transcriptConfirmedAt: new Date('2026-07-17T12:00:00.000Z'),
@@ -266,11 +267,15 @@ describe('metadata entity persistence ownership', () => {
         summary: 'Fresh summary',
       });
 
-    await runEntityExtractionOnly('letter-1', { claimKind: 'REQUESTED' });
+    await runEntityExtractionOnly('letter-1', {
+      claimKind: 'REQUESTED',
+      expectedPrimarySourceRevision: 0,
+    });
 
     expect(claimRequestedEntityExtractionMock).toHaveBeenCalledWith(
       'letter-1',
       expect.any(Object),
+      0,
     );
     expect(extractEntitiesMock).toHaveBeenCalledWith(expect.objectContaining({
       transcriptionText: 'Fresh post-claim transcript',
@@ -397,10 +402,7 @@ describe('metadata entity persistence ownership', () => {
       expect.any(Object),
     );
     expect(extractMetadataV2Mock).toHaveBeenCalledWith(expect.objectContaining({
-      corrections: {
-        confirmedSender: 'Alice',
-        confirmedRecipient: 'Bob',
-      },
+      corrections: undefined,
     }));
     expect(claimQueuedEntityExtractionMock).not.toHaveBeenCalled();
     expect(claimRequestedEntityExtractionMock).not.toHaveBeenCalled();
@@ -414,6 +416,7 @@ describe('metadata entity persistence ownership', () => {
 
     await expect(runEntityExtractionOnly('letter-1', {
       claimKind: 'REQUESTED',
+      expectedPrimarySourceRevision: 0,
     })).rejects.toThrow('provider failed');
 
     expect(failEntityExtractionMock).toHaveBeenCalledWith(
@@ -429,6 +432,7 @@ describe('metadata entity persistence ownership', () => {
 
     await expect(runEntityExtractionOnly('letter-1', {
       claimKind: 'REQUESTED',
+      expectedPrimarySourceRevision: 0,
     })).resolves.toEqual({ kind: 'claim_lost' });
 
     expect(extractEntitiesMock).not.toHaveBeenCalled();
@@ -446,6 +450,7 @@ describe('metadata entity persistence ownership', () => {
 
     await expect(runEntityExtractionOnly('letter-1', {
       claimKind: 'REQUESTED',
+      expectedPrimarySourceRevision: 0,
     })).resolves.toEqual({ kind: 'superseded' });
 
     expect(extractEntitiesMock).not.toHaveBeenCalled();
@@ -462,6 +467,7 @@ describe('metadata entity persistence ownership', () => {
 
     await expect(runEntityExtractionOnly('letter-1', {
       claimKind: 'REQUESTED',
+      expectedPrimarySourceRevision: 0,
     })).resolves.toEqual({ kind: 'superseded' });
 
     expect(failEntityExtractionMock).not.toHaveBeenCalled();
@@ -475,6 +481,7 @@ describe('metadata entity persistence ownership', () => {
 
     await expect(runEntityExtractionOnly('letter-1', {
       claimKind: 'REQUESTED',
+      expectedPrimarySourceRevision: 0,
     })).resolves.toEqual({ kind: 'superseded' });
 
     expect(notifyMock).not.toHaveBeenCalled();
@@ -607,7 +614,7 @@ describe('metadata entity persistence ownership', () => {
     );
   });
 
-  it('derives queued identity corrections from the post-claim reload', async () => {
+  it('does not canonize stored AI identity scalars as human corrections', async () => {
     getLetterWithPagesMock
       .mockResolvedValueOnce({
         ...letter(),
@@ -630,10 +637,7 @@ describe('metadata entity persistence ownership', () => {
     });
 
     expect(extractMetadataV2Mock).toHaveBeenCalledWith(expect.objectContaining({
-      corrections: expect.objectContaining({
-        confirmedSender: 'Fresh Bob',
-        confirmedRecipient: 'Fresh Carol',
-      }),
+      corrections: undefined,
     }));
   });
 

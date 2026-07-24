@@ -1,14 +1,14 @@
 import { Router } from 'express';
 import {
   cancelActiveJob,
+  clearProcessingQueueSnapshotSchema,
   clearQueue,
   getQueueStatus,
-  queueJobTypeSchema,
+  processingJobActionSchema,
   removeFromQueue,
   retryJob,
   wakeBackgroundWorkerForQueuedProcessing,
 } from '../../../services/processing-queue.js';
-import { requireString } from './helpers.js';
 
 const router = Router();
 
@@ -30,9 +30,16 @@ router.post('/wake', async (_req, res, next) => {
 
 router.post('/cancel', async (req, res, next) => {
   try {
-    const letterId = requireString(req.body?.letterId, 'letterId required');
-    const jobType = queueJobTypeSchema.parse(req.body?.type);
-    const result = await cancelActiveJob(letterId, jobType);
+    const {
+      letterId,
+      type,
+      primarySourceRevision,
+      jobStateToken,
+    } = processingJobActionSchema.parse(req.body);
+    const result = await cancelActiveJob(letterId, type, {
+      primarySourceRevision,
+      jobStateToken,
+    });
     res.json(result);
   } catch (error) {
     next(error);
@@ -41,9 +48,16 @@ router.post('/cancel', async (req, res, next) => {
 
 router.post('/queue/remove', async (req, res, next) => {
   try {
-    const letterId = requireString(req.body?.letterId, 'letterId required');
-    const jobType = queueJobTypeSchema.parse(req.body?.type);
-    const result = await removeFromQueue(letterId, jobType);
+    const {
+      letterId,
+      type,
+      primarySourceRevision,
+      jobStateToken,
+    } = processingJobActionSchema.parse(req.body);
+    const result = await removeFromQueue(letterId, type, {
+      primarySourceRevision,
+      jobStateToken,
+    });
     res.json(result);
   } catch (error) {
     next(error);
@@ -52,8 +66,8 @@ router.post('/queue/remove', async (req, res, next) => {
 
 router.post('/queue/clear', async (req, res, next) => {
   try {
-    const jobType = queueJobTypeSchema.parse(req.body?.type);
-    const result = await clearQueue(jobType);
+    const { type, items } = clearProcessingQueueSnapshotSchema.parse(req.body);
+    const result = await clearQueue(type, items);
     res.json(result);
   } catch (error) {
     next(error);
@@ -62,9 +76,16 @@ router.post('/queue/clear', async (req, res, next) => {
 
 router.post('/queue/retry', async (req, res, next) => {
   try {
-    const letterId = requireString(req.body?.letterId, 'letterId required');
-    const jobType = queueJobTypeSchema.parse(req.body?.type);
-    const result = await retryJob(letterId, jobType);
+    const {
+      letterId,
+      type,
+      primarySourceRevision,
+      jobStateToken,
+    } = processingJobActionSchema.parse(req.body);
+    const result = await retryJob(letterId, type, {
+      primarySourceRevision,
+      jobStateToken,
+    });
     res.json(result);
   } catch (error) {
     next(error);

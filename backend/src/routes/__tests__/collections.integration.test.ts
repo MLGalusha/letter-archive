@@ -6,6 +6,9 @@ const {
   getCollectionByCodeMock,
   resolveCollectionStartHereMock,
   getCollectionAggregationsMock,
+  collectionProfilePublicationIsCurrentMock,
+  collectionProfileSourceIsCurrentMock,
+  getCurrentCollectionProfilePublicationIdsMock,
   transformLettersWithRelatedToDTOMock,
   selectMock,
   selectFromMock,
@@ -25,6 +28,9 @@ const {
   getCollectionByCodeMock: vi.fn(),
   resolveCollectionStartHereMock: vi.fn(),
   getCollectionAggregationsMock: vi.fn(),
+  collectionProfilePublicationIsCurrentMock: vi.fn(),
+  collectionProfileSourceIsCurrentMock: vi.fn(),
+  getCurrentCollectionProfilePublicationIdsMock: vi.fn(),
   transformLettersWithRelatedToDTOMock: vi.fn(),
   selectMock: vi.fn(),
   selectFromMock: vi.fn(),
@@ -60,6 +66,14 @@ vi.mock('../../dto/index.js', () => ({
 
 vi.mock('../../services/collection-profile.js', () => ({
   getCollectionAggregations: getCollectionAggregationsMock,
+}));
+
+vi.mock('../../services/collection-profile-source.js', () => ({
+  collectionProfilePublicationIsCurrent:
+    collectionProfilePublicationIsCurrentMock,
+  collectionProfileSourceIsCurrent: collectionProfileSourceIsCurrentMock,
+  getCurrentCollectionProfilePublicationIds:
+    getCurrentCollectionProfilePublicationIdsMock,
 }));
 
 vi.mock('../../services/public-read-model.js', async (importOriginal) => {
@@ -166,6 +180,9 @@ describe('collections route integration', () => {
       correspondents: [],
       formatBreakdown: [],
     });
+    collectionProfileSourceIsCurrentMock.mockResolvedValue(true);
+    collectionProfilePublicationIsCurrentMock.mockResolvedValue(true);
+    getCurrentCollectionProfilePublicationIdsMock.mockResolvedValue(new Set());
     lettersFindFirstMock.mockResolvedValue({ id: 'public-unit' });
   });
 
@@ -219,6 +236,102 @@ describe('collections route integration', () => {
       },
     ]);
     expect(response.headers['x-request-id']).toEqual(expect.any(String));
+  });
+
+  it('withholds verified hooks whose final publication authority is stale', async () => {
+    listCollectionsMock.mockResolvedValueOnce([{
+      id: 'collection-9',
+      collectionCode: '009',
+      title: 'Collection Nine',
+      description: 'Ninth set',
+      createdAt: '2024-01-01T00:00:00Z',
+      hook: 'Stale verified hook',
+      profileStatus: 'VERIFIED',
+      profileSourceFingerprint: 'a'.repeat(32),
+    }]);
+    getCurrentCollectionProfilePublicationIdsMock.mockResolvedValueOnce(
+      new Set(),
+    );
+    let selectCallCount = 0;
+    selectMock.mockImplementation(() => {
+      selectCallCount += 1;
+      return {
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            groupBy: vi.fn().mockResolvedValue(
+              selectCallCount === 1
+                ? [{ collectionId: 'collection-9', count: 1 }]
+                : [],
+            ),
+          }),
+        }),
+      };
+    });
+
+    const response = await invokeRouter(collectionsRouter, {
+      method: 'GET',
+      url: '/collections',
+      path: '/collections',
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual([
+      expect.objectContaining({
+        collectionCode: '009',
+        hook: null,
+      }),
+    ]);
+    expect(getCurrentCollectionProfilePublicationIdsMock)
+      .toHaveBeenCalledWith(['collection-9']);
+  });
+
+  it('withholds a list hook revoked after its matching source fingerprint read', async () => {
+    listCollectionsMock.mockResolvedValueOnce([{
+      id: 'collection-9',
+      collectionCode: '009',
+      title: 'Collection Nine',
+      description: 'Ninth set',
+      createdAt: '2024-01-01T00:00:00Z',
+      hook: 'Hook read before the profile edit',
+      profileStatus: 'VERIFIED',
+      profileSourceFingerprint: 'a'.repeat(32),
+    }]);
+    getCurrentCollectionProfilePublicationIdsMock.mockResolvedValueOnce(
+      new Set(),
+    );
+    let selectCallCount = 0;
+    selectMock.mockImplementation(() => {
+      selectCallCount += 1;
+      return {
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            groupBy: vi.fn().mockResolvedValue(
+              selectCallCount === 1
+                ? [{ collectionId: 'collection-9', count: 1 }]
+                : [],
+            ),
+          }),
+        }),
+      };
+    });
+
+    const response = await invokeRouter(collectionsRouter, {
+      method: 'GET',
+      url: '/collections',
+      path: '/collections',
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual([
+      expect.objectContaining({
+        collectionCode: '009',
+        hook: null,
+      }),
+    ]);
+    expect(getCurrentCollectionProfilePublicationIdsMock)
+      .toHaveBeenCalledWith(['collection-9']);
   });
 
   it('reflects collection revocation on the next list request', async () => {
@@ -316,6 +429,46 @@ describe('collections route integration', () => {
         relatedItems: [],
       },
     ]);
+  });
+
+  it('withholds a detail hook revoked after the collection and letters are read', async () => {
+    getCollectionByCodeMock.mockResolvedValueOnce({
+      id: 'collection-9',
+      collectionCode: '009',
+      title: 'Collection Nine',
+      description: 'Ninth set',
+      createdAt: '2024-01-01T00:00:00Z',
+      hook: 'Hook read before the profile edit',
+      profileStatus: 'VERIFIED',
+      profileSourceFingerprint: 'a'.repeat(32),
+    });
+    lettersFindManyMock.mockResolvedValueOnce([
+      {
+        id: 'letter-1',
+        dateRaw: '19470810',
+        typeSequence: '01',
+        type: 'L',
+      },
+    ]);
+    collectionProfilePublicationIsCurrentMock.mockResolvedValueOnce(false);
+
+    const response = await invokeRouter(collectionsRouter, {
+      method: 'GET',
+      url: '/collections/009',
+      path: '/collections/009',
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual(expect.objectContaining({
+      collectionCode: '009',
+      hook: null,
+      letterCount: 1,
+    }));
+    expect(collectionProfilePublicationIsCurrentMock).toHaveBeenCalledWith(
+      'collection-9',
+    );
+    expect(collectionProfileSourceIsCurrentMock).not.toHaveBeenCalled();
   });
 
   it('does not expose a collection whose only published records are supplementary', async () => {
@@ -545,6 +698,80 @@ describe('collections route integration', () => {
       readingPaths: [{ title: 'A path', letterIds: ['root', 'attached-cover'] }],
       themes: [{ name: 'A theme', letterIds: ['attached-cover'] }],
     });
+  });
+
+  it('withholds a verified profile after its public source corpus changes', async () => {
+    getCollectionByCodeMock.mockResolvedValueOnce({
+      id: 'collection-9',
+      collectionCode: '009',
+      title: 'Collection Nine',
+      hook: 'Stale verified hook',
+      profileNarrative: 'Stale verified narrative',
+      profileStatus: 'VERIFIED',
+      profileSourceFingerprint: 'a'.repeat(32),
+      profileCorrespondents: [{
+        name: 'Stale correspondent',
+        biography: 'Stale biography',
+      }],
+    });
+    collectionProfileSourceIsCurrentMock.mockResolvedValueOnce(false);
+
+    const response = await invokeRouter(collectionsRouter, {
+      method: 'GET',
+      url: '/collections/009/profile',
+      path: '/collections/009/profile',
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toMatchObject({
+      hook: null,
+      narrative: null,
+      profileStatus: 'EMPTY',
+      startHere: null,
+      profileCorrespondents: [],
+    });
+    expect(resolveCollectionStartHereMock).not.toHaveBeenCalled();
+  });
+
+  it('withholds profile content revoked after dependent public reads start', async () => {
+    getCollectionByCodeMock.mockResolvedValueOnce({
+      id: 'collection-9',
+      collectionCode: '009',
+      title: 'Collection Nine',
+      hook: 'Previously current hook',
+      profileNarrative: 'Previously current narrative',
+      profileStatus: 'VERIFIED',
+      profileSourceFingerprint: 'a'.repeat(32),
+      profileCorrespondents: [{
+        name: 'Previously current correspondent',
+        biography: 'Biography',
+      }],
+    });
+    lettersFindManyMock.mockResolvedValueOnce([]);
+    collectionProfilePublicationIsCurrentMock.mockResolvedValueOnce(false);
+
+    const response = await invokeRouter(collectionsRouter, {
+      method: 'GET',
+      url: '/collections/009/profile',
+      path: '/collections/009/profile',
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toMatchObject({
+      hook: null,
+      narrative: null,
+      profileStatus: 'EMPTY',
+      startHere: null,
+      readingPaths: [],
+      gapAnalysis: [],
+      themes: [],
+      profileCorrespondents: [],
+    });
+    expect(collectionProfilePublicationIsCurrentMock).toHaveBeenCalledWith(
+      'collection-9',
+    );
   });
 
   it('does not expose draft collection-profile content', async () => {

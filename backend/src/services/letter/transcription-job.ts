@@ -21,6 +21,7 @@ const log = createLogger({ module: 'transcription-job' });
 const LEASE_EXPIRED_ERROR = 'Transcription lease expired before the attempt completed';
 
 export interface ObservedTranscriptionState {
+  primarySourceRevision: number;
   status: JobStatus;
   workflow: WorkflowState;
   transcriptionText: string | null;
@@ -36,6 +37,7 @@ export interface ObservedTranscriptionState {
 }
 
 export interface TranscriptionStateSource {
+  primarySourceRevision: number;
   transcriptionStatus: JobStatus;
   workflow: WorkflowState;
   transcriptionText: string | null;
@@ -78,6 +80,7 @@ export function observeTranscriptionState(
   source: TranscriptionStateSource,
 ): ObservedTranscriptionState {
   return {
+    primarySourceRevision: source.primarySourceRevision,
     status: source.transcriptionStatus,
     workflow: source.workflow,
     transcriptionText: source.transcriptionText,
@@ -95,6 +98,7 @@ export function observeTranscriptionState(
 
 export function observedTranscriptionStateConditions(observed: ObservedTranscriptionState) {
   return [
+    eq(letters.primarySourceRevision, observed.primarySourceRevision),
     eq(letters.transcriptionStatus, observed.status),
     eq(letters.workflow, observed.workflow),
     observed.transcriptionText === null
@@ -126,9 +130,16 @@ function hasPairedLeaseMetadata(observed: ObservedTranscriptionState): boolean {
     === (observed.transcriptionClaimKind === null);
 }
 
-function activeOwnedTranscriptionConditions(letterId: string, runId: string) {
+function activeOwnedTranscriptionConditions(
+  letterId: string,
+  runId: string,
+  expectedPrimarySourceRevision?: number,
+) {
   return [
     eq(letters.id, letterId),
+    ...(expectedPrimarySourceRevision === undefined
+      ? []
+      : [eq(letters.primarySourceRevision, expectedPrimarySourceRevision)]),
     eq(letters.transcriptionStatus, 'RUNNING'),
     eq(letters.transcriptionRunId, runId),
     eq(letters.transcriptionLeaseRunId, runId),
@@ -137,7 +148,7 @@ function activeOwnedTranscriptionConditions(letterId: string, runId: string) {
   ];
 }
 
-function clearedOwnershipTuple() {
+export function clearedTranscriptionOwnership() {
   return {
     transcriptionRunId: null,
     transcriptionLeaseExpiresAt: null,
@@ -284,6 +295,7 @@ export async function completeTranscription(
   letterId: string,
   runId: string,
   transcriptionText: string | null,
+  expectedPrimarySourceRevision?: number,
 ): Promise<boolean> {
   const updated = await db
     .update(letters)
@@ -301,10 +313,14 @@ export async function completeTranscription(
       // The completed transcription is the new primary source, so its stage
       // transition wins over the generic metadata-source workflow fallback.
       workflow: 'TRANSCRIBED',
-      ...clearedOwnershipTuple(),
+      ...clearedTranscriptionOwnership(),
       updatedAt: new Date(),
     })
-    .where(and(...activeOwnedTranscriptionConditions(letterId, runId)))
+    .where(and(...activeOwnedTranscriptionConditions(
+      letterId,
+      runId,
+      expectedPrimarySourceRevision,
+    )))
     .returning({ id: letters.id });
 
   return updated.length > 0;
@@ -315,11 +331,22 @@ async function revokeTranscription(
   runId: string,
   error: string,
   requireLiveLease: boolean,
+  expectedPrimarySourceRevision?: number,
 ): Promise<boolean> {
   const ownershipConditions = requireLiveLease
-    ? activeOwnedTranscriptionConditions(letterId, runId)
+    ? activeOwnedTranscriptionConditions(
+      letterId,
+      runId,
+      expectedPrimarySourceRevision,
+    )
     : [
       eq(letters.id, letterId),
+      ...(expectedPrimarySourceRevision === undefined
+        ? []
+        : [eq(
+          letters.primarySourceRevision,
+          expectedPrimarySourceRevision,
+        )]),
       eq(letters.transcriptionStatus, 'RUNNING'),
       eq(letters.transcriptionRunId, runId),
     ];
@@ -330,7 +357,7 @@ async function revokeTranscription(
       transcriptionStatus: 'FAILED',
       transcriptionError: error,
       workflow: revokedTranscriptionWorkflow(runId),
-      ...clearedOwnershipTuple(),
+      ...clearedTranscriptionOwnership(),
       updatedAt: new Date(),
     })
     .where(and(...ownershipConditions))
@@ -344,8 +371,15 @@ export async function failTranscription(
   letterId: string,
   runId: string,
   error: string,
+  expectedPrimarySourceRevision?: number,
 ): Promise<boolean> {
-  return revokeTranscription(letterId, runId, error, true);
+  return revokeTranscription(
+    letterId,
+    runId,
+    error,
+    true,
+    expectedPrimarySourceRevision,
+  );
 }
 
 /**
@@ -358,8 +392,15 @@ export async function cancelTranscriptionAttempt(
   letterId: string,
   runId: string,
   error = 'Cancelled by admin',
+  expectedPrimarySourceRevision?: number,
 ): Promise<boolean> {
-  return revokeTranscription(letterId, runId, error, false);
+  return revokeTranscription(
+    letterId,
+    runId,
+    error,
+    false,
+    expectedPrimarySourceRevision,
+  );
 }
 
 /**
@@ -375,7 +416,7 @@ export async function recoverExpiredTranscriptions(
       transcriptionStatus: 'PENDING',
       transcriptionError: null,
       workflow: 'UPLOADED',
-      ...clearedOwnershipTuple(),
+      ...clearedTranscriptionOwnership(),
       updatedAt: new Date(),
     })
     .where(and(
@@ -397,7 +438,7 @@ export async function recoverExpiredTranscriptions(
     .set({
       transcriptionStatus: 'FAILED',
       transcriptionError: LEASE_EXPIRED_ERROR,
-      ...clearedOwnershipTuple(),
+      ...clearedTranscriptionOwnership(),
       updatedAt: new Date(),
     })
     .where(and(

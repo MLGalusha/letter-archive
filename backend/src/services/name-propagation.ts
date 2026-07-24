@@ -10,7 +10,7 @@
  */
 
 import { and, eq, isNull } from 'drizzle-orm';
-import { db, letters, type Letter } from '../db/index.js';
+import { db, letters, type Database, type Letter } from '../db/index.js';
 import { createLogger } from '../utils/logger.js';
 import { PLACEHOLDERS, replacePlaceholder, findOrphanedPlaceholders, isPlaceholderValue } from '../utils/placeholders.js';
 import {
@@ -50,6 +50,7 @@ export type IdentityField = 'sender' | 'recipient';
 export interface IdentityStateSource {
   sender: string | null;
   recipient: string | null;
+  primarySourceRevision: number;
   metadataRevision: number;
   updatedAt: Date;
   metadataV2Json?: unknown;
@@ -58,9 +59,12 @@ export interface IdentityStateSource {
 
 export type IdentityState = IdentityStateSource & { id: string };
 
+export type IdentityMutationDatabase = Pick<Database, 'query' | 'update'>;
+
 /** The exact identity value and metadata revision a caller based its edit on. */
 export interface ObservedIdentityField {
   value: string | null;
+  primarySourceRevision: number;
   metadataRevision: number;
   updatedAt: Date;
 }
@@ -71,6 +75,7 @@ export function observeIdentityField(
 ): ObservedIdentityField {
   return {
     value: source[field],
+    primarySourceRevision: source.primarySourceRevision,
     metadataRevision: source.metadataRevision,
     updatedAt: source.updatedAt,
   };
@@ -84,6 +89,7 @@ export function observedIdentityFieldConditions(
 ) {
   return [
     ...observedMetadataRevisionConditions(letterId, observed),
+    eq(letters.primarySourceRevision, observed.primarySourceRevision),
     observed.value === null
       ? isNull(letters[field])
       : eq(letters[field], observed.value),
@@ -95,9 +101,9 @@ export async function commitDirectIdentityField(input: {
   letter: IdentityState;
   field: IdentityField;
   value: string | null;
-}): Promise<IdentityState> {
+}, database: IdentityMutationDatabase = db): Promise<IdentityState> {
   const observed = observeIdentityField(input.letter, input.field);
-  const committed = await db
+  const committed = await database
     .update(letters)
     .set({
       [input.field]: input.value,
@@ -112,6 +118,7 @@ export async function commitDirectIdentityField(input: {
       id: letters.id,
       sender: letters.sender,
       recipient: letters.recipient,
+      primarySourceRevision: letters.primarySourceRevision,
       metadataRevision: letters.metadataRevision,
       updatedAt: letters.updatedAt,
       metadataV2Json: letters.metadataV2Json,
@@ -697,7 +704,10 @@ export function propagateInEntityExtraction(
  * Applies replacements longest-first to prevent double-replacement.
  * Skips single-word variants that collide with other people's first names.
  */
-export async function propagateName(params: PropagateNameParams): Promise<PropagateNameResult> {
+export async function propagateName(
+  params: PropagateNameParams,
+  database: IdentityMutationDatabase = db,
+): Promise<PropagateNameResult> {
   const { letterId, field, oldName, newName, observed } = params;
   const letterLog = log.child({ letterId, field, oldName, newName });
 
@@ -709,7 +719,7 @@ export async function propagateName(params: PropagateNameParams): Promise<Propag
     );
   }
 
-  const letter = await db.query.letters.findFirst({
+  const letter = await database.query.letters.findFirst({
     where: and(...observedIdentityFieldConditions(letterId, field, observed)),
   });
 
@@ -821,7 +831,7 @@ export async function propagateName(params: PropagateNameParams): Promise<Propag
     }
   }
 
-  const propagated = await db
+  const propagated = await database
     .update(letters)
     .set(dbUpdates)
     .where(and(...observedIdentityFieldConditions(letterId, field, observed)))
@@ -910,6 +920,7 @@ function clearPlaceholderFlag(
  */
 export async function propagatePlaceholderReplacement(
   params: PlaceholderReplacementParams,
+  database: IdentityMutationDatabase = db,
 ): Promise<PlaceholderReplacementResult> {
   const { letterId, field, newName, observed } = params;
   const placeholder = field === 'sender' ? PLACEHOLDERS.SENDER : PLACEHOLDERS.RECIPIENT;
@@ -917,7 +928,7 @@ export async function propagatePlaceholderReplacement(
 
   letterLog.info('Starting placeholder replacement');
 
-  const letter = await db.query.letters.findFirst({
+  const letter = await database.query.letters.findFirst({
     where: and(...observedIdentityFieldConditions(letterId, field, observed)),
   });
 
@@ -1027,7 +1038,7 @@ export async function propagatePlaceholderReplacement(
     }
   }
 
-  const propagated = await db
+  const propagated = await database
     .update(letters)
     .set(dbUpdates)
     .where(and(...observedIdentityFieldConditions(letterId, field, observed)))

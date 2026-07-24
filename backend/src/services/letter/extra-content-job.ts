@@ -47,6 +47,7 @@ export interface ExtraContentRecoveryResult {
 
 interface ExtraContentJobOptions<T> {
   letterId: string;
+  expectedPrimarySourceRevision: number;
   expectedStatus: ClaimableJobStatus;
   expectedUpdatedAt: Date;
   claimKind: ExtraContentClaimKind;
@@ -64,19 +65,32 @@ function newLeaseDeadline() {
   return sql<Date>`clock_timestamp() + interval '5 minutes'`;
 }
 
-function activeOwnedExtraContentConditions(
+function activeOwnedExtraContentAttemptConditions(
   letterId: string,
   runId: string,
-  dirty: boolean,
 ) {
   return [
     eq(letters.id, letterId),
     eq(letters.extraContentJobStatus, 'RUNNING'),
     eq(letters.extraContentJobRunId, runId),
     eq(letters.extraContentJobLeaseRunId, runId),
-    eq(letters.extraContentJobDirty, dirty),
     isNotNull(letters.extraContentJobLeaseExpiresAt),
     gt(letters.extraContentJobLeaseExpiresAt, databaseNow()),
+  ];
+}
+
+function activeOwnedExtraContentConditions(
+  letterId: string,
+  runId: string,
+  dirty: boolean,
+  expectedPrimarySourceRevision?: number,
+) {
+  return [
+    ...activeOwnedExtraContentAttemptConditions(letterId, runId),
+    eq(letters.extraContentJobDirty, dirty),
+    ...(expectedPrimarySourceRevision === undefined
+      ? []
+      : [eq(letters.primarySourceRevision, expectedPrimarySourceRevision)]),
   ];
 }
 
@@ -145,7 +159,10 @@ export function buildExtraContentSourceInvalidationPatch() {
   };
 }
 
-async function requeueDirtyAttempt(letterId: string, runId: string): Promise<boolean> {
+async function requeueSupersededAttempt(
+  letterId: string,
+  runId: string,
+): Promise<boolean> {
   const rows = await db
     .update(letters)
     .set({
@@ -154,7 +171,7 @@ async function requeueDirtyAttempt(letterId: string, runId: string): Promise<boo
       ...clearedExtraContentOwnership(),
       updatedAt: new Date(),
     })
-    .where(and(...activeOwnedExtraContentConditions(letterId, runId, true)))
+    .where(and(...activeOwnedExtraContentAttemptConditions(letterId, runId)))
     .returning({ id: letters.id });
 
   return rows.length > 0;
@@ -201,6 +218,7 @@ export async function cancelExtraContentAttempt(
   letterId: string,
   runId: string,
   error = 'Cancelled by admin',
+  expectedPrimarySourceRevision?: number,
 ): Promise<boolean> {
   const cancelled = await db
     .update(letters)
@@ -218,6 +236,12 @@ export async function cancelExtraContentAttempt(
     })
     .where(and(
       eq(letters.id, letterId),
+      ...(expectedPrimarySourceRevision === undefined
+        ? []
+        : [eq(
+          letters.primarySourceRevision,
+          expectedPrimarySourceRevision,
+        )]),
       eq(letters.extraContentJobStatus, 'RUNNING'),
       eq(letters.extraContentJobRunId, runId),
     ))
@@ -233,6 +257,7 @@ export async function cancelExtraContentAttempt(
  */
 export async function runExtraContentJob<T>({
   letterId,
+  expectedPrimarySourceRevision,
   expectedStatus,
   expectedUpdatedAt,
   claimKind,
@@ -254,6 +279,7 @@ export async function runExtraContentJob<T>({
     })
     .where(and(
       eq(letters.id, letterId),
+      eq(letters.primarySourceRevision, expectedPrimarySourceRevision),
       eq(letters.extraContentJobStatus, expectedStatus),
       ne(letters.entityExtractionStatus, 'RUNNING'),
       observedTimestampMatches(letters.updatedAt, expectedUpdatedAt),
@@ -269,7 +295,7 @@ export async function runExtraContentJob<T>({
     try {
       const { value, patch } = await produce(heartbeat);
       if (!heartbeat.hasOwnership()) {
-        await requeueDirtyAttempt(letterId, runId);
+        await requeueSupersededAttempt(letterId, runId);
         return { kind: 'superseded' };
       }
 
@@ -283,16 +309,21 @@ export async function runExtraContentJob<T>({
           ...clearedExtraContentOwnership(),
           updatedAt: new Date(),
         })
-        .where(and(...activeOwnedExtraContentConditions(letterId, runId, false)))
+        .where(and(...activeOwnedExtraContentConditions(
+          letterId,
+          runId,
+          false,
+          expectedPrimarySourceRevision,
+        )))
         .returning({ id: letters.id });
 
       if (completed.length > 0) return { kind: 'completed', value };
 
-      await requeueDirtyAttempt(letterId, runId);
+      await requeueSupersededAttempt(letterId, runId);
       return { kind: 'superseded' };
     } catch (error) {
       if (!heartbeat.hasOwnership()) {
-        await requeueDirtyAttempt(letterId, runId);
+        await requeueSupersededAttempt(letterId, runId);
         return { kind: 'superseded' };
       }
 
@@ -306,11 +337,16 @@ export async function runExtraContentJob<T>({
             ...clearedExtraContentOwnership(),
             updatedAt: new Date(),
           })
-          .where(and(...activeOwnedExtraContentConditions(letterId, runId, false)))
+          .where(and(...activeOwnedExtraContentConditions(
+            letterId,
+            runId,
+            false,
+            expectedPrimarySourceRevision,
+          )))
           .returning({ id: letters.id });
 
         if (failed.length === 0) {
-          await requeueDirtyAttempt(letterId, runId);
+          await requeueSupersededAttempt(letterId, runId);
           return { kind: 'superseded' };
         }
       } catch (statusError) {

@@ -1,9 +1,11 @@
-import { unlink } from 'node:fs/promises';
 import { Router } from 'express';
 import { and, eq, isNull } from 'drizzle-orm';
 import { db, canonicalPersons, letterPages, letterPersons, letters } from '../../../db/index.js';
-import type { StructuredNote, NoteCategory, NotePriority } from '../../../ai/schemas/metadataV2.js';
-import { savePageLineSegments } from '../../../services/line-segments.js';
+import {
+  savePageLineSegments,
+  updateLetterSegmentTrust,
+  updatePageSegmentTrust,
+} from '../../../services/line-segments.js';
 import {
   createVersion,
   describePhoto,
@@ -13,18 +15,22 @@ import {
   transcribeExtras,
   transcribeLetterOnly,
   updateLetter,
-  updateAiNotes,
   updateExtraContent,
   updatePhotoDescription,
   type UpdateLetterInput,
 } from '../../../services/letter-operations.js';
+import {
+  addAiNote,
+  resolveAiNotesForChangedFields,
+  updateAiNotes,
+  updateAiNoteStatus,
+} from '../../../services/letter/ai-notes.js';
 import { resetLetterForProcessing } from '../../../services/letters.js';
 import { executeRetagForLetter } from '../../../services/metadata-update.js';
-import { checkNoteAutoResolutions } from '../../../services/note-resolution.js';
 import { requestBackgroundWorkerRun } from '../../../services/processing-queue.js';
 import { addAliasToCanonicalPerson } from '../../../services/entities/persons.js';
 import { syncLetterParticipantsFromMetadata } from '../../../services/entities/participant-sync.js';
-import { getAbsoluteStoragePath } from '../../../services/storage.js';
+import { deleteCorrespondenceGroup } from '../../../services/letter/correspondence-deletion.js';
 import {
   runEntityExtractionOnly,
   runMetadataExtractionV2,
@@ -34,21 +40,29 @@ import {
 } from '../../../pipeline/metadataV2.js';
 import {
   buildHumanMetadataJobPatch,
-  buildHumanMetadataNotesPatch,
   claimMetadataAfterTranscriptConfirmation,
   claimRequestedMetadata,
   observeMetadataState,
   observedMetadataRevisionConditions,
 } from '../../../services/letter/metadata-job.js';
 import { buildMetadataDocumentProjectionPatch } from '../../../services/letter/metadata-projection.js';
+import {
+  assertCurrentPrimarySourceRevision,
+  sourceRevisionChanged,
+} from '../../../services/letter/source-revision.js';
 import { AppError, BadRequestError, NotFoundError } from '../../../utils/response-helpers.js';
 import { isPlaceholderValue } from '../../../utils/placeholders.js';
 import {
   addNoteSchema,
   confirmTranscriptSchema,
   reExtractSchema,
+  replaceAiNotesSchema,
+  restoreVersionBodySchema,
   retagMetadataSchema,
+  saveLineSegmentsSchema,
   toggleFlagSchema,
+  updateLetterSegmentTrustSchema,
+  updatePageSegmentTrustSchema,
   updateIdentitySchema,
   updateLetterSchema,
   updateNoteStatusSchema,
@@ -61,6 +75,7 @@ import {
   requireLetter,
   requireLetterDto,
   requirePositiveInt,
+  requirePrimarySourceRevision,
 } from './helpers.js';
 
 const router = Router();
@@ -99,6 +114,39 @@ function requireCompletedEntityRun(outcome: EntityExtractionRunOutcome): void {
   );
 }
 
+function hasOwnField(value: unknown, field: string): boolean {
+  return typeof value === 'object'
+    && value !== null
+    && Object.hasOwn(value, field);
+}
+
+function requirePageSourceExpectation(body: unknown, message: string): void {
+  if (
+    !hasOwnField(body, 'primarySourceRevision')
+    || !hasOwnField(body, 'sourceChecksum')
+  ) {
+    throw sourceRevisionChanged(message);
+  }
+}
+
+function requireLetterPageSourceExpectations(body: unknown): void {
+  const pages = typeof body === 'object' && body !== null
+    ? (body as { pages?: unknown }).pages
+    : undefined;
+  if (
+    !hasOwnField(body, 'primarySourceRevision')
+    || !hasOwnField(body, 'pages')
+    || (
+      Array.isArray(pages)
+      && pages.some((page) => !hasOwnField(page, 'sourceChecksum'))
+    )
+  ) {
+    throw sourceRevisionChanged(
+      'Letter page source versions are missing; reload before updating segment trust',
+    );
+  }
+}
+
 router.patch('/:letterId/flag', async (req, res, next) => {
   try {
     const { letterId } = req.params;
@@ -121,8 +169,23 @@ router.patch('/:letterId/flag', async (req, res, next) => {
 router.post('/:letterId/process', async (req, res, next) => {
   try {
     const { letterId } = req.params;
-    await requireLetter(letterId);
-    if (!await resetLetterForProcessing(letterId)) {
+    const primarySourceRevision = requirePrimarySourceRevision(
+      req.body,
+      'Letter source version is missing; reload before reprocessing',
+    );
+    const letter = await requireLetter(letterId);
+    assertCurrentPrimarySourceRevision(
+      letter.primarySourceRevision ?? 0,
+      primarySourceRevision,
+      'Letter source changed; reload before reprocessing',
+    );
+    if (!await resetLetterForProcessing(letterId, primarySourceRevision)) {
+      const latest = await requireLetter(letterId);
+      assertCurrentPrimarySourceRevision(
+        latest.primarySourceRevision ?? 0,
+        primarySourceRevision,
+        'Letter source changed; reload before reprocessing',
+      );
       throw new AppError(
         409,
         'Cannot reprocess: the letter is not transcribable, has no pages, or another job is running',
@@ -139,23 +202,14 @@ router.put('/:letterId', async (req, res, next) => {
   try {
     const { letterId } = req.params;
     const updates = parseOrThrow(updateLetterSchema, req.body, 'Invalid request body');
+    if (updates.primarySourceRevision === undefined) {
+      throw sourceRevisionChanged(
+        'Letter source version is missing; reload before saving',
+      );
+    }
 
     const updated = await updateLetter(letterId, updates as UpdateLetterInput, getUserId(req));
     if (!updated) throw new NotFoundError('Letter not found');
-
-    const fieldTriggers: Array<[string | undefined | null, string]> = [
-      [updates.sender, 'sender'],
-      [updates.recipient, 'recipient'],
-      [updates.locationWritten, 'locationWritten'],
-      [updates.extractedDate, 'extractedDate'],
-      [updates.transcriptionText, 'transcriptionText'],
-    ];
-    for (const [value, field] of fieldTriggers) {
-      if (value !== undefined) {
-        checkNoteAutoResolutions(letterId, field).catch(err =>
-          req.log.warn({ letterId, field, err }, 'Note auto-resolution failed'));
-      }
-    }
 
     res.json(await requireLetterDto(letterId));
   } catch (error) {
@@ -166,8 +220,17 @@ router.put('/:letterId', async (req, res, next) => {
 router.post('/:letterId/confirm-transcript', async (req, res, next) => {
   try {
     const { letterId } = req.params;
+    const primarySourceRevision = requirePrimarySourceRevision(
+      req.body,
+      'Letter source version is missing; reload before confirming its transcript',
+    );
     const { confirmedSender, confirmedRecipient } = confirmTranscriptSchema.parse(req.body ?? {});
     const letter = await requireLetter(letterId);
+    assertCurrentPrimarySourceRevision(
+      letter.primarySourceRevision ?? 0,
+      primarySourceRevision,
+      'Letter source changed; reload before confirming its transcript',
+    );
     if (letter.workflow !== 'TRANSCRIBED') {
       throw new BadRequestError('Letter must be in TRANSCRIBED state', { currentState: letter.workflow });
     }
@@ -182,9 +245,16 @@ router.post('/:letterId/confirm-transcript', async (req, res, next) => {
         updatedAt: new Date(),
       }).where(and(
         ...observedTranscriptConditions(letterId, letter),
+        eq(letters.primarySourceRevision, primarySourceRevision),
       )).returning({ id: letters.id });
 
       if (confirmationResult.length === 0) {
+        const latest = await requireLetter(letterId);
+        assertCurrentPrimarySourceRevision(
+          latest.primarySourceRevision ?? 0,
+          primarySourceRevision,
+          'Letter source changed before its transcript could be confirmed; reload and try again',
+        );
         throw new AppError(409, 'Transcript changed before confirmation; reload and try again');
       }
     };
@@ -204,6 +274,7 @@ router.post('/:letterId/confirm-transcript', async (req, res, next) => {
       const claim = await claimMetadataAfterTranscriptConfirmation(
         letterId,
         observeMetadataState(letter),
+        primarySourceRevision,
         getUserId(req),
       );
 
@@ -240,8 +311,17 @@ router.post('/:letterId/confirm-transcript', async (req, res, next) => {
 router.post('/:letterId/regenerate-metadata', async (req, res, next) => {
   try {
     const { letterId } = req.params;
+    const primarySourceRevision = requirePrimarySourceRevision(
+      req.body,
+      'Letter source version is missing; reload before regenerating metadata',
+    );
     const { confirmedSender, confirmedRecipient } = confirmTranscriptSchema.parse(req.body ?? {});
     const letter = await requireLetter(letterId);
+    assertCurrentPrimarySourceRevision(
+      letter.primarySourceRevision ?? 0,
+      primarySourceRevision,
+      'Letter source changed; reload before regenerating metadata',
+    );
     if (!letter.transcriptConfirmedAt) {
       throw new BadRequestError('Transcript must be confirmed before regenerating metadata');
     }
@@ -264,8 +344,15 @@ router.post('/:letterId/regenerate-metadata', async (req, res, next) => {
     const claim = await claimRequestedMetadata(
       letterId,
       observeMetadataState(letter),
+      primarySourceRevision,
     );
     if (!claim) {
+      const latest = await requireLetter(letterId);
+      assertCurrentPrimarySourceRevision(
+        latest.primarySourceRevision ?? 0,
+        primarySourceRevision,
+        'Letter source changed before metadata extraction could start; reload and try again',
+      );
       throw new BadRequestError('Letter processing state changed; try again');
     }
 
@@ -275,8 +362,25 @@ router.post('/:letterId/regenerate-metadata', async (req, res, next) => {
     };
     if (confirmedSender) extractionOptions.confirmedSender = confirmedSender;
     if (confirmedRecipient) extractionOptions.confirmedRecipient = confirmedRecipient;
-    requireCompletedMetadataRun(
-      await runMetadataExtractionV2(letterId, extractionOptions, claim),
+    const outcome = await runMetadataExtractionV2(
+      letterId,
+      extractionOptions,
+      claim,
+    );
+    if (outcome.kind !== 'completed') {
+      const latest = await requireLetter(letterId);
+      assertCurrentPrimarySourceRevision(
+        latest.primarySourceRevision ?? 0,
+        primarySourceRevision,
+        'Letter source changed during metadata extraction; reload and try again',
+      );
+    }
+    requireCompletedMetadataRun(outcome);
+    const latest = await requireLetter(letterId);
+    assertCurrentPrimarySourceRevision(
+      latest.primarySourceRevision ?? 0,
+      primarySourceRevision,
+      'Letter source changed during metadata extraction; reload and try again',
     );
     res.json(await requireLetterDto(letterId, 'Failed to fetch updated letter', 500));
   } catch (error) {
@@ -287,7 +391,16 @@ router.post('/:letterId/regenerate-metadata', async (req, res, next) => {
 router.post('/:letterId/regenerate-entities', async (req, res, next) => {
   try {
     const { letterId } = req.params;
+    const primarySourceRevision = requirePrimarySourceRevision(
+      req.body,
+      'Letter source version is missing; reload before regenerating entities',
+    );
     const letter = await requireLetter(letterId);
+    assertCurrentPrimarySourceRevision(
+      letter.primarySourceRevision ?? 0,
+      primarySourceRevision,
+      'Letter source changed; reload before regenerating entities',
+    );
     if (!letter.transcriptionText) {
       throw new BadRequestError('Letter must have a transcription before extracting entities');
     }
@@ -304,9 +417,25 @@ router.post('/:letterId/regenerate-entities', async (req, res, next) => {
       throw new BadRequestError('Metadata extraction must complete before extracting entities');
     }
 
-    requireCompletedEntityRun(await runEntityExtractionOnly(letterId, {
+    const outcome = await runEntityExtractionOnly(letterId, {
       claimKind: 'REQUESTED',
-    }));
+      expectedPrimarySourceRevision: primarySourceRevision,
+    });
+    if (outcome.kind !== 'completed') {
+      const latest = await requireLetter(letterId);
+      assertCurrentPrimarySourceRevision(
+        latest.primarySourceRevision ?? 0,
+        primarySourceRevision,
+        'Letter source changed during entity extraction; reload and try again',
+      );
+    }
+    requireCompletedEntityRun(outcome);
+    const latest = await requireLetter(letterId);
+    assertCurrentPrimarySourceRevision(
+      latest.primarySourceRevision ?? 0,
+      primarySourceRevision,
+      'Letter source changed during entity extraction; reload and try again',
+    );
     res.json(await requireLetterDto(letterId, 'Failed to fetch updated letter', 500));
   } catch (error) {
     next(error);
@@ -316,13 +445,31 @@ router.post('/:letterId/regenerate-entities', async (req, res, next) => {
 router.post('/:letterId/generate-reading-view', async (req, res, next) => {
   try {
     const { letterId } = req.params;
+    const primarySourceRevision = requirePrimarySourceRevision(
+      req.body,
+      'Letter source version is missing; reload before generating a reading view',
+    );
     const letter = await requireLetter(letterId);
+    assertCurrentPrimarySourceRevision(
+      letter.primarySourceRevision ?? 0,
+      primarySourceRevision,
+      'Letter source changed; reload before generating a reading view',
+    );
     if (!letter.transcriptionText) {
       throw new BadRequestError('Letter must have a transcription before generating reading view');
     }
 
     const { generateAndSaveReadingView } = await import('../../../services/letter/readingView.js');
-    await generateAndSaveReadingView(letterId);
+    if (
+      await generateAndSaveReadingView(
+        letterId,
+        primarySourceRevision,
+      ) === null
+    ) {
+      throw new BadRequestError(
+        'Letter transcription must be complete before generating a reading view',
+      );
+    }
     res.json(await requireLetterDto(letterId, 'Failed to fetch updated letter', 500));
   } catch (error) {
     next(error);
@@ -332,9 +479,18 @@ router.post('/:letterId/generate-reading-view', async (req, res, next) => {
 router.post('/:letterId/re-extract', async (req, res, next) => {
   try {
     const { letterId } = req.params;
+    const primarySourceRevision = requirePrimarySourceRevision(
+      req.body,
+      'Letter source version is missing; reload before re-extracting content',
+    );
     const { confirmedSender, confirmedRecipient, mode } = parseOrThrow(reExtractSchema, req.body, 'Invalid request body');
 
     const letter = await requireLetter(letterId);
+    assertCurrentPrimarySourceRevision(
+      letter.primarySourceRevision ?? 0,
+      primarySourceRevision,
+      'Letter source changed; reload before re-extracting content',
+    );
     if (!letter.transcriptionText) {
       throw new BadRequestError('Letter must have a transcription before re-extraction');
     }
@@ -374,14 +530,32 @@ router.post('/:letterId/re-extract', async (req, res, next) => {
       const claim = await claimRequestedMetadata(
         letterId,
         observeMetadataState(letter),
+        primarySourceRevision,
       );
       if (!claim) {
+        const latest = await requireLetter(letterId);
+        assertCurrentPrimarySourceRevision(
+          latest.primarySourceRevision ?? 0,
+          primarySourceRevision,
+          'Letter source changed before metadata extraction could start; reload and try again',
+        );
         throw new BadRequestError('Letter processing state changed; try again');
       }
 
-      requireCompletedMetadataRun(
-        await runMetadataExtractionV2(letterId, extractionOptions, claim),
+      const outcome = await runMetadataExtractionV2(
+        letterId,
+        extractionOptions,
+        claim,
       );
+      if (outcome.kind !== 'completed') {
+        const latest = await requireLetter(letterId);
+        assertCurrentPrimarySourceRevision(
+          latest.primarySourceRevision ?? 0,
+          primarySourceRevision,
+          'Letter source changed during metadata extraction; reload and try again',
+        );
+      }
+      requireCompletedMetadataRun(outcome);
     } else if (mode === 'entities_only') {
       if (letter.entityExtractionStatus === 'RUNNING') {
         throw new BadRequestError('Entity extraction is already in progress');
@@ -392,12 +566,28 @@ router.post('/:letterId/re-extract', async (req, res, next) => {
       if (letter.metadataStatus !== 'SUCCESS') {
         throw new BadRequestError('Metadata extraction must complete before extracting entities');
       }
-      requireCompletedEntityRun(await runEntityExtractionOnly(letterId, {
+      const outcome = await runEntityExtractionOnly(letterId, {
         ...extractionOptions,
         claimKind: 'REQUESTED',
-      }));
+        expectedPrimarySourceRevision: primarySourceRevision,
+      });
+      if (outcome.kind !== 'completed') {
+        const latest = await requireLetter(letterId);
+        assertCurrentPrimarySourceRevision(
+          latest.primarySourceRevision ?? 0,
+          primarySourceRevision,
+          'Letter source changed during entity extraction; reload and try again',
+        );
+      }
+      requireCompletedEntityRun(outcome);
     }
 
+    const latest = await requireLetter(letterId);
+    assertCurrentPrimarySourceRevision(
+      latest.primarySourceRevision ?? 0,
+      primarySourceRevision,
+      'Letter source changed during re-extraction; reload and try again',
+    );
     res.json(await requireLetterDto(letterId, 'Failed to fetch updated letter', 500));
   } catch (error) {
     next(error);
@@ -407,17 +597,48 @@ router.post('/:letterId/re-extract', async (req, res, next) => {
 router.patch('/:letterId/identity', async (req, res, next) => {
   try {
     const { letterId } = req.params;
-    const { sender: newSender, recipient: newRecipient } = parseOrThrow(updateIdentitySchema, req.body, 'Invalid request body');
+    const primarySourceRevision = requirePrimarySourceRevision(
+      req.body,
+      'Letter source version is missing; reload before saving identity',
+    );
+    const {
+      expectedSender,
+      expectedRecipient,
+      sender: newSender,
+      recipient: newRecipient,
+    } = parseOrThrow(updateIdentitySchema, req.body, 'Invalid request body');
 
     if (newSender === undefined && newRecipient === undefined) {
       throw new BadRequestError('At least one of sender or recipient must be provided');
     }
 
     const letter = await requireLetter(letterId);
+    if (letter.primarySourceRevision !== primarySourceRevision) {
+      throw sourceRevisionChanged('Letter source changed; reload before saving identity');
+    }
     const senderValue = newSender === undefined ? undefined : newSender || null;
     const recipientValue = newRecipient === undefined ? undefined : newRecipient || null;
     const senderChanged = senderValue !== undefined && senderValue !== letter.sender;
     const recipientChanged = recipientValue !== undefined && recipientValue !== letter.recipient;
+
+    if (
+      (
+        senderChanged
+        && (
+          !hasOwnField(req.body, 'expectedSender')
+          || expectedSender !== letter.sender
+        )
+      )
+      || (
+        recipientChanged
+        && (
+          !hasOwnField(req.body, 'expectedRecipient')
+          || expectedRecipient !== letter.recipient
+        )
+      )
+    ) {
+      throw new AppError(409, 'Letter identity changed; reload before saving names');
+    }
 
     // Autosave and repeated form submissions commonly send the value already
     // on screen. A no-op must not revoke an AI owner or demote reviewed data.
@@ -438,74 +659,101 @@ router.patch('/:letterId/identity', async (req, res, next) => {
       ...(senderChanged ? { sender: senderValue } : {}),
       ...(recipientChanged ? { recipient: recipientValue } : {}),
     }));
+    const noteAutoResolution = resolveAiNotesForChangedFields(
+      letter.aiNotes,
+      [
+        ...(senderChanged && senderValue ? ['sender'] : []),
+        ...(recipientChanged && recipientValue ? ['recipient'] : []),
+      ],
+    );
+    if (noteAutoResolution) {
+      dbUpdates.aiNotes = noteAutoResolution.notes;
+    }
 
-    const aliasesToPreserve = await db.transaction(async (tx) => {
-      const identityUpdated = await tx
-        .update(letters)
-        .set(dbUpdates)
-        .where(and(...observedMetadataRevisionConditions(letterId, letter)))
-        .returning({ id: letters.id });
-      if (identityUpdated.length === 0) {
-        throw new AppError(409, 'Metadata changed before identity could be saved; reload and try again');
-      }
-
-      const candidates: Array<{
-        personId: string;
-        canonicalName: string;
-        role: 'sender' | 'recipient';
-      }> = [];
-      const captureAliasCandidate = async (
-        role: 'sender' | 'recipient',
-        newName: string,
-      ) => {
-        const linked = await tx.query.letterPersons.findFirst({
-          where: and(eq(letterPersons.letterId, letterId), eq(letterPersons.role, role)),
-        });
-        if (!linked) return;
-
-        const person = await tx.query.canonicalPersons.findFirst({
-          where: eq(canonicalPersons.id, linked.personId),
-        });
-        if (
-          person
-          && person.canonicalName.toLowerCase() !== newName.toLowerCase()
-        ) {
-          candidates.push({
-            personId: linked.personId,
-            canonicalName: person.canonicalName,
-            role,
-          });
+    let aliasesToPreserve: Array<{
+      personId: string;
+      canonicalName: string;
+      role: 'sender' | 'recipient';
+    }>;
+    try {
+      aliasesToPreserve = await db.transaction(async (tx) => {
+        const identityUpdated = await tx
+          .update(letters)
+          .set(dbUpdates)
+          .where(and(
+            ...observedMetadataRevisionConditions(letterId, letter),
+            eq(letters.primarySourceRevision, primarySourceRevision),
+          ))
+          .returning({ id: letters.id });
+        if (identityUpdated.length === 0) {
+          throw new AppError(409, 'Metadata changed before identity could be saved; reload and try again');
         }
-      };
 
-      // Capture the old linked people before participant synchronization can
-      // replace their role links. Alias writes remain a best-effort follow-up.
-      if (senderChanged && senderValue && letter.sender && !isPlaceholderValue(letter.sender)) {
-        await captureAliasCandidate('sender', senderValue);
-      }
-      if (recipientChanged && recipientValue && letter.recipient && !isPlaceholderValue(letter.recipient)) {
-        await captureAliasCandidate('recipient', recipientValue);
-      }
+        const candidates: Array<{
+          personId: string;
+          canonicalName: string;
+          role: 'sender' | 'recipient';
+        }> = [];
+        const captureAliasCandidate = async (
+          role: 'sender' | 'recipient',
+          newName: string,
+        ) => {
+          const linked = await tx.query.letterPersons.findFirst({
+            where: and(eq(letterPersons.letterId, letterId), eq(letterPersons.role, role)),
+          });
+          if (!linked) return;
 
-      await syncLetterParticipantsFromMetadata({
-        letterId,
-        sender: senderChanged ? senderValue : undefined,
-        recipient: recipientChanged ? recipientValue : undefined,
-        database: tx,
+          const person = await tx.query.canonicalPersons.findFirst({
+            where: eq(canonicalPersons.id, linked.personId),
+          });
+          if (
+            person
+            && person.canonicalName.toLowerCase() !== newName.toLowerCase()
+          ) {
+            candidates.push({
+              personId: linked.personId,
+              canonicalName: person.canonicalName,
+              role,
+            });
+          }
+        };
+
+        // Capture the old linked people before participant synchronization can
+        // replace their role links. Alias writes remain a best-effort follow-up.
+        if (senderChanged && senderValue && letter.sender && !isPlaceholderValue(letter.sender)) {
+          await captureAliasCandidate('sender', senderValue);
+        }
+        if (recipientChanged && recipientValue && letter.recipient && !isPlaceholderValue(letter.recipient)) {
+          await captureAliasCandidate('recipient', recipientValue);
+        }
+
+        await syncLetterParticipantsFromMetadata({
+          letterId,
+          sender: senderChanged ? senderValue : undefined,
+          recipient: recipientChanged ? recipientValue : undefined,
+          database: tx,
+        });
+
+        return candidates;
       });
-
-      return candidates;
-    });
+    } catch (error) {
+      if (error instanceof AppError && error.statusCode === 409) {
+        const latest = await requireLetter(letterId);
+        assertCurrentPrimarySourceRevision(
+          latest.primarySourceRevision ?? 0,
+          primarySourceRevision,
+          'Letter source changed before identity could be saved; reload and try again',
+        );
+      }
+      throw error;
+    }
 
     req.log.info({ letterId, senderValue, recipientValue, senderChanged, recipientChanged }, 'Identity update completed');
-
-    if (senderChanged && senderValue) {
-      checkNoteAutoResolutions(letterId, 'sender').catch(err =>
-        req.log.warn({ letterId, err }, 'Note auto-resolution failed for sender'));
-    }
-    if (recipientChanged && recipientValue) {
-      checkNoteAutoResolutions(letterId, 'recipient').catch(err =>
-        req.log.warn({ letterId, err }, 'Note auto-resolution failed for recipient'));
+    if (noteAutoResolution) {
+      req.log.info(
+        { letterId, resolvedCount: noteAutoResolution.resolvedCount },
+        'Auto-resolved AI notes with identity update',
+      );
     }
 
     await Promise.all(
@@ -524,10 +772,33 @@ router.patch('/:letterId/identity', async (req, res, next) => {
 router.post('/:letterId/retag', async (req, res, next) => {
   try {
     const { letterId } = req.params;
+    const primarySourceRevision = requirePrimarySourceRevision(
+      req.body,
+      'Letter source version is missing; reload before updating metadata references',
+    );
     const change = parseOrThrow(retagMetadataSchema, req.body, 'Invalid request body');
 
-    await requireLetter(letterId);
-    const result = await executeRetagForLetter(letterId, change);
+    const letter = await requireLetter(letterId);
+    if (letter.primarySourceRevision !== primarySourceRevision) {
+      throw sourceRevisionChanged('Letter source changed; reload before updating metadata references');
+    }
+    const result = await executeRetagForLetter(
+      letterId,
+      { ...change, primarySourceRevision },
+    );
+    if (
+      result.reason === 'source_changed_before_ai'
+      || result.reason === 'source_changed_before_save'
+    ) {
+      throw sourceRevisionChanged('Letter source changed; reload before updating metadata references');
+    }
+    if (
+      result.reason === 'stale_before_ai'
+      || result.reason === 'stale_before_save'
+      || result.reason === 'revision_changed_before_save'
+    ) {
+      throw new AppError(409, 'Letter metadata changed; reload before updating its references');
+    }
 
     req.log.info({ letterId, change, result }, 'Metadata re-tag request completed');
     res.json(await requireLetterDto(letterId));
@@ -540,9 +811,9 @@ router.get('/:letterId/versions', async (req, res, next) => {
   try {
     const { letterId } = req.params;
     const fieldType = requireFieldType(req.query.fieldType);
-    await requireLetter(letterId);
     const versions = await getVersions(letterId, fieldType);
-    res.json({ versions: versions || [] });
+    if (!versions) throw new NotFoundError('Letter not found');
+    res.json({ versions });
   } catch (error) {
     next(error);
   }
@@ -551,10 +822,23 @@ router.get('/:letterId/versions', async (req, res, next) => {
 router.post('/:letterId/versions', async (req, res, next) => {
   try {
     const { letterId } = req.params;
-    await requireLetter(letterId);
+    const primarySourceRevision = requirePrimarySourceRevision(
+      req.body,
+      'Letter source version is missing; reload before saving a version',
+    );
     const versionInput = parseOrThrow(versionBodySchema, req.body, 'Invalid request body');
-    const result = await createVersion(letterId, versionInput);
-    res.json(result);
+    const result = await createVersion(
+      letterId,
+      { ...versionInput, primarySourceRevision },
+    );
+    if (result.kind === 'letter_not_found') throw new NotFoundError('Letter not found');
+    if (result.kind === 'source_changed') {
+      throw sourceRevisionChanged('Letter source changed; reload before saving a version');
+    }
+    if (result.kind === 'content_changed') {
+      throw new AppError(409, 'Letter content changed before its version could be saved');
+    }
+    res.json(result.version);
   } catch (error) {
     next(error);
   }
@@ -565,8 +849,30 @@ router.post('/:letterId/versions/:versionNumber/restore', async (req, res, next)
     const { letterId, versionNumber } = req.params;
     const fieldType = requireFieldType(req.query.fieldType);
     const vn = requirePositiveInt(versionNumber);
-    const result = await restoreVersion(letterId, vn, fieldType);
-    if (!result) throw new NotFoundError('Letter or version not found');
+    const primarySourceRevision = requirePrimarySourceRevision(
+      req.body,
+      'Letter source version is missing; reload before restoring a version',
+    );
+    parseOrThrow(
+      restoreVersionBodySchema,
+      req.body,
+      'Invalid request body',
+    );
+    const result = await restoreVersion(
+      letterId,
+      vn,
+      fieldType,
+      primarySourceRevision,
+    );
+    if (result.kind === 'letter_not_found' || result.kind === 'version_not_found') {
+      throw new NotFoundError('Letter or version not found');
+    }
+    if (result.kind === 'source_changed') {
+      throw sourceRevisionChanged('Letter source changed; reload before restoring a version');
+    }
+    if (result.kind === 'metadata_changed') {
+      throw new AppError(409, 'Letter metadata changed; reload before restoring a version');
+    }
 
     res.json(await requireLetterDto(letterId, 'Letter not found after restore'));
   } catch (error) {
@@ -577,8 +883,16 @@ router.post('/:letterId/versions/:versionNumber/restore', async (req, res, next)
 router.post('/:letterId/regenerate-transcription', async (req, res, next) => {
   try {
     const { letterId } = req.params;
+    const primarySourceRevision = requirePrimarySourceRevision(
+      req.body,
+      'Letter source version is missing; reload before regenerating its transcription',
+    );
     const includeExtras = req.query.includeExtras === 'true';
-    const result = await regenerateTranscription(letterId, includeExtras);
+    const result = await regenerateTranscription(
+      letterId,
+      includeExtras,
+      primarySourceRevision,
+    );
     if (!result) throw new NotFoundError('Letter not found');
 
     res.json({
@@ -597,7 +911,11 @@ router.post('/:letterId/regenerate-transcription', async (req, res, next) => {
 router.post('/:letterId/transcribe-letter', async (req, res, next) => {
   try {
     const { letterId } = req.params;
-    const result = await transcribeLetterOnly(letterId);
+    const primarySourceRevision = requirePrimarySourceRevision(
+      req.body,
+      'Letter source version is missing; reload before transcribing its pages',
+    );
+    const result = await transcribeLetterOnly(letterId, primarySourceRevision);
     if (!result) throw new NotFoundError('Letter not found');
 
     res.json({
@@ -615,7 +933,11 @@ router.post('/:letterId/transcribe-letter', async (req, res, next) => {
 router.post('/:letterId/transcribe-extras', async (req, res, next) => {
   try {
     const { letterId } = req.params;
-    const result = await transcribeExtras(letterId);
+    const primarySourceRevision = requirePrimarySourceRevision(
+      req.body,
+      'Letter source version is missing; reload before transcribing extra content',
+    );
+    const result = await transcribeExtras(letterId, primarySourceRevision);
     if (!result) throw new NotFoundError('Letter not found');
 
     res.json({
@@ -631,10 +953,18 @@ router.post('/:letterId/transcribe-extras', async (req, res, next) => {
 router.post('/:letterId/describe-photo', async (req, res, next) => {
   try {
     const { letterId } = req.params;
+    const primarySourceRevision = requirePrimarySourceRevision(
+      req.body,
+      'Photo source version is missing; reload before generating a description',
+    );
     const { photoDescriptionContext } = (req.body ?? {}) as {
       photoDescriptionContext?: string | null;
     };
-    const result = await describePhoto(letterId, photoDescriptionContext ?? null);
+    const result = await describePhoto(
+      letterId,
+      photoDescriptionContext ?? null,
+      primarySourceRevision,
+    );
     if (!result) throw new NotFoundError('Letter not found');
 
     res.json({
@@ -659,8 +989,16 @@ router.put('/:letterId/extra-content', async (req, res, next) => {
     if (nextExtraContent === undefined) {
       throw new BadRequestError('extraContent field required');
     }
+    const primarySourceRevision = requirePrimarySourceRevision(
+      req.body,
+      'Letter source version is missing; reload before saving extra content',
+    );
 
-    const result = await updateExtraContent(letterId, nextExtraContent);
+    const result = await updateExtraContent(
+      letterId,
+      nextExtraContent,
+      primarySourceRevision,
+    );
     if (!result) throw new NotFoundError('Letter not found');
     res.json(await requireLetterDto(letterId));
   } catch (error) {
@@ -679,11 +1017,15 @@ router.put('/:letterId/photo-description', async (req, res, next) => {
     if (photoDescription === undefined) {
       throw new BadRequestError('photoDescription field required');
     }
+    const primarySourceRevision = requirePrimarySourceRevision(
+      req.body,
+      'Photo source version is missing; reload before saving its description',
+    );
 
     const result = await updatePhotoDescription(letterId, {
       photoDescription,
       photoDescriptionContext,
-    });
+    }, primarySourceRevision);
     if (!result) throw new NotFoundError('Letter not found');
     res.json(await requireLetterDto(letterId));
   } catch (error) {
@@ -694,7 +1036,20 @@ router.put('/:letterId/photo-description', async (req, res, next) => {
 router.put('/:letterId/ai-notes', async (req, res, next) => {
   try {
     const { letterId } = req.params;
-    const result = await updateAiNotes(letterId, req.body?.aiNotes ?? []);
+    const primarySourceRevision = requirePrimarySourceRevision(
+      req.body,
+      'Letter source version is missing; reload before replacing notes',
+    );
+    const { aiNotes } = parseOrThrow(
+      replaceAiNotesSchema,
+      req.body,
+      'Invalid request body',
+    );
+    const result = await updateAiNotes(
+      letterId,
+      aiNotes,
+      primarySourceRevision,
+    );
     if (!result) throw new NotFoundError('Letter not found');
     res.json(await requireLetterDto(letterId));
   } catch (error) {
@@ -705,38 +1060,18 @@ router.put('/:letterId/ai-notes', async (req, res, next) => {
 router.post('/:letterId/notes', async (req, res, next) => {
   try {
     const { letterId } = req.params;
+    const primarySourceRevision = requirePrimarySourceRevision(
+      req.body,
+      'Letter source version is missing; reload before adding a note',
+    );
     const noteInput = parseOrThrow(addNoteSchema, req.body, 'Invalid request body');
-    const letter = await requireLetter(letterId);
-
-    const existingNotes: StructuredNote[] = Array.isArray(letter.aiNotes)
-      ? (letter.aiNotes as StructuredNote[])
-      : [];
-
-    const newNote: StructuredNote = {
-      id: crypto.randomUUID(),
-      content: noteInput.content,
-      category: noteInput.category as NoteCategory,
-      priority: noteInput.priority as NotePriority,
-      status: 'open',
-      resolves_when: null,
-      resolved_at: null,
-      resolved_by: null,
-      source: 'admin',
-    };
-
-    const noteAdded = await db
-      .update(letters)
-      .set({
-        aiNotes: [...existingNotes, newNote],
-        ...buildHumanMetadataNotesPatch(),
-        updatedAt: new Date(),
-      })
-      .where(and(...observedMetadataRevisionConditions(letterId, letter)))
-      .returning({ id: letters.id });
-    if (noteAdded.length === 0) {
-      throw new AppError(409, 'Metadata changed before the note could be added; reload and try again');
-    }
-
+    const result = await addAiNote(
+      letterId,
+      noteInput,
+      primarySourceRevision,
+      getUserId(req),
+    );
+    if (!result) throw new NotFoundError('Letter not found');
     res.json(await requireLetterDto(letterId));
   } catch (error) {
     next(error);
@@ -746,35 +1081,23 @@ router.post('/:letterId/notes', async (req, res, next) => {
 router.patch('/:letterId/notes/:noteId', async (req, res, next) => {
   try {
     const { letterId, noteId } = req.params;
-    const { status } = parseOrThrow(updateNoteStatusSchema, req.body, 'Invalid request body');
-    const letter = await requireLetter(letterId);
-
-    const existingNotes: StructuredNote[] = Array.isArray(letter.aiNotes)
-      ? (letter.aiNotes as StructuredNote[])
-      : [];
-
-    const noteIndex = existingNotes.findIndex(n => n.id === noteId);
-    if (noteIndex === -1) throw new NotFoundError('Note not found');
-
-    existingNotes[noteIndex] = {
-      ...existingNotes[noteIndex],
+    const primarySourceRevision = requirePrimarySourceRevision(
+      req.body,
+      'Letter source version is missing; reload before updating the note',
+    );
+    const { status } = parseOrThrow(
+      updateNoteStatusSchema,
+      req.body,
+      'Invalid request body',
+    );
+    const result = await updateAiNoteStatus(
+      letterId,
+      noteId,
       status,
-      resolved_at: new Date().toISOString(),
-      resolved_by: getUserId(req),
-    };
-
-    const noteUpdated = await db
-      .update(letters)
-      .set({
-        aiNotes: existingNotes,
-        ...buildHumanMetadataNotesPatch(),
-        updatedAt: new Date(),
-      })
-      .where(and(...observedMetadataRevisionConditions(letterId, letter)))
-      .returning({ id: letters.id });
-    if (noteUpdated.length === 0) {
-      throw new AppError(409, 'Metadata changed before the note could be updated; reload and try again');
-    }
+      primarySourceRevision,
+      getUserId(req),
+    );
+    if (!result) throw new NotFoundError('Letter not found');
     res.json(await requireLetterDto(letterId));
   } catch (error) {
     next(error);
@@ -784,35 +1107,28 @@ router.patch('/:letterId/notes/:noteId', async (req, res, next) => {
 router.delete('/:letterId', async (req, res, next) => {
   try {
     const { letterId } = req.params;
-    const letter = await requireLetter(letterId);
-
-    const group = await db.select({ id: letters.id }).from(letters).where(
-      and(
-        eq(letters.collectionId, letter.collectionId),
-        eq(letters.dateRaw, letter.dateRaw),
-        eq(letters.typeSequence, letter.typeSequence),
-      )
+    const primarySourceRevision = requirePrimarySourceRevision(
+      req.body,
+      'Letter source version is missing; reload before deleting',
     );
-    const groupIds = group.map(r => r.id);
+    const result = await deleteCorrespondenceGroup(
+      letterId,
+      primarySourceRevision,
+    );
+    if (!result) throw new NotFoundError('Letter not found');
 
-    let totalFiles = 0;
-    for (const id of groupIds) {
-      const pages = await db.select({
-        storagePath: letterPages.storagePath,
-      }).from(letterPages).where(eq(letterPages.letterId, id));
-
-      for (const page of pages) {
-        const absPath = getAbsoluteStoragePath(page.storagePath);
-        await unlink(absPath).catch(() => {
-        });
-        totalFiles++;
-      }
-
-      await db.delete(letters).where(eq(letters.id, id));
-    }
-
-    req.log.info({ letterId, groupSize: groupIds.length, filesDeleted: totalFiles }, 'Letter group deleted');
-    res.json({ message: 'Letter deleted successfully', letterId, deletedCount: groupIds.length });
+    req.log.info({
+      letterId,
+      groupSize: result.deletedCount,
+      storageObjectsRemoved: result.removedStorageObjectCount,
+      orphanedStorageObjects: result.orphanedStoragePaths.length,
+      collectionProfileInvalidated: result.collectionProfileInvalidated,
+    }, 'Letter group deleted');
+    res.json({
+      message: 'Letter deleted successfully',
+      letterId,
+      deletedCount: result.deletedCount,
+    });
   } catch (error) {
     next(error);
   }
@@ -826,13 +1142,27 @@ router.patch('/pages/:pageId/line-segments', async (req, res, next) => {
     });
     if (!page) throw new NotFoundError('Page not found');
 
-    const { lineSegments } = req.body;
-    if (!Array.isArray(lineSegments)) {
-      throw new BadRequestError('lineSegments must be an array');
+    requirePageSourceExpectation(
+      req.body,
+      'Page source version is missing; reload before saving line segments',
+    );
+    const body = parseOrThrow(
+      saveLineSegmentsSchema,
+      req.body,
+      'Invalid page line-segment update',
+    );
+    const saved = await savePageLineSegments(
+      req.params.pageId,
+      body.lineSegments as Parameters<typeof savePageLineSegments>[1],
+      {
+        primarySourceRevision: body.primarySourceRevision,
+        sourceChecksum: body.sourceChecksum,
+      },
+    );
+    if (!saved) {
+      throw sourceRevisionChanged('Page source changed; reload before saving line segments');
     }
-
-    await savePageLineSegments(req.params.pageId, lineSegments);
-    req.log.info({ pageId: req.params.pageId, segmentCount: lineSegments.length }, 'Line segments updated manually');
+    req.log.info({ pageId: req.params.pageId, segmentCount: body.lineSegments.length }, 'Line segments updated manually');
     res.json({ ok: true });
   } catch (error) {
     next(error);
@@ -862,17 +1192,29 @@ router.patch('/pages/:pageId/segment-trust', async (req, res, next) => {
     });
     if (!page) throw new NotFoundError('Page not found');
 
-    const { trustState } = req.body;
-    if (trustState !== 'unverified' && trustState !== 'trusted') {
-      throw new BadRequestError('trustState must be "unverified" or "trusted"');
+    requirePageSourceExpectation(
+      req.body,
+      'Page source version is missing; reload before updating segment trust',
+    );
+    const body = parseOrThrow(
+      updatePageSegmentTrustSchema,
+      req.body,
+      'Invalid page segment-trust update',
+    );
+    const updated = await updatePageSegmentTrust(
+      req.params.pageId,
+      body.trustState,
+      {
+        primarySourceRevision: body.primarySourceRevision,
+        sourceChecksum: body.sourceChecksum,
+      },
+    );
+    if (!updated) {
+      throw sourceRevisionChanged('Page source changed; reload before updating segment trust');
     }
 
-    await db.update(letterPages)
-      .set({ segmentTrustState: trustState, updatedAt: new Date() })
-      .where(eq(letterPages.id, req.params.pageId));
-
-    req.log.info({ pageId: req.params.pageId, trustState }, 'Segment trust state updated');
-    res.json({ ok: true, trustState });
+    req.log.info({ pageId: req.params.pageId, trustState: body.trustState }, 'Segment trust state updated');
+    res.json({ ok: true, trustState: body.trustState });
   } catch (error) {
     next(error);
   }
@@ -881,10 +1223,12 @@ router.patch('/pages/:pageId/segment-trust', async (req, res, next) => {
 // Bulk update segment trust state for all pages of a letter
 router.patch('/:letterId/segment-trust', async (req, res, next) => {
   try {
-    const { trustState } = req.body;
-    if (trustState !== 'unverified' && trustState !== 'trusted') {
-      throw new BadRequestError('trustState must be "unverified" or "trusted"');
-    }
+    requireLetterPageSourceExpectations(req.body);
+    const body = parseOrThrow(
+      updateLetterSegmentTrustSchema,
+      req.body,
+      'Invalid letter segment-trust update',
+    );
 
     const pages = await db.query.letterPages.findMany({
       where: eq(letterPages.letterId, req.params.letterId),
@@ -892,12 +1236,18 @@ router.patch('/:letterId/segment-trust', async (req, res, next) => {
     });
     if (pages.length === 0) throw new NotFoundError('No pages found for letter');
 
-    await db.update(letterPages)
-      .set({ segmentTrustState: trustState, updatedAt: new Date() })
-      .where(eq(letterPages.letterId, req.params.letterId));
+    const updated = await updateLetterSegmentTrust(
+      req.params.letterId,
+      body.trustState,
+      body.primarySourceRevision,
+      body.pages,
+    );
+    if (!updated) {
+      throw sourceRevisionChanged('Letter page sources changed; reload before updating segment trust');
+    }
 
-    req.log.info({ letterId: req.params.letterId, trustState, pageCount: pages.length }, 'Segment trust state updated for all pages');
-    res.json({ ok: true, trustState, pageCount: pages.length });
+    req.log.info({ letterId: req.params.letterId, trustState: body.trustState, pageCount: pages.length }, 'Segment trust state updated for all pages');
+    res.json({ ok: true, trustState: body.trustState, pageCount: pages.length });
   } catch (error) {
     next(error);
   }

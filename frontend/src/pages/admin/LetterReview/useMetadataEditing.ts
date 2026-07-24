@@ -18,6 +18,7 @@ import type {
 
 type ToastType = 'success' | 'error' | 'info';
 type ShowToast = (message: string, type: ToastType) => void;
+type HandleMutationError = (error: unknown, fallback: string) => boolean;
 interface MetadataFormValues {
   sender: string;
   recipient: string;
@@ -40,6 +41,7 @@ interface UseMetadataEditingOptions {
   letter: Letter | null;
   setLetter: Dispatch<SetStateAction<Letter | null>>;
   setSaving: Dispatch<SetStateAction<boolean>>;
+  handleMutationError: HandleMutationError;
   showToast: ShowToast;
 }
 
@@ -74,6 +76,7 @@ export function useMetadataEditing({
   letter,
   setLetter,
   setSaving,
+  handleMutationError,
   showToast,
 }: UseMetadataEditingOptions) {
   const [sender, setSender] = useState('');
@@ -201,25 +204,32 @@ export function useMetadataEditing({
   ]);
 
   const handleVerifyMetadata = useCallback(async () => {
-    if (!letterId) {
+    if (!letterId || !letter) {
       return;
     }
 
     setSaving(true);
 
     try {
-      const updated = await verifyMetadata(letterId);
+      const updated = await verifyMetadata(
+        letterId,
+        letter.primarySourceRevision,
+      );
       setLetter(updated);
       showToast('Metadata verified', 'success');
     } catch (error) {
-      showToast(
-        error instanceof Error ? error.message : 'Failed to verify metadata',
-        'error',
-      );
+      handleMutationError(error, 'Failed to verify metadata');
     } finally {
       setSaving(false);
     }
-  }, [letterId, setLetter, setSaving, showToast]);
+  }, [
+    handleMutationError,
+    letter,
+    letterId,
+    setLetter,
+    setSaving,
+    showToast,
+  ]);
 
   const handleMetadataFieldClick = useCallback(
     (event: MouseEvent) => {
@@ -241,20 +251,21 @@ export function useMetadataEditing({
     setSaving(true);
 
     try {
-      const updated = await unverifyMetadata(letterId);
+      const updated = await unverifyMetadata(
+        letterId,
+        letter.primarySourceRevision,
+      );
       setLetter(updated);
       showToast('Verification removed', 'info');
     } catch (error) {
-      showToast(
-        error instanceof Error ? error.message : 'Failed to unverify metadata',
-        'error',
-      );
+      handleMutationError(error, 'Failed to unverify metadata');
     } finally {
       setSaving(false);
     }
   }, [
     closeMetadataTooltip,
-    letter?.metadataContentStatus,
+    handleMutationError,
+    letter,
     letterId,
     setLetter,
     setSaving,

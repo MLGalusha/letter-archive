@@ -4,6 +4,7 @@ const {
   getLetterWithPagesMock,
   claimQueuedTranscriptionMock,
   claimRequestedTranscriptionMock,
+  cancelTranscriptionAttemptMock,
   completeTranscriptionMock,
   failTranscriptionMock,
   withTranscriptionHeartbeatMock,
@@ -14,6 +15,7 @@ const {
   getLetterWithPagesMock: vi.fn(),
   claimQueuedTranscriptionMock: vi.fn(),
   claimRequestedTranscriptionMock: vi.fn(),
+  cancelTranscriptionAttemptMock: vi.fn(),
   completeTranscriptionMock: vi.fn(),
   failTranscriptionMock: vi.fn(),
   withTranscriptionHeartbeatMock: vi.fn(),
@@ -32,12 +34,14 @@ vi.mock('../../services/letters.js', () => ({
 }));
 
 vi.mock('../../services/letter/transcription-job.js', () => ({
+  cancelTranscriptionAttempt: cancelTranscriptionAttemptMock,
   claimQueuedTranscription: claimQueuedTranscriptionMock,
   claimRequestedTranscription: claimRequestedTranscriptionMock,
   completeTranscription: completeTranscriptionMock,
   failTranscription: failTranscriptionMock,
   withTranscriptionHeartbeat: withTranscriptionHeartbeatMock,
   observeTranscriptionState: vi.fn((source: Record<string, unknown>) => ({
+    primarySourceRevision: source.primarySourceRevision,
     status: source.transcriptionStatus,
     workflow: source.workflow,
     transcriptionText: source.transcriptionText,
@@ -92,6 +96,7 @@ function letter(overrides: Record<string, unknown> = {}) {
     entityExtractionStatus: 'PENDING',
     deadLetter: false,
     transcriptStatus: 'EMPTY',
+    primarySourceRevision: 4,
     updatedAt,
     collection: { collectionCode: '009' },
     dateRaw: '19470810',
@@ -130,6 +135,7 @@ describe('canonical transcription pipeline', () => {
     expect(claimQueuedTranscriptionMock).toHaveBeenCalledWith(
       'letter-1',
       {
+        primarySourceRevision: 4,
         status: 'PENDING',
         workflow: 'UPLOADED',
         transcriptionText: null,
@@ -149,6 +155,7 @@ describe('canonical transcription pipeline', () => {
       'letter-1',
       'run-a',
       'Main transcript',
+      undefined,
     );
     expect(withTranscriptionHeartbeatMock).toHaveBeenCalledWith(
       'letter-1',
@@ -191,13 +198,14 @@ describe('canonical transcription pipeline', () => {
       transcriptionStatus: 'SUCCESS',
     }));
 
-    await expect(runRequestedTranscription('letter-1')).resolves.toEqual({
+    await expect(runRequestedTranscription('letter-1', 4)).resolves.toEqual({
       kind: 'completed',
       pageCount: 1,
       textLength: 15,
     });
 
     expect(claimRequestedTranscriptionMock).toHaveBeenCalledWith('letter-1', {
+      primarySourceRevision: 4,
       status: 'SUCCESS',
       workflow: 'UPLOADED',
       transcriptionText: null,
@@ -219,8 +227,40 @@ describe('canonical transcription pipeline', () => {
     getLetterWithPagesMock.mockResolvedValue(letter({ transcriptionStatus: 'RUNNING' }));
     claimRequestedTranscriptionMock.mockResolvedValue(null);
 
-    await expect(runRequestedTranscription('letter-1')).resolves.toEqual({ kind: 'claim_lost' });
+    await expect(runRequestedTranscription('letter-1', 4)).resolves.toEqual({ kind: 'claim_lost' });
 
+    expect(transcribeImageMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a stale direct source revision before claiming or calling AI', async () => {
+    getLetterWithPagesMock.mockResolvedValue(letter({ primarySourceRevision: 5 }));
+
+    await expect(runRequestedTranscription('letter-1', 4)).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'SOURCE_REVISION_CHANGED',
+    });
+
+    expect(claimRequestedTranscriptionMock).not.toHaveBeenCalled();
+    expect(transcribeImageMock).not.toHaveBeenCalled();
+  });
+
+  it('revokes a requested claim when the source epoch changes before source reload', async () => {
+    getLetterWithPagesMock
+      .mockResolvedValueOnce(letter({ primarySourceRevision: 4 }))
+      .mockResolvedValueOnce(letter({
+        primarySourceRevision: 5,
+        transcriptionStatus: 'RUNNING',
+      }));
+
+    await expect(runRequestedTranscription('letter-1', 4)).resolves.toEqual({
+      kind: 'superseded',
+    });
+
+    expect(cancelTranscriptionAttemptMock).toHaveBeenCalledWith(
+      'letter-1',
+      'run-a',
+      'Transcription source revision changed after the attempt was claimed',
+    );
     expect(transcribeImageMock).not.toHaveBeenCalled();
   });
 
@@ -256,14 +296,14 @@ describe('canonical transcription pipeline', () => {
     getLetterWithPagesMock.mockResolvedValue(letter({ type: 'T' }));
     transcribeExtraContentMock.mockResolvedValue({ text: '\n\n', isStub: false });
 
-    await expect(runRequestedTranscription('letter-1')).resolves.toEqual({
+    await expect(runRequestedTranscription('letter-1', 4)).resolves.toEqual({
       kind: 'completed',
       pageCount: 1,
       textLength: 0,
     });
 
     expect(transcribeExtraContentMock).toHaveBeenCalledTimes(1);
-    expect(completeTranscriptionMock).toHaveBeenCalledWith('letter-1', 'run-a', null);
+    expect(completeTranscriptionMock).toHaveBeenCalledWith('letter-1', 'run-a', null, 4);
   });
 
   it('does not let a late producer failure overwrite a superseding transition', async () => {
@@ -276,6 +316,7 @@ describe('canonical transcription pipeline', () => {
       'letter-1',
       'run-a',
       'vision unavailable',
+      undefined,
     );
   });
 
@@ -288,6 +329,7 @@ describe('canonical transcription pipeline', () => {
       'letter-1',
       'run-a',
       'vision unavailable',
+      undefined,
     );
   });
 
@@ -334,6 +376,7 @@ describe('canonical transcription pipeline', () => {
       'letter-1',
       'run-a',
       '--- Page 1 ---\n\nSecond\n\n--- Page 2 ---\n\nFifth',
+      undefined,
     );
   });
 
@@ -349,22 +392,23 @@ describe('canonical transcription pipeline', () => {
       'letter-1',
       'run-a',
       'Letter disappeared after transcription claim: letter-1',
+      undefined,
     );
     expect(transcribeImageMock).not.toHaveBeenCalled();
   });
 
   it('validates direct requests before acquiring or mutating a claim', async () => {
     getLetterWithPagesMock.mockResolvedValueOnce(undefined);
-    await expect(runRequestedTranscription('missing')).resolves.toEqual({ kind: 'not_found' });
+    await expect(runRequestedTranscription('missing', 4)).resolves.toEqual({ kind: 'not_found' });
 
     getLetterWithPagesMock.mockResolvedValueOnce(letter({ type: 'P' }));
-    await expect(runRequestedTranscription('photo')).resolves.toEqual({
+    await expect(runRequestedTranscription('photo', 4)).resolves.toEqual({
       kind: 'not_transcribable',
       type: 'P',
     });
 
     getLetterWithPagesMock.mockResolvedValueOnce(letter({ pages: [] }));
-    await expect(runRequestedTranscription('empty')).resolves.toEqual({ kind: 'no_pages' });
+    await expect(runRequestedTranscription('empty', 4)).resolves.toEqual({ kind: 'no_pages' });
 
     expect(claimRequestedTranscriptionMock).not.toHaveBeenCalled();
     expect(transcribeImageMock).not.toHaveBeenCalled();

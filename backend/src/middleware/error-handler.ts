@@ -87,6 +87,7 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   let errorType = 'internal_error';
   let userMessage = 'Internal server error';
   let details: unknown;
+  let code: string | undefined;
 
   if (bodyParserFailure) {
     statusCode = bodyParserFailure.statusCode;
@@ -102,6 +103,7 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
     errorType = err.name || 'application_error';
     userMessage = err.message;
     details = err.details;
+    code = err.code;
   } else {
     const explicitStatus = getExplicitStatus(err);
     if (explicitStatus !== null) {
@@ -157,6 +159,7 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   res.status(statusCode).json({
     error: userMessage,
     details,
+    ...(code ? { code } : {}),
     message: process.env.NODE_ENV === 'development' ? errorMessage : undefined,
     requestId,
   });

@@ -1,6 +1,7 @@
 import { transcribeExtraContent, transcribeImage } from '../ai/openai.js';
 import { getLetterWithPages } from '../services/letters.js';
 import {
+  cancelTranscriptionAttempt,
   claimQueuedTranscription,
   claimRequestedTranscription,
   completeTranscription,
@@ -9,6 +10,7 @@ import {
   withTranscriptionHeartbeat,
   type TranscriptionHeartbeat,
 } from '../services/letter/transcription-job.js';
+import { assertCurrentPrimarySourceRevision } from '../services/letter/source-revision.js';
 import { getAbsoluteStoragePath } from '../services/storage.js';
 import { createLogger } from '../utils/logger.js';
 import { getDocumentTypeFromCode, isTranscribableType } from '../services/letter/shared.js';
@@ -52,6 +54,7 @@ async function executeClaimedTranscription(
   runId: string,
   options: TranscriptionOptions,
   heartbeat: TranscriptionHeartbeat,
+  expectedPrimarySourceRevision?: number,
 ): Promise<ClaimedTranscriptionOutcome> {
   const start = Date.now();
   const { id: letterId } = letter;
@@ -189,8 +192,20 @@ async function executeClaimedTranscription(
     const terminalLeaseLoss = stopIfLeaseLost();
     if (terminalLeaseLoss) return terminalLeaseLoss;
 
-    const published = await completeTranscription(letterId, runId, combinedTranscription);
+    const published = await completeTranscription(
+      letterId,
+      runId,
+      combinedTranscription,
+      expectedPrimarySourceRevision,
+    );
     if (!published) {
+      if (expectedPrimarySourceRevision !== undefined) {
+        await cancelTranscriptionAttempt(
+          letterId,
+          runId,
+          'Transcription source revision changed or the attempt was superseded',
+        );
+      }
       letterLog.info('Transcription was cancelled or superseded; discarding result');
       return { kind: 'superseded' };
     }
@@ -243,8 +258,20 @@ async function executeClaimedTranscription(
       'Transcription pipeline failed',
     );
 
-    const failed = await failTranscription(letterId, runId, message);
+    const failed = await failTranscription(
+      letterId,
+      runId,
+      message,
+      expectedPrimarySourceRevision,
+    );
     if (!failed) {
+      if (expectedPrimarySourceRevision !== undefined) {
+        await cancelTranscriptionAttempt(
+          letterId,
+          runId,
+          'Transcription source revision changed or the attempt was superseded',
+        );
+      }
       letterLog.info('Transcription failure was superseded; preserving newer state');
       return { kind: 'superseded' };
     }
@@ -256,24 +283,54 @@ async function runClaimedTranscription(
   letterId: string,
   runId: string,
   options: TranscriptionOptions,
+  expectedPrimarySourceRevision?: number,
 ): Promise<ClaimedTranscriptionOutcome> {
   return withTranscriptionHeartbeat(letterId, runId, async (heartbeat) => {
-    const claimedLetter = await reloadClaimedTranscription(letterId, runId);
+    const claimedLetter = await reloadClaimedTranscription(
+      letterId,
+      runId,
+      expectedPrimarySourceRevision,
+    );
     if ('kind' in claimedLetter) return claimedLetter;
     if (!heartbeat.hasOwnership()) return { kind: 'superseded' };
-    return executeClaimedTranscription(claimedLetter, runId, options, heartbeat);
+    return executeClaimedTranscription(
+      claimedLetter,
+      runId,
+      options,
+      heartbeat,
+      expectedPrimarySourceRevision,
+    );
   });
 }
 
 async function reloadClaimedTranscription(
   letterId: string,
   runId: string,
+  expectedPrimarySourceRevision?: number,
 ): Promise<TranscriptionLetter | { kind: 'superseded' }> {
   const claimedLetter = await getLetterWithPages(letterId);
-  if (claimedLetter) return claimedLetter;
+  if (claimedLetter) {
+    if (
+      expectedPrimarySourceRevision !== undefined
+      && claimedLetter.primarySourceRevision !== expectedPrimarySourceRevision
+    ) {
+      await cancelTranscriptionAttempt(
+        letterId,
+        runId,
+        'Transcription source revision changed after the attempt was claimed',
+      );
+      return { kind: 'superseded' };
+    }
+    return claimedLetter;
+  }
 
   const error = new Error(`Letter disappeared after transcription claim: ${letterId}`);
-  const failed = await failTranscription(letterId, runId, error.message);
+  const failed = await failTranscription(
+    letterId,
+    runId,
+    error.message,
+    expectedPrimarySourceRevision,
+  );
   if (!failed) return { kind: 'superseded' };
   throw error;
 }
@@ -317,9 +374,15 @@ export async function runTranscription(
  */
 export async function runRequestedTranscription(
   letterId: string,
+  expectedPrimarySourceRevision: number,
 ): Promise<RequestedTranscriptionOutcome> {
   const letter = await getLetterWithPages(letterId);
   if (!letter) return { kind: 'not_found' };
+  assertCurrentPrimarySourceRevision(
+    letter.primarySourceRevision,
+    expectedPrimarySourceRevision,
+    'Letter source changed before transcription started; reload and try again',
+  );
   if (!isTranscribableType(letter.type)) {
     return { kind: 'not_transcribable', type: letter.type };
   }
@@ -328,5 +391,10 @@ export async function runRequestedTranscription(
   const claim = await claimRequestedTranscription(letterId, observeTranscriptionState(letter));
   if (!claim) return { kind: 'claim_lost' };
 
-  return runClaimedTranscription(letterId, claim.runId, { extraContent: 'skip' });
+  return runClaimedTranscription(
+    letterId,
+    claim.runId,
+    { extraContent: 'skip' },
+    expectedPrimarySourceRevision,
+  );
 }

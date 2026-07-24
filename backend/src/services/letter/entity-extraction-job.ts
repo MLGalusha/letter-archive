@@ -157,6 +157,7 @@ async function claimEntityExtraction(
   observed: ObservedEntityExtractionState,
   claimKind: EntityExtractionClaimKind,
   workerExecutionToken?: string,
+  expectedPrimarySourceRevision?: number,
 ): Promise<EntityExtractionClaim | null> {
   const runId = randomUUID();
   const result = await db
@@ -175,6 +176,12 @@ async function claimEntityExtraction(
     .where(and(
       eq(letters.id, letterId),
       ...observedEntityExtractionStateConditions(observed),
+      ...(expectedPrimarySourceRevision === undefined
+        ? []
+        : [eq(
+            letters.primarySourceRevision,
+            expectedPrimarySourceRevision,
+          )]),
       ...(workerExecutionToken
         ? [activeWorkerExecutionCondition(workerExecutionToken)]
         : []),
@@ -211,12 +218,19 @@ export async function claimQueuedEntityExtraction(
 export async function claimRequestedEntityExtraction(
   letterId: string,
   observed: ObservedEntityExtractionState,
+  expectedPrimarySourceRevision: number,
 ): Promise<EntityExtractionClaim | null> {
   if (!hasClaimableSource(observed) || observed.status === 'RUNNING') {
     return null;
   }
 
-  return claimEntityExtraction(letterId, observed, 'REQUESTED');
+  return claimEntityExtraction(
+    letterId,
+    observed,
+    'REQUESTED',
+    undefined,
+    expectedPrimarySourceRevision,
+  );
 }
 
 /**
@@ -334,6 +348,7 @@ export async function cancelEntityExtractionAttempt(
   letterId: string,
   claim: EntityExtractionClaim,
   error = 'Cancelled by admin',
+  expectedPrimarySourceRevision?: number,
 ): Promise<boolean> {
   const result = await db
     .update(letters)
@@ -345,6 +360,12 @@ export async function cancelEntityExtractionAttempt(
     })
     .where(and(
       eq(letters.id, letterId),
+      ...(expectedPrimarySourceRevision === undefined
+        ? []
+        : [eq(
+          letters.primarySourceRevision,
+          expectedPrimarySourceRevision,
+        )]),
       eq(letters.entityExtractionStatus, 'RUNNING'),
       eq(letters.entityExtractionRunId, claim.runId),
       eq(letters.entityExtractionRunRevision, claim.revision),
@@ -361,6 +382,7 @@ export async function cancelEntityExtractionAttempt(
 export async function cancelLegacyEntityExtraction(
   letterId: string,
   error: string,
+  expectedPrimarySourceRevision?: number,
 ): Promise<boolean> {
   const result = await db
     .update(letters)
@@ -372,6 +394,12 @@ export async function cancelLegacyEntityExtraction(
     })
     .where(and(
       eq(letters.id, letterId),
+      ...(expectedPrimarySourceRevision === undefined
+        ? []
+        : [eq(
+          letters.primarySourceRevision,
+          expectedPrimarySourceRevision,
+        )]),
       eq(letters.entityExtractionStatus, 'RUNNING'),
       isNull(letters.entityExtractionRunId),
       isNull(letters.entityExtractionRunRevision),

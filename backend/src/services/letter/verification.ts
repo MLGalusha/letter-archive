@@ -5,6 +5,11 @@ import { buildHumanExtraContentJobPatch } from './extra-content-job.js';
 import { generateAndSaveReadingView } from './readingView.js';
 import { observedMetadataRevisionConditions } from './metadata-job.js';
 import { log, observedTimestampMatches } from './shared.js';
+import {
+  assertCurrentPrimarySourceRevision,
+  currentPrimarySourceRevisionCondition,
+  SourceRevisionChangedError,
+} from './source-revision.js';
 
 function transcriptionTextCondition(transcriptionText: string | null) {
   return transcriptionText === null
@@ -30,9 +35,32 @@ function metadataVerificationConflict(message: string): Error & { status: number
   return error;
 }
 
-export async function verifyTranscript(letterId: string, userId: string = 'admin'): Promise<{ previousStatus: string } | null> {
+async function assertSourceStillCurrent(
+  letterId: string,
+  expectedPrimarySourceRevision: number,
+  message: string,
+): Promise<void> {
+  const latest = await getLetterById(letterId);
+  if (!latest) return;
+  assertCurrentPrimarySourceRevision(
+    latest.primarySourceRevision,
+    expectedPrimarySourceRevision,
+    message,
+  );
+}
+
+export async function verifyTranscript(
+  letterId: string,
+  expectedPrimarySourceRevision: number,
+  userId: string = 'admin',
+): Promise<{ previousStatus: string } | null> {
   const existingLetter = await getLetterById(letterId);
   if (!existingLetter) return null;
+  assertCurrentPrimarySourceRevision(
+    existingLetter.primarySourceRevision,
+    expectedPrimarySourceRevision,
+    'Letter source changed before its transcript could be verified; reload and try again',
+  );
 
   const previousStatus = existingLetter.transcriptStatus;
 
@@ -54,6 +82,7 @@ export async function verifyTranscript(letterId: string, userId: string = 'admin
     })
     .where(and(
       eq(letters.id, letterId),
+      currentPrimarySourceRevisionCondition(expectedPrimarySourceRevision),
       eq(letters.transcriptionStatus, 'SUCCESS'),
       eq(letters.transcriptStatus, previousStatus),
       transcriptionTextCondition(existingLetter.transcriptionText),
@@ -61,6 +90,11 @@ export async function verifyTranscript(letterId: string, userId: string = 'admin
     .returning({ id: letters.id });
 
   if (verified.length === 0) {
+    await assertSourceStillCurrent(
+      letterId,
+      expectedPrimarySourceRevision,
+      'Letter source changed before its transcript could be verified; reload and try again',
+    );
     throw transcriptionVerificationConflict(
       'Transcript changed before it could be verified; review the latest transcript and try again',
     );
@@ -75,9 +109,16 @@ export async function verifyTranscript(letterId: string, userId: string = 'admin
     && existingLetter.type === 'L'
   ) {
     try {
-      await generateAndSaveReadingView(letterId);
-      log.info({ letterId }, 'Auto-generated reading view on first verification');
+      if (
+        await generateAndSaveReadingView(
+          letterId,
+          expectedPrimarySourceRevision,
+        ) !== null
+      ) {
+        log.info({ letterId }, 'Auto-generated reading view on first verification');
+      }
     } catch (err) {
+      if (err instanceof SourceRevisionChangedError) throw err;
       log.warn({ letterId, err }, 'Failed to auto-generate reading view — user can trigger manually');
     }
   }
@@ -85,9 +126,17 @@ export async function verifyTranscript(letterId: string, userId: string = 'admin
   return { previousStatus };
 }
 
-export async function unverifyTranscript(letterId: string): Promise<true | null> {
+export async function unverifyTranscript(
+  letterId: string,
+  expectedPrimarySourceRevision: number,
+): Promise<true | null> {
   const existingLetter = await getLetterById(letterId);
   if (!existingLetter) return null;
+  assertCurrentPrimarySourceRevision(
+    existingLetter.primarySourceRevision,
+    expectedPrimarySourceRevision,
+    'Letter source changed before transcript verification could be removed; reload and try again',
+  );
 
   if (existingLetter.transcriptStatus !== 'VERIFIED') {
     const err = new Error('Transcript is not verified') as Error & { status: number; currentStatus: string };
@@ -107,6 +156,7 @@ export async function unverifyTranscript(letterId: string): Promise<true | null>
     })
     .where(and(
       eq(letters.id, letterId),
+      currentPrimarySourceRevisionCondition(expectedPrimarySourceRevision),
       eq(letters.transcriptionStatus, existingLetter.transcriptionStatus),
       ne(letters.transcriptionStatus, 'RUNNING'),
       eq(letters.transcriptStatus, 'VERIFIED'),
@@ -115,6 +165,11 @@ export async function unverifyTranscript(letterId: string): Promise<true | null>
     .returning({ id: letters.id });
 
   if (unverified.length === 0) {
+    await assertSourceStillCurrent(
+      letterId,
+      expectedPrimarySourceRevision,
+      'Letter source changed before transcript verification could be removed; reload and try again',
+    );
     throw transcriptionVerificationConflict(
       'Transcript changed before verification could be removed; refresh and try again',
     );
@@ -124,9 +179,18 @@ export async function unverifyTranscript(letterId: string): Promise<true | null>
   return true;
 }
 
-export async function verifyMetadata(letterId: string, userId: string = 'admin'): Promise<{ previousStatus: string } | null> {
+export async function verifyMetadata(
+  letterId: string,
+  expectedPrimarySourceRevision: number,
+  userId: string = 'admin',
+): Promise<{ previousStatus: string } | null> {
   const existingLetter = await getLetterById(letterId);
   if (!existingLetter) return null;
+  assertCurrentPrimarySourceRevision(
+    existingLetter.primarySourceRevision,
+    expectedPrimarySourceRevision,
+    'Letter source changed before its metadata could be verified; reload and try again',
+  );
 
   if (
     existingLetter.metadataStatus !== 'SUCCESS'
@@ -152,12 +216,18 @@ export async function verifyMetadata(letterId: string, userId: string = 'admin')
     })
     .where(and(
       ...observedMetadataRevisionConditions(letterId, existingLetter),
+      currentPrimarySourceRevisionCondition(expectedPrimarySourceRevision),
       eq(letters.metadataStatus, 'SUCCESS'),
       eq(letters.metadataContentStatus, existingLetter.metadataContentStatus),
     ))
     .returning({ id: letters.id });
 
   if (verified.length === 0) {
+    await assertSourceStillCurrent(
+      letterId,
+      expectedPrimarySourceRevision,
+      'Letter source changed before its metadata could be verified; reload and try again',
+    );
     throw metadataVerificationConflict(
       'Metadata changed before it could be verified; review the latest metadata and try again',
     );
@@ -167,9 +237,17 @@ export async function verifyMetadata(letterId: string, userId: string = 'admin')
   return { previousStatus: existingLetter.metadataContentStatus };
 }
 
-export async function unverifyMetadata(letterId: string): Promise<true | null> {
+export async function unverifyMetadata(
+  letterId: string,
+  expectedPrimarySourceRevision: number,
+): Promise<true | null> {
   const existingLetter = await getLetterById(letterId);
   if (!existingLetter) return null;
+  assertCurrentPrimarySourceRevision(
+    existingLetter.primarySourceRevision,
+    expectedPrimarySourceRevision,
+    'Letter source changed before metadata verification could be removed; reload and try again',
+  );
 
   if (existingLetter.metadataContentStatus !== 'VERIFIED') {
     const err = new Error('Metadata is not verified') as Error & { status: number; currentStatus: string };
@@ -190,6 +268,7 @@ export async function unverifyMetadata(letterId: string): Promise<true | null> {
     })
     .where(and(
       ...observedMetadataRevisionConditions(letterId, existingLetter),
+      currentPrimarySourceRevisionCondition(expectedPrimarySourceRevision),
       eq(letters.metadataStatus, existingLetter.metadataStatus),
       ne(letters.metadataStatus, 'RUNNING'),
       eq(letters.metadataContentStatus, 'VERIFIED'),
@@ -197,6 +276,11 @@ export async function unverifyMetadata(letterId: string): Promise<true | null> {
     .returning({ id: letters.id });
 
   if (unverified.length === 0) {
+    await assertSourceStillCurrent(
+      letterId,
+      expectedPrimarySourceRevision,
+      'Letter source changed before metadata verification could be removed; reload and try again',
+    );
     throw metadataVerificationConflict(
       'Metadata changed before verification could be removed; refresh and try again',
     );
@@ -206,9 +290,18 @@ export async function unverifyMetadata(letterId: string): Promise<true | null> {
   return true;
 }
 
-export async function verifyExtraContent(letterId: string, userId: string = 'admin'): Promise<{ previousStatus: string } | null> {
+export async function verifyExtraContent(
+  letterId: string,
+  expectedPrimarySourceRevision: number,
+  userId: string = 'admin',
+): Promise<{ previousStatus: string } | null> {
   const existingLetter = await getLetterById(letterId);
   if (!existingLetter) return null;
+  assertCurrentPrimarySourceRevision(
+    existingLetter.primarySourceRevision,
+    expectedPrimarySourceRevision,
+    'Letter source changed before extra content could be verified; reload and try again',
+  );
 
   const verified = await db
     .update(letters)
@@ -221,12 +314,18 @@ export async function verifyExtraContent(letterId: string, userId: string = 'adm
     })
     .where(and(
       eq(letters.id, letterId),
+      currentPrimarySourceRevisionCondition(expectedPrimarySourceRevision),
       observedTimestampMatches(letters.updatedAt, existingLetter.updatedAt),
       eq(letters.extraContentStatus, existingLetter.extraContentStatus),
     ))
     .returning({ id: letters.id });
 
   if (verified.length === 0) {
+    await assertSourceStillCurrent(
+      letterId,
+      expectedPrimarySourceRevision,
+      'Letter source changed before extra content could be verified; reload and try again',
+    );
     const error = new Error(
       'Extra content changed before it could be verified; review the latest content and try again',
     ) as Error & { status: number };
@@ -238,9 +337,17 @@ export async function verifyExtraContent(letterId: string, userId: string = 'adm
   return { previousStatus: existingLetter.extraContentStatus };
 }
 
-export async function unverifyExtraContent(letterId: string): Promise<true | null> {
+export async function unverifyExtraContent(
+  letterId: string,
+  expectedPrimarySourceRevision: number,
+): Promise<true | null> {
   const existingLetter = await getLetterById(letterId);
   if (!existingLetter) return null;
+  assertCurrentPrimarySourceRevision(
+    existingLetter.primarySourceRevision,
+    expectedPrimarySourceRevision,
+    'Letter source changed before extra-content verification could be removed; reload and try again',
+  );
 
   if (existingLetter.extraContentStatus !== 'VERIFIED') {
     const err = new Error('Extra content is not verified') as Error & { status: number; currentStatus: string };
@@ -260,12 +367,18 @@ export async function unverifyExtraContent(letterId: string): Promise<true | nul
     })
     .where(and(
       eq(letters.id, letterId),
+      currentPrimarySourceRevisionCondition(expectedPrimarySourceRevision),
       observedTimestampMatches(letters.updatedAt, existingLetter.updatedAt),
       eq(letters.extraContentStatus, 'VERIFIED'),
     ))
     .returning({ id: letters.id });
 
   if (unverified.length === 0) {
+    await assertSourceStillCurrent(
+      letterId,
+      expectedPrimarySourceRevision,
+      'Letter source changed before extra-content verification could be removed; reload and try again',
+    );
     const error = new Error(
       'Extra content changed before verification could be removed; refresh and try again',
     ) as Error & { status: number };
@@ -277,9 +390,18 @@ export async function unverifyExtraContent(letterId: string): Promise<true | nul
   return true;
 }
 
-export async function verifyPhotoDescription(letterId: string, userId: string = 'admin'): Promise<{ previousStatus: string } | null> {
+export async function verifyPhotoDescription(
+  letterId: string,
+  expectedPrimarySourceRevision: number,
+  userId: string = 'admin',
+): Promise<{ previousStatus: string } | null> {
   const existingLetter = await getLetterById(letterId);
   if (!existingLetter) return null;
+  assertCurrentPrimarySourceRevision(
+    existingLetter.primarySourceRevision,
+    expectedPrimarySourceRevision,
+    'Photo source changed before its description could be verified; reload and try again',
+  );
 
   const verified = await db
     .update(letters)
@@ -291,6 +413,7 @@ export async function verifyPhotoDescription(letterId: string, userId: string = 
     })
     .where(and(
       eq(letters.id, letterId),
+      currentPrimarySourceRevisionCondition(expectedPrimarySourceRevision),
       observedTimestampMatches(letters.updatedAt, existingLetter.updatedAt),
       eq(letters.photoDescriptionStatus, existingLetter.photoDescriptionStatus),
       photoDescriptionCondition(existingLetter.photoDescription),
@@ -298,6 +421,11 @@ export async function verifyPhotoDescription(letterId: string, userId: string = 
     .returning({ id: letters.id });
 
   if (verified.length === 0) {
+    await assertSourceStillCurrent(
+      letterId,
+      expectedPrimarySourceRevision,
+      'Photo source changed before its description could be verified; reload and try again',
+    );
     const error = new Error(
       'Photo description changed before it could be verified; review the latest description and try again',
     ) as Error & { status: number };
@@ -309,9 +437,17 @@ export async function verifyPhotoDescription(letterId: string, userId: string = 
   return { previousStatus: existingLetter.photoDescriptionStatus };
 }
 
-export async function unverifyPhotoDescription(letterId: string): Promise<true | null> {
+export async function unverifyPhotoDescription(
+  letterId: string,
+  expectedPrimarySourceRevision: number,
+): Promise<true | null> {
   const existingLetter = await getLetterById(letterId);
   if (!existingLetter) return null;
+  assertCurrentPrimarySourceRevision(
+    existingLetter.primarySourceRevision,
+    expectedPrimarySourceRevision,
+    'Photo source changed before description verification could be removed; reload and try again',
+  );
 
   if (existingLetter.photoDescriptionStatus !== 'VERIFIED') {
     const err = new Error('Photo description is not verified') as Error & { status: number; currentStatus: string };
@@ -330,6 +466,7 @@ export async function unverifyPhotoDescription(letterId: string): Promise<true |
     })
     .where(and(
       eq(letters.id, letterId),
+      currentPrimarySourceRevisionCondition(expectedPrimarySourceRevision),
       observedTimestampMatches(letters.updatedAt, existingLetter.updatedAt),
       eq(letters.photoDescriptionStatus, 'VERIFIED'),
       photoDescriptionCondition(existingLetter.photoDescription),
@@ -337,6 +474,11 @@ export async function unverifyPhotoDescription(letterId: string): Promise<true |
     .returning({ id: letters.id });
 
   if (unverified.length === 0) {
+    await assertSourceStillCurrent(
+      letterId,
+      expectedPrimarySourceRevision,
+      'Photo source changed before description verification could be removed; reload and try again',
+    );
     const error = new Error(
       'Photo description changed before verification could be removed; refresh and try again',
     ) as Error & { status: number };

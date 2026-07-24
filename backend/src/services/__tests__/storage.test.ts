@@ -2,7 +2,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { computeChecksum, fileExists, storeFile } from '../storage.js';
+import {
+  computeChecksum,
+  isImmutableStoragePath,
+  removeStoredFile,
+  storeImmutableFile,
+} from '../storage.js';
 
 const tempDirs: string[] = [];
 
@@ -36,43 +41,55 @@ describe('storage helpers', () => {
     );
   });
 
-  it('reports file existence correctly', async () => {
-    const dir = makeTempDir();
-    const filePath = path.join(dir, 'exists.txt');
-    fs.writeFileSync(filePath, 'hi');
-
-    await expect(fileExists(filePath)).resolves.toBe(true);
-    await expect(fileExists(path.join(dir, 'missing.txt'))).resolves.toBe(false);
-  });
-
-  it('stores large enough files and skips overwriting by default', async () => {
+  it('stores each accepted upload at a unique immutable object path', async () => {
     const dir = makeTempDir();
     const sourcePath = path.join(dir, 'source.jpg');
-    const destPath = path.join(dir, 'nested', 'dest.jpg');
+    const logicalPath = path.join(dir, 'nested', 'dest.jpg');
     writeFileOfSize(sourcePath, 11 * 1024);
 
-    const first = await storeFile(sourcePath, destPath);
-    const second = await storeFile(sourcePath, destPath);
+    const first = await storeImmutableFile(sourcePath, logicalPath);
+    const second = await storeImmutableFile(sourcePath, logicalPath);
 
-    expect(first.alreadyExists).toBe(false);
-    expect(second.alreadyExists).toBe(true);
-    expect(fs.existsSync(destPath)).toBe(true);
+    expect(first.storagePath).not.toBe(logicalPath);
+    expect(second.storagePath).not.toBe(first.storagePath);
+    expect(first.storagePath).toContain(`${path.sep}objects${path.sep}dest${path.sep}`);
+    expect(path.basename(first.storagePath)).toMatch(
+      new RegExp(`^${first.checksumSha256}-[0-9a-f-]+\\.jpg$`),
+    );
+    expect(isImmutableStoragePath(first.storagePath)).toBe(true);
+    expect(isImmutableStoragePath(logicalPath)).toBe(false);
+    expect(fs.existsSync(first.storagePath)).toBe(true);
+    expect(fs.existsSync(second.storagePath)).toBe(true);
   });
 
-  it('overwrites existing files when force is true', async () => {
+  it('verifies the completed immutable object and never overwrites the logical path', async () => {
     const dir = makeTempDir();
-    const sourceA = path.join(dir, 'source-a.jpg');
-    const sourceB = path.join(dir, 'source-b.jpg');
-    const destPath = path.join(dir, 'dest.jpg');
-    writeFileOfSize(sourceA, 11 * 1024, 'a');
-    writeFileOfSize(sourceB, 11 * 1024, 'b');
+    const sourcePath = path.join(dir, 'source.jpg');
+    const logicalPath = path.join(dir, 'dest.jpg');
+    writeFileOfSize(sourcePath, 11 * 1024, 'b');
+    writeFileOfSize(logicalPath, 11 * 1024, 'a');
+    const originalChecksum = await computeChecksum(logicalPath);
 
-    await storeFile(sourceA, destPath);
-    const replaced = await storeFile(sourceB, destPath, true);
-    const checksum = await computeChecksum(destPath);
+    const stored = await storeImmutableFile(sourcePath, logicalPath);
 
-    expect(replaced.alreadyExists).toBe(false);
-    expect(checksum).toBe(replaced.checksumSha256);
+    await expect(computeChecksum(stored.storagePath)).resolves.toBe(
+      stored.checksumSha256,
+    );
+    await expect(computeChecksum(logicalPath)).resolves.toBe(originalChecksum);
+  });
+
+  it('leaves the live logical object intact when candidate materialization fails', async () => {
+    const dir = makeTempDir();
+    const sourcePath = path.join(dir, 'source.jpg');
+    const logicalPath = path.join(dir, 'dest.jpg');
+    const objectsPath = path.join(dir, 'objects');
+    writeFileOfSize(sourcePath, 11 * 1024, 'b');
+    writeFileOfSize(logicalPath, 11 * 1024, 'a');
+    fs.writeFileSync(objectsPath, 'not a directory');
+    const originalChecksum = await computeChecksum(logicalPath);
+
+    await expect(storeImmutableFile(sourcePath, logicalPath)).rejects.toThrow();
+    await expect(computeChecksum(logicalPath)).resolves.toBe(originalChecksum);
   });
 
   it('rejects tiny files that are likely corrupt placeholders', async () => {
@@ -81,6 +98,17 @@ describe('storage helpers', () => {
     const destPath = path.join(dir, 'dest.jpg');
     writeFileOfSize(sourcePath, 128);
 
-    await expect(storeFile(sourcePath, destPath)).rejects.toThrow('File too small');
+    await expect(storeImmutableFile(sourcePath, destPath)).rejects.toThrow('File too small');
+  });
+
+  it('never removes an absolute path outside the configured storage root', async () => {
+    const dir = makeTempDir();
+    const outsidePath = path.join(dir, 'outside.jpg');
+    writeFileOfSize(outsidePath, 11 * 1024);
+
+    await expect(removeStoredFile(outsidePath)).rejects.toThrow(
+      'Path traversal detected',
+    );
+    expect(fs.existsSync(outsidePath)).toBe(true);
   });
 });

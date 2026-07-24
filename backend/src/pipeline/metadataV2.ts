@@ -49,6 +49,8 @@ export interface EntityExtractionRunOptions {
   previousAiRecipient?: string;
   /** Present only for the automatic worker's QUEUED claim. */
   workerExecutionToken?: string;
+  /** Required by direct requests so a stale UI cannot claim newer source bytes. */
+  expectedPrimarySourceRevision?: number;
 }
 
 export type MetadataRunOutcome =
@@ -61,7 +63,8 @@ export type EntityExtractionRunOutcome =
   | { kind: 'completed' }
   | { kind: 'claim_lost' }
   | { kind: 'superseded' }
-  | { kind: 'ineligible' };
+  | { kind: 'ineligible' }
+  | { kind: 'source_changed' };
 
 interface ClaimedEntityExtractionResult {
   entityResult: Awaited<ReturnType<typeof extractEntities>>;
@@ -287,9 +290,9 @@ async function executeClaimedMetadataExtractionV2(
     extraContentTranscript: letter.extraContentTranscript,
   };
 
-  // Queue preflight data is intentionally not passed into this function. When
-  // no explicit admin corrections were bound to the claim, derive prefills
-  // from the authoritative post-claim reload instead of an earlier snapshot.
+  // Only corrections explicitly bound to this requested claim are human
+  // authority. Stored sender/recipient scalars are usually prior AI output and
+  // must not be silently promoted to confirmed truth on a later source rebuild.
   const effectiveCorrections: ExtractionCorrections | undefined = options && (
     options.confirmedSender !== undefined
       || options.confirmedRecipient !== undefined
@@ -302,12 +305,7 @@ async function executeClaimedMetadataExtractionV2(
         previousAiSender: options.previousAiSender,
         previousAiRecipient: options.previousAiRecipient,
       }
-    : letter.sender || letter.recipient
-      ? {
-          confirmedSender: letter.sender ?? undefined,
-          confirmedRecipient: letter.recipient ?? undefined,
-        }
-      : undefined;
+    : undefined;
   const embeddedEntityCorrections: ExtractionCorrections | undefined = options && (
     options.confirmedSender !== undefined
     || options.confirmedRecipient !== undefined
@@ -556,13 +554,27 @@ export async function runEntityExtractionOnly(
   }
 
   const observed = observeEntityExtractionState(source);
+  if (
+    options.claimKind === 'REQUESTED'
+    && (
+      options.expectedPrimarySourceRevision === undefined
+      || source.primarySourceRevision !== options.expectedPrimarySourceRevision
+    )
+  ) {
+    letterLog.info('Entity extraction source revision changed before claim');
+    return { kind: 'source_changed' };
+  }
   const claim = options.claimKind === 'QUEUED'
     ? await claimQueuedEntityExtraction(
       letterId,
       observed,
       options.workerExecutionToken,
     )
-    : await claimRequestedEntityExtraction(letterId, observed);
+    : await claimRequestedEntityExtraction(
+      letterId,
+      observed,
+      options.expectedPrimarySourceRevision!,
+    );
   if (!claim) {
     letterLog.info('Entity extraction job already claimed by another process — skipping');
     return { kind: 'claim_lost' };

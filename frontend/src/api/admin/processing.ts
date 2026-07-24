@@ -6,8 +6,13 @@ export type ProcessingJobType =
   | "entity_extraction"
   | "extra_content";
 
-export interface ProcessingQueueItem {
+export interface ProcessingJobSnapshot {
   letterId: string;
+  primarySourceRevision: number;
+  jobStateToken: string;
+}
+
+export interface ProcessingQueueItem extends ProcessingJobSnapshot {
   letterTitle: string;
   collectionCode: string;
   sender: string | null;
@@ -15,8 +20,7 @@ export interface ProcessingQueueItem {
   queuedAt: string | null;
 }
 
-export interface ProcessingActiveJob {
-  letterId: string;
+export interface ProcessingActiveJob extends ProcessingJobSnapshot {
   letterTitle: string;
   collectionCode: string;
   sender: string | null;
@@ -25,8 +29,7 @@ export interface ProcessingActiveJob {
   startedAt: string;
 }
 
-export interface ProcessingRecentJob {
-  letterId: string;
+export interface ProcessingRecentJob extends ProcessingJobSnapshot {
   letterTitle: string;
   collectionCode: string;
   type: ProcessingJobType;
@@ -65,12 +68,40 @@ export interface ProcessingQueueStatus {
   };
 }
 
+export type ProcessingQueueClearSkipCode =
+  | "NOT_FOUND"
+  | "SOURCE_REVISION_CHANGED"
+  | "PROCESSING_JOB_CHANGED";
+
+export interface ProcessingQueueClearResult {
+  message: string;
+  requested: number;
+  cleared: number;
+  skipped: number;
+  skipReasons: Array<{
+    letterId: string;
+    code: ProcessingQueueClearSkipCode;
+  }>;
+}
+
 export type ProcessingWorkerWakeResult =
   | { requested: true }
   | {
       requested: false;
       reason: "queue_empty" | "worker_not_configured";
     };
+
+function processingActionBody(
+  type: ProcessingJobType,
+  snapshot: ProcessingJobSnapshot,
+) {
+  return {
+    type,
+    letterId: snapshot.letterId,
+    primarySourceRevision: snapshot.primarySourceRevision,
+    jobStateToken: snapshot.jobStateToken,
+  };
+}
 
 export async function getProcessingQueueStatus(): Promise<ProcessingQueueStatus> {
   return apiGet<ProcessingQueueStatus>("/admin/processing/queue");
@@ -82,27 +113,44 @@ export async function wakeProcessingWorker(): Promise<ProcessingWorkerWakeResult
 
 export async function cancelProcessingJob(
   type: ProcessingJobType,
-  letterId: string,
+  snapshot: ProcessingJobSnapshot,
 ): Promise<{ message: string }> {
-  return apiPost("/admin/processing/cancel", { letterId, type });
+  return apiPost(
+    "/admin/processing/cancel",
+    processingActionBody(type, snapshot),
+  );
 }
 
 export async function removeProcessingQueueItem(
   type: ProcessingJobType,
-  letterId: string,
+  snapshot: ProcessingJobSnapshot,
 ): Promise<{ message: string }> {
-  return apiPost("/admin/processing/queue/remove", { letterId, type });
+  return apiPost(
+    "/admin/processing/queue/remove",
+    processingActionBody(type, snapshot),
+  );
 }
 
 export async function clearProcessingQueue(
   type: ProcessingJobType,
-): Promise<{ message: string; cleared: number }> {
-  return apiPost("/admin/processing/queue/clear", { type });
+  items: ProcessingJobSnapshot[],
+): Promise<ProcessingQueueClearResult> {
+  return apiPost("/admin/processing/queue/clear", {
+    type,
+    items: items.map(({ letterId, primarySourceRevision, jobStateToken }) => ({
+      letterId,
+      primarySourceRevision,
+      jobStateToken,
+    })),
+  });
 }
 
 export async function retryProcessingJob(
   type: ProcessingJobType,
-  letterId: string,
+  snapshot: ProcessingJobSnapshot,
 ): Promise<{ message: string }> {
-  return apiPost("/admin/processing/queue/retry", { letterId, type });
+  return apiPost(
+    "/admin/processing/queue/retry",
+    processingActionBody(type, snapshot),
+  );
 }

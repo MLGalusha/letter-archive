@@ -3,6 +3,7 @@ import { invokeRouter } from '../../../test/express-test-utils.js';
 
 const {
   findFirstMock,
+  findManyMock,
   dbInsertMock,
   insertValuesMock,
   insertReturningMock,
@@ -29,8 +30,12 @@ const {
   verifyPhotoDescriptionMock,
   unverifyExtraContentMock,
   unverifyPhotoDescriptionMock,
+  savePageLineSegmentsMock,
+  updatePageSegmentTrustMock,
+  updateLetterSegmentTrustMock,
 } = vi.hoisted(() => ({
   findFirstMock: vi.fn(),
+  findManyMock: vi.fn(),
   dbInsertMock: vi.fn(),
   insertValuesMock: vi.fn(),
   insertReturningMock: vi.fn(),
@@ -57,6 +62,9 @@ const {
   verifyPhotoDescriptionMock: vi.fn(),
   unverifyExtraContentMock: vi.fn(),
   unverifyPhotoDescriptionMock: vi.fn(),
+  savePageLineSegmentsMock: vi.fn(),
+  updatePageSegmentTrustMock: vi.fn(),
+  updateLetterSegmentTrustMock: vi.fn(),
 }));
 
 vi.mock('drizzle-orm', () => ({
@@ -95,6 +103,7 @@ vi.mock('../../../db/index.js', () => {
       query: {
         letterPages: {
           findFirst: findFirstMock,
+          findMany: findManyMock,
         },
       },
       insert: dbInsertMock,
@@ -121,6 +130,7 @@ vi.mock('../../../db/index.js', () => {
       extraContentJobStatus: 'letters.extraContentJobStatus',
       transcriptConfirmedAt: 'letters.transcriptConfirmedAt',
       transcriptionText: 'letters.transcriptionText',
+      primarySourceRevision: 'letters.primarySourceRevision',
       deadLetter: 'letters.deadLetter',
     },
     letterPages: {
@@ -134,8 +144,14 @@ vi.mock('../../../services/storage.js', () => ({
   getAbsoluteStoragePath: getAbsoluteStoragePathMock,
 }));
 
+vi.mock('../../../services/letter/correspondence-deletion.js', () => ({
+  deleteCorrespondenceGroup: vi.fn(),
+}));
+
 vi.mock('../../../services/line-segments.js', () => ({
-  savePageLineSegments: vi.fn(),
+  savePageLineSegments: savePageLineSegmentsMock,
+  updatePageSegmentTrust: updatePageSegmentTrustMock,
+  updateLetterSegmentTrust: updateLetterSegmentTrustMock,
 }));
 
 vi.mock('../../../services/letters.js', () => ({
@@ -197,15 +213,23 @@ vi.mock('../../../services/letter-operations.js', () => ({
   removeLinkedPerson: vi.fn(),
   removeLinkedPlace: vi.fn(),
 }));
+vi.mock('../../../services/letter/ai-notes.js', () => ({
+  addAiNote: vi.fn(),
+  resolveAiNotesForChangedFields: vi.fn(() => null),
+  updateAiNotes: vi.fn(),
+  updateAiNoteStatus: vi.fn(),
+}));
 
 vi.mock('../../../services/metadata-update.js', () => ({
   executeRetagForLetter: executeRetagForLetterMock,
 }));
 
 import lettersRouter from '../letters.js';
+import { sourceRevisionChanged } from '../../../services/letter/source-revision.js';
 
 const LETTER_ID = '11111111-1111-4111-8111-111111111111';
 const PAGE_ID = 'collection-009-page-1';
+const PAGE_UUID = '22222222-2222-4222-8222-222222222222';
 
 function createStoredPage(overrides: Record<string, unknown> = {}) {
   return {
@@ -238,6 +262,9 @@ function createVerifiedLetterDto(overrides: Record<string, unknown> = {}) {
 describe('admin letters line review route integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    savePageLineSegmentsMock.mockResolvedValue(true);
+    updatePageSegmentTrustMock.mockResolvedValue(true);
+    updateLetterSegmentTrustMock.mockResolvedValue(true);
   });
 
   it('returns stored line segments for a page', async () => {
@@ -267,6 +294,217 @@ describe('admin letters line review route integration', () => {
     expect(response.body).toEqual({ lineSegments: [] });
   });
 
+  it('saves line segments only against the source revision and checksum the editor loaded', async () => {
+    findFirstMock.mockResolvedValueOnce(createStoredPage());
+    const checksum = 'a'.repeat(64);
+    const lineSegments = [{
+      line: 1,
+      baseline: [[1, 2], [3, 4]],
+      bbox: [1, 2, 3, 4],
+      ocrText: 'line',
+    }];
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'PATCH',
+      url: `/letters/pages/${PAGE_ID}/line-segments`,
+      path: `/letters/pages/${PAGE_ID}/line-segments`,
+      body: {
+        lineSegments,
+        primarySourceRevision: 4,
+        sourceChecksum: checksum,
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(savePageLineSegmentsMock).toHaveBeenCalledWith(
+      PAGE_ID,
+      lineSegments,
+      { primarySourceRevision: 4, sourceChecksum: checksum },
+    );
+  });
+
+  it('rejects a stale line-segment write without restoring old geometry', async () => {
+    findFirstMock.mockResolvedValueOnce(createStoredPage());
+    savePageLineSegmentsMock.mockResolvedValueOnce(false);
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'PATCH',
+      url: `/letters/pages/${PAGE_ID}/line-segments`,
+      path: `/letters/pages/${PAGE_ID}/line-segments`,
+      body: {
+        lineSegments: [],
+        primarySourceRevision: 3,
+        sourceChecksum: 'b'.repeat(64),
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({
+      error: expect.stringContaining('Page source changed'),
+    });
+  });
+
+  it.each([
+    {
+      label: 'revision',
+      body: {
+        lineSegments: [],
+        sourceChecksum: 'b'.repeat(64),
+      },
+    },
+    {
+      label: 'checksum',
+      body: {
+        lineSegments: [],
+        primarySourceRevision: 3,
+      },
+    },
+  ])('tells an old editor to reload when its line-segment request omits the source $label', async ({ body }) => {
+    findFirstMock.mockResolvedValueOnce(createStoredPage());
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'PATCH',
+      url: `/letters/pages/${PAGE_ID}/line-segments`,
+      path: `/letters/pages/${PAGE_ID}/line-segments`,
+      body,
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({
+      error: expect.stringContaining('reload'),
+    });
+    expect(savePageLineSegmentsMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps malformed supplied line-segment source revisions as validation errors', async () => {
+    findFirstMock.mockResolvedValueOnce(createStoredPage());
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'PATCH',
+      url: `/letters/pages/${PAGE_ID}/line-segments`,
+      path: `/letters/pages/${PAGE_ID}/line-segments`,
+      body: {
+        lineSegments: [],
+        primarySourceRevision: -1,
+        sourceChecksum: 'b'.repeat(64),
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(savePageLineSegmentsMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects stale page trust writes through the same source fence', async () => {
+    findFirstMock.mockResolvedValueOnce(createStoredPage());
+    updatePageSegmentTrustMock.mockResolvedValueOnce(false);
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'PATCH',
+      url: `/letters/pages/${PAGE_ID}/segment-trust`,
+      path: `/letters/pages/${PAGE_ID}/segment-trust`,
+      body: {
+        trustState: 'trusted',
+        primarySourceRevision: 3,
+        sourceChecksum: 'c'.repeat(64),
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+  });
+
+  it.each([
+    {
+      label: 'revision',
+      body: {
+        trustState: 'trusted',
+        sourceChecksum: 'c'.repeat(64),
+      },
+    },
+    {
+      label: 'checksum',
+      body: {
+        trustState: 'trusted',
+        primarySourceRevision: 3,
+      },
+    },
+  ])('tells an old editor to reload when its page-trust request omits the source $label', async ({ body }) => {
+    findFirstMock.mockResolvedValueOnce(createStoredPage());
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'PATCH',
+      url: `/letters/pages/${PAGE_ID}/segment-trust`,
+      path: `/letters/pages/${PAGE_ID}/segment-trust`,
+      body,
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({
+      error: expect.stringContaining('reload'),
+    });
+    expect(updatePageSegmentTrustMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      label: 'letter revision and page expectations',
+      body: { trustState: 'trusted' },
+    },
+    {
+      label: 'page checksum',
+      body: {
+        trustState: 'trusted',
+        primarySourceRevision: 4,
+        pages: [{ pageId: PAGE_ID }],
+      },
+    },
+  ])('tells an old editor to reload when bulk page trust omits its $label', async ({ body }) => {
+    const response = await invokeRouter(lettersRouter, {
+      method: 'PATCH',
+      url: `/letters/${LETTER_ID}/segment-trust`,
+      path: `/letters/${LETTER_ID}/segment-trust`,
+      body,
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({
+      error: expect.stringContaining('reload'),
+    });
+    expect(findManyMock).not.toHaveBeenCalled();
+    expect(updateLetterSegmentTrustMock).not.toHaveBeenCalled();
+  });
+
+  it('passes the complete loaded page set to the fenced bulk trust update', async () => {
+    const sourceChecksum = 'd'.repeat(64);
+    findManyMock.mockResolvedValueOnce([{ id: PAGE_UUID }]);
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'PATCH',
+      url: `/letters/${LETTER_ID}/segment-trust`,
+      path: `/letters/${LETTER_ID}/segment-trust`,
+      body: {
+        trustState: 'trusted',
+        primarySourceRevision: 4,
+        pages: [{ pageId: PAGE_UUID, sourceChecksum }],
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(updateLetterSegmentTrustMock).toHaveBeenCalledWith(
+      LETTER_ID,
+      'trusted',
+      4,
+      [{ pageId: PAGE_UUID, sourceChecksum }],
+    );
+  });
+
   it('updates transcript text through the letter update route and returns the refreshed DTO', async () => {
     updateLetterMock.mockResolvedValueOnce(true);
     fetchLetterWithRelatedAndTransformMock.mockResolvedValueOnce(createLetterDto());
@@ -276,6 +514,7 @@ describe('admin letters line review route integration', () => {
       url: `/letters/${LETTER_ID}`,
       path: `/letters/${LETTER_ID}`,
       body: {
+        primarySourceRevision: 4,
         transcriptionText: 'Edited line one\nEdited line two',
       },
       headers: { 'content-type': 'application/json' },
@@ -285,6 +524,7 @@ describe('admin letters line review route integration', () => {
     expect(updateLetterMock).toHaveBeenCalledWith(
       LETTER_ID,
       {
+        primarySourceRevision: 4,
         transcriptionText: 'Edited line one\nEdited line two',
       },
       'admin',
@@ -294,12 +534,13 @@ describe('admin letters line review route integration', () => {
     expect(response.body).toEqual(createLetterDto());
   });
 
-  it('creates transcript versions after validating the target letter exists', async () => {
-    getLetterByIdMock.mockResolvedValueOnce({ id: LETTER_ID });
+  it('creates transcript versions only for the source revision the editor loaded', async () => {
     createVersionMock.mockResolvedValueOnce({
-      versionNumber: 3,
-      fieldType: 'transcript',
-      source: 'human',
+      kind: 'created',
+      version: {
+        versionNumber: 3,
+        createdAt: '2026-07-24T12:00:00.000Z',
+      },
     });
 
     const response = await invokeRouter(lettersRouter, {
@@ -307,6 +548,7 @@ describe('admin letters line review route integration', () => {
       url: `/letters/${LETTER_ID}/versions`,
       path: `/letters/${LETTER_ID}/versions`,
       body: {
+        primarySourceRevision: 4,
         fieldType: 'transcript',
         content: 'Edited line one\nEdited line two',
         source: 'human',
@@ -315,16 +557,38 @@ describe('admin letters line review route integration', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(getLetterByIdMock).toHaveBeenCalledWith(LETTER_ID);
     expect(createVersionMock).toHaveBeenCalledWith(LETTER_ID, {
+      primarySourceRevision: 4,
       fieldType: 'transcript',
       content: 'Edited line one\nEdited line two',
       source: 'human',
     });
     expect(response.body).toEqual({
       versionNumber: 3,
-      fieldType: 'transcript',
-      source: 'human',
+      createdAt: '2026-07-24T12:00:00.000Z',
+    });
+  });
+
+  it('returns a conflict instead of recording a delayed version of superseded content', async () => {
+    createVersionMock.mockResolvedValueOnce({ kind: 'content_changed' });
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'POST',
+      url: `/letters/${LETTER_ID}/versions`,
+      path: `/letters/${LETTER_ID}/versions`,
+      body: {
+        primarySourceRevision: 4,
+        fieldType: 'transcript',
+        content: 'Superseded transcript',
+        source: 'human',
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toEqual({
+      error: 'Letter content changed before its version could be saved',
+      requestId: expect.any(String),
     });
   });
 
@@ -338,7 +602,10 @@ describe('admin letters line review route integration', () => {
       },
     });
 
-    getLetterByIdMock.mockResolvedValueOnce({ id: LETTER_ID });
+    getLetterByIdMock.mockResolvedValueOnce({
+      id: LETTER_ID,
+      primarySourceRevision: 4,
+    });
     executeRetagForLetterMock.mockResolvedValueOnce({ status: 'updated' });
     fetchLetterWithRelatedAndTransformMock.mockResolvedValueOnce(refreshedLetter);
 
@@ -347,6 +614,7 @@ describe('admin letters line review route integration', () => {
       url: `/letters/${LETTER_ID}/retag`,
       path: `/letters/${LETTER_ID}/retag`,
       body: {
+        primarySourceRevision: 4,
         field: 'sender',
         oldSender: 'A. Lovelace',
         newSender: 'Ada Lovelace',
@@ -357,12 +625,43 @@ describe('admin letters line review route integration', () => {
     expect(response.statusCode).toBe(200);
     expect(getLetterByIdMock).toHaveBeenCalledWith(LETTER_ID);
     expect(executeRetagForLetterMock).toHaveBeenCalledWith(LETTER_ID, {
+      primarySourceRevision: 4,
       field: 'sender',
       oldSender: 'A. Lovelace',
       newSender: 'Ada Lovelace',
     });
     expect(fetchLetterWithRelatedAndTransformMock).toHaveBeenCalledWith(LETTER_ID);
     expect(response.body).toEqual(refreshedLetter);
+  });
+
+  it('returns a conflict when a metadata re-tag is superseded in flight', async () => {
+    getLetterByIdMock.mockResolvedValueOnce({
+      id: LETTER_ID,
+      primarySourceRevision: 4,
+    });
+    executeRetagForLetterMock.mockResolvedValueOnce({
+      status: 'skipped',
+      reason: 'revision_changed_before_save',
+    });
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'POST',
+      url: `/letters/${LETTER_ID}/retag`,
+      path: `/letters/${LETTER_ID}/retag`,
+      body: {
+        primarySourceRevision: 4,
+        field: 'sender',
+        oldSender: 'A. Lovelace',
+        newSender: 'Ada Lovelace',
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toEqual({
+      error: 'Letter metadata changed; reload before updating its references',
+      requestId: expect.any(String),
+    });
   });
 
   it('passes includeExtras through regeneration and returns the refreshed letter DTO', async () => {
@@ -378,11 +677,12 @@ describe('admin letters line review route integration', () => {
       url: `/letters/${LETTER_ID}/regenerate-transcription?includeExtras=true`,
       path: `/letters/${LETTER_ID}/regenerate-transcription`,
       query: { includeExtras: 'true' },
+      body: { primarySourceRevision: 4 },
       headers: { 'content-type': 'application/json' },
     });
 
     expect(response.statusCode).toBe(200);
-    expect(regenerateTranscriptionMock).toHaveBeenCalledWith(LETTER_ID, true);
+    expect(regenerateTranscriptionMock).toHaveBeenCalledWith(LETTER_ID, true, 4);
     expect(response.body).toEqual({
       letter: createLetterDto(),
       regenerated: {
@@ -401,11 +701,12 @@ describe('admin letters line review route integration', () => {
       method: 'POST',
       url: `/letters/${LETTER_ID}/transcribe-letter`,
       path: `/letters/${LETTER_ID}/transcribe-letter`,
+      body: { primarySourceRevision: 4 },
       headers: { 'content-type': 'application/json' },
     });
 
     expect(response.statusCode).toBe(200);
-    expect(transcribeLetterOnlyMock).toHaveBeenCalledWith(LETTER_ID);
+    expect(transcribeLetterOnlyMock).toHaveBeenCalledWith(LETTER_ID, 4);
     expect(response.body).toEqual({
       letter: createLetterDto(),
       transcribed: {
@@ -424,6 +725,7 @@ describe('admin letters line review route integration', () => {
       method: 'POST',
       url: `/letters/${LETTER_ID}/transcribe-letter`,
       path: `/letters/${LETTER_ID}/transcribe-letter`,
+      body: { primarySourceRevision: 4 },
       headers: { 'content-type': 'application/json' },
     });
 
@@ -446,6 +748,7 @@ describe('admin letters line review route integration', () => {
       method: 'POST',
       url: `/letters/${LETTER_ID}/transcribe-letter`,
       path: `/letters/${LETTER_ID}/transcribe-letter`,
+      body: { primarySourceRevision: 4 },
       headers: { 'content-type': 'application/json' },
     });
 
@@ -457,6 +760,27 @@ describe('admin letters line review route integration', () => {
     expect(response.headers['x-request-id']).toBe(
       (response.body as { requestId: string }).requestId,
     );
+  });
+
+  it('preserves the stable source-conflict code from direct transcription', async () => {
+    transcribeLetterOnlyMock.mockRejectedValueOnce(
+      sourceRevisionChanged('Letter source changed while transcription was running'),
+    );
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'POST',
+      url: `/letters/${LETTER_ID}/transcribe-letter`,
+      path: `/letters/${LETTER_ID}/transcribe-letter`,
+      body: { primarySourceRevision: 4 },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({
+      error: 'Letter source changed while transcription was running',
+      code: 'SOURCE_REVISION_CHANGED',
+      requestId: expect.any(String),
+    });
   });
 
   it('transcribes extra content and returns the refreshed letter DTO', async () => {
@@ -475,11 +799,12 @@ describe('admin letters line review route integration', () => {
       method: 'POST',
       url: `/letters/${LETTER_ID}/transcribe-extras`,
       path: `/letters/${LETTER_ID}/transcribe-extras`,
+      body: { primarySourceRevision: 4 },
       headers: { 'content-type': 'application/json' },
     });
 
     expect(response.statusCode).toBe(200);
-    expect(transcribeExtrasMock).toHaveBeenCalledWith(LETTER_ID);
+    expect(transcribeExtrasMock).toHaveBeenCalledWith(LETTER_ID, 4);
     expect(fetchLetterWithRelatedAndTransformMock).toHaveBeenCalledWith(LETTER_ID);
     expect(response.body).toEqual({
       letter: createLetterDto({
@@ -503,6 +828,7 @@ describe('admin letters line review route integration', () => {
       method: 'POST',
       url: `/letters/${LETTER_ID}/transcribe-extras`,
       path: `/letters/${LETTER_ID}/transcribe-extras`,
+      body: { primarySourceRevision: 4 },
       headers: { 'content-type': 'application/json' },
     });
 
@@ -548,12 +874,19 @@ describe('admin letters line review route integration', () => {
       method: 'PUT',
       url: `/letters/${LETTER_ID}/extra-content`,
       path: `/letters/${LETTER_ID}/extra-content`,
-      body: { extraContent: 'Typed by an admin' },
+      body: {
+        extraContent: 'Typed by an admin',
+        primarySourceRevision: 4,
+      },
       headers: { 'content-type': 'application/json' },
     });
 
     expect(response.statusCode).toBe(200);
-    expect(updateExtraContentMock).toHaveBeenCalledWith(LETTER_ID, 'Typed by an admin');
+    expect(updateExtraContentMock).toHaveBeenCalledWith(
+      LETTER_ID,
+      'Typed by an admin',
+      4,
+    );
     expect(fetchLetterWithRelatedAndTransformMock).toHaveBeenCalledWith(LETTER_ID);
     expect(response.body).toEqual(
       createLetterDto({
@@ -580,12 +913,19 @@ describe('admin letters line review route integration', () => {
       method: 'POST',
       url: `/letters/${LETTER_ID}/describe-photo`,
       path: `/letters/${LETTER_ID}/describe-photo`,
-      body: { photoDescriptionContext: 'Likely Jimmy and Molly' },
+      body: {
+        photoDescriptionContext: 'Likely Jimmy and Molly',
+        primarySourceRevision: 4,
+      },
       headers: { 'content-type': 'application/json' },
     });
 
     expect(response.statusCode).toBe(200);
-    expect(describePhotoMock).toHaveBeenCalledWith(LETTER_ID, 'Likely Jimmy and Molly');
+    expect(describePhotoMock).toHaveBeenCalledWith(
+      LETTER_ID,
+      'Likely Jimmy and Molly',
+      4,
+    );
     expect(fetchLetterWithRelatedAndTransformMock).toHaveBeenCalledWith(LETTER_ID);
     expect(response.body).toEqual({
       letter: createLetterDto({
@@ -630,7 +970,10 @@ describe('admin letters line review route integration', () => {
       method: 'PUT',
       url: `/letters/${LETTER_ID}/photo-description`,
       path: `/letters/${LETTER_ID}/photo-description`,
-      body: { photoDescription: 'A corrected porch snapshot description.' },
+      body: {
+        photoDescription: 'A corrected porch snapshot description.',
+        primarySourceRevision: 4,
+      },
       headers: { 'content-type': 'application/json' },
     });
 
@@ -638,7 +981,7 @@ describe('admin letters line review route integration', () => {
     expect(updatePhotoDescriptionMock).toHaveBeenCalledWith(LETTER_ID, {
       photoDescription: 'A corrected porch snapshot description.',
       photoDescriptionContext: undefined,
-    });
+    }, 4);
     expect(fetchLetterWithRelatedAndTransformMock).toHaveBeenCalledWith(LETTER_ID);
     expect(response.body).toEqual(
       createLetterDto({
@@ -661,12 +1004,19 @@ describe('admin letters line review route integration', () => {
       method: 'PUT',
       url: `/letters/${LETTER_ID}/extra-content`,
       path: `/letters/${LETTER_ID}/extra-content`,
-      body: { extraContentTranscript: 'Legacy payload text' },
+      body: {
+        extraContentTranscript: 'Legacy payload text',
+        primarySourceRevision: 4,
+      },
       headers: { 'content-type': 'application/json' },
     });
 
     expect(response.statusCode).toBe(200);
-    expect(updateExtraContentMock).toHaveBeenCalledWith(LETTER_ID, 'Legacy payload text');
+    expect(updateExtraContentMock).toHaveBeenCalledWith(
+      LETTER_ID,
+      'Legacy payload text',
+      4,
+    );
     expect(response.body).toEqual(
       createLetterDto({
         extraContentTranscript: 'Legacy payload text',
@@ -689,11 +1039,12 @@ describe('admin letters line review route integration', () => {
       method: 'POST',
       url: `/letters/${LETTER_ID}/verify-extra-content`,
       path: `/letters/${LETTER_ID}/verify-extra-content`,
+      body: { primarySourceRevision: 4 },
       headers: { 'content-type': 'application/json' },
     });
 
     expect(response.statusCode).toBe(200);
-    expect(verifyExtraContentMock).toHaveBeenCalledWith(LETTER_ID, 'admin');
+    expect(verifyExtraContentMock).toHaveBeenCalledWith(LETTER_ID, 4, 'admin');
     expect(response.body).toEqual(
       createLetterDto({
         extraContentStatus: 'VERIFIED',
@@ -717,11 +1068,12 @@ describe('admin letters line review route integration', () => {
       method: 'POST',
       url: `/letters/${LETTER_ID}/verify-photo-description`,
       path: `/letters/${LETTER_ID}/verify-photo-description`,
+      body: { primarySourceRevision: 4 },
       headers: { 'content-type': 'application/json' },
     });
 
     expect(response.statusCode).toBe(200);
-    expect(verifyPhotoDescriptionMock).toHaveBeenCalledWith(LETTER_ID, 'admin');
+    expect(verifyPhotoDescriptionMock).toHaveBeenCalledWith(LETTER_ID, 4, 'admin');
     expect(response.body).toEqual(
       createLetterDto({
         photoDescriptionStatus: 'VERIFIED',
@@ -738,11 +1090,12 @@ describe('admin letters line review route integration', () => {
       method: 'POST',
       url: `/letters/${LETTER_ID}/unverify-extra-content`,
       path: `/letters/${LETTER_ID}/unverify-extra-content`,
+      body: { primarySourceRevision: 4 },
       headers: { 'content-type': 'application/json' },
     });
 
     expect(response.statusCode).toBe(404);
-    expect(unverifyExtraContentMock).toHaveBeenCalledWith(LETTER_ID);
+    expect(unverifyExtraContentMock).toHaveBeenCalledWith(LETTER_ID, 4);
     expect(response.body).toEqual({
       error: 'Letter not found or not verified',
       requestId: expect.any(String),
@@ -759,11 +1112,12 @@ describe('admin letters line review route integration', () => {
       method: 'POST',
       url: `/letters/${LETTER_ID}/unverify-photo-description`,
       path: `/letters/${LETTER_ID}/unverify-photo-description`,
+      body: { primarySourceRevision: 4 },
       headers: { 'content-type': 'application/json' },
     });
 
     expect(response.statusCode).toBe(404);
-    expect(unverifyPhotoDescriptionMock).toHaveBeenCalledWith(LETTER_ID);
+    expect(unverifyPhotoDescriptionMock).toHaveBeenCalledWith(LETTER_ID, 4);
     expect(response.body).toEqual({
       error: 'Letter not found or not verified',
       requestId: expect.any(String),
@@ -775,34 +1129,158 @@ describe('admin letters line review route integration', () => {
 
   it.each([
     {
+      method: 'POST',
+      path: `/letters/${LETTER_ID}/process`,
+      body: {},
+    },
+    {
+      method: 'POST',
+      path: `/letters/${LETTER_ID}/regenerate-transcription`,
+      body: {},
+    },
+    {
+      method: 'POST',
+      path: `/letters/${LETTER_ID}/transcribe-letter`,
+      body: {},
+    },
+    {
+      method: 'POST',
+      path: `/letters/${LETTER_ID}/transcribe-extras`,
+      body: {},
+    },
+    {
+      method: 'PATCH',
+      path: `/letters/${LETTER_ID}/identity`,
+      body: { sender: 'Stale sender' },
+    },
+    {
+      method: 'POST',
+      path: `/letters/${LETTER_ID}/retag`,
+      body: {
+        field: 'sender',
+        oldSender: 'Old sender',
+        newSender: 'Stale sender',
+      },
+    },
+    {
+      method: 'POST',
+      path: `/letters/${LETTER_ID}/versions`,
+      body: {
+        fieldType: 'transcript',
+        content: 'Stale transcript',
+        source: 'human',
+      },
+    },
+    {
+      method: 'PUT',
+      path: `/letters/${LETTER_ID}/extra-content`,
+      body: { extraContent: 'Stale enclosure text' },
+    },
+    {
+      method: 'POST',
+      path: `/letters/${LETTER_ID}/describe-photo`,
+      body: { photoDescriptionContext: 'Stale context' },
+    },
+    {
+      method: 'PUT',
+      path: `/letters/${LETTER_ID}/photo-description`,
+      body: { photoDescription: 'Stale description' },
+    },
+    {
+      method: 'POST',
+      path: `/letters/${LETTER_ID}/verify-transcript`,
+      body: {},
+    },
+    {
+      method: 'POST',
+      path: `/letters/${LETTER_ID}/unverify-transcript`,
+      body: {},
+    },
+    {
+      method: 'POST',
+      path: `/letters/${LETTER_ID}/verify-metadata`,
+      body: {},
+    },
+    {
+      method: 'POST',
+      path: `/letters/${LETTER_ID}/unverify-metadata`,
+      body: {},
+    },
+    {
+      method: 'POST',
+      path: `/letters/${LETTER_ID}/verify-extra-content`,
+      body: {},
+    },
+    {
+      method: 'POST',
+      path: `/letters/${LETTER_ID}/unverify-extra-content`,
+      body: {},
+    },
+    {
+      method: 'POST',
+      path: `/letters/${LETTER_ID}/verify-photo-description`,
+      body: {},
+    },
+    {
+      method: 'POST',
+      path: `/letters/${LETTER_ID}/unverify-photo-description`,
+      body: {},
+    },
+  ])('requires a page-source revision for $method $path', async ({
+    method,
+    path,
+    body,
+  }) => {
+    const response = await invokeRouter(lettersRouter, {
+      method,
+      url: path,
+      path,
+      body,
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({
+      error: expect.stringContaining('source version is missing'),
+      code: 'SOURCE_REVISION_CHANGED',
+      requestId: expect.any(String),
+    });
+  });
+
+  it.each([
+    {
       name: 'verifies transcript through the admin letters route',
       path: `/letters/${LETTER_ID}/verify-transcript`,
       serviceMock: verifyTranscriptMock,
       dto: createVerifiedLetterDto({ metadataVerifiedAt: null, metadataVerifiedBy: null }),
-      expectedArgs: [LETTER_ID, 'admin'],
+      body: { primarySourceRevision: 7 },
+      expectedArgs: [LETTER_ID, 7, 'admin'],
     },
     {
       name: 'removes transcript verification through the admin letters route',
       path: `/letters/${LETTER_ID}/unverify-transcript`,
       serviceMock: unverifyTranscriptMock,
       dto: createLetterDto({ transcriptVerifiedAt: null, transcriptVerifiedBy: null }),
-      expectedArgs: [LETTER_ID],
+      body: { primarySourceRevision: 7 },
+      expectedArgs: [LETTER_ID, 7],
     },
     {
       name: 'verifies metadata through the admin letters route',
       path: `/letters/${LETTER_ID}/verify-metadata`,
       serviceMock: verifyMetadataMock,
       dto: createVerifiedLetterDto({ transcriptVerifiedAt: null, transcriptVerifiedBy: null }),
-      expectedArgs: [LETTER_ID, 'admin'],
+      body: { primarySourceRevision: 7 },
+      expectedArgs: [LETTER_ID, 7, 'admin'],
     },
     {
       name: 'removes metadata verification through the admin letters route',
       path: `/letters/${LETTER_ID}/unverify-metadata`,
       serviceMock: unverifyMetadataMock,
       dto: createLetterDto({ metadataVerifiedAt: null, metadataVerifiedBy: null }),
-      expectedArgs: [LETTER_ID],
+      body: { primarySourceRevision: 7 },
+      expectedArgs: [LETTER_ID, 7],
     },
-  ])('$name', async ({ path, serviceMock, dto, expectedArgs }) => {
+  ])('$name', async ({ path, serviceMock, dto, body, expectedArgs }) => {
     serviceMock.mockResolvedValueOnce(true);
     fetchLetterWithRelatedAndTransformMock.mockResolvedValueOnce(dto);
 
@@ -810,6 +1288,7 @@ describe('admin letters line review route integration', () => {
       method: 'POST',
       url: path,
       path,
+      body,
       headers: { 'content-type': 'application/json' },
     });
 

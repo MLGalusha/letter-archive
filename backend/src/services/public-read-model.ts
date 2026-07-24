@@ -122,14 +122,19 @@ export function isVerifiedPublicContent(status: string | null | undefined): bool
   return status === 'VERIFIED';
 }
 
-export function toPublicCollection(collection: PublicCollectionSource): PublicCollection {
+export function toPublicCollection(
+  collection: PublicCollectionSource,
+  profileSourceCurrent: boolean,
+): PublicCollection {
   return {
     id: collection.id,
     collectionCode: collection.collectionCode,
     title: collection.title,
     description: collection.description,
     createdAt: collection.createdAt,
-    hook: isVerifiedPublicContent(collection.profileStatus) ? collection.hook : null,
+    hook: isVerifiedPublicContent(collection.profileStatus) && profileSourceCurrent
+      ? collection.hook
+      : null,
   };
 }
 

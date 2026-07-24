@@ -10,8 +10,13 @@ const {
   propagateNameMock,
   commitDirectIdentityFieldMock,
   syncLetterParticipantsFromMetadataMock,
+  generateCollectionProfileMock,
+  computeCollectionProfileSourceFingerprintMock,
+  applyCollectionEditorMutationMock,
+  collectionIdentityFingerprintMock,
   queryCollectionsFindManyMock,
   queryLettersFindManyMock,
+  queryLetterPagesFindFirstMock,
   executeMock,
   selectMock,
   selectFromMock,
@@ -34,8 +39,13 @@ const {
   propagateNameMock: vi.fn(),
   commitDirectIdentityFieldMock: vi.fn(),
   syncLetterParticipantsFromMetadataMock: vi.fn(),
+  generateCollectionProfileMock: vi.fn(),
+  computeCollectionProfileSourceFingerprintMock: vi.fn(),
+  applyCollectionEditorMutationMock: vi.fn(),
+  collectionIdentityFingerprintMock: vi.fn(),
   queryCollectionsFindManyMock: vi.fn(),
   queryLettersFindManyMock: vi.fn(),
+  queryLetterPagesFindFirstMock: vi.fn(),
   executeMock: vi.fn(),
   selectMock: vi.fn(),
   selectFromMock: vi.fn(),
@@ -98,6 +108,21 @@ vi.mock('../../../services/entities/participant-sync.js', () => ({
   syncLetterParticipantsFromMetadata: syncLetterParticipantsFromMetadataMock,
 }));
 
+vi.mock('../../../ai/generate-collection-profile.js', () => ({
+  assessCollectionCompleteness: vi.fn(),
+  generateCollectionProfile: generateCollectionProfileMock,
+}));
+
+vi.mock('../../../services/collection-profile-source.js', () => ({
+  computeCollectionProfileSourceFingerprint:
+    computeCollectionProfileSourceFingerprintMock,
+}));
+
+vi.mock('../../../services/collection-editor-mutation.js', () => ({
+  applyCollectionEditorMutation: applyCollectionEditorMutationMock,
+  collectionIdentityFingerprint: collectionIdentityFingerprintMock,
+}));
+
 vi.mock('../../../db/index.js', () => ({
   db: {
     query: {
@@ -106,6 +131,9 @@ vi.mock('../../../db/index.js', () => ({
       },
       letters: {
         findMany: queryLettersFindManyMock,
+      },
+      letterPages: {
+        findFirst: queryLetterPagesFindFirstMock,
       },
     },
     execute: executeMock,
@@ -124,8 +152,12 @@ vi.mock('../../../db/index.js', () => ({
   },
   collections: {
     id: 'collections.id',
+    profileRevision: 'collections.profileRevision',
+    profileSourceFingerprint: 'collections.profileSourceFingerprint',
+    profileStatus: 'collections.profileStatus',
   },
   letterPages: {
+    id: 'letterPages.id',
     letterId: 'letterPages.letterId',
   },
 }));
@@ -171,6 +203,23 @@ describe('admin collections route integration', () => {
     });
     propagateNameMock.mockResolvedValue(undefined);
     syncLetterParticipantsFromMetadataMock.mockResolvedValue(undefined);
+    generateCollectionProfileMock.mockResolvedValue({
+      sourceFingerprint: 'a'.repeat(32),
+      hook: 'Generated hook',
+      narrative: 'Generated narrative',
+      correspondents: [],
+      isStub: true,
+    });
+    computeCollectionProfileSourceFingerprintMock.mockResolvedValue(
+      'a'.repeat(32),
+    );
+    applyCollectionEditorMutationMock.mockResolvedValue({
+      profileRevision: 6,
+      identityFingerprint: 'c'.repeat(64),
+      updatedLetterCount: 2,
+      changed: true,
+    });
+    collectionIdentityFingerprintMock.mockReturnValue('b'.repeat(64));
   });
 
   it('returns admin collection stats with page counts and verification totals', async () => {
@@ -330,6 +379,7 @@ describe('admin collections route integration', () => {
       profileStartHereLetterId: null,
       profileStartHereReason: null,
       profileCorrespondents: [],
+      identityFingerprint: 'b'.repeat(64),
       letters: [
         { id: 'letter-1', title: 'First letter' },
         { id: 'letter-3', title: 'Second letter' },
@@ -394,41 +444,61 @@ describe('admin collections route integration', () => {
     expect(updateSetMock).not.toHaveBeenCalled();
   });
 
-  it('renames a correspondent across matching letters in a collection only', async () => {
-    const observedAt = new Date('2026-07-17T12:00:00.000Z');
-    getCollectionByCodeMock.mockResolvedValueOnce({
-      id: 'collection-9',
-      collectionCode: '009',
-      title: 'Collection Nine',
-      description: 'Ninth set',
+  it('adapts the complete collection editor payload to one mutation owner', async () => {
+    const response = await invokeRouter(adminCollectionsRouter, {
+      method: 'PUT',
+      url: '/009/editor',
+      path: '/009/editor',
+      body: {
+        profileRevision: 5,
+        identityFingerprint: 'b'.repeat(64),
+        hook: 'Updated hook',
+        profileNarrative: 'Updated narrative',
+        profileStartHereLetterId: null,
+        profileCorrespondents: [{
+          name: '  Jimmie  ',
+          hook: '  Short hook  ',
+          biography: '',
+        }],
+        description: 'Updated notes',
+        correspondentRenames: [{
+          oldName: 'Jimmie',
+          newName: 'Jimmy',
+          roles: ['sender'],
+        }],
+      },
+      headers: { 'content-type': 'application/json' },
     });
-    queryLettersFindManyMock.mockResolvedValueOnce([
-      { id: 'letter-1', sender: 'Jimmie', recipient: 'Molly', metadataRevision: 1, updatedAt: observedAt },
-      { id: 'letter-2', sender: 'Jimmie', recipient: 'Molly', metadataRevision: 2, updatedAt: observedAt },
-      { id: 'letter-3', sender: 'Someone Else', recipient: 'Molly', metadataRevision: 3, updatedAt: observedAt },
-    ]);
-    propagateNameMock
-      .mockResolvedValueOnce({
-        letter: {
-          id: 'letter-1',
-          sender: 'Jimmy',
-          recipient: 'Molly',
-          metadataRevision: 2,
-          updatedAt: new Date('2026-07-17T12:01:00.000Z'),
-        },
-        fieldsUpdated: ['sender'],
-      })
-      .mockResolvedValueOnce({
-        letter: {
-          id: 'letter-2',
-          sender: 'Jimmy',
-          recipient: 'Molly',
-          metadataRevision: 3,
-          updatedAt: new Date('2026-07-17T12:01:00.000Z'),
-        },
-        fieldsUpdated: ['sender'],
-      });
 
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual({
+      profileRevision: 6,
+      identityFingerprint: 'c'.repeat(64),
+      updatedLetterCount: 2,
+      changed: true,
+    });
+    expect(applyCollectionEditorMutationMock).toHaveBeenCalledWith({
+      code: '009',
+      expectedProfileRevision: 5,
+      expectedIdentityFingerprint: 'b'.repeat(64),
+      hook: 'Updated hook',
+      profileNarrative: 'Updated narrative',
+      profileStartHereLetterId: null,
+      profileCorrespondents: [{
+        name: 'Jimmie',
+        hook: 'Short hook',
+        biography: null,
+      }],
+      description: 'Updated notes',
+      correspondentRenames: [{
+        oldName: 'Jimmie',
+        newName: 'Jimmy',
+        roles: ['sender'],
+      }],
+    });
+  });
+
+  it('routes the legacy correspondent endpoint through the atomic owner', async () => {
     const response = await invokeRouter(adminCollectionsRouter, {
       method: 'PATCH',
       url: '/009/correspondents',
@@ -446,183 +516,37 @@ describe('admin collections route integration', () => {
       updatedCount: 2,
       message: 'Updated 2 letters',
     });
-    expect(propagateNameMock).toHaveBeenCalledTimes(2);
-    expect(propagateNameMock).toHaveBeenNthCalledWith(1, {
-      letterId: 'letter-1',
-      field: 'sender',
-      oldName: 'Jimmie',
-      newName: 'Jimmy',
-      observed: {
-        value: 'Jimmie',
-        metadataRevision: 1,
-        updatedAt: observedAt,
-      },
-    });
-    expect(propagateNameMock).toHaveBeenNthCalledWith(2, {
-      letterId: 'letter-2',
-      field: 'sender',
-      oldName: 'Jimmie',
-      newName: 'Jimmy',
-      observed: {
-        value: 'Jimmie',
-        metadataRevision: 2,
-        updatedAt: observedAt,
-      },
-    });
-    expect(syncLetterParticipantsFromMetadataMock).toHaveBeenNthCalledWith(1, {
-      letterId: 'letter-1',
-      sender: 'Jimmy',
-    });
-    expect(syncLetterParticipantsFromMetadataMock).toHaveBeenNthCalledWith(2, {
-      letterId: 'letter-2',
-      sender: 'Jimmy',
-    });
-  });
-
-  it('does not turn a name-propagation revision conflict into a stale fallback update', async () => {
-    const updatedAt = new Date('2026-07-17T12:00:00.000Z');
-    getCollectionByCodeMock.mockResolvedValueOnce({
-      id: 'collection-9',
-      collectionCode: '009',
-      title: 'Collection Nine',
-      description: 'Ninth set',
-    });
-    queryLettersFindManyMock.mockResolvedValueOnce([{
-      id: 'letter-1',
-      sender: 'Jimmie',
-      recipient: 'Molly',
-      metadataRevision: 4,
-      updatedAt,
-    }]);
-    propagateNameMock.mockRejectedValueOnce(Object.assign(
-      new Error('Metadata changed during name propagation'),
-      { status: 409 },
-    ));
-
-    const response = await invokeRouter(adminCollectionsRouter, {
-      method: 'PATCH',
-      url: '/009/correspondents',
-      path: '/009/correspondents',
-      body: {
+    expect(applyCollectionEditorMutationMock).toHaveBeenCalledWith({
+      code: '009',
+      correspondentRenames: [{
         oldName: 'Jimmie',
         newName: 'Jimmy',
         roles: ['sender'],
-      },
-      headers: { 'content-type': 'application/json' },
+      }],
     });
-
-    expect(response.statusCode).toBe(409);
-    expect(updateMock).not.toHaveBeenCalled();
-    expect(syncLetterParticipantsFromMetadataMock).not.toHaveBeenCalled();
   });
 
-  it('guards the non-conflict fallback with the observed metadata revision', async () => {
-    const updatedAt = new Date('2026-07-17T12:00:00.000Z');
-    getCollectionByCodeMock.mockResolvedValueOnce({
-      id: 'collection-9',
-      collectionCode: '009',
-      title: 'Collection Nine',
-      description: 'Ninth set',
-    });
-    queryLettersFindManyMock.mockResolvedValueOnce([{
-      id: 'letter-1',
-      sender: 'Jimmie',
-      recipient: 'Molly',
-      metadataRevision: 4,
-      updatedAt,
-    }]);
-    propagateNameMock.mockRejectedValueOnce(new Error('Unexpected propagation failure'));
-    commitDirectIdentityFieldMock.mockRejectedValueOnce(Object.assign(
-      new Error('Metadata changed during identity update'),
-      { status: 409 },
-    ));
+  it('surfaces an atomic editor conflict without invoking another writer', async () => {
+    applyCollectionEditorMutationMock.mockRejectedValueOnce(
+      Object.assign(new Error('Collection changed'), { status: 409 }),
+    );
 
     const response = await invokeRouter(adminCollectionsRouter, {
-      method: 'PATCH',
-      url: '/009/correspondents',
-      path: '/009/correspondents',
+      method: 'PUT',
+      url: '/009/editor',
+      path: '/009/editor',
       body: {
-        oldName: 'Jimmie',
-        newName: 'Jimmy',
-        roles: ['sender'],
+        profileRevision: 5,
+        identityFingerprint: 'b'.repeat(64),
+        hook: 'Updated hook',
+        correspondentRenames: [],
       },
       headers: { 'content-type': 'application/json' },
     });
 
     expect(response.statusCode).toBe(409);
-    expect(commitDirectIdentityFieldMock).toHaveBeenCalledWith({
-      letter: {
-        id: 'letter-1',
-        sender: 'Jimmie',
-        recipient: 'Molly',
-        metadataRevision: 4,
-        updatedAt,
-      },
-      field: 'sender',
-      value: 'Jimmy',
-    });
+    expect(response.body).toMatchObject({ error: 'Collection changed' });
     expect(updateMock).not.toHaveBeenCalled();
-    expect(syncLetterParticipantsFromMetadataMock).not.toHaveBeenCalled();
-  });
-
-  it('chains a second role from the first committed revision and never syncs a failed role', async () => {
-    const initialAt = new Date('2026-07-17T12:00:00.000Z');
-    const senderCommittedAt = new Date('2026-07-17T12:01:00.000Z');
-    getCollectionByCodeMock.mockResolvedValueOnce({
-      id: 'collection-9',
-      collectionCode: '009',
-      title: 'Collection Nine',
-      description: 'Ninth set',
-    });
-    queryLettersFindManyMock.mockResolvedValueOnce([{
-      id: 'letter-1',
-      sender: 'Jimmie',
-      recipient: 'Jimmie',
-      metadataRevision: 4,
-      updatedAt: initialAt,
-    }]);
-    propagateNameMock
-      .mockResolvedValueOnce({
-        letter: {
-          id: 'letter-1',
-          sender: 'Jimmy',
-          recipient: 'Jimmie',
-          metadataRevision: 5,
-          updatedAt: senderCommittedAt,
-        },
-        fieldsUpdated: ['sender'],
-      })
-      .mockRejectedValueOnce(Object.assign(new Error('Recipient changed'), { status: 409 }));
-
-    const response = await invokeRouter(adminCollectionsRouter, {
-      method: 'PATCH',
-      url: '/009/correspondents',
-      path: '/009/correspondents',
-      body: {
-        oldName: 'Jimmie',
-        newName: 'Jimmy',
-        roles: ['sender', 'recipient'],
-      },
-      headers: { 'content-type': 'application/json' },
-    });
-
-    expect(response.statusCode).toBe(409);
-    expect(propagateNameMock).toHaveBeenNthCalledWith(2, {
-      letterId: 'letter-1',
-      field: 'recipient',
-      oldName: 'Jimmie',
-      newName: 'Jimmy',
-      observed: {
-        value: 'Jimmie',
-        metadataRevision: 5,
-        updatedAt: senderCommittedAt,
-      },
-    });
-    expect(syncLetterParticipantsFromMetadataMock).toHaveBeenCalledTimes(1);
-    expect(syncLetterParticipantsFromMetadataMock).toHaveBeenCalledWith({
-      letterId: 'letter-1',
-      sender: 'Jimmy',
-    });
   });
 
   it('injects request ids into invalid update payload responses', async () => {
@@ -631,6 +555,7 @@ describe('admin collections route integration', () => {
       url: '/009',
       path: '/009',
       body: {
+        profileRevision: 2,
         title: '',
       },
       headers: { 'content-type': 'application/json' },
@@ -653,6 +578,8 @@ describe('admin collections route integration', () => {
       collectionCode: '009',
       title: 'Collection Nine',
       description: 'Ninth set',
+      profileRevision: 2,
+      profileStatus: 'VERIFIED',
     });
     returningMock.mockResolvedValueOnce([
       {
@@ -668,6 +595,7 @@ describe('admin collections route integration', () => {
       url: '/009',
       path: '/009',
       body: {
+        profileRevision: 2,
         title: 'Updated title',
         description: 'Updated description',
       },
@@ -681,9 +609,102 @@ describe('admin collections route integration', () => {
       title: 'Updated title',
       description: 'Updated description',
     });
-    expect(updateSetMock).toHaveBeenCalledWith({
+    expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
       title: 'Updated title',
       description: 'Updated description',
+      profileRevision: expect.objectContaining({
+        strings: expect.any(Array),
+      }),
+      profileStatus: expect.objectContaining({
+        strings: expect.any(Array),
+      }),
+    }));
+    expect(updateWhereMock).toHaveBeenCalledWith({
+      op: 'and',
+      conditions: [
+        { op: 'eq', left: 'collections.id', right: 'collection-9' },
+        { op: 'eq', left: 'collections.profileRevision', right: 2 },
+      ],
+    });
+  });
+
+  it('does not advance or demote a collection profile for metadata no-ops', async () => {
+    const collection = {
+      id: 'collection-9',
+      collectionCode: '009',
+      title: 'Collection Nine',
+      description: 'Ninth set',
+      profileRevision: 2,
+      profileStatus: 'VERIFIED',
+    };
+    getCollectionByCodeMock.mockResolvedValueOnce(collection);
+
+    const response = await invokeRouter(adminCollectionsRouter, {
+      method: 'PUT',
+      url: '/009',
+      path: '/009',
+      body: {
+        profileRevision: 2,
+        title: 'Collection Nine',
+        description: 'Ninth set',
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual(collection);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it('requires the source revision before updating legacy collection metadata', async () => {
+    const response = await invokeRouter(adminCollectionsRouter, {
+      method: 'PUT',
+      url: '/009',
+      path: '/009',
+      body: { title: 'Updated title' },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({
+      error: expect.stringContaining('version is missing'),
+    });
+    expect(getCollectionByCodeMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a legacy metadata save when a concurrent source change wins', async () => {
+    getCollectionByCodeMock.mockResolvedValueOnce({
+      id: 'collection-9',
+      collectionCode: '009',
+      title: 'Collection Nine',
+      description: 'Ninth set',
+      profileRevision: 2,
+      profileStatus: 'EDITED',
+    });
+    returningMock.mockResolvedValueOnce([]);
+
+    const response = await invokeRouter(adminCollectionsRouter, {
+      method: 'PUT',
+      url: '/009',
+      path: '/009',
+      body: {
+        profileRevision: 2,
+        description: 'Stale replacement notes',
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({
+      error: expect.stringContaining('changed'),
+    });
+    expect(updateWhereMock).toHaveBeenCalledWith({
+      op: 'and',
+      conditions: [
+        { op: 'eq', left: 'collections.id', right: 'collection-9' },
+        { op: 'eq', left: 'collections.profileRevision', right: 2 },
+      ],
     });
   });
 
@@ -692,6 +713,7 @@ describe('admin collections route integration', () => {
       id: 'collection-9',
       collectionCode: '009',
       profileStatus: 'VERIFIED',
+      profileRevision: 3,
     });
     resolveRepresentativeLetterIdMock.mockResolvedValueOnce(null);
 
@@ -700,6 +722,7 @@ describe('admin collections route integration', () => {
       url: '/009/profile',
       path: '/009/profile',
       body: {
+        profileRevision: 3,
         profileStartHereLetterId: '11111111-1111-4111-8111-111111111111',
       },
       headers: { 'content-type': 'application/json' },
@@ -717,6 +740,394 @@ describe('admin collections route integration', () => {
       },
     );
     expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a highlight image owned by another collection', async () => {
+    getCollectionByCodeMock.mockResolvedValueOnce({
+      id: 'collection-9',
+      collectionCode: '009',
+      profileStatus: 'EDITED',
+      profileRevision: 3,
+      profileSourceFingerprint: 'a'.repeat(32),
+      highlightImageId: null,
+    });
+    queryLetterPagesFindFirstMock.mockResolvedValueOnce({
+      id: '11111111-1111-4111-8111-111111111111',
+      letter: { collectionId: 'collection-10' },
+    });
+
+    const response = await invokeRouter(adminCollectionsRouter, {
+      method: 'PUT',
+      url: '/009/profile',
+      path: '/009/profile',
+      body: {
+        profileRevision: 3,
+        highlightImageId: '11111111-1111-4111-8111-111111111111',
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body).toMatchObject({
+      error: 'Highlight image must belong to this collection',
+    });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it('tells an old profile editor to reload instead of accepting an unfenced save', async () => {
+    const response = await invokeRouter(adminCollectionsRouter, {
+      method: 'PUT',
+      url: '/009/profile',
+      path: '/009/profile',
+      body: {
+        profileNarrative: 'Stale narrative',
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({
+      error: expect.stringContaining('version is missing'),
+    });
+    expect(getCollectionByCodeMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a profile save whose collection source epoch changed', async () => {
+    getCollectionByCodeMock.mockResolvedValueOnce({
+      id: 'collection-9',
+      collectionCode: '009',
+      profileStatus: 'EDITED',
+      profileRevision: 4,
+    });
+
+    const response = await invokeRouter(adminCollectionsRouter, {
+      method: 'PUT',
+      url: '/009/profile',
+      path: '/009/profile',
+      body: {
+        profileRevision: 3,
+        profileStatus: 'VERIFIED',
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({
+      error: expect.stringContaining('changed'),
+    });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it('advances the profile epoch through the exact loaded revision', async () => {
+    getCollectionByCodeMock.mockResolvedValueOnce({
+      id: 'collection-9',
+      collectionCode: '009',
+      profileStatus: 'EDITED',
+      profileRevision: 4,
+      profileSourceFingerprint: 'a'.repeat(32),
+    });
+    returningMock.mockResolvedValueOnce([{
+      id: 'collection-9',
+      collectionCode: '009',
+      profileStatus: 'VERIFIED',
+      profileRevision: 5,
+    }]);
+
+    const response = await invokeRouter(adminCollectionsRouter, {
+      method: 'PUT',
+      url: '/009/profile',
+      path: '/009/profile',
+      body: {
+        profileRevision: 4,
+        profileStatus: 'VERIFIED',
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toMatchObject({
+      profileStatus: 'VERIFIED',
+      profileRevision: 5,
+    });
+    expect(updateSetMock).toHaveBeenCalledWith({
+      profileStatus: 'VERIFIED',
+      profileRevision: expect.objectContaining({
+        strings: expect.any(Array),
+      }),
+    });
+    expect(updateWhereMock).toHaveBeenCalledWith({
+      op: 'and',
+      conditions: [
+        { op: 'eq', left: 'collections.id', right: 'collection-9' },
+        { op: 'eq', left: 'collections.profileRevision', right: 4 },
+        {
+          op: 'eq',
+          left: 'collections.profileSourceFingerprint',
+          right: 'a'.repeat(32),
+        },
+        expect.objectContaining({
+          strings: expect.any(Array),
+        }),
+      ],
+    });
+    expect(updateSetMock.mock.calls[0]?.[0]).not.toHaveProperty(
+      'profileSourceFingerprint',
+    );
+  });
+
+  it('does not bless stale profile content with the latest source fingerprint', async () => {
+    getCollectionByCodeMock.mockResolvedValueOnce({
+      id: 'collection-9',
+      collectionCode: '009',
+      profileStatus: 'EDITED',
+      profileRevision: 4,
+      profileSourceFingerprint: 'a'.repeat(32),
+    });
+    computeCollectionProfileSourceFingerprintMock.mockResolvedValueOnce(
+      'b'.repeat(32),
+    );
+
+    const response = await invokeRouter(adminCollectionsRouter, {
+      method: 'PUT',
+      url: '/009/profile',
+      path: '/009/profile',
+      body: {
+        profileRevision: 4,
+        profileStatus: 'VERIFIED',
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({
+      error: expect.stringContaining('regenerate'),
+    });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it('does not verify legacy profile content whose source provenance is unknown', async () => {
+    getCollectionByCodeMock.mockResolvedValueOnce({
+      id: 'collection-9',
+      collectionCode: '009',
+      profileStatus: 'EDITED',
+      profileRevision: 4,
+      profileSourceFingerprint: null,
+      profileNarrative: 'Legacy profile content',
+    });
+
+    const response = await invokeRouter(adminCollectionsRouter, {
+      method: 'PUT',
+      url: '/009/profile',
+      path: '/009/profile',
+      body: {
+        profileRevision: 4,
+        profileStatus: 'VERIFIED',
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({
+      error: expect.stringContaining('not bound'),
+    });
+    expect(computeCollectionProfileSourceFingerprintMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it('binds the first manual profile content edit to one terminal source fingerprint', async () => {
+    getCollectionByCodeMock.mockResolvedValueOnce({
+      id: 'collection-9',
+      collectionCode: '009',
+      profileStatus: 'EMPTY',
+      profileRevision: 4,
+      profileSourceFingerprint: null,
+      profileNarrative: null,
+    });
+    returningMock.mockResolvedValueOnce([{
+      id: 'collection-9',
+      collectionCode: '009',
+      profileStatus: 'EMPTY',
+      profileRevision: 5,
+      profileSourceFingerprint: 'a'.repeat(32),
+      profileNarrative: 'A manually authored profile',
+    }]);
+
+    const response = await invokeRouter(adminCollectionsRouter, {
+      method: 'PUT',
+      url: '/009/profile',
+      path: '/009/profile',
+      body: {
+        profileRevision: 4,
+        profileNarrative: 'A manually authored profile',
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(updateSetMock).toHaveBeenCalledWith({
+      profileNarrative: 'A manually authored profile',
+      profileSourceFingerprint: 'a'.repeat(32),
+      profileRevision: expect.objectContaining({
+        strings: expect.any(Array),
+      }),
+    });
+    expect(updateWhereMock).toHaveBeenCalledWith({
+      op: 'and',
+      conditions: [
+        { op: 'eq', left: 'collections.id', right: 'collection-9' },
+        { op: 'eq', left: 'collections.profileRevision', right: 4 },
+        expect.objectContaining({
+          strings: expect.any(Array),
+        }),
+        expect.objectContaining({
+          strings: expect.any(Array),
+        }),
+      ],
+    });
+  });
+
+  it('does not advance the profile epoch for an exact content no-op', async () => {
+    const collection = {
+      id: 'collection-9',
+      collectionCode: '009',
+      profileStatus: 'EDITED',
+      profileRevision: 4,
+      profileSourceFingerprint: 'a'.repeat(32),
+      profileNarrative: 'Existing narrative',
+    };
+    getCollectionByCodeMock.mockResolvedValueOnce(collection);
+
+    const response = await invokeRouter(adminCollectionsRouter, {
+      method: 'PUT',
+      url: '/009/profile',
+      path: '/009/profile',
+      body: {
+        profileRevision: 4,
+        profileNarrative: 'Existing narrative',
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual(collection);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it('demotes verified profile content edits without rebinding their source', async () => {
+    getCollectionByCodeMock.mockResolvedValueOnce({
+      id: 'collection-9',
+      collectionCode: '009',
+      profileStatus: 'VERIFIED',
+      profileRevision: 4,
+      profileSourceFingerprint: 'a'.repeat(32),
+      profileNarrative: 'Reviewed narrative',
+    });
+    returningMock.mockResolvedValueOnce([{
+      id: 'collection-9',
+      collectionCode: '009',
+      profileStatus: 'EDITED',
+      profileRevision: 5,
+      profileSourceFingerprint: 'a'.repeat(32),
+      profileNarrative: 'Edited narrative',
+    }]);
+
+    const response = await invokeRouter(adminCollectionsRouter, {
+      method: 'PUT',
+      url: '/009/profile',
+      path: '/009/profile',
+      body: {
+        profileRevision: 4,
+        profileNarrative: 'Edited narrative',
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(updateSetMock).toHaveBeenCalledWith({
+      profileNarrative: 'Edited narrative',
+      profileStatus: 'EDITED',
+      profileRevision: expect.objectContaining({
+        strings: expect.any(Array),
+      }),
+    });
+    expect(updateSetMock.mock.calls[0]?.[0]).not.toHaveProperty(
+      'profileSourceFingerprint',
+    );
+    expect(computeCollectionProfileSourceFingerprintMock).not.toHaveBeenCalled();
+  });
+
+  it('stores generated profile output only with its exact source fingerprint', async () => {
+    getCollectionByCodeMock.mockResolvedValueOnce({
+      id: 'collection-9',
+      collectionCode: '009',
+      profileStatus: 'EMPTY',
+      profileRevision: 4,
+      profileSourceFingerprint: null,
+    });
+    returningMock.mockResolvedValueOnce([{ profileRevision: 5 }]);
+
+    const response = await invokeRouter(adminCollectionsRouter, {
+      method: 'POST',
+      url: '/009/generate-profile',
+      path: '/009/generate-profile',
+      body: {
+        profileRevision: 4,
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toMatchObject({
+      sourceFingerprint: 'a'.repeat(32),
+      profileStatus: 'AI_DRAFT',
+      profileRevision: 5,
+    });
+    expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
+      hook: 'Generated hook',
+      profileNarrative: 'Generated narrative',
+      profileSourceFingerprint: 'a'.repeat(32),
+      profileStatus: 'AI_DRAFT',
+      profileRevision: expect.objectContaining({
+        strings: expect.any(Array),
+      }),
+    }));
+    expect(updateWhereMock).toHaveBeenCalledWith({
+      op: 'and',
+      conditions: [
+        { op: 'eq', left: 'collections.id', right: 'collection-9' },
+        { op: 'eq', left: 'collections.profileRevision', right: 4 },
+        expect.objectContaining({
+          strings: expect.any(Array),
+        }),
+      ],
+    });
+  });
+
+  it('discards AI profile output when source invalidation wins during generation', async () => {
+    getCollectionByCodeMock.mockResolvedValueOnce({
+      id: 'collection-9',
+      collectionCode: '009',
+      profileStatus: 'EMPTY',
+      profileRevision: 4,
+    });
+    returningMock.mockResolvedValueOnce([]);
+
+    const response = await invokeRouter(adminCollectionsRouter, {
+      method: 'POST',
+      url: '/009/generate-profile',
+      path: '/009/generate-profile',
+      body: {
+        profileRevision: 4,
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(generateCollectionProfileMock).toHaveBeenCalledWith('collection-9');
+    expect(response.body).toMatchObject({
+      error: expect.stringContaining('while the profile was generated'),
+    });
   });
 
 });

@@ -12,6 +12,8 @@ type ProcessingJobType =
 
 interface QueuedItem {
   letterId: string;
+  primarySourceRevision: number;
+  jobStateToken: string;
   letterTitle: string;
   collectionCode: string;
   sender: string | null;
@@ -21,6 +23,8 @@ interface QueuedItem {
 
 interface ActiveJob {
   letterId: string;
+  primarySourceRevision: number;
+  jobStateToken: string;
   letterTitle: string;
   collectionCode: string;
   sender: string | null;
@@ -31,6 +35,8 @@ interface ActiveJob {
 
 interface RecentJob {
   letterId: string;
+  primarySourceRevision: number;
+  jobStateToken: string;
   letterTitle: string;
   collectionCode: string;
   type: ProcessingJobType;
@@ -124,6 +130,8 @@ export function createMockProcessingState(): MockProcessingState {
     active: [
       {
         letterId: "letter-1",
+        primarySourceRevision: 3,
+        jobStateToken: "v1.active-transcription-letter-1",
         letterTitle: "19470810",
         collectionCode: "009",
         sender: "Alice Smith",
@@ -133,6 +141,8 @@ export function createMockProcessingState(): MockProcessingState {
       },
       {
         letterId: "letter-6",
+        primarySourceRevision: 4,
+        jobStateToken: "v1.active-transcription-letter-6",
         letterTitle: "19470815",
         collectionCode: "009",
         sender: "Grace Hill",
@@ -145,6 +155,8 @@ export function createMockProcessingState(): MockProcessingState {
       transcription: [
         {
           letterId: "letter-2",
+          primarySourceRevision: 5,
+          jobStateToken: "v1.queued-transcription-letter-2",
           letterTitle: "19470811",
           collectionCode: "009",
           sender: "Carol Clark",
@@ -155,6 +167,8 @@ export function createMockProcessingState(): MockProcessingState {
       metadata: [
         {
           letterId: "letter-3",
+          primarySourceRevision: 6,
+          jobStateToken: "v1.queued-metadata-letter-3",
           letterTitle: "19470812",
           collectionCode: "009",
           sender: "Ellen Gray",
@@ -166,6 +180,8 @@ export function createMockProcessingState(): MockProcessingState {
       extraContent: [
         {
           letterId: "letter-extra",
+          primarySourceRevision: 7,
+          jobStateToken: "v1.queued-extra-letter-extra",
           letterTitle: "19470816",
           collectionCode: "009",
           sender: null,
@@ -177,6 +193,8 @@ export function createMockProcessingState(): MockProcessingState {
     recent: [
       {
         letterId: "letter-5",
+        primarySourceRevision: 8,
+        jobStateToken: "v1.recent-transcription-letter-5",
         letterTitle: "19470814",
         collectionCode: "009",
         type: "transcription",
@@ -185,6 +203,8 @@ export function createMockProcessingState(): MockProcessingState {
       },
       {
         letterId: "letter-4",
+        primarySourceRevision: 9,
+        jobStateToken: "v1.recent-metadata-letter-4",
         letterTitle: "19470813",
         collectionCode: "009",
         type: "metadata",
@@ -244,14 +264,28 @@ export async function installMockProcessingQueueApi(
   const removeRequests: Array<{
     letterId: string;
     type: ProcessingJobType;
+    primarySourceRevision: number;
+    jobStateToken: string;
   }> = [];
   const cancelRequests: Array<{
     letterId: string;
     type: ProcessingJobType;
+    primarySourceRevision: number;
+    jobStateToken: string;
   }> = [];
   const retryRequests: Array<{
     letterId: string;
     type: ProcessingJobType;
+    primarySourceRevision: number;
+    jobStateToken: string;
+  }> = [];
+  const clearRequests: Array<{
+    type: ProcessingJobType;
+    items: Array<{
+      letterId: string;
+      primarySourceRevision: number;
+      jobStateToken: string;
+    }>;
   }> = [];
   const wakeRequests: Array<Record<string, never>> = [];
 
@@ -290,6 +324,8 @@ export async function installMockProcessingQueueApi(
       const body = request.postDataJSON() as {
         letterId: string;
         type: ProcessingJobType;
+        primarySourceRevision: number;
+        jobStateToken: string;
       };
       removeRequests.push(body);
       replaceQueueForType(
@@ -309,6 +345,8 @@ export async function installMockProcessingQueueApi(
       const body = request.postDataJSON() as {
         letterId: string;
         type: ProcessingJobType;
+        primarySourceRevision: number;
+        jobStateToken: string;
       };
       cancelRequests.push(body);
       if (options.cancelError) {
@@ -339,6 +377,8 @@ export async function installMockProcessingQueueApi(
       const body = request.postDataJSON() as {
         letterId: string;
         type: ProcessingJobType;
+        primarySourceRevision: number;
+        jobStateToken: string;
       };
       retryRequests.push(body);
       if (options.retryError) {
@@ -362,10 +402,37 @@ export async function installMockProcessingQueueApi(
       `${escapeRegex(API_BASE_URL)}/admin/processing/queue/clear$`,
     ),
     async (route, request) => {
-      const body = request.postDataJSON() as { type: ProcessingJobType };
-      const cleared = queueForType(state, body.type).length;
-      replaceQueueForType(state, body.type, []);
-      await fulfillJson(route, { message: "Queue cleared", cleared });
+      const body = request.postDataJSON() as {
+        type: ProcessingJobType;
+        items: Array<{
+          letterId: string;
+          primarySourceRevision: number;
+          jobStateToken: string;
+        }>;
+      };
+      clearRequests.push(body);
+      const displayedKeys = new Set(
+        body.items.map(
+          (item) =>
+            `${item.letterId}:${item.primarySourceRevision}:${item.jobStateToken}`,
+        ),
+      );
+      const before = queueForType(state, body.type);
+      const remaining = before.filter(
+        (item) =>
+          !displayedKeys.has(
+            `${item.letterId}:${item.primarySourceRevision}:${item.jobStateToken}`,
+          ),
+      );
+      const cleared = before.length - remaining.length;
+      replaceQueueForType(state, body.type, remaining);
+      await fulfillJson(route, {
+        message: "Displayed queue snapshot cleared",
+        requested: body.items.length,
+        cleared,
+        skipped: body.items.length - cleared,
+        skipReasons: [],
+      });
     },
   );
 
@@ -374,6 +441,7 @@ export async function installMockProcessingQueueApi(
     removeRequests,
     cancelRequests,
     retryRequests,
+    clearRequests,
     wakeRequests,
   };
 }

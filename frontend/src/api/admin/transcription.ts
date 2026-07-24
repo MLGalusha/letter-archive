@@ -24,22 +24,26 @@ export interface RegenerateTranscriptionResponse {
   };
 }
 
-export async function transcribeLetter(letterId: string): Promise<TranscribeLetterResponse> {
+export async function transcribeLetter(
+  letterId: string,
+  primarySourceRevision: number,
+): Promise<TranscribeLetterResponse> {
   return apiPost<TranscribeLetterResponse>(
     `/admin/letters/${letterId}/transcribe-letter`,
-    undefined,
+    { primarySourceRevision },
     { timeoutMs: AI_TIMEOUT_MS },
   );
 }
 
 export async function regenerateTranscription(
   letterId: string,
+  primarySourceRevision: number,
   includeExtras = true,
 ): Promise<RegenerateTranscriptionResponse> {
   const url = includeExtras
     ? `/admin/letters/${letterId}/regenerate-transcription?includeExtras=true`
     : `/admin/letters/${letterId}/regenerate-transcription`;
-  return apiPost<RegenerateTranscriptionResponse>(url, undefined, {
+  return apiPost<RegenerateTranscriptionResponse>(url, { primarySourceRevision }, {
     timeoutMs: AI_TIMEOUT_MS,
   });
 }

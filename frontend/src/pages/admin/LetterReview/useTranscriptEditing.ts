@@ -19,6 +19,7 @@ import type { AutoSaveData } from './useAutoSave';
 
 type ToastType = 'success' | 'error' | 'info';
 type ShowToast = (message: string, type: ToastType) => void;
+type HandleMutationError = (error: unknown, fallback: string) => boolean;
 
 interface UseTranscriptEditingOptions {
   letterId?: string;
@@ -27,6 +28,7 @@ interface UseTranscriptEditingOptions {
   setLetter: Dispatch<SetStateAction<Letter | null>>;
   setSaving: Dispatch<SetStateAction<boolean>>;
   setTranscript: Dispatch<SetStateAction<string>>;
+  handleMutationError: HandleMutationError;
   showToast: ShowToast;
   editorRef: RefObject<HTMLDivElement | null>;
   triggerAutoSave: (data: AutoSaveData) => Promise<void>;
@@ -39,6 +41,7 @@ export function useTranscriptEditing({
   setLetter,
   setSaving,
   setTranscript,
+  handleMutationError,
   showToast,
   editorRef,
   triggerAutoSave,
@@ -80,14 +83,17 @@ export function useTranscriptEditing({
   );
 
   const handleVerifyTranscript = useCallback(async () => {
-    if (!letterId) {
+    if (!letterId || !letter) {
       return;
     }
 
     setSaving(true);
 
     try {
-      const updated = await verifyTranscript(letterId);
+      const updated = await verifyTranscript(
+        letterId,
+        letter.primarySourceRevision,
+      );
       const hadReadingText = letter?.readingText;
       setLetter(updated);
       resetEditingState();
@@ -97,14 +103,19 @@ export function useTranscriptEditing({
         showToast('Transcript verified', 'success');
       }
     } catch (error) {
-      showToast(
-        error instanceof Error ? error.message : 'Failed to verify transcript',
-        'error',
-      );
+      handleMutationError(error, 'Failed to verify transcript');
     } finally {
       setSaving(false);
     }
-  }, [letterId, resetEditingState, setLetter, setSaving, showToast]);
+  }, [
+    handleMutationError,
+    letter,
+    letterId,
+    resetEditingState,
+    setLetter,
+    setSaving,
+    showToast,
+  ]);
 
   const handleTranscriptClick = useCallback(
     (event: MouseEvent) => {
@@ -136,24 +147,23 @@ export function useTranscriptEditing({
     setSaving(true);
 
     try {
-      const updated = await unverifyTranscript(letterId);
+      const updated = await unverifyTranscript(
+        letterId,
+        letter.primarySourceRevision,
+      );
       setLetter(updated);
       setIsTranscriptEditing(true);
       setHasTranscriptChanges(false);
       showToast('Verification removed', 'info');
     } catch (error) {
-      showToast(
-        error instanceof Error
-          ? error.message
-          : 'Failed to unverify transcript',
-        'error',
-      );
+      handleMutationError(error, 'Failed to unverify transcript');
     } finally {
       setSaving(false);
     }
   }, [
     closeEditTooltip,
-    letter?.transcriptStatus,
+    handleMutationError,
+    letter,
     letterId,
     setLetter,
     setSaving,
@@ -162,7 +172,7 @@ export function useTranscriptEditing({
   ]);
 
   const handleTranscriptRevert = useCallback(async () => {
-    if (!letterId || originalTranscriptText === null) {
+    if (!letterId || !letter || originalTranscriptText === null) {
       return;
     }
 
@@ -174,6 +184,7 @@ export function useTranscriptEditing({
 
     try {
       const updated = await updateLetter(letterId, {
+        primarySourceRevision: letter.primarySourceRevision,
         transcriptionText: originalTranscriptText,
       });
       setLetter(updated);
@@ -185,7 +196,10 @@ export function useTranscriptEditing({
       }
 
       if (originalTranscriptVerified) {
-        const verifiedLetter = await verifyTranscript(letterId);
+        const verifiedLetter = await verifyTranscript(
+          letterId,
+          updated.primarySourceRevision,
+        );
         setLetter(verifiedLetter);
         showToast('Changes reverted and verification restored', 'success');
       } else {
@@ -194,15 +208,14 @@ export function useTranscriptEditing({
 
       resetEditingState();
     } catch (error) {
-      showToast(
-        error instanceof Error ? error.message : 'Failed to revert changes',
-        'error',
-      );
+      handleMutationError(error, 'Failed to revert changes');
     } finally {
       setSaving(false);
     }
   }, [
     editorRef,
+    handleMutationError,
+    letter,
     letterId,
     originalTranscriptText,
     originalTranscriptVerified,

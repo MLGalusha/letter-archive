@@ -17,6 +17,11 @@ import {
   buildMetadataSourceInvalidationPatch,
   observedMetadataRevisionConditions,
 } from './metadata-job.js';
+import {
+  assertCurrentPrimarySourceRevision,
+  currentPrimarySourceRevisionCondition,
+  sourceRevisionChanged,
+} from './source-revision.js';
 
 export { transcribeExtras } from './extra-content.js';
 
@@ -26,8 +31,12 @@ function statusError(message: string, status: number): Error & { status: number 
 
 async function runDirectMainTranscription(
   letterId: string,
+  expectedPrimarySourceRevision: number,
 ): Promise<TranscribeLetterOnlyResult | null> {
-  const outcome = await runRequestedTranscription(letterId);
+  const outcome = await runRequestedTranscription(
+    letterId,
+    expectedPrimarySourceRevision,
+  );
 
   switch (outcome.kind) {
     case 'completed':
@@ -41,10 +50,28 @@ async function runDirectMainTranscription(
       throw statusError(`Cannot transcribe type '${outcome.type}'`, 400);
     case 'no_pages':
       throw statusError('Letter has no pages to transcribe', 400);
-    case 'claim_lost':
+    case 'claim_lost': {
+      const latest = await getLetterById(letterId);
+      if (latest) {
+        assertCurrentPrimarySourceRevision(
+          latest.primarySourceRevision,
+          expectedPrimarySourceRevision,
+          'Letter source changed before transcription could be claimed; reload and try again',
+        );
+      }
       throw statusError('Transcription conflicted with another job update', 409);
-    case 'superseded':
+    }
+    case 'superseded': {
+      const latest = await getLetterById(letterId);
+      if (latest) {
+        assertCurrentPrimarySourceRevision(
+          latest.primarySourceRevision,
+          expectedPrimarySourceRevision,
+          'Letter source changed while transcription was running; reload and try again',
+        );
+      }
       throw statusError('Transcription was cancelled or superseded', 409);
+    }
   }
 }
 
@@ -101,14 +128,21 @@ function buildLinkedLetterContext(letter: {
 export async function regenerateTranscription(
   letterId: string,
   includeExtras: boolean,
+  expectedPrimarySourceRevision: number,
 ): Promise<TranscriptionRegenerateResult | null> {
-  const mainTranscription = await runDirectMainTranscription(letterId);
+  const mainTranscription = await runDirectMainTranscription(
+    letterId,
+    expectedPrimarySourceRevision,
+  );
   if (!mainTranscription) return null;
 
   let extrasTranscribed = 0;
 
   if (includeExtras) {
-    const extraJob = await runRegeneratedExtraContent(letterId);
+    const extraJob = await runRegeneratedExtraContent(
+      letterId,
+      expectedPrimarySourceRevision,
+    );
     if (extraJob.kind === 'completed' || extraJob.kind === 'ineligible') {
       extrasTranscribed = extraJob.value;
     } else {
@@ -133,16 +167,23 @@ export async function regenerateTranscription(
 
 export async function transcribeLetterOnly(
   letterId: string,
+  expectedPrimarySourceRevision: number,
 ): Promise<TranscribeLetterOnlyResult | null> {
-  return runDirectMainTranscription(letterId);
+  return runDirectMainTranscription(letterId, expectedPrimarySourceRevision);
 }
 
 export async function updateExtraContent(
   letterId: string,
   extraContentTranscript: string | null,
+  expectedPrimarySourceRevision: number,
 ): Promise<true | null> {
   const existingLetter = await getLetterById(letterId);
   if (!existingLetter) return null;
+  assertCurrentPrimarySourceRevision(
+    existingLetter.primarySourceRevision,
+    expectedPrimarySourceRevision,
+    'Letter source changed before extra content could be saved; reload and try again',
+  );
 
   const hasContent = Boolean(extraContentTranscript?.trim());
   const updates: {
@@ -164,9 +205,20 @@ export async function updateExtraContent(
   const updated = await db
     .update(letters)
     .set(updates)
-    .where(and(...observedMetadataRevisionConditions(letterId, existingLetter)))
+    .where(and(
+      ...observedMetadataRevisionConditions(letterId, existingLetter),
+      currentPrimarySourceRevisionCondition(expectedPrimarySourceRevision),
+    ))
     .returning({ id: letters.id });
   if (updated.length === 0) {
+    const latest = await getLetterById(letterId);
+    if (latest) {
+      assertCurrentPrimarySourceRevision(
+        latest.primarySourceRevision,
+        expectedPrimarySourceRevision,
+        'Letter source changed before extra content could be saved; reload and try again',
+      );
+    }
     throw statusError(
       'Letter content changed before extra content could be saved; reload and try again',
       409,
@@ -187,7 +239,8 @@ export async function updateExtraContent(
 
 export async function describePhoto(
   letterId: string,
-  reviewerContext: string | null = null,
+  reviewerContext: string | null,
+  expectedPrimarySourceRevision: number,
 ): Promise<DescribePhotoResult | null> {
   const letter = await db.query.letters.findFirst({
     where: eq(letters.id, letterId),
@@ -198,6 +251,11 @@ export async function describePhoto(
   });
 
   if (!letter) return null;
+  assertCurrentPrimarySourceRevision(
+    letter.primarySourceRevision,
+    expectedPrimarySourceRevision,
+    'Photo source changed before description generation started; reload and try again',
+  );
 
   if (letter.type !== 'P') {
     const err = new Error(`Cannot describe type '${letter.type}' (only photo records are supported)`) as Error & { status: number };
@@ -263,14 +321,26 @@ export async function describePhoto(
 
   const newStatus = combinedDescription ? 'AI_DRAFT' : 'EMPTY';
 
-  await db.update(letters).set({
-    photoDescription: combinedDescription || null,
-    photoDescriptionStatus: newStatus,
-    photoDescriptionVerifiedAt: null,
-    photoDescriptionVerifiedBy: null,
-    photoDescriptionContext: trimmedReviewerContext,
-    updatedAt: new Date(),
-  }).where(eq(letters.id, letterId));
+  const updated = await db
+    .update(letters)
+    .set({
+      photoDescription: combinedDescription || null,
+      photoDescriptionStatus: newStatus,
+      photoDescriptionVerifiedAt: null,
+      photoDescriptionVerifiedBy: null,
+      photoDescriptionContext: trimmedReviewerContext,
+      updatedAt: new Date(),
+    })
+    .where(and(
+      eq(letters.id, letterId),
+      currentPrimarySourceRevisionCondition(expectedPrimarySourceRevision),
+    ))
+    .returning({ id: letters.id });
+  if (updated.length !== 1) {
+    throw sourceRevisionChanged(
+      'Photo source changed before its generated description could be saved; reload and try again',
+    );
+  }
 
   log.info(
     { letterId, describedCount: descriptions.length, status: newStatus },
@@ -289,9 +359,15 @@ export async function updatePhotoDescription(
     photoDescription: string | null;
     photoDescriptionContext?: string | null;
   },
+  expectedPrimarySourceRevision: number,
 ): Promise<true | null> {
   const existingLetter = await getLetterById(letterId);
   if (!existingLetter) return null;
+  assertCurrentPrimarySourceRevision(
+    existingLetter.primarySourceRevision,
+    expectedPrimarySourceRevision,
+    'Photo source changed before its description could be saved; reload and try again',
+  );
 
   if (existingLetter.type !== 'P') {
     const err = new Error(`Cannot update photo description for type '${existingLetter.type}'`) as Error & { status: number };
@@ -332,7 +408,19 @@ export async function updatePhotoDescription(
     updates.photoDescriptionStatus = 'EDITED';
   }
 
-  await db.update(letters).set(updates).where(eq(letters.id, letterId));
+  const updated = await db
+    .update(letters)
+    .set(updates)
+    .where(and(
+      eq(letters.id, letterId),
+      currentPrimarySourceRevisionCondition(expectedPrimarySourceRevision),
+    ))
+    .returning({ id: letters.id });
+  if (updated.length !== 1) {
+    throw sourceRevisionChanged(
+      'Photo source changed before its description could be saved; reload and try again',
+    );
+  }
 
   log.debug(
     {

@@ -263,6 +263,86 @@ describe("migration validation", () => {
     );
   });
 
+  it("adds page, version, and profile source epochs without inventing legacy profile provenance", () => {
+    const journal = readJournal();
+    const entityLiveness = journal.entries.find(
+      (entry) => entry.tag === "0053_add_entity_extraction_liveness",
+    );
+    const sourceRevisions = journal.entries.find(
+      (entry) => entry.tag === "0054_add_page_source_revisions",
+    );
+    const sql = readMigrationSql("0054_add_page_source_revisions");
+
+    expect(sourceRevisions).toBeDefined();
+    expect(sourceRevisions!.idx).toBe(entityLiveness!.idx + 1);
+    expect(sourceRevisions!.breakpoints).toBe(true);
+    expect(sql).toContain(
+      'ADD COLUMN "profile_revision" integer DEFAULT 0 NOT NULL',
+    );
+    expect(sql).toContain(
+      'ADD COLUMN "profile_source_fingerprint" text',
+    );
+    expect(sql).toContain(
+      'ADD COLUMN "primary_source_revision" integer DEFAULT 0 NOT NULL',
+    );
+    expect(sql.match(
+      /ALTER TABLE "letter_versions"\s+ADD COLUMN "primary_source_revision" integer DEFAULT 0 NOT NULL/g,
+    )).toHaveLength(1);
+    expect(sql).toContain(
+      'ADD CONSTRAINT "collection_profile_revision_nonnegative"',
+    );
+    expect(sql).toContain(
+      'ADD CONSTRAINT "collection_profile_source_fingerprint_valid"',
+    );
+    expect(sql).toContain(
+      'ADD CONSTRAINT "primary_source_revision_nonnegative"',
+    );
+    expect(sql).toContain(
+      'ADD CONSTRAINT "letter_version_primary_source_revision_nonnegative"',
+    );
+    expect(sql).toContain(
+      'ADD CONSTRAINT "collections_highlight_image_id_letter_pages_id_fk"',
+    );
+    expect(sql).toMatch(
+      /FOREIGN KEY \("highlight_image_id"\)[\s\S]*REFERENCES "public"\."letter_pages"\("id"\)[\s\S]*ON DELETE SET NULL/,
+    );
+    expect(sql).toMatch(
+      /UPDATE "collections" AS c[\s\S]*"highlight_image_id" = NULL[\s\S]*l\."collection_id" = c\."id"/,
+    );
+    expect(sql.match(/NOT VALID/g)).toHaveLength(5);
+    expect(sql).toMatch(
+      /CREATE FUNCTION compute_collection_profile_source_fingerprint\([\s\S]*?l\.type = 'L'[\s\S]*?l\.visibility = 'PUBLISHED'[\s\S]*?l\.metadata_published = true[\s\S]*?LANGUAGE sql|CREATE FUNCTION compute_collection_profile_source_fingerprint\([\s\S]*?LANGUAGE sql[\s\S]*?l\.type = 'L'[\s\S]*?l\.visibility = 'PUBLISHED'[\s\S]*?l\.metadata_published = true/,
+    );
+    expect(sql).toMatch(
+      /RETURNS text\s+LANGUAGE sql\s+STABLE/,
+    );
+    for (const input of [
+      "'title', c.title",
+      "'description', c.description",
+      "'id', l.id",
+      "'letterDate', l.letter_date",
+      "'dateRaw', l.date_raw",
+      "'sender', l.sender",
+      "'recipient', l.recipient",
+      "'summary', l.summary",
+      "'hook', l.hook",
+      "'entityExtractionJson', l.entity_extraction_json",
+      "'primarySourceRevision', l.primary_source_revision",
+    ]) {
+      expect(sql).toContain(input);
+    }
+    expect(sql).toContain(
+      'ORDER BY l.letter_date NULLS LAST, l.date_raw, l.id',
+    );
+    expect(sql).not.toMatch(
+      /\bUPDATE\s+(?:"?letters"?|"?letter_versions"?)\b/i,
+    );
+    expect(sql.match(/\bUPDATE\s+"collections"\s+AS\s+c/gi)).toHaveLength(1);
+    expect(sql).not.toMatch(
+      /\bSET[\s\S]*?"profile_source_fingerprint"\s*=/i,
+    );
+  });
+
   it("protects current entity liveness ownership while allowing renewals and 0051 terminal writers", () => {
     const sql = readMigrationSql("0053_add_entity_extraction_liveness");
     const guardFunction = sql.match(

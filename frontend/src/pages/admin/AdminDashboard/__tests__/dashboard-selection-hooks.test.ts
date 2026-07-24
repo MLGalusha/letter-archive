@@ -81,6 +81,28 @@ describe("dashboard selection hooks", () => {
     ]);
   });
 
+  it("retains the source revision observed when a row was selected", () => {
+    const initialRows = [
+      { id: "letter-1", primarySourceRevision: 4 },
+    ];
+    const { result, rerender } = renderHook(
+      ({ currentRows }) => useDashboardSelection(currentRows),
+      { initialProps: { currentRows: initialRows } },
+    );
+
+    act(() => {
+      result.current.toggleSelection("letter-1");
+    });
+
+    rerender({
+      currentRows: [{ id: "letter-1", primarySourceRevision: 9 }],
+    });
+
+    expect(result.current.selectedSources).toEqual([
+      { letterId: "letter-1", primarySourceRevision: 4 },
+    ]);
+  });
+
   it("shift-selects a checkbox range from the last clicked row", () => {
     const { result } = renderHook(() => useSelectionHarness());
 

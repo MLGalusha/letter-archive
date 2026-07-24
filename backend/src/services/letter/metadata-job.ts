@@ -201,6 +201,7 @@ async function claimMetadata(
   claimKind: MetadataClaimKind,
   updates: Record<string, unknown>,
   workerExecutionToken?: string,
+  expectedPrimarySourceRevision?: number,
 ): Promise<MetadataClaim | null> {
   const runId = randomUUID();
   const claimed = await db
@@ -220,6 +221,12 @@ async function claimMetadata(
     .where(and(
       eq(letters.id, letterId),
       ...observedMetadataStateConditions(observed),
+      ...(expectedPrimarySourceRevision === undefined
+        ? []
+        : [eq(
+            letters.primarySourceRevision,
+            expectedPrimarySourceRevision,
+          )]),
       ...(workerExecutionToken
         ? [activeWorkerExecutionCondition(workerExecutionToken)]
         : []),
@@ -261,6 +268,7 @@ export async function claimQueuedMetadata(
 export async function claimRequestedMetadata(
   letterId: string,
   observed: ObservedMetadataState,
+  expectedPrimarySourceRevision: number,
 ): Promise<MetadataClaim | null> {
   if (
     !hasClaimableSource(observed)
@@ -276,13 +284,14 @@ export async function claimRequestedMetadata(
     entityExtractionStatus: 'PENDING',
     ...clearedEntityExtractionOwnership(),
     entityExtractionError: null,
-  });
+  }, undefined, expectedPrimarySourceRevision);
 }
 
 /** Confirms the reviewed transcript and claims its first metadata attempt atomically. */
 export async function claimMetadataAfterTranscriptConfirmation(
   letterId: string,
   observed: ObservedMetadataState,
+  expectedPrimarySourceRevision: number,
   confirmedBy: string,
 ): Promise<MetadataClaim | null> {
   if (
@@ -301,7 +310,7 @@ export async function claimMetadataAfterTranscriptConfirmation(
     entityExtractionStatus: 'PENDING',
     ...clearedEntityExtractionOwnership(),
     entityExtractionError: null,
-  });
+  }, undefined, expectedPrimarySourceRevision);
 }
 
 function ownedMetadataAttemptConditions(
@@ -329,9 +338,16 @@ function activeMetadataAttemptConditions(
   ];
 }
 
-function exactOwnedMetadataRunConditions(letterId: string, runId: string) {
+function exactOwnedMetadataRunConditions(
+  letterId: string,
+  runId: string,
+  expectedPrimarySourceRevision?: number,
+) {
   return [
     eq(letters.id, letterId),
+    ...(expectedPrimarySourceRevision === undefined
+      ? []
+      : [eq(letters.primarySourceRevision, expectedPrimarySourceRevision)]),
     eq(letters.metadataStatus, 'RUNNING'),
     eq(letters.metadataRunId, runId),
     eq(letters.metadataLeaseRunId, runId),
@@ -341,7 +357,7 @@ function exactOwnedMetadataRunConditions(letterId: string, runId: string) {
   ];
 }
 
-function clearedMetadataOwnership() {
+export function clearedMetadataOwnership() {
   return {
     metadataRunId: null,
     metadataRunRevision: null,
@@ -490,6 +506,7 @@ export async function cancelMetadataAttempt(
   letterId: string,
   runId: string,
   error = 'Cancelled by admin',
+  expectedPrimarySourceRevision?: number,
 ): Promise<boolean> {
   const cancelled = await db
     .update(letters)
@@ -501,7 +518,11 @@ export async function cancelMetadataAttempt(
       workflow: restoredWorkflowAfterMetadataAttempt(),
       updatedAt: new Date(),
     })
-    .where(and(...exactOwnedMetadataRunConditions(letterId, runId)))
+    .where(and(...exactOwnedMetadataRunConditions(
+      letterId,
+      runId,
+      expectedPrimarySourceRevision,
+    )))
     .returning({ id: letters.id });
 
   return cancelled.length > 0;
@@ -701,7 +722,8 @@ export function buildMetadataSourceInvalidationPatch() {
     metadataPublished: false,
     transcriptPublished: false,
     workflow: sql<WorkflowState>`CASE
-      WHEN ${letters.transcriptionText} IS NOT NULL
+      WHEN ${letters.transcriptionStatus} = 'SUCCESS'
+        AND ${letters.transcriptionText} IS NOT NULL
         AND btrim(${letters.transcriptionText}) <> ''
         THEN 'TRANSCRIBED'::workflow_state
       ELSE ${letters.workflow}

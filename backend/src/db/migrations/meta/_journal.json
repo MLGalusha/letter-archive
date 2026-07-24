@@ -379,6 +379,13 @@
       "when": 1777200000000,
       "tag": "0053_add_entity_extraction_liveness",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1777286400000,
+      "tag": "0054_add_page_source_revisions",
+      "breakpoints": true
     }
   ]
 }

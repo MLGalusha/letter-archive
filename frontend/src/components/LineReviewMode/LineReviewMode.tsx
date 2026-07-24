@@ -8,9 +8,13 @@ import {
   useImperativeHandle,
 } from 'react';
 import { getErrorMessage, getImageUrl } from '../../api/client';
-import { getPageLineSegments, savePageLineSegments, updatePageSegmentTrust } from '../../api/admin/letters';
+import {
+  getPageLineSegments,
+  savePageLineSegments,
+  updateLetterSegmentTrust,
+} from '../../api/admin/letters';
 import type { Letter, LineSegment, LineSegmentWord, SpecialArea } from '../../types/Letter';
-import { useSegmentEditor } from '../../hooks/useSegmentEditor';
+import { toLineSegments, useSegmentEditor } from '../../hooks/useSegmentEditor';
 import SegmentEditorOverlay from './SegmentEditorOverlay';
 import SegmentContextMenu from './SegmentContextMenu';
 import { constrainedGrouping, eastEdgeY, westEdgeY } from '../../utils/constrainedGrouping';
@@ -24,6 +28,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { highlightTranscriptMarkers } from '../../utils/transcriptHighlight';
 import {
   CSS_BORDER_PADDING,
+  computeAutoScrollTop,
   computeLineInputHeight,
   computeLineFontSize,
   measureRenderedTextWidth,
@@ -40,6 +45,8 @@ interface LineReviewModeProps {
   onTranscriptChange: (newFullTranscript: string) => void;
   onExit: () => void;
   onAutoSave: (data: { transcriptionText: string }) => void;
+  handleMutationError: (error: unknown, fallback: string) => boolean;
+  mutationsBlocked?: boolean;
   debugMode?: boolean;
   onDebugModeChange?: (debugMode: boolean) => void;
   initialPageIndex?: number;
@@ -57,76 +64,12 @@ export interface LineReviewModeHandle {
   isLoading: boolean;
 }
 
-export function computeAutoScrollTop(params: {
-  currentLineIndex: number;
-  movementDirection: 'up' | 'down' | 'none';
-  currentScrollTop: number;
-  viewportHeight: number;
-  contentHeight: number;
-  regionTop: number;
-  regionBottom: number;
-}): number | null {
-  const {
-    currentLineIndex,
-    movementDirection,
-    currentScrollTop,
-    viewportHeight,
-    contentHeight,
-    regionTop,
-    regionBottom,
-  } = params;
-
-  if (viewportHeight <= 0) return null;
-
-  const maxScroll = Math.max(0, contentHeight - viewportHeight);
-
-  // Returning to the first line should snap back to the top, but only if
-  // we've actually scrolled away from it.
-  if (currentLineIndex === 0) {
-    return currentScrollTop > 0.5 ? 0 : null;
-  }
-
-  if (maxScroll <= currentScrollTop + 0.5) {
-    return null;
-  }
-
-  const visibleRegionTop = regionTop - currentScrollTop;
-  const visibleRegionBottom = regionBottom - currentScrollTop;
-  const regionHeight = Math.max(1, visibleRegionBottom - visibleRegionTop);
-  const holdBuffer = Math.max(40, regionHeight * 1.75);
-
-  const topTriggerLine = viewportHeight * 0.42;
-  const bottomTriggerLine = viewportHeight * 0.58;
-
-  // When moving back up through the page, use a matching top threshold so
-  // the viewport recenters in reverse instead of only ever scrolling down.
-  if (movementDirection === 'up' && visibleRegionTop < topTriggerLine) {
-    const nextScrollTop = Math.max(
-      0,
-      currentScrollTop - ((topTriggerLine - visibleRegionTop) + holdBuffer),
-    );
-
-    return nextScrollTop < currentScrollTop - 0.5 ? nextScrollTop : null;
-  }
-
-  if (movementDirection !== 'down') {
-    return null;
-  }
-
-  // Let the active line move slightly past the midpoint before we scroll
-  // downward.
-  if (visibleRegionBottom <= bottomTriggerLine) {
-    return null;
-  }
-
-  // Scroll a bit more than one line so adjacent up/down navigation doesn't
-  // constantly retrigger auto-scroll.
-  const nextScrollTop = Math.min(
-    maxScroll,
-    currentScrollTop + (visibleRegionBottom - bottomTriggerLine) + holdBuffer,
-  );
-
-  return nextScrollTop > currentScrollTop + 0.5 ? nextScrollTop : null;
+interface SegmentSaveState {
+  page: Letter['images'][number];
+  letterPageIndex: number;
+  revision: number;
+  isDirty: boolean;
+  getSegmentsForSave: () => LineSegment[];
 }
 
 /**
@@ -241,6 +184,8 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   onTranscriptChange,
   onExit,
   onAutoSave,
+  handleMutationError,
+  mutationsBlocked = false,
   debugMode: debugLines = false,
   onDebugModeChange,
   initialPageIndex,
@@ -249,6 +194,8 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   onMappingComplete,
 }: LineReviewModeProps, ref) {
   const { showToast } = useToast();
+  const mutationsBlockedRef = useRef(mutationsBlocked);
+  mutationsBlockedRef.current = mutationsBlocked;
 
   // All images (letter + extra content) for page navigation
   const allPages = useMemo(() => letter.images, [letter.images]);
@@ -258,6 +205,11 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     () => letter.images.filter((img) => img.type === 'letter'),
     [letter.images],
   );
+  const primarySourceRevision = letter.primarySourceRevision;
+  const sourceExpectation = useCallback((page: Letter['images'][number]) => ({
+    primarySourceRevision,
+    sourceChecksum: page.sourceChecksum ?? null,
+  }), [primarySourceRevision]);
 
   // Set of allPages indices that are letter-type
   const letterPageIndices = useMemo(() => {
@@ -336,6 +288,47 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   );
   const segmentEditor = useSegmentEditor(currentKrakenSegments);
 
+  // Keep a render-current save snapshot outside async callback closures. A
+  // slow save may finish after another segment edit, so only the revision it
+  // actually persisted is eligible to clear dirty state.
+  const segmentEditRevisionRef = useRef(0);
+  const previousSegmentEditRef = useRef<{
+    pageId: string | null;
+    segments: typeof segmentEditor.editedSegments;
+  }>({
+    pageId: null,
+    segments: segmentEditor.editedSegments,
+  });
+  const currentSegmentPage = currentLetterPageIndex === undefined
+    ? undefined
+    : letterPages[currentLetterPageIndex];
+  const currentSegmentPageId = currentSegmentPage?.id ?? null;
+  if (
+    previousSegmentEditRef.current.pageId !== currentSegmentPageId
+    || previousSegmentEditRef.current.segments !== segmentEditor.editedSegments
+  ) {
+    segmentEditRevisionRef.current += 1;
+    previousSegmentEditRef.current = {
+      pageId: currentSegmentPageId,
+      segments: segmentEditor.editedSegments,
+    };
+  }
+  const latestSegmentSaveStateRef = useRef<SegmentSaveState | null>(null);
+  latestSegmentSaveStateRef.current = currentSegmentPage
+    && currentLetterPageIndex !== undefined
+    ? {
+        page: currentSegmentPage,
+        letterPageIndex: currentLetterPageIndex,
+        revision: segmentEditRevisionRef.current,
+        isDirty: segmentEditor.isDirty,
+        getSegmentsForSave: segmentEditor.getSegmentsForSave,
+      }
+    : null;
+  const activeSegmentFlushRef = useRef<{
+    pageId: string;
+    promise: Promise<boolean>;
+  } | null>(null);
+
   // Sync segment editor when source segments change (page switch or redetect)
   const lastSourceRef = useRef<LineSegment[] | undefined>(currentKrakenSegments);
   useEffect(() => {
@@ -382,6 +375,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
   const handleMappingClick = useCallback(
     (segId: string) => {
+      if (mutationsBlockedRef.current) return;
       if (!mappingActive || !mappingText) return;
       const seg = segmentEditor.editedSegments.find((s) => s._id === segId);
       if (!seg) return;
@@ -389,23 +383,35 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       const cls = seg.segmentClass;
       if (cls !== 'continuation' && cls !== 'addition') return;
 
+      if (currentLetterPageIndex === undefined) return;
+      const page = letterPages[currentLetterPageIndex];
+      if (!page) return;
+
+      const segments = toLineSegments(segmentEditor.editedSegments.map((segment) => (
+        segment._id === segId
+          ? { ...segment, isMapped: true, mappedText: mappingText }
+          : segment
+      )));
       segmentEditor.mapSegment(segId, mappingText);
 
-      // Auto-save after mapping
-      const segments = segmentEditor.getSegmentsForSave();
-      if (currentLetterPageIndex !== undefined) {
-        const pageId = letterPages[currentLetterPageIndex]?.id;
-        if (pageId) {
-          void savePageLineSegments(pageId, segments).then(() => {
-            segmentEditor.markSaved();
-          });
-        }
-      }
-
-      setMappingActive(false);
-      onMappingComplete?.();
+      void savePageLineSegments(page.id, segments, sourceExpectation(page)).then(() => {
+        segmentEditor.markSaved();
+        setMappingActive(false);
+        onMappingComplete?.();
+      }).catch((error) => {
+        handleMutationError(error, 'Failed to save segment mapping');
+      });
     },
-    [mappingActive, mappingText, segmentEditor, currentLetterPageIndex, letterPages, onMappingComplete],
+    [
+      mappingActive,
+      mappingText,
+      segmentEditor,
+      currentLetterPageIndex,
+      letterPages,
+      onMappingComplete,
+      handleMutationError,
+      sourceExpectation,
+    ],
   );
 
   // Detection progress steps (shown in loading overlay for current page)
@@ -553,7 +559,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
     // No Kraken segments — don't fall back to pixel detection
     return [];
-  }, [currentPage, currentLetterPageIndex, onLetterPage, pageLineTexts, aiSegmentsMap, isLoading, imageReady]);
+  }, [currentPage, currentLetterPageIndex, onLetterPage, pageLineTexts, aiSegmentsMap, isLoading]);
   const hasTranscriptLinesOnPage = onLetterPage && currentLetterPageIndex !== undefined
     && (pageLineTexts[currentLetterPageIndex]?.length ?? 0) > 0;
 
@@ -573,7 +579,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
       return transcriptLineCount;
     }),
-    [letterPages, pageLineTexts, aiSegmentsMap, currentLetterPageIndex],
+    [letterPages, pageLineTexts, aiSegmentsMap],
   );
 
   const totalLines = useMemo(
@@ -763,6 +769,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
   // Save current line text and trigger auto-save (only if user actually edited)
   const saveCurrentLine = useCallback(() => {
+    if (mutationsBlockedRef.current) return;
     if (!inputRef.current || currentLetterPageIndex === undefined) return;
     const currentAligned = alignedLines[currentLineIndex];
     if (!currentAligned) return;
@@ -804,60 +811,176 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   }, [currentLetterPageIndex, currentLineIndex, alignedLines, pageNonBlankMap, onTranscriptChange, onAutoSave, pageRawTexts]);
 
   // Auto-save segment edits (no trust state change)
-  const autoSaveSegments = useCallback(async () => {
-    if (!segmentEditor.isDirty || currentLetterPageIndex === undefined) return;
-    const pageId = letterPages[currentLetterPageIndex]?.id;
-    if (!pageId) return;
-    const segments = segmentEditor.getSegmentsForSave();
-    try {
-      await savePageLineSegments(pageId, segments);
-      // Update lastSourceRef BEFORE mutating the map so the sync effect
-      // doesn't treat our own save as an external change and reset selection.
-      const nextKraken = { ...krakenSegmentsMap, [currentLetterPageIndex]: segments };
-      lastSourceRef.current = nextKraken[currentLetterPageIndex] ?? [];
-      setKrakenSegmentsMap(nextKraken);
-      setAiSegmentsMap(prev => ({ ...prev, [currentLetterPageIndex]: segments }));
-      segmentEditor.markSaved();
-    } catch (err) {
-      showToast(getErrorMessage(err, 'Failed to save segment edits'), 'error');
+  const autoSaveSegments = useCallback((): Promise<boolean> => {
+    if (mutationsBlockedRef.current) return Promise.resolve(false);
+    const initialState = latestSegmentSaveStateRef.current;
+    if (!initialState) return Promise.resolve(true);
+
+    const activeFlush = activeSegmentFlushRef.current;
+    if (activeFlush?.pageId === initialState.page.id) {
+      return activeFlush.promise;
     }
-  }, [segmentEditor, currentLetterPageIndex, letterPages, showToast, krakenSegmentsMap]);
+    if (!initialState.isDirty) return Promise.resolve(true);
+
+    const targetPageId = initialState.page.id;
+    const targetLetterPageIndex = initialState.letterPageIndex;
+    const targetSourceExpectation = sourceExpectation(initialState.page);
+
+    const flushPromise = (async () => {
+      while (true) {
+        if (mutationsBlockedRef.current) return false;
+        const state = latestSegmentSaveStateRef.current;
+        if (
+          !state
+          || state.page.id !== targetPageId
+          || state.letterPageIndex !== targetLetterPageIndex
+        ) {
+          return false;
+        }
+
+        const savedRevision = state.revision;
+        const segments = state.getSegmentsForSave();
+        try {
+          await savePageLineSegments(
+            targetPageId,
+            segments,
+            targetSourceExpectation,
+          );
+        } catch (err) {
+          handleMutationError(err, 'Failed to save segment edits');
+          return false;
+        }
+
+        const latestState = latestSegmentSaveStateRef.current;
+        if (
+          !latestState
+          || latestState.page.id !== targetPageId
+          || latestState.letterPageIndex !== targetLetterPageIndex
+        ) {
+          return false;
+        }
+
+        // Another edit landed while the request was in flight. Persist that
+        // newer snapshot before allowing the page or mode to change.
+        if (latestState.revision !== savedRevision) {
+          continue;
+        }
+
+        // Update lastSourceRef BEFORE mutating the maps so the sync effect
+        // doesn't treat our own save as an external source replacement.
+        lastSourceRef.current = segments;
+        setKrakenSegmentsMap((prev) => ({
+          ...prev,
+          [targetLetterPageIndex]: segments,
+        }));
+        setAiSegmentsMap((prev) => ({
+          ...prev,
+          [targetLetterPageIndex]: segments,
+        }));
+        latestSegmentSaveStateRef.current = {
+          ...latestState,
+          isDirty: false,
+        };
+        segmentEditor.markSaved();
+        return true;
+      }
+    })();
+
+    activeSegmentFlushRef.current = {
+      pageId: targetPageId,
+      promise: flushPromise,
+    };
+    void flushPromise.then(
+      () => {
+        if (activeSegmentFlushRef.current?.promise === flushPromise) {
+          activeSegmentFlushRef.current = null;
+        }
+      },
+      () => {
+        if (activeSegmentFlushRef.current?.promise === flushPromise) {
+          activeSegmentFlushRef.current = null;
+        }
+      },
+    );
+    return flushPromise;
+  }, [
+    handleMutationError,
+    segmentEditor,
+    sourceExpectation,
+  ]);
 
   // Auto-save on a debounced timer when dirty
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
+    if (mutationsBlocked) {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
+      }
+      return;
+    }
     if (!segmentEditor.isDirty) return;
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     autoSaveTimerRef.current = setTimeout(() => {
-      autoSaveSegments();
+      void autoSaveSegments();
     }, 1500);
     return () => {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
-  }, [segmentEditor.isDirty, segmentEditor.editedSegments, autoSaveSegments]);
+  }, [
+    autoSaveSegments,
+    mutationsBlocked,
+    segmentEditor.editedSegments,
+    segmentEditor.isDirty,
+  ]);
 
   // Verify segments — mark ALL letter pages as trusted (letter-level, not per-page)
   const handleVerifySegments = useCallback(async () => {
+    if (mutationsBlockedRef.current) return;
     // Save any pending changes first
-    if (segmentEditor.isDirty) await autoSaveSegments();
+    if (segmentEditor.isDirty && !(await autoSaveSegments())) return;
     if (!letterPages.length) return;
     try {
-      await Promise.all(letterPages.map(p => updatePageSegmentTrust(p.id, 'trusted')));
+      await updateLetterSegmentTrust(
+        letter.id,
+        'trusted',
+        primarySourceRevision,
+        letterPages.map((page) => ({
+          pageId: page.id,
+          sourceChecksum: page.sourceChecksum ?? null,
+        })),
+      );
       setTrustOverrides(prev => {
         const next = { ...prev };
         for (const p of letterPages) next[p.id] = 'trusted';
         return next;
       });
     } catch (err) {
-      showToast(getErrorMessage(err, 'Failed to verify segments'), 'error');
+      handleMutationError(err, 'Failed to verify segments');
     }
-  }, [segmentEditor, letterPages, autoSaveSegments, showToast]);
+  }, [
+    segmentEditor,
+    letterPages,
+    autoSaveSegments,
+    handleMutationError,
+    letter.id,
+    primarySourceRevision,
+  ]);
 
   // Unverify segments — unlock editor for ALL letter pages
   const handleUnverifySegments = useCallback(async () => {
+    if (mutationsBlockedRef.current) return;
     if (!letterPages.length) return;
     try {
-      await Promise.all(letterPages.map(p => updatePageSegmentTrust(p.id, 'unverified')));
+      await updateLetterSegmentTrust(
+        letter.id,
+        'unverified',
+        primarySourceRevision,
+        letterPages.map((page) => ({
+          pageId: page.id,
+          sourceChecksum: page.sourceChecksum ?? null,
+        })),
+      );
       setTrustOverrides(prev => {
         const next = { ...prev };
         for (const p of letterPages) next[p.id] = 'unverified';
@@ -865,9 +988,14 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       });
       setLockHintVisible(false);
     } catch (err) {
-      showToast(getErrorMessage(err, 'Failed to unverify segments'), 'error');
+      handleMutationError(err, 'Failed to unverify segments');
     }
-  }, [letterPages, showToast]);
+  }, [
+    handleMutationError,
+    letterPages,
+    letter.id,
+    primarySourceRevision,
+  ]);
 
   // Lock hint for toolbar tooltip when trusted
   const [lockHintVisible, setLockHintVisible] = useState(false);
@@ -878,14 +1006,35 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     lockHintTimerRef.current = setTimeout(() => setLockHintVisible(false), 2000);
   }, []);
 
-  const handleExitSegmentEditMode = useCallback(async () => {
-    if (segmentEditor.isDirty) {
-      await autoSaveSegments();
+  const segmentTransitionPendingRef = useRef(false);
+  const runAfterSegmentFlush = useCallback(async (
+    transition: () => void,
+    saveTranscriptLine = false,
+  ): Promise<boolean> => {
+    if (segmentTransitionPendingRef.current) return false;
+    segmentTransitionPendingRef.current = true;
+    try {
+      if (saveTranscriptLine) {
+        saveCurrentLine();
+      }
+      if (!(await autoSaveSegments())) return false;
+      transition();
+      return true;
+    } finally {
+      segmentTransitionPendingRef.current = false;
     }
-    setSubtractMode(false);
-    segmentEditor.clearSessionHistory();
-    segmentEditor.setSegmentEditMode(false);
-  }, [segmentEditor, autoSaveSegments]);
+  }, [autoSaveSegments, saveCurrentLine]);
+
+  const handleExitSegmentEditMode = useCallback(async () => {
+    await runAfterSegmentFlush(() => {
+      setSubtractMode(false);
+      segmentEditor.clearSessionHistory();
+      segmentEditor.setSegmentEditMode(false);
+    });
+  }, [
+    runAfterSegmentFlush,
+    segmentEditor,
+  ]);
 
   // Navigate to next line (cross-page: skips to next letter page)
   const goToNextLine = useCallback(() => {
@@ -924,28 +1073,24 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   }, [saveCurrentLine, currentLineIndex, currentPageIndex, letterPageIndices]);
 
   // Navigate to next page (any type)
-  const goToNextPage = useCallback(() => {
+  const goToNextPage = useCallback(async () => {
     if (currentPageIndex >= allPages.length - 1) return;
-    saveCurrentLine();
-    if (segmentEditor.segmentEditMode && segmentEditor.isDirty) {
-      autoSaveSegments();
-    }
-    setCurrentPageIndex(currentPageIndex + 1);
-    setCurrentLineIndex(0);
-    containerRef.current?.scrollTo({ top: 0 });
-  }, [currentPageIndex, allPages.length, saveCurrentLine, segmentEditor, autoSaveSegments]);
+    await runAfterSegmentFlush(() => {
+      setCurrentPageIndex(currentPageIndex + 1);
+      setCurrentLineIndex(0);
+      containerRef.current?.scrollTo({ top: 0 });
+    }, true);
+  }, [currentPageIndex, allPages.length, runAfterSegmentFlush]);
 
   // Navigate to previous page (any type)
-  const goToPrevPage = useCallback(() => {
+  const goToPrevPage = useCallback(async () => {
     if (currentPageIndex <= 0) return;
-    saveCurrentLine();
-    if (segmentEditor.segmentEditMode && segmentEditor.isDirty) {
-      autoSaveSegments();
-    }
-    setCurrentPageIndex(currentPageIndex - 1);
-    setCurrentLineIndex(0);
-    containerRef.current?.scrollTo({ top: 0 });
-  }, [currentPageIndex, saveCurrentLine]);
+    await runAfterSegmentFlush(() => {
+      setCurrentPageIndex(currentPageIndex - 1);
+      setCurrentLineIndex(0);
+      containerRef.current?.scrollTo({ top: 0 });
+    }, true);
+  }, [currentPageIndex, runAfterSegmentFlush]);
 
   // Clamp line index when aligned lines change (e.g., after page switch)
   useEffect(() => {
@@ -1234,9 +1379,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [saveCurrentLine, onExit, goToNextLine, goToPrevLine, goToNextPage, goToPrevPage, onLetterPage, overlayEnabled, reloadSegments, debugLines, onDebugModeChange, segmentEditor, handleExitSegmentEditMode]);
-
-  if (!currentPage) return null;
+  }, [goToNextLine, goToPrevLine, goToNextPage, goToPrevPage, onLetterPage, overlayEnabled, reloadSegments, debugLines, onDebugModeChange, segmentEditor, editMode]);
 
   // Dynamic height for the editable strip — based on current line's word heights and font size
   // Compute overlay positions
@@ -1288,17 +1431,19 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     return `${sx1},${sy1} ${sx2},${sy1} ${sx2},${sy2} ${sx1},${sy2}`;
   }, [currentLine, scaleFactor]);
 
-  const handleFullExit = useCallback(() => {
-    saveCurrentLine();
-    if (segmentEditor.segmentEditMode && segmentEditor.isDirty) {
-      autoSaveSegments();
-    }
-    if (segmentEditor.segmentEditMode) {
-      setSubtractMode(false);
-      segmentEditor.clearSessionHistory();
-    }
-    onExit();
-  }, [saveCurrentLine, segmentEditor, autoSaveSegments, onExit]);
+  const handleFullExit = useCallback(async () => {
+    await runAfterSegmentFlush(() => {
+      if (segmentEditor.segmentEditMode) {
+        setSubtractMode(false);
+        segmentEditor.clearSessionHistory();
+      }
+      onExit();
+    }, true);
+  }, [
+    runAfterSegmentFlush,
+    segmentEditor,
+    onExit,
+  ]);
 
   const handleContainerClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     // Only exit when clicking directly on the dark background (not the image or overlays)
@@ -1306,6 +1451,8 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       handleFullExit();
     }
   }, [handleFullExit]);
+
+  if (!currentPage) return null;
 
   return (
     <div

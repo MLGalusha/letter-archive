@@ -8,6 +8,7 @@ const {
   navigateMock,
   showToastMock,
   startUploadMock,
+  useUploadMock,
   uploadFilesMock,
   checkDuplicatesMock,
   createObjectURLMock,
@@ -16,6 +17,7 @@ const {
   navigateMock: vi.fn(),
   showToastMock: vi.fn(),
   startUploadMock: vi.fn(),
+  useUploadMock: vi.fn(),
   uploadFilesMock: vi.fn(),
   checkDuplicatesMock: vi.fn(),
   createObjectURLMock: vi.fn(() => 'blob:preview'),
@@ -37,12 +39,7 @@ vi.mock('../../../contexts/ToastContext', () => ({
 }));
 
 vi.mock('../../../contexts/UploadContext', () => ({
-  useUpload: () => ({
-    job: null,
-    startUpload: startUploadMock,
-    clearJob: vi.fn(),
-    isUploading: false,
-  }),
+  useUpload: useUploadMock,
 }));
 
 vi.mock('../../../api/admin', () => ({
@@ -65,11 +62,16 @@ vi.mock('../../../components/common', () => ({
     icon?: string;
     active?: boolean;
     variant?: string;
-  }) => (
-    <button type="button" {...props}>
-      {children}
-    </button>
-  ),
+  }) => {
+    void icon;
+    void active;
+    void variant;
+    return (
+      <button type="button" {...props}>
+        {children}
+      </button>
+    );
+  },
   ConfirmDialog: ({
     isOpen,
     title,
@@ -157,13 +159,23 @@ function makeUploadResult(filename: string) {
     pageId: `page-${filename}`,
     collectionCode: filename.slice(0, 3),
     storagePath: `/uploads/${filename}`,
+    primarySourceRevision: 1,
     alreadyExists: false,
+    outcome: 'created' as const,
+    changed: true,
   };
 }
 
 function makeImageFile(name: string): File {
   return new File(['image-bytes'], name, { type: 'image/jpeg' });
 }
+
+const sourceExpectation = {
+  pageId: 'page-existing',
+  primarySourceRevision: 7,
+  storagePath: 'storage/current.jpg',
+  checksumSha256: 'checksum-current',
+};
 
 function getFileInput(container: HTMLElement): HTMLInputElement {
   const input = container.querySelector('input[type="file"]:not([webkitdirectory])');
@@ -203,13 +215,31 @@ describe('UploadLetterPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     sessionStorage.setItem('adminAuth', 'true');
+    useUploadMock.mockReturnValue({
+      job: null,
+      startUpload: startUploadMock,
+      clearJob: vi.fn(),
+      isUploading: false,
+    });
 
-    checkDuplicatesMock.mockResolvedValue({ duplicates: {} });
+    checkDuplicatesMock.mockResolvedValue({
+      duplicates: {},
+      sourceExpectations: {},
+    });
     uploadFilesMock.mockResolvedValue({
       success: 1,
       failed: 0,
       results: [makeUploadResult('001-18860314-L01-01.jpg')],
       errors: [],
+      summary: {
+        accepted: 1,
+        failed: 0,
+        changed: 1,
+        unchanged: 0,
+        created: 1,
+        replaced: 0,
+        affectedLetters: 1,
+      },
     });
   });
 
@@ -267,10 +297,15 @@ describe('UploadLetterPage', () => {
       expect(startUploadMock).toHaveBeenCalledTimes(1);
     });
 
-    const files = startUploadMock.mock.calls[0][0] as Array<{ file: File; force: boolean }>;
+    const files = startUploadMock.mock.calls[0][0] as Array<{
+      file: File;
+      force: boolean;
+      sourceExpectation: typeof sourceExpectation | null;
+    }>;
     expect(files).toHaveLength(1);
     expect(files[0].file.name).toBe('001-18860314-L01-01.jpg');
     expect(files[0].force).toBe(false);
+    expect(files[0].sourceExpectation).toBeNull();
   });
 
   it('surfaces duplicate check failures while still importing files', async () => {
@@ -305,6 +340,10 @@ describe('UploadLetterPage', () => {
         '001-18860314-L01-01.jpg': true,
         '001-18860314-L01-02.jpg': false,
       },
+      sourceExpectations: {
+        '001-18860314-L01-01.jpg': sourceExpectation,
+        '001-18860314-L01-02.jpg': null,
+      },
     });
 
     const { container } = render(<UploadLetterPage />);
@@ -323,12 +362,162 @@ describe('UploadLetterPage', () => {
       expect(startUploadMock).toHaveBeenCalledTimes(1);
     });
 
-    const files = startUploadMock.mock.calls[0][0] as Array<{ file: File; force: boolean }>;
+    const files = startUploadMock.mock.calls[0][0] as Array<{
+      file: File;
+      force: boolean;
+      sourceExpectation: typeof sourceExpectation | null;
+    }>;
     expect(files.map((f) => f.file.name)).toEqual(['001-18860314-L01-02.jpg']);
     expect(files[0].force).toBe(false);
-    await waitFor(() => {
-      expect(document.querySelector('.upload-banner')).toHaveTextContent('1 skipped');
+    expect(files[0].sourceExpectation).toBeNull();
+    expect(document.querySelector('.upload-banner')).toBeNull();
+    expect(screen.queryByText('Upload Complete')).not.toBeInTheDocument();
+    expect(screen.getByText('Collection 001')).toBeInTheDocument();
+  });
+
+  it('does not claim a queued forced upload was replaced', async () => {
+    const user = userEvent.setup();
+    checkDuplicatesMock.mockResolvedValueOnce({
+      duplicates: {
+        '001-18860314-L01-01.jpg': true,
+      },
+      sourceExpectations: {
+        '001-18860314-L01-01.jpg': sourceExpectation,
+      },
     });
-    expect(screen.queryByText('Collection 001')).not.toBeInTheDocument();
+
+    const { container } = render(<UploadLetterPage />);
+    await user.upload(
+      getFileInput(container),
+      makeImageFile('001-18860314-L01-01.jpg'),
+    );
+
+    expect(await screen.findByText(/1 duplicate/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Upload' }));
+    await user.click(screen.getByRole('button', { name: /Replace Duplicates/i }));
+
+    await waitFor(() => {
+      expect(startUploadMock).toHaveBeenCalledTimes(1);
+    });
+    const files = startUploadMock.mock.calls[0][0] as Array<{
+      file: File;
+      force: boolean;
+      sourceExpectation: typeof sourceExpectation | null;
+    }>;
+    expect(files[0].force).toBe(true);
+    expect(files[0].sourceExpectation).toEqual(sourceExpectation);
+    expect(document.querySelector('.upload-banner')).toBeNull();
+    expect(screen.queryByText('Upload Complete')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /^Replaced/ })).not.toBeInTheDocument();
+  });
+
+  it('keeps a stale force file and refreshes its expectation only on explicit retry', async () => {
+    const user = userEvent.setup();
+    checkDuplicatesMock.mockResolvedValueOnce({
+      duplicates: { '001-18860314-L01-01.jpg': true },
+      sourceExpectations: {
+        '001-18860314-L01-01.jpg': sourceExpectation,
+      },
+    });
+    const { container, rerender } = render(<UploadLetterPage />);
+    await user.upload(
+      getFileInput(container),
+      makeImageFile('001-18860314-L01-01.jpg'),
+    );
+    await user.click(screen.getByRole('button', { name: 'Upload' }));
+    await user.click(screen.getByRole('button', { name: /Replace Duplicates/i }));
+
+    useUploadMock.mockReturnValue({
+      job: {
+        status: 'complete',
+        files: [],
+        totalFiles: 1,
+        completedFiles: 1,
+        successCount: 0,
+        failedCount: 1,
+        results: [],
+        errors: [{
+          filename: '001-18860314-L01-01.jpg',
+          error: 'Page source changed',
+          code: 'SOURCE_REVISION_CHANGED',
+        }],
+      },
+      startUpload: startUploadMock,
+      clearJob: vi.fn(),
+      isUploading: false,
+    });
+    rerender(<UploadLetterPage />);
+
+    expect(await screen.findByText('Collection 001')).toBeInTheDocument();
+    checkDuplicatesMock.mockResolvedValueOnce({
+      duplicates: { '001-18860314-L01-01.jpg': true },
+      sourceExpectations: {
+        '001-18860314-L01-01.jpg': {
+          ...sourceExpectation,
+          primarySourceRevision: 8,
+          storagePath: 'storage/newer.jpg',
+        },
+      },
+    });
+    await user.click(screen.getByRole('button', {
+      name: 'Refresh Duplicate Check',
+    }));
+
+    expect(checkDuplicatesMock).toHaveBeenLastCalledWith([
+      '001-18860314-L01-01.jpg',
+    ]);
+    expect(showToastMock).toHaveBeenCalledWith(
+      expect.stringContaining('Duplicate information refreshed'),
+      'info',
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Upload' }));
+    await user.click(screen.getByRole('button', { name: /Replace Duplicates/i }));
+    expect(startUploadMock).toHaveBeenCalledTimes(2);
+    expect(startUploadMock.mock.calls[1]?.[0]?.[0]).toMatchObject({
+      force: true,
+      sourceExpectation: {
+        primarySourceRevision: 8,
+        storagePath: 'storage/newer.jpg',
+      },
+    });
+  });
+
+  it('counts only authoritative replaced outcomes as replaced', async () => {
+    const unchanged = {
+      ...makeUploadResult('001-18860314-L01-01.jpg'),
+      alreadyExists: true,
+      outcome: 'unchanged' as const,
+      changed: false,
+    };
+    const replaced = {
+      ...makeUploadResult('001-18860314-L01-02.jpg'),
+      alreadyExists: true,
+      outcome: 'replaced' as const,
+      changed: true,
+    };
+    useUploadMock.mockReturnValue({
+      job: {
+        status: 'complete',
+        files: [],
+        totalFiles: 3,
+        completedFiles: 3,
+        successCount: 2,
+        failedCount: 1,
+        results: [unchanged, replaced],
+        errors: [{ filename: '001-18860314-L01-03.jpg', error: 'failed' }],
+      },
+      startUpload: startUploadMock,
+      clearJob: vi.fn(),
+      isUploading: false,
+    });
+
+    render(<UploadLetterPage />);
+
+    expect(await screen.findByRole('heading', { name: 'Upload Complete' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Replaced (1)' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Unchanged (1)' })).toBeInTheDocument();
+    expect(screen.getByText('001-18860314-L01-02.jpg')).toBeInTheDocument();
+    expect(screen.getByText('001-18860314-L01-01.jpg')).toBeInTheDocument();
   });
 });

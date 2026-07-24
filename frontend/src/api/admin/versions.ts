@@ -21,13 +21,14 @@ export async function getVersionHistory(
 
 export async function createVersion(
   letterId: string,
+  primarySourceRevision: number,
   fieldType: "transcript" | "metadata",
   content: string | Record<string, unknown>,
   source: "ai" | "human" = "human",
 ): Promise<{ versionNumber: number; createdAt: string }> {
   return apiPost<{ versionNumber: number; createdAt: string }>(
     `/admin/letters/${letterId}/versions`,
-    { fieldType, content, source },
+    { primarySourceRevision, fieldType, content, source },
   );
 }
 
@@ -35,8 +36,10 @@ export async function restoreVersion(
   letterId: string,
   versionNumber: number,
   fieldType: "transcript" | "metadata",
+  primarySourceRevision: number,
 ): Promise<Letter> {
   return apiPost<Letter>(
     `/admin/letters/${letterId}/versions/${versionNumber}/restore?fieldType=${fieldType}`,
+    { primarySourceRevision },
   );
 }

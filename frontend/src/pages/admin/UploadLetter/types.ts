@@ -7,6 +7,7 @@ export interface UploadedImage {
   originalFilename: string;
   parsed: ParsedFilename | null;
   isDuplicate: boolean;
+  sourceExpectation: import("../../../api/admin").UploadSourceExpectation | null;
 }
 
 export interface LetterGroup {
@@ -48,18 +49,9 @@ export interface UploadProgress {
 export interface UploadResultsState {
   uploaded: import("../../../api/admin").UploadResult[];
   replaced: import("../../../api/admin").UploadResult[];
+  unchanged: import("../../../api/admin").UploadResult[];
   failed: import("../../../api/admin").UploadError[];
   show: boolean;
-}
-
-export interface UploadBannerState {
-  show: boolean;
-  fileCount: number;
-  totalSize: string;
-  collectionCount: number;
-  replacedCount: number;
-  skippedCount: number;
-  excludedCount: number;
 }
 
 export interface DeleteDialogState {

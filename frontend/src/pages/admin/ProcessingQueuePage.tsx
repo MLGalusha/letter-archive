@@ -6,7 +6,11 @@ import {
   removeProcessingQueueItem,
   retryProcessingJob,
   wakeProcessingWorker,
+  type ProcessingActiveJob,
   type ProcessingJobType,
+  type ProcessingQueueClearResult,
+  type ProcessingQueueItem,
+  type ProcessingRecentJob,
 } from "../../api/admin/processing";
 import AdminLayout from "../../components/AdminLayout/AdminLayout";
 import { Button } from "../../components/common";
@@ -23,6 +27,29 @@ import {
   PROCESSING_STAGES,
 } from "./ProcessingQueue/stages";
 import "./ProcessingQueuePage.css";
+
+function clearResultMessage(result: ProcessingQueueClearResult): string {
+  if (result.skipped === 0) {
+    return `Cleared ${result.cleared} displayed queue item${result.cleared === 1 ? "" : "s"}`;
+  }
+
+  const sourceChanged = result.skipReasons.filter(
+    ({ code }) => code === "SOURCE_REVISION_CHANGED",
+  ).length;
+  const jobChanged = result.skipReasons.filter(
+    ({ code }) => code === "PROCESSING_JOB_CHANGED",
+  ).length;
+  const missing = result.skipReasons.filter(
+    ({ code }) => code === "NOT_FOUND",
+  ).length;
+  const reasons = [
+    sourceChanged > 0 ? `${sourceChanged} source changed` : null,
+    jobChanged > 0 ? `${jobChanged} job changed` : null,
+    missing > 0 ? `${missing} no longer exists` : null,
+  ].filter((reason): reason is string => reason !== null);
+
+  return `Cleared ${result.cleared} of ${result.requested} displayed items; skipped ${reasons.join(", ")}`;
+}
 
 export default function ProcessingQueuePage() {
   const { showToast } = useToast();
@@ -49,56 +76,69 @@ export default function ProcessingQueuePage() {
   }, [refresh, showToast]);
 
   const handleRemove = useCallback(
-    async (type: ProcessingJobType, letterId: string) => {
+    async (type: ProcessingJobType, item: ProcessingQueueItem) => {
       try {
-        await removeProcessingQueueItem(type, letterId);
-        await refresh();
+        await removeProcessingQueueItem(type, item);
       } catch (err) {
         showToast(
           getErrorMessage(err, "Failed to remove from queue"),
           "error",
         );
+      } finally {
+        await refresh();
       }
     },
     [refresh, showToast],
   );
 
   const handleClear = useCallback(
-    async (type: ProcessingJobType, label: string) => {
-      if (!window.confirm(`Clear the entire ${label} queue?`)) return;
+    async (
+      type: ProcessingJobType,
+      label: string,
+      items: ProcessingQueueItem[],
+    ) => {
+      if (!window.confirm(
+        `Clear the ${items.length} displayed ${label} queue item${items.length === 1 ? "" : "s"}? Newly queued work will not be affected.`,
+      )) return;
       try {
-        const result = await clearProcessingQueue(type);
-        showToast(`Cleared ${result.cleared} items`, "info");
-        await refresh();
+        const result = await clearProcessingQueue(type, items);
+        showToast(
+          clearResultMessage(result),
+          result.cleared > 0 ? "info" : "error",
+        );
       } catch (err) {
         showToast(getErrorMessage(err, "Failed to clear queue"), "error");
+      } finally {
+        await refresh();
       }
     },
     [refresh, showToast],
   );
 
   const handleRetry = useCallback(
-    async (type: ProcessingJobType, letterId: string) => {
+    async (job: ProcessingRecentJob) => {
       try {
-        await retryProcessingJob(type, letterId);
+        await retryProcessingJob(job.type, job);
         showToast("Retry queued", "info");
-        await refresh();
       } catch (err) {
         showToast(getErrorMessage(err, "Failed to retry"), "error");
+      } finally {
+        await refresh();
       }
     },
     [refresh, showToast],
   );
 
   const handleCancel = useCallback(
-    async (type: ProcessingJobType, letterId: string) => {
+    async (type: ProcessingJobType, job: ProcessingActiveJob) => {
       if (!window.confirm("Cancel this running job?")) return;
       try {
-        await cancelProcessingJob(type, letterId);
+        await cancelProcessingJob(type, job);
         showToast("Job cancelled", "info");
-        await refresh();
       } catch (err) {
         showToast(getErrorMessage(err, "Failed to cancel"), "error");
+      } finally {
+        await refresh();
       }
     },
     [refresh, showToast],
@@ -162,12 +202,14 @@ export default function ProcessingQueuePage() {
                   stage={stage}
                   queued={getStageQueue(status, stage)}
                   active={getStageActiveJobs(status, stage.type)}
-                  onRemove={(type, letterId) =>
-                    void handleRemove(type, letterId)
+                  onRemove={(type, item) =>
+                    void handleRemove(type, item)
                   }
-                  onClear={(type, label) => void handleClear(type, label)}
-                  onCancel={(type, letterId) =>
-                    void handleCancel(type, letterId)
+                  onClear={(type, label, items) =>
+                    void handleClear(type, label, items)
+                  }
+                  onCancel={(type, job) =>
+                    void handleCancel(type, job)
                   }
                 />
               ))}
@@ -177,7 +219,7 @@ export default function ProcessingQueuePage() {
               <h2 className="proc-section-title">Recent activity</h2>
               <RecentActivityList
                 recent={status.recent}
-                onRetry={(type, letterId) => void handleRetry(type, letterId)}
+                onRetry={(job) => void handleRetry(job)}
               />
             </section>
 

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { eq, sql, asc } from 'drizzle-orm';
 import { z } from 'zod';
-import { db, letters, collections, letterPages } from '../../db/index.js';
+import { db, letters, letterPages } from '../../db/index.js';
 import {
   getCollectionByCode,
   resolveCollectionStartHere,
@@ -10,18 +10,20 @@ import { transformLettersWithRelatedToDTO, type LetterWithRelations } from '../.
 import { getRows } from '../../services/letter-queries.js';
 import { resolveRepresentativeLetterId } from '../../services/letters.js';
 import {
-  commitDirectIdentityField,
-  isIdentityRevisionConflict,
-  observeIdentityField,
-  propagateName,
-  type IdentityField,
-  type IdentityStateSource,
-} from '../../services/name-propagation.js';
-import { syncLetterParticipantsFromMetadata } from '../../services/entities/participant-sync.js';
-import {
   assessCollectionCompleteness,
   generateCollectionProfile,
 } from '../../ai/generate-collection-profile.js';
+import { AppError } from '../../utils/response-helpers.js';
+import {
+  applyCollectionEditorMutation,
+  collectionIdentityFingerprint,
+} from '../../services/collection-editor-mutation.js';
+import {
+  storeGeneratedCollectionProfile,
+  updateCollectionProfile,
+  updateCollectionSourceMetadata,
+  type CollectionProfileChanges,
+} from '../../services/collection-profile-mutations.js';
 
 const router = Router();
 
@@ -59,6 +61,7 @@ function normalizeProfileCorrespondents(input: unknown): ProfileCorrespondent[] 
 }
 
 const updateCollectionSchema = z.object({
+  profileRevision: z.number().int().nonnegative(),
   title: z.string().min(1).max(255).optional(),
   description: z.string().max(2000).nullable().optional(),
 });
@@ -231,6 +234,7 @@ router.get('/:code', async (req, res, next) => {
       profileStartHereLetterId: resolvedStartHere.letterId,
       profileStartHereReason: resolvedStartHere.reason,
       profileCorrespondents: normalizeProfileCorrespondents(collection.profileCorrespondents),
+      identityFingerprint: collectionIdentityFingerprint(allLetters),
       letters: collectionLetters,
       letterCount: collectionLetters.length,
     });
@@ -246,6 +250,7 @@ router.get('/:code', async (req, res, next) => {
 router.put('/:code', async (req, res, next) => {
   try {
     const { code } = req.params;
+    requireProfileRevision(req.body);
 
     const parseResult = updateCollectionSchema.safeParse(req.body);
     if (!parseResult.success) {
@@ -262,13 +267,12 @@ router.put('/:code', async (req, res, next) => {
       return;
     }
 
-    const updates = parseResult.data;
-    const [updated] = await db
-      .update(collections)
-      .set(updates)
-      .where(eq(collections.id, collection.id))
-      .returning();
-
+    const { profileRevision, ...changes } = parseResult.data;
+    const updated = await updateCollectionSourceMetadata({
+      collection,
+      expectedProfileRevision: profileRevision,
+      ...changes,
+    });
     res.json(updated);
   } catch (error) {
     next(error);
@@ -281,16 +285,62 @@ const renameCorrespondentSchema = z.object({
   roles: z.array(z.enum(['sender', 'recipient'])).min(1),
 });
 
-router.patch('/:code/correspondents', async (req, res, next) => {
-  try {
-    const { code } = req.params;
-    const collection = await getCollectionByCode(code);
+const collectionEditorUpdateSchema = z.object({
+  profileRevision: z.number().int().nonnegative(),
+  identityFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+  hook: z.string().max(500).nullable().optional(),
+  profileNarrative: z.string().max(10000).optional(),
+  profileStartHereLetterId: z.string().uuid().nullable().optional(),
+  profileCorrespondents: z.array(z.object({
+    name: z.string().trim().min(1).max(255),
+    hook: z.string().max(500).nullable().optional(),
+    biography: z.string().max(10000).nullable().optional(),
+  })).optional(),
+  description: z.string().max(2000).nullable().optional(),
+  correspondentRenames: z.array(renameCorrespondentSchema).default([]),
+});
 
-    if (!collection) {
-      res.status(404).json({ error: 'Collection not found' });
+router.put('/:code/editor', async (req, res, next) => {
+  try {
+    const parseResult = collectionEditorUpdateSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      res.status(400).json({
+        error: 'Invalid request body',
+        details: parseResult.error.errors,
+      });
       return;
     }
 
+    const { code } = req.params;
+    const {
+      profileRevision,
+      identityFingerprint,
+      profileCorrespondents,
+      correspondentRenames,
+      ...updates
+    } = parseResult.data;
+    const result = await applyCollectionEditorMutation({
+      code,
+      expectedProfileRevision: profileRevision,
+      expectedIdentityFingerprint: identityFingerprint,
+      ...updates,
+      ...(profileCorrespondents !== undefined
+        ? {
+            profileCorrespondents:
+              normalizeProfileCorrespondents(profileCorrespondents),
+          }
+        : {}),
+      correspondentRenames,
+    });
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/:code/correspondents', async (req, res, next) => {
+  try {
+    const { code } = req.params;
     const data = renameCorrespondentSchema.parse(req.body ?? {});
     const normalizedOldName = data.oldName.trim().toLowerCase();
     const normalizedNewName = data.newName.trim();
@@ -300,87 +350,16 @@ router.patch('/:code/correspondents', async (req, res, next) => {
       return;
     }
 
-    const collectionLetters = await db.query.letters.findMany({
-      where: eq(letters.collectionId, collection.id),
-      columns: {
-        id: true,
-        sender: true,
-        recipient: true,
-        metadataRevision: true,
-        updatedAt: true,
-        metadataV2Json: true,
-      },
+    const result = await applyCollectionEditorMutation({
+      code,
+      correspondentRenames: [data],
     });
 
-    let updatedCount = 0;
-
-    for (const letter of collectionLetters) {
-      const senderMatches = data.roles.includes('sender')
-        && letter.sender?.trim().toLowerCase() === normalizedOldName;
-      const recipientMatches = data.roles.includes('recipient')
-        && letter.recipient?.trim().toLowerCase() === normalizedOldName;
-
-      if (!senderMatches && !recipientMatches) continue;
-
-      let current: IdentityStateSource & { id: string } = letter;
-      const renameField = async (field: IdentityField) => {
-        const oldName = current[field];
-        if (!oldName || oldName === normalizedNewName) return false;
-
-        try {
-          const result = await propagateName({
-            letterId: current.id,
-            field,
-            oldName,
-            newName: normalizedNewName,
-            observed: observeIdentityField(current, field),
-          });
-          current = result.letter;
-        } catch (error) {
-          if (isIdentityRevisionConflict(error)) throw error;
-
-          req.log.warn(
-            { error, letterId: current.id, field },
-            'Collection correspondent propagation failed, using guarded direct update',
-          );
-          current = await commitDirectIdentityField({
-            letter: current,
-            field,
-            value: normalizedNewName,
-          });
-        }
-
-        await syncLetterParticipantsFromMetadata({
-          letterId: current.id,
-          [field]: normalizedNewName,
-        }).catch((error) => {
-          req.log.warn(
-            { error, letterId: current.id, field },
-            'Participant sync failed after collection correspondent rename',
-          );
-        });
-        return true;
-      };
-
-      let changed = false;
-
-      if (senderMatches) {
-        const senderChanged = await renameField('sender');
-        changed ||= senderChanged;
-      }
-      if (recipientMatches) {
-        const recipientChanged = await renameField('recipient');
-        changed ||= recipientChanged;
-      }
-
-      if (changed) updatedCount += 1;
-    }
-
     res.json({
-      updatedCount,
-      message: updatedCount === 0
+      updatedCount: result.updatedLetterCount,
+      message: result.updatedLetterCount === 0
         ? 'No matching correspondents found'
-        : `Updated ${updatedCount} ${updatedCount === 1 ? 'letter' : 'letters'}`,
+        : `Updated ${result.updatedLetterCount} ${result.updatedLetterCount === 1 ? 'letter' : 'letters'}`,
     });
   } catch (error) {
     next(error);
@@ -414,7 +393,21 @@ router.get('/:code/profile/completeness', async (req, res, next) => {
 
 const generateProfileSchema = z.object({
   force: z.boolean().optional(),
+  profileRevision: z.number().int().nonnegative(),
 });
+
+function requireProfileRevision(body: unknown): void {
+  if (
+    !body
+    || typeof body !== 'object'
+    || !Object.hasOwn(body, 'profileRevision')
+  ) {
+    throw new AppError(
+      409,
+      'Collection profile version is missing; reload before saving',
+    );
+  }
+}
 
 /**
  * POST /admin/collections/:code/generate-profile
@@ -423,6 +416,7 @@ const generateProfileSchema = z.object({
 router.post('/:code/generate-profile', async (req, res, next) => {
   try {
     const { code } = req.params;
+    requireProfileRevision(req.body);
     const collection = await getCollectionByCode(code);
 
     if (!collection) {
@@ -431,6 +425,12 @@ router.post('/:code/generate-profile', async (req, res, next) => {
     }
 
     const body = generateProfileSchema.parse(req.body || {});
+    if (body.profileRevision !== collection.profileRevision) {
+      throw new AppError(
+        409,
+        'Collection sources changed; reload before generating the profile',
+      );
+    }
 
     // Check if profile already exists
     if (collection.profileStatus !== 'EMPTY' && !body.force) {
@@ -444,18 +444,16 @@ router.post('/:code/generate-profile', async (req, res, next) => {
 
     const result = await generateCollectionProfile(collection.id);
 
-    // Store results
-    await db.update(collections).set({
-      hook: result.hook,
-      profileNarrative: result.narrative,
-      profileCorrespondents: result.correspondents,
-      profileStatus: 'AI_DRAFT',
-      profileGeneratedAt: new Date(),
-    }).where(eq(collections.id, collection.id));
+    const profileRevision = await storeGeneratedCollectionProfile({
+      collectionId: collection.id,
+      expectedProfileRevision: body.profileRevision,
+      profile: result,
+    });
 
     res.json({
       ...result,
       profileStatus: 'AI_DRAFT',
+      profileRevision,
     });
   } catch (error) {
     next(error);
@@ -463,6 +461,7 @@ router.post('/:code/generate-profile', async (req, res, next) => {
 });
 
 const updateProfileSchema = z.object({
+  profileRevision: z.number().int().nonnegative(),
   hook: z.string().max(500).nullable().optional(),
   profileNarrative: z.string().max(10000).optional(),
   profileStartHereLetterId: z.string().uuid().nullable().optional(),
@@ -498,6 +497,7 @@ const updateProfileSchema = z.object({
 router.put('/:code/profile', async (req, res, next) => {
   try {
     const { code } = req.params;
+    requireProfileRevision(req.body);
     const collection = await getCollectionByCode(code);
 
     if (!collection) {
@@ -514,14 +514,23 @@ router.put('/:code/profile', async (req, res, next) => {
       return;
     }
 
-    const updates: Record<string, unknown> = {};
-    const data = parseResult.data;
-
-    if (data.hook !== undefined) updates.hook = data.hook;
-    if (data.profileNarrative !== undefined) updates.profileNarrative = data.profileNarrative;
+    const {
+      profileRevision,
+      profileCorrespondents,
+      ...data
+    } = parseResult.data;
+    const changes: CollectionProfileChanges = {
+      ...data,
+      ...(profileCorrespondents !== undefined
+        ? {
+            profileCorrespondents:
+              normalizeProfileCorrespondents(profileCorrespondents),
+          }
+        : {}),
+    };
     if (data.profileStartHereLetterId !== undefined) {
       if (data.profileStartHereLetterId === null) {
-        updates.profileStartHereLetterId = null;
+        changes.profileStartHereLetterId = null;
       } else {
         const resolvedStartHereLetterId = await resolveRepresentativeLetterId(
           data.profileStartHereLetterId,
@@ -534,46 +543,37 @@ router.put('/:code/profile', async (req, res, next) => {
           res.status(400).json({ error: 'Featured letter must be published' });
           return;
         }
-        updates.profileStartHereLetterId = resolvedStartHereLetterId;
+        changes.profileStartHereLetterId = resolvedStartHereLetterId;
       }
     }
-    if (data.profileStartHereReason !== undefined) updates.profileStartHereReason = data.profileStartHereReason;
-    if (data.profileReadingPaths !== undefined) updates.profileReadingPaths = data.profileReadingPaths;
-    if (data.profileGapAnalysis !== undefined) updates.profileGapAnalysis = data.profileGapAnalysis;
-    if (data.profileThemes !== undefined) updates.profileThemes = data.profileThemes;
-    if (data.profileCorrespondents !== undefined) {
-      updates.profileCorrespondents = normalizeProfileCorrespondents(data.profileCorrespondents);
+    if (data.highlightImageId !== undefined) {
+      if (data.highlightImageId !== null) {
+        const highlightPage = await db.query.letterPages.findFirst({
+          where: eq(letterPages.id, data.highlightImageId),
+          columns: { id: true },
+          with: {
+            letter: {
+              columns: { collectionId: true },
+            },
+          },
+        });
+        if (
+          !highlightPage
+          || highlightPage.letter.collectionId !== collection.id
+        ) {
+          res.status(400).json({
+            error: 'Highlight image must belong to this collection',
+          });
+          return;
+        }
+      }
+      changes.highlightImageId = data.highlightImageId;
     }
-    if (data.profileStatus !== undefined) updates.profileStatus = data.profileStatus;
-    if (data.highlightImageId !== undefined) updates.highlightImageId = data.highlightImageId;
-
-    // Reset all profile fields when status is set to EMPTY
-    if (data.profileStatus === 'EMPTY') {
-      updates.hook = null;
-      updates.profileNarrative = null;
-      updates.profileCorrespondents = null;
-      updates.profileStartHereLetterId = null;
-      updates.profileStartHereReason = null;
-      updates.profileReadingPaths = null;
-      updates.profileGapAnalysis = null;
-      updates.profileThemes = null;
-      updates.highlightImageId = null;
-      updates.profileGeneratedAt = null;
-    }
-
-    // Auto-upgrade status from AI_DRAFT to EDITED if content changes (but not if status is explicitly set)
-    if (!data.profileStatus && collection.profileStatus === 'AI_DRAFT' && Object.keys(updates).length > 0) {
-      updates.profileStatus = 'EDITED';
-    }
-
-    if (Object.keys(updates).length > 0) {
-      await db.update(collections).set(updates).where(eq(collections.id, collection.id));
-    }
-
-    const updated = await db.query.collections.findFirst({
-      where: eq(collections.id, collection.id),
+    const updated = await updateCollectionProfile({
+      collection,
+      expectedProfileRevision: profileRevision,
+      changes,
     });
-
     res.json(updated);
   } catch (error) {
     next(error);

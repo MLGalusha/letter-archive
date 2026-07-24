@@ -24,6 +24,10 @@ import {
 } from './extra-content-job.js';
 import { buildMetadataSourceInvalidationPatch } from './metadata-job.js';
 import { activeWorkerExecutionCondition } from '../worker-state.js';
+import {
+  assertCurrentPrimarySourceRevision,
+  currentPrimarySourceRevisionCondition,
+} from './source-revision.js';
 
 const log = createLogger({ module: 'extra-content' });
 
@@ -271,6 +275,7 @@ async function produceStandaloneExtras(
 
 async function executeEligibleExtraContent<T>(
   letterId: string,
+  expectedPrimarySourceRevision: number,
   expectedStatus: ClaimableJobStatus,
   expectedUpdatedAt: Date,
   claimKind: ExtraContentClaimKind,
@@ -282,6 +287,7 @@ async function executeEligibleExtraContent<T>(
 ): Promise<ExtraContentJobResult<T>> {
   return runExtraContentJob({
     letterId,
+    expectedPrimarySourceRevision,
     expectedStatus,
     expectedUpdatedAt,
     claimKind,
@@ -290,6 +296,12 @@ async function executeEligibleExtraContent<T>(
       const claimedSource = await loadExtraContentSource(letterId);
       if (!claimedSource) {
         throw new Error('Extra content source disappeared after the job was claimed');
+      }
+      if (
+        claimedSource.letter.primarySourceRevision
+        !== expectedPrimarySourceRevision
+      ) {
+        throw new ExtraContentOwnershipLostError();
       }
       requireOwnership(heartbeat);
       return produce(claimedSource, heartbeat);
@@ -312,6 +324,7 @@ export async function runAutomaticExtraContent(
 
   return executeEligibleExtraContent(
     letterId,
+    source.letter.primarySourceRevision,
     'PENDING',
     source.letter.updatedAt,
     'QUEUED',
@@ -321,32 +334,61 @@ export async function runAutomaticExtraContent(
 
 export async function runRegeneratedExtraContent(
   letterId: string,
+  expectedPrimarySourceRevision: number,
 ): Promise<ExtraContentExecution<number>> {
   const source = await loadExtraContentSource(letterId);
   if (!source) return { kind: 'missing' };
+  assertCurrentPrimarySourceRevision(
+    source.letter.primarySourceRevision,
+    expectedPrimarySourceRevision,
+    'Letter source changed before extra content regeneration started; reload and try again',
+  );
   if (source.relatedItems.length === 0) return { kind: 'ineligible', value: 0 };
 
   const expectedStatus = observedClaimableStatus(source);
   if (!expectedStatus) return { kind: 'claim_lost' };
-  return executeEligibleExtraContent(
+  const result = await executeEligibleExtraContent(
     letterId,
+    expectedPrimarySourceRevision,
     expectedStatus,
     source.letter.updatedAt,
     'REQUESTED',
     produceRegeneratedExtras,
   );
+  if (result.kind === 'claim_lost' || result.kind === 'superseded') {
+    const latest = await loadExtraContentSource(letterId);
+    if (latest) {
+      assertCurrentPrimarySourceRevision(
+        latest.letter.primarySourceRevision,
+        expectedPrimarySourceRevision,
+        'Letter source changed while extra content was regenerating; reload and try again',
+      );
+    }
+  }
+  return result;
 }
 
 export async function tryTranscribeExtras(
   letterId: string,
   options: {
     expectedStatus?: ClaimableJobStatus;
+    expectedPrimarySourceRevision?: number;
     claimKind: ExtraContentClaimKind;
     workerExecutionToken?: string;
   },
 ): Promise<ExtraContentExecution<TranscribeExtrasResult>> {
   const source = await loadExtraContentSource(letterId);
   if (!source) return { kind: 'missing' };
+  const expectedPrimarySourceRevision =
+    options.expectedPrimarySourceRevision
+    ?? source.letter.primarySourceRevision;
+  if (options.expectedPrimarySourceRevision !== undefined) {
+    assertCurrentPrimarySourceRevision(
+      source.letter.primarySourceRevision,
+      options.expectedPrimarySourceRevision,
+      'Letter source changed before extra content transcription started; reload and try again',
+    );
+  }
 
   const expectedStatus = options.expectedStatus ?? observedClaimableStatus(source);
   if (!expectedStatus) return { kind: 'claim_lost' };
@@ -364,6 +406,7 @@ export async function tryTranscribeExtras(
       })
       .where(and(
         eq(letters.id, letterId),
+        currentPrimarySourceRevisionCondition(expectedPrimarySourceRevision),
         eq(letters.extraContentJobStatus, expectedStatus),
         observedTimestampMatches(letters.updatedAt, source.letter.updatedAt),
         ...(options.workerExecutionToken
@@ -372,7 +415,19 @@ export async function tryTranscribeExtras(
       ))
       .returning({ id: letters.id });
 
-    if (cleared.length === 0) return { kind: 'claim_lost' };
+    if (cleared.length === 0) {
+      if (options.expectedPrimarySourceRevision !== undefined) {
+        const latest = await loadExtraContentSource(letterId);
+        if (latest) {
+          assertCurrentPrimarySourceRevision(
+            latest.letter.primarySourceRevision,
+            expectedPrimarySourceRevision,
+            'Letter source changed before extra content could be cleared; reload and try again',
+          );
+        }
+      }
+      return { kind: 'claim_lost' };
+    }
 
     return {
       kind: 'ineligible',
@@ -384,14 +439,29 @@ export async function tryTranscribeExtras(
     };
   }
 
-  return executeEligibleExtraContent(
+  const result = await executeEligibleExtraContent(
     letterId,
+    expectedPrimarySourceRevision,
     expectedStatus,
     source.letter.updatedAt,
     options.claimKind,
     produceStandaloneExtras,
     options.workerExecutionToken,
   );
+  if (
+    options.expectedPrimarySourceRevision !== undefined
+    && (result.kind === 'claim_lost' || result.kind === 'superseded')
+  ) {
+    const latest = await loadExtraContentSource(letterId);
+    if (latest) {
+      assertCurrentPrimarySourceRevision(
+        latest.letter.primarySourceRevision,
+        expectedPrimarySourceRevision,
+        'Letter source changed while extra content was transcribing; reload and try again',
+      );
+    }
+  }
+  return result;
 }
 
 function conflictError(message: string) {
@@ -402,8 +472,12 @@ function conflictError(message: string) {
 
 export async function transcribeExtras(
   letterId: string,
+  expectedPrimarySourceRevision: number,
 ): Promise<TranscribeExtrasResult | null> {
-  const result = await tryTranscribeExtras(letterId, { claimKind: 'REQUESTED' });
+  const result = await tryTranscribeExtras(letterId, {
+    claimKind: 'REQUESTED',
+    expectedPrimarySourceRevision,
+  });
   if (result.kind === 'missing') return null;
   if (result.kind === 'completed' || result.kind === 'ineligible') return result.value;
   if (result.kind === 'claim_lost') {

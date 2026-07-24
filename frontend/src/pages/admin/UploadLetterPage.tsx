@@ -19,11 +19,9 @@ import type {
   EditState,
   LightboxState,
   UploadResultsState,
-  UploadBannerState,
   DeleteDialogState,
 } from "./UploadLetter/types";
 import {
-  formatFileSize,
   generateId,
   generateNewFilename,
   getNextCollectionCode,
@@ -37,6 +35,7 @@ export default function UploadLetterPage() {
   const { startUpload, job, isUploading } = useUpload();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+  const pendingUploadNamesRef = useRef<Set<string>>(new Set());
 
   // State
   const [images, setImages] = useState<UploadedImage[]>([]);
@@ -57,29 +56,30 @@ export default function UploadLetterPage() {
   const [uploadResults, setUploadResults] = useState<UploadResultsState>({
     uploaded: [],
     replaced: [],
+    unchanged: [],
     failed: [],
     show: false,
-  });
-  const [uploadBanner, setUploadBanner] = useState<UploadBannerState>({
-    show: false,
-    fileCount: 0,
-    totalSize: "0 B",
-    collectionCount: 0,
-    replacedCount: 0,
-    skippedCount: 0,
-    excludedCount: 0,
   });
   // Sync upload context results into local state when job completes
   useEffect(() => {
     if (job?.status === 'complete') {
-      const uploaded = job.results.filter(r => !r.alreadyExists);
-      const replaced = job.results.filter(r => r.alreadyExists);
+      const uploaded = job.results.filter(r => r.outcome === 'created');
+      const replaced = job.results.filter(r => r.outcome === 'replaced');
+      const unchanged = job.results.filter(r => r.outcome === 'unchanged');
       setUploadResults({
         uploaded,
         replaced,
+        unchanged,
         failed: job.errors,
-        show: job.errors.length > 0,
+        show: job.errors.length > 0 || unchanged.length > 0,
       });
+      if (pendingUploadNamesRef.current.size > 0) {
+        const completedNames = new Set(job.results.map((result) => result.filename));
+        setImages((current) => current.filter(
+          (image) => !completedNames.has(image.originalFilename),
+        ));
+        pendingUploadNamesRef.current = new Set();
+      }
     }
   }, [job?.status, job?.results, job?.errors]);
 
@@ -152,7 +152,7 @@ export default function UploadLetterPage() {
 
   // Duplicate check helper
   const recheckDuplicates = useCallback(async (filenames: string[]) => {
-    if (filenames.length === 0) return;
+    if (filenames.length === 0) return true;
     setDuplicateCheckLoading(true);
     try {
       const response = await checkDuplicates(filenames);
@@ -161,12 +161,16 @@ export default function UploadLetterPage() {
           return {
             ...img,
             isDuplicate: response.duplicates[img.originalFilename],
+            sourceExpectation:
+              response.sourceExpectations?.[img.originalFilename] ?? null,
           };
         }
         return img;
       }));
+      return true;
     } catch (err) {
       showToast(getErrorMessage(err, "Failed to check duplicates"), "error");
+      return false;
     } finally {
       setDuplicateCheckLoading(false);
     }
@@ -197,6 +201,7 @@ export default function UploadLetterPage() {
         originalFilename: file.name,
         parsed,
         isDuplicate: false,
+        sourceExpectation: null,
       });
     }
 
@@ -226,6 +231,8 @@ export default function UploadLetterPage() {
             return {
               ...img,
               isDuplicate: response.duplicates[img.originalFilename],
+              sourceExpectation:
+                response.sourceExpectations?.[img.originalFilename] ?? null,
             };
           }
           return img;
@@ -388,6 +395,7 @@ export default function UploadLetterPage() {
           originalFilename: newFilename,
           parsed: newParsed,
           isDuplicate: false, // Reset until recheck
+          sourceExpectation: null,
         };
       }),
     );
@@ -428,11 +436,9 @@ export default function UploadLetterPage() {
   const doUpload = (duplicateStrategy: "skip" | "replace") => {
     setDuplicateDialog({ show: false, duplicateCount: 0 });
     setMessage("");
-    setUploadBanner(prev => ({ ...prev, show: false }));
 
     const queued: QueuedFile[] = [];
-    let skippedCount = 0;
-    let totalBytes = 0;
+    const missingExpectations: string[] = [];
 
     for (const collection of collections) {
       for (const letter of collection.letters) {
@@ -443,17 +449,32 @@ export default function UploadLetterPage() {
 
           if (img.isDuplicate) {
             if (duplicateStrategy === "replace") {
-              queued.push({ file, force: true });
-              totalBytes += file.size;
-            } else {
-              skippedCount++;
+              if (img.sourceExpectation) {
+                queued.push({
+                  file,
+                  force: true,
+                  sourceExpectation: img.sourceExpectation,
+                });
+              } else {
+                missingExpectations.push(img.originalFilename);
+              }
             }
           } else {
-            queued.push({ file, force: false });
-            totalBytes += file.size;
+            queued.push({ file, force: false, sourceExpectation: null });
           }
         }
       }
+    }
+
+    if (missingExpectations.length > 0) {
+      setMessage(
+        "Duplicate information is incomplete. Recheck duplicates before replacing files.",
+      );
+      showToast(
+        "Duplicate information is incomplete. Recheck duplicates before replacing files.",
+        "error",
+      );
+      return;
     }
 
     if (queued.length === 0) {
@@ -462,46 +483,39 @@ export default function UploadLetterPage() {
     }
 
     // Hand off to the upload context — it chunks and processes in the background
+    pendingUploadNamesRef.current = new Set(queued.map(q => q.file.name));
     startUpload(queued);
 
-    // Remove categorized images from local state immediately
-    const queuedNames = new Set(queued.map(q => q.file.name));
-    setImages(prev => prev.filter(img => {
-      if (!img.parsed) return true; // Keep uncategorized
-      if (queuedNames.has(img.originalFilename)) return false;
-      if (img.isDuplicate) return false; // Remove skipped duplicates too
-      return true;
-    }));
-
-    const excludedCount = uncategorizedImages.length;
-
-    setUploadBanner({
-      show: true,
-      fileCount: queued.length,
-      totalSize: formatFileSize(totalBytes),
-      collectionCount: collections.length,
-      replacedCount: queued.filter(q => q.force).length,
-      skippedCount,
-      excludedCount,
-    });
-
-    setTimeout(() => {
-      setUploadBanner(prev => ({ ...prev, show: false }));
-    }, 8000);
+    // A failed source-fenced upload must keep its File and observation so the
+    // user can explicitly refresh and retry. Only deliberate skips leave now;
+    // successful queued files are removed when the authoritative job finishes.
+    if (duplicateStrategy === "skip") {
+      setImages(prev => prev.filter(img => !img.parsed || !img.isDuplicate));
+    }
   };
 
   const handleClearResults = () => {
     setUploadResults({
       uploaded: [],
       replaced: [],
+      unchanged: [],
       failed: [],
       show: false,
     });
     setMessage("");
   };
 
-  const handleDismissBanner = () => {
-    setUploadBanner(prev => ({ ...prev, show: false }));
+  const sourceConflictFilenames = uploadResults.failed
+    .filter((failure) => failure.code === "SOURCE_REVISION_CHANGED")
+    .map((failure) => failure.filename);
+  const handleRefreshSourceConflicts = async () => {
+    const refreshed = await recheckDuplicates(sourceConflictFilenames);
+    if (!refreshed) return;
+    handleClearResults();
+    showToast(
+      "Duplicate information refreshed. Review the current source, then choose Upload again to retry.",
+      "info",
+    );
   };
 
   // Deletion toggle handlers
@@ -825,31 +839,6 @@ export default function UploadLetterPage() {
 
       {images.length === 0 && collections.length === 0 ? (
         <div className="upload-content">
-          {/* Upload Success Banner */}
-          {uploadBanner.show && (
-            <div className="upload-banner">
-              <div className="banner-icon">✓</div>
-              <div className="banner-content">
-                <strong>Upload Complete</strong>
-                <div className="banner-stats">
-                  <span className="banner-stat"><strong>{uploadBanner.fileCount}</strong> files</span>
-                  <span className="banner-stat"><strong>{uploadBanner.totalSize}</strong></span>
-                  <span className="banner-stat"><strong>{uploadBanner.collectionCount}</strong> collection{uploadBanner.collectionCount !== 1 ? 's' : ''}</span>
-                  {uploadBanner.replacedCount > 0 && (
-                    <span className="banner-stat"><strong>{uploadBanner.replacedCount}</strong> replaced</span>
-                  )}
-                  {uploadBanner.skippedCount > 0 && (
-                    <span className="banner-stat"><strong>{uploadBanner.skippedCount}</strong> skipped</span>
-                  )}
-                  {uploadBanner.excludedCount > 0 && (
-                    <span className="banner-stat"><strong>{uploadBanner.excludedCount}</strong> uncategorized excluded</span>
-                  )}
-                </div>
-              </div>
-              <button className="banner-dismiss" onClick={handleDismissBanner} title="Dismiss">×</button>
-            </div>
-          )}
-
           {/* Empty state: large drop zone */}
           <div
             className={`upload-drop-zone ${dragActive ? 'drag-active' : ''}`}
@@ -878,31 +867,6 @@ export default function UploadLetterPage() {
         </div>
       ) : (
         <div className="upload-content">
-          {/* Upload Success Banner */}
-          {uploadBanner.show && (
-            <div className="upload-banner">
-              <div className="banner-icon">✓</div>
-              <div className="banner-content">
-                <strong>Upload Complete</strong>
-                <div className="banner-stats">
-                  <span className="banner-stat"><strong>{uploadBanner.fileCount}</strong> files</span>
-                  <span className="banner-stat"><strong>{uploadBanner.totalSize}</strong></span>
-                  <span className="banner-stat"><strong>{uploadBanner.collectionCount}</strong> collection{uploadBanner.collectionCount !== 1 ? 's' : ''}</span>
-                  {uploadBanner.replacedCount > 0 && (
-                    <span className="banner-stat"><strong>{uploadBanner.replacedCount}</strong> replaced</span>
-                  )}
-                  {uploadBanner.skippedCount > 0 && (
-                    <span className="banner-stat"><strong>{uploadBanner.skippedCount}</strong> skipped</span>
-                  )}
-                  {uploadBanner.excludedCount > 0 && (
-                    <span className="banner-stat"><strong>{uploadBanner.excludedCount}</strong> uncategorized excluded</span>
-                  )}
-                </div>
-              </div>
-              <button className="banner-dismiss" onClick={handleDismissBanner} title="Dismiss">×</button>
-            </div>
-          )}
-
           {/* Collections Section */}
           {collections.length > 0 && (
             <div className="collections-section">
@@ -1016,7 +980,7 @@ export default function UploadLetterPage() {
         />
       )}
 
-      {/* Upload Results Panel (only shown for failures) */}
+      {/* Authoritative upload details for no-ops and failures. */}
       {uploadResults.show && (
         <div className="modal-overlay" onClick={handleClearResults}>
           <div className="upload-results-panel" onClick={(e) => e.stopPropagation()}>
@@ -1051,6 +1015,19 @@ export default function UploadLetterPage() {
                   </ul>
                 </div>
               )}
+              {uploadResults.unchanged.length > 0 && (
+                <div className="result-section unchanged">
+                  <h4>Unchanged ({uploadResults.unchanged.length})</h4>
+                  <ul>
+                    {uploadResults.unchanged.slice(0, 10).map((r) => (
+                      <li key={r.pageId}>{r.filename}</li>
+                    ))}
+                    {uploadResults.unchanged.length > 10 && (
+                      <li className="more">...and {uploadResults.unchanged.length - 10} more</li>
+                    )}
+                  </ul>
+                </div>
+              )}
               {uploadResults.failed.length > 0 && (
                 <div className="result-section failed">
                   <h4>Failed ({uploadResults.failed.length})</h4>
@@ -1069,6 +1046,14 @@ export default function UploadLetterPage() {
               )}
             </div>
             <div className="results-actions">
+              {sourceConflictFilenames.length > 0 && (
+                <button
+                  className="results-btn primary"
+                  onClick={handleRefreshSourceConflicts}
+                >
+                  Refresh Duplicate Check
+                </button>
+              )}
               <button className="results-btn primary" onClick={handleClearResults}>
                 Upload More
               </button>

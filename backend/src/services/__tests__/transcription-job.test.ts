@@ -30,6 +30,7 @@ vi.mock('../../db/index.js', () => ({
   db: { update: dbUpdateMock },
   letters: {
     id: 'letters.id',
+    primarySourceRevision: 'letters.primarySourceRevision',
     workflow: 'letters.workflow',
     transcriptionStatus: 'letters.transcriptionStatus',
     transcriptionText: 'letters.transcriptionText',
@@ -61,6 +62,7 @@ import {
 
 interface TranscriptionRow {
   id: string;
+  primarySourceRevision: number;
   workflow: 'UPLOADED' | 'TRANSCRIBING' | 'TRANSCRIBED';
   transcriptionStatus: 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';
   transcriptionText: string | null;
@@ -91,6 +93,7 @@ let returningBarrier: Promise<void> | null;
 
 function observed(overrides: Partial<ObservedTranscriptionState> = {}): ObservedTranscriptionState {
   return {
+    primarySourceRevision: row.primarySourceRevision,
     status: row.transcriptionStatus,
     workflow: row.workflow,
     transcriptionText: row.transcriptionText,
@@ -184,6 +187,7 @@ describe('transcription job lifecycle', () => {
     vi.clearAllMocks();
     row = {
       id: 'letter-1',
+      primarySourceRevision: 4,
       workflow: 'UPLOADED',
       transcriptionStatus: 'PENDING',
       transcriptionText: null,
@@ -343,6 +347,27 @@ describe('transcription job lifecycle', () => {
 
     expect(row.transcriptionStatus).toBe('PENDING');
     expect(row.transcriptionRunId).toBeNull();
+  });
+
+  it('fences requested claim and publication to one primary source revision', async () => {
+    const staleObservation = observed();
+    row.primarySourceRevision = 5;
+
+    await expect(
+      claimRequestedTranscription(row.id, staleObservation),
+    ).resolves.toBeNull();
+
+    row.primarySourceRevision = 4;
+    await expect(
+      claimRequestedTranscription(row.id, observed()),
+    ).resolves.toEqual({ runId: 'run-a' });
+    row.primarySourceRevision = 5;
+
+    await expect(
+      completeTranscription(row.id, 'run-a', 'Stale transcript', 4),
+    ).resolves.toBe(false);
+    expect(row.transcriptionText).toBeNull();
+    expect(row.transcriptionStatus).toBe('RUNNING');
   });
 
   it('publishes success or failure only for the owning run ID', async () => {

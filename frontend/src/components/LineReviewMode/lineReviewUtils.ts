@@ -4,6 +4,78 @@ export const PAGE_SEPARATOR_REGEX = /\n*---\s*Page\s*\d+\s*---\n*/i;
 export const FONT_FAMILY = "Georgia, 'Times New Roman', serif";
 export const CSS_BORDER_PADDING = 6;
 
+export function computeAutoScrollTop(params: {
+  currentLineIndex: number;
+  movementDirection: 'up' | 'down' | 'none';
+  currentScrollTop: number;
+  viewportHeight: number;
+  contentHeight: number;
+  regionTop: number;
+  regionBottom: number;
+}): number | null {
+  const {
+    currentLineIndex,
+    movementDirection,
+    currentScrollTop,
+    viewportHeight,
+    contentHeight,
+    regionTop,
+    regionBottom,
+  } = params;
+
+  if (viewportHeight <= 0) return null;
+
+  const maxScroll = Math.max(0, contentHeight - viewportHeight);
+
+  // Returning to the first line should snap back to the top, but only if
+  // we've actually scrolled away from it.
+  if (currentLineIndex === 0) {
+    return currentScrollTop > 0.5 ? 0 : null;
+  }
+
+  if (maxScroll <= currentScrollTop + 0.5) {
+    return null;
+  }
+
+  const visibleRegionTop = regionTop - currentScrollTop;
+  const visibleRegionBottom = regionBottom - currentScrollTop;
+  const regionHeight = Math.max(1, visibleRegionBottom - visibleRegionTop);
+  const holdBuffer = Math.max(40, regionHeight * 1.75);
+
+  const topTriggerLine = viewportHeight * 0.42;
+  const bottomTriggerLine = viewportHeight * 0.58;
+
+  // When moving back up through the page, use a matching top threshold so
+  // the viewport recenters in reverse instead of only ever scrolling down.
+  if (movementDirection === 'up' && visibleRegionTop < topTriggerLine) {
+    const nextScrollTop = Math.max(
+      0,
+      currentScrollTop - ((topTriggerLine - visibleRegionTop) + holdBuffer),
+    );
+
+    return nextScrollTop < currentScrollTop - 0.5 ? nextScrollTop : null;
+  }
+
+  if (movementDirection !== 'down') {
+    return null;
+  }
+
+  // Let the active line move slightly past the midpoint before we scroll
+  // downward.
+  if (visibleRegionBottom <= bottomTriggerLine) {
+    return null;
+  }
+
+  // Scroll a bit more than one line so adjacent up/down navigation doesn't
+  // constantly retrigger auto-scroll.
+  const nextScrollTop = Math.min(
+    maxScroll,
+    currentScrollTop + (visibleRegionBottom - bottomTriggerLine) + holdBuffer,
+  );
+
+  return nextScrollTop > currentScrollTop + 0.5 ? nextScrollTop : null;
+}
+
 export function splitTranscriptByPage(fullText: string, pageCount: number): string[] {
   if (pageCount <= 1) {
     return [fullText];

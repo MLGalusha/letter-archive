@@ -1,18 +1,42 @@
 import { z } from 'zod';
 
-export const bulkLetterIdsSchema = z.object({
-  letterIds: z.array(z.string().uuid()).min(1),
+export const MAX_BULK_SOURCE_ITEMS = 1_000;
+
+export const bulkSourcesSchema = z.array(z.object({
+  letterId: z.string().uuid(),
+  primarySourceRevision: z.number().int().nonnegative(),
+})).min(1).max(
+  MAX_BULK_SOURCE_ITEMS,
+  `Select at most ${MAX_BULK_SOURCE_ITEMS} letters at a time`,
+).superRefine((sources, context) => {
+  const seen = new Set<string>();
+  for (const source of sources) {
+    if (seen.has(source.letterId)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Each letter may appear only once',
+      });
+      return;
+    }
+    seen.add(source.letterId);
+  }
+});
+
+export const bulkSourceRequestSchema = z.object({
+  sources: bulkSourcesSchema,
 });
 
 export const bulkUpdateFieldsSchema = z.object({
   updates: z.array(z.object({
     letterId: z.string().uuid(),
+    primarySourceRevision: z.number().int().nonnegative(),
     sender: z.string().optional(),
     recipient: z.string().optional(),
   })).min(1),
 });
 
 export const updateLetterSchema = z.object({
+  primarySourceRevision: z.number().int().nonnegative().optional(),
   transcriptionText: z.string().optional(),
   sender: z.string().nullable().optional(),
   recipient: z.string().nullable().optional(),
@@ -29,9 +53,14 @@ export const updateLetterSchema = z.object({
 });
 
 export const versionBodySchema = z.object({
+  primarySourceRevision: z.number().int().nonnegative().optional(),
   fieldType: z.enum(['transcript', 'metadata']),
   content: z.union([z.string(), z.record(z.unknown())]),
   source: z.enum(['ai', 'human']),
+});
+
+export const restoreVersionBodySchema = z.object({
+  primarySourceRevision: z.number().int().nonnegative().optional(),
 });
 
 export const updateLinkedPersonSchema = z.object({
@@ -63,12 +92,40 @@ export const reExtractSchema = z.object({
   mode: z.enum(['full', 'metadata_only', 'entities_only']),
 });
 
+const pageSourceExpectationShape = {
+  primarySourceRevision: z.number().int().nonnegative(),
+  sourceChecksum: z.string().regex(/^[0-9a-f]{64}$/i).nullable(),
+};
+
+export const saveLineSegmentsSchema = z.object({
+  lineSegments: z.array(z.unknown()),
+  ...pageSourceExpectationShape,
+});
+
+export const updatePageSegmentTrustSchema = z.object({
+  trustState: z.enum(['unverified', 'trusted']),
+  ...pageSourceExpectationShape,
+});
+
+export const updateLetterSegmentTrustSchema = z.object({
+  trustState: z.enum(['unverified', 'trusted']),
+  primarySourceRevision: z.number().int().nonnegative(),
+  pages: z.array(z.object({
+    pageId: z.string().uuid(),
+    sourceChecksum: z.string().regex(/^[0-9a-f]{64}$/i).nullable(),
+  })).min(1),
+});
+
 export const updateIdentitySchema = z.object({
+  primarySourceRevision: z.number().int().nonnegative().optional(),
+  expectedSender: z.string().nullable().optional(),
+  expectedRecipient: z.string().nullable().optional(),
   sender: z.string().nullable().optional(),
   recipient: z.string().nullable().optional(),
 });
 
 export const retagMetadataSchema = z.object({
+  primarySourceRevision: z.number().int().nonnegative().optional(),
   field: z.enum(['sender', 'recipient', 'both']),
   oldSender: z.string().nullable().optional(),
   newSender: z.string().nullable().optional(),
@@ -101,13 +158,20 @@ export const toggleFlagSchema = z.object({
 });
 
 export const addNoteSchema = z.object({
+  primarySourceRevision: z.number().int().nonnegative(),
   content: z.string().min(1),
   category: z.enum(['identity', 'date', 'transcription', 'relationship', 'context', 'cross-reference', 'location', 'condition']),
   priority: z.enum(['high', 'medium', 'low']),
 });
 
 export const updateNoteStatusSchema = z.object({
+  primarySourceRevision: z.number().int().nonnegative(),
   status: z.enum(['dismissed', 'resolved']),
+});
+
+export const replaceAiNotesSchema = z.object({
+  primarySourceRevision: z.number().int().nonnegative(),
+  aiNotes: z.array(z.unknown()),
 });
 
 export const notesQuerySchema = z.object({

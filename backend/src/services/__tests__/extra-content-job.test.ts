@@ -39,6 +39,7 @@ vi.mock('../../db/index.js', () => ({
   db: { update: dbUpdateMock },
   letters: {
     id: 'letters.id',
+    primarySourceRevision: 'letters.primarySourceRevision',
     entityExtractionStatus: 'letters.entityExtractionStatus',
     extraContentJobStatus: 'letters.extraContentJobStatus',
     extraContentJobRunId: 'letters.extraContentJobRunId',
@@ -63,6 +64,7 @@ import {
 
 interface JobRow {
   id: string;
+  primarySourceRevision: number;
   entityExtractionStatus: 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';
   extraContentJobStatus: 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';
   extraContentJobError: string | null;
@@ -179,6 +181,7 @@ describe('extra-content job lifecycle', () => {
     vi.clearAllMocks();
     row = {
       id: 'letter-1',
+      primarySourceRevision: 4,
       entityExtractionStatus: 'PENDING',
       extraContentJobStatus: 'PENDING',
       extraContentJobError: null,
@@ -205,6 +208,7 @@ describe('extra-content job lifecycle', () => {
 
     const result = await runExtraContentJob({
       letterId: row.id,
+      expectedPrimarySourceRevision: row.primarySourceRevision,
       expectedStatus: 'PENDING',
       expectedUpdatedAt: row.updatedAt,
       claimKind: 'QUEUED',
@@ -222,6 +226,7 @@ describe('extra-content job lifecycle', () => {
 
     const result = await runExtraContentJob({
       letterId: row.id,
+      expectedPrimarySourceRevision: row.primarySourceRevision,
       expectedStatus: 'PENDING',
       expectedUpdatedAt: observedUpdatedAt,
       claimKind: 'QUEUED',
@@ -238,6 +243,7 @@ describe('extra-content job lifecycle', () => {
 
     await expect(runExtraContentJob({
       letterId: row.id,
+      expectedPrimarySourceRevision: row.primarySourceRevision,
       expectedStatus: 'PENDING',
       expectedUpdatedAt: row.updatedAt,
       claimKind: 'REQUESTED',
@@ -251,6 +257,7 @@ describe('extra-content job lifecycle', () => {
   it('publishes content and SUCCESS atomically for the owning run ID', async () => {
     const result = await runExtraContentJob({
       letterId: row.id,
+      expectedPrimarySourceRevision: row.primarySourceRevision,
       expectedStatus: 'PENDING',
       expectedUpdatedAt: row.updatedAt,
       claimKind: 'QUEUED',
@@ -278,6 +285,7 @@ describe('extra-content job lifecycle', () => {
 
     await expect(runExtraContentJob({
       letterId: row.id,
+      expectedPrimarySourceRevision: row.primarySourceRevision,
       expectedStatus: 'PENDING',
       expectedUpdatedAt: row.updatedAt,
       claimKind: 'QUEUED',
@@ -299,6 +307,7 @@ describe('extra-content job lifecycle', () => {
     const work = deferred<{ value: number; patch: ExtraContentPatch }>();
     const attempt = runExtraContentJob({
       letterId: row.id,
+      expectedPrimarySourceRevision: row.primarySourceRevision,
       expectedStatus: 'PENDING',
       expectedUpdatedAt: row.updatedAt,
       claimKind: 'QUEUED',
@@ -321,10 +330,35 @@ describe('extra-content job lifecycle', () => {
     });
   });
 
+  it('discards and requeues a result when the primary source revision changes', async () => {
+    const work = deferred<{ value: number; patch: ExtraContentPatch }>();
+    const attempt = runExtraContentJob({
+      letterId: row.id,
+      expectedPrimarySourceRevision: row.primarySourceRevision,
+      expectedStatus: 'PENDING',
+      expectedUpdatedAt: row.updatedAt,
+      claimKind: 'REQUESTED',
+      produce: () => work.promise,
+    });
+    await vi.waitFor(() => expect(row.extraContentJobStatus).toBe('RUNNING'));
+    row.primarySourceRevision = 5;
+
+    work.resolve({ value: 1, patch: patch('Now stale') });
+    await expect(attempt).resolves.toEqual({ kind: 'superseded' });
+
+    expect(row).toMatchObject({
+      primarySourceRevision: 5,
+      extraContentJobStatus: 'PENDING',
+      extraContentJobRunId: null,
+      extraContentTranscript: null,
+    });
+  });
+
   it('cannot publish a late AI result after a human edit revokes its run ID', async () => {
     const work = deferred<{ value: number; patch: ExtraContentPatch }>();
     const attempt = runExtraContentJob({
       letterId: row.id,
+      expectedPrimarySourceRevision: row.primarySourceRevision,
       expectedStatus: 'PENDING',
       expectedUpdatedAt: row.updatedAt,
       claimKind: 'QUEUED',
@@ -360,6 +394,7 @@ describe('extra-content job lifecycle', () => {
 
     const firstAttempt = runExtraContentJob({
       letterId: row.id,
+      expectedPrimarySourceRevision: row.primarySourceRevision,
       expectedStatus: 'PENDING',
       expectedUpdatedAt: row.updatedAt,
       claimKind: 'QUEUED',
@@ -373,6 +408,7 @@ describe('extra-content job lifecycle', () => {
 
     const secondAttempt = runExtraContentJob({
       letterId: row.id,
+      expectedPrimarySourceRevision: row.primarySourceRevision,
       expectedStatus: 'PENDING',
       expectedUpdatedAt: row.updatedAt,
       claimKind: 'QUEUED',
@@ -409,6 +445,7 @@ describe('extra-content job lifecycle', () => {
 
     const attempt = runExtraContentJob({
       letterId: row.id,
+      expectedPrimarySourceRevision: row.primarySourceRevision,
       expectedStatus: 'PENDING',
       expectedUpdatedAt: row.updatedAt,
       claimKind: 'REQUESTED',
@@ -445,6 +482,7 @@ describe('extra-content job lifecycle', () => {
 
     await expect(runExtraContentJob({
       letterId: row.id,
+      expectedPrimarySourceRevision: row.primarySourceRevision,
       expectedStatus: 'SUCCESS',
       expectedUpdatedAt: row.updatedAt,
       claimKind: 'QUEUED',
@@ -674,6 +712,7 @@ describe('extra-content job lifecycle', () => {
       const work = deferred<{ value: number; patch: ExtraContentPatch }>();
       const attempt = runExtraContentJob({
         letterId: row.id,
+        expectedPrimarySourceRevision: row.primarySourceRevision,
         expectedStatus: 'PENDING',
         expectedUpdatedAt: row.updatedAt,
         claimKind: 'QUEUED',
@@ -706,6 +745,7 @@ describe('extra-content job lifecycle', () => {
     const work = deferred<{ value: number; patch: ExtraContentPatch }>();
     const attempt = runExtraContentJob({
       letterId: row.id,
+      expectedPrimarySourceRevision: row.primarySourceRevision,
       expectedStatus: 'PENDING',
       expectedUpdatedAt: row.updatedAt,
       claimKind: 'QUEUED',

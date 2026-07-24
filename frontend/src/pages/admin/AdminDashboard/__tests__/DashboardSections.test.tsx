@@ -12,6 +12,7 @@ function makeLetter(): Letter {
     id: "letter-1",
     title: "Test Letter",
     collectionCode: "001",
+    primarySourceRevision: 0,
     images: [{ id: "img-1", type: "letter", imageUrl: "test.jpg" }],
     transcript: { pages: [], fullText: "hello", verified: false },
     metadata: { sender: "Alice", recipient: "Bob", dateRaw: "18860314", verified: false },

@@ -38,6 +38,7 @@ const log = createLogger({ module: 'metadata-update' });
 // ============================================================================
 
 export interface RetagChange {
+  primarySourceRevision: number;
   field: 'sender' | 'recipient' | 'both';
   oldSender?: string | null;
   newSender?: string | null;
@@ -126,6 +127,11 @@ export async function executeRetagForLetter(
     return { status: 'skipped', reason: 'missing_letter' };
   }
 
+  if (letter.primarySourceRevision !== change.primarySourceRevision) {
+    letterLog.info({ change }, 'Skipping metadata re-tag for a replaced page source');
+    return { status: 'skipped', reason: 'source_changed_before_ai' };
+  }
+
   if (!letter.metadataV2Json || !hasOpenAI || !openai) {
     letterLog.debug('Skipping AI re-tag (no metadata or no API key)');
     return {
@@ -140,6 +146,7 @@ export async function executeRetagForLetter(
   }
 
   const existingMetadata = letter.metadataV2Json as Record<string, unknown>;
+  let receivedAiResponse = false;
 
   try {
     const userPrompt = buildMetadataUpdateUserPrompt({
@@ -166,6 +173,7 @@ export async function executeRetagForLetter(
         },
       },
     });
+    receivedAiResponse = true;
 
     const duration = Date.now() - start;
 
@@ -213,6 +221,11 @@ export async function executeRetagForLetter(
     if (!latestLetter) {
       letterLog.warn({ duration }, 'Letter disappeared before metadata re-tag save');
       return { status: 'skipped', reason: 'missing_letter_before_save' };
+    }
+
+    if (latestLetter.primarySourceRevision !== change.primarySourceRevision) {
+      letterLog.info({ duration, change }, 'Skipping metadata re-tag after page source replacement');
+      return { status: 'skipped', reason: 'source_changed_before_save' };
     }
 
     if (!matchesRetagTarget(latestLetter, change)) {
@@ -287,7 +300,10 @@ export async function executeRetagForLetter(
     const saved = await db
       .update(letters)
       .set(dbUpdates)
-      .where(and(...observedMetadataRevisionConditions(letterId, latestLetter)))
+      .where(and(
+        ...observedMetadataRevisionConditions(letterId, latestLetter),
+        eq(letters.primarySourceRevision, change.primarySourceRevision),
+      ))
       .returning({ id: letters.id });
     if (saved.length === 0) {
       letterLog.info({ duration }, 'Skipping metadata re-tag because its revision changed');
@@ -313,7 +329,12 @@ export async function executeRetagForLetter(
     });
     return { status: 'updated' };
   } catch (error) {
-    letterLog.error({ err: error }, 'AI metadata re-tag failed');
+    if (receivedAiResponse) {
+      letterLog.error({ err: error }, 'Metadata re-tag persistence failed');
+      throw error;
+    }
+
+    letterLog.error({ err: error }, 'AI metadata re-tag request failed');
     return { status: 'skipped', reason: 'request_failed' };
   }
 }

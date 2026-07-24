@@ -14,6 +14,7 @@ import {
   transcriptionPrerequisiteConditions,
 } from '../processing-eligibility.js';
 import { syncLetterParticipantsFromMetadata } from '../entities/participant-sync.js';
+import type { ParticipantSyncDatabase } from '../entities/participant-sync.js';
 import {
   commitDirectIdentityField,
   isIdentityRevisionConflict,
@@ -21,9 +22,13 @@ import {
   propagateName,
   propagatePlaceholderReplacement,
   type IdentityField,
+  type IdentityMutationDatabase,
   type IdentityState,
 } from '../name-propagation.js';
 import { isPlaceholderValue } from '../../utils/placeholders.js';
+import {
+  assertCurrentPrimarySourceRevision,
+} from './source-revision.js';
 import {
   observeTranscriptionState,
   observedTranscriptionStateConditions,
@@ -38,63 +43,123 @@ import {
   log,
   type BulkClearResult,
   type BulkResult,
+  type BulkSourceEntry,
   type BulkUpdateFieldEntry,
   type BulkUpdateFieldsResult,
 } from './shared.js';
 
-export async function bulkTranscribe(letterIds: string[], overwrite = false): Promise<BulkResult> {
-  log.info({ requestedCount: letterIds.length }, 'Bulk transcribe request received');
+function expectedSourceCondition(source: BulkSourceEntry) {
+  return and(
+    eq(letters.id, source.letterId),
+    eq(letters.primarySourceRevision, source.primarySourceRevision),
+  );
+}
+
+export async function bulkTranscribe(
+  sources: BulkSourceEntry[],
+  overwrite = false,
+): Promise<BulkResult> {
+  log.info({ requestedCount: sources.length }, 'Bulk transcribe request received');
+
+  if (sources.length === 0) {
+    return { requested: 0, queued: 0, skipped: 0, skipReasons: [] };
+  }
 
   const allRequested = await db.query.letters.findMany({
-    where: and(
-      inArray(letters.id, letterIds)
-    ),
+    where: inArray(letters.id, sources.map(({ letterId }) => letterId)),
     with: { pages: true },
   });
 
-  const foundIds = new Set(allRequested.map(l => l.id));
-  const eligible: typeof allRequested = [];
-  const skipReasons: Array<{ letterId: string; reason: string }> = [];
+  const requestedById = new Map(allRequested.map(letter => [letter.id, letter]));
+  const eligible: Array<{
+    letter: (typeof allRequested)[number];
+    source: BulkSourceEntry;
+  }> = [];
+  const skipReasons: BulkResult['skipReasons'] = [];
 
-  for (const id of letterIds) {
-    if (!foundIds.has(id)) {
-      skipReasons.push({ letterId: id, reason: 'Letter not found or deleted' });
-    }
-  }
-
-  for (const letter of allRequested) {
-    if (!isTranscribableType(letter.type)) {
-      skipReasons.push({ letterId: letter.id, reason: `Type '${letter.type}' is not transcribable` });
+  for (const source of sources) {
+    const letter = requestedById.get(source.letterId);
+    if (!letter) {
+      skipReasons.push({
+        letterId: source.letterId,
+        code: 'NOT_FOUND',
+        reason: 'Letter not found or deleted',
+      });
+    } else if (
+      (letter.primarySourceRevision ?? 0) !== source.primarySourceRevision
+    ) {
+      skipReasons.push({
+        letterId: source.letterId,
+        code: 'SOURCE_CHANGED',
+        reason: 'Letter source changed; refresh and reselect',
+      });
+    } else if (!isTranscribableType(letter.type)) {
+      skipReasons.push({
+        letterId: letter.id,
+        code: 'INELIGIBLE',
+        reason: `Type '${letter.type}' is not transcribable`,
+      });
     } else if (letter.workflow !== 'UPLOADED' && !overwrite) {
-      skipReasons.push({ letterId: letter.id, reason: `Already past upload stage (workflow: ${letter.workflow})` });
+      skipReasons.push({
+        letterId: letter.id,
+        code: 'INELIGIBLE',
+        reason: `Already past upload stage (workflow: ${letter.workflow})`,
+      });
     } else if (letter.pages.length === 0) {
-      skipReasons.push({ letterId: letter.id, reason: 'No page images uploaded' });
+      skipReasons.push({
+        letterId: letter.id,
+        code: 'INELIGIBLE',
+        reason: 'No page images uploaded',
+      });
     } else if (letter.transcriptionStatus === 'RUNNING') {
-      skipReasons.push({ letterId: letter.id, reason: 'Transcription already running' });
+      skipReasons.push({
+        letterId: letter.id,
+        code: 'INELIGIBLE',
+        reason: 'Transcription already running',
+      });
     } else if (letter.metadataStatus === 'RUNNING') {
-      skipReasons.push({ letterId: letter.id, reason: 'Metadata extraction already running' });
+      skipReasons.push({
+        letterId: letter.id,
+        code: 'INELIGIBLE',
+        reason: 'Metadata extraction already running',
+      });
     } else if (letter.entityExtractionStatus === 'RUNNING') {
-      skipReasons.push({ letterId: letter.id, reason: 'Entity extraction already running' });
+      skipReasons.push({
+        letterId: letter.id,
+        code: 'INELIGIBLE',
+        reason: 'Entity extraction already running',
+      });
     } else {
-      eligible.push(letter);
+      eligible.push({ letter, source });
     }
   }
 
   if (eligible.length === 0) {
     log.info({ skipped: skipReasons.length }, 'Bulk transcribe: no eligible letters');
-    return { queued: 0, skipped: skipReasons.length, skipReasons };
+    return {
+      requested: sources.length,
+      queued: 0,
+      skipped: skipReasons.length,
+      skipReasons,
+    };
   }
 
   const needsResetLetters = overwrite
-    ? eligible.filter(letter => letter.workflow !== 'UPLOADED')
+    ? eligible.filter(({ letter }) => letter.workflow !== 'UPLOADED')
     : [];
-  const needsReset = new Set(needsResetLetters.map(letter => letter.id));
-  const queueOnlyLetters = eligible.filter(letter => !needsReset.has(letter.id));
+  const needsReset = new Set(
+    needsResetLetters.map(({ source }) => source.letterId),
+  );
+  const queueOnlyLetters = eligible.filter(
+    ({ source }) => !needsReset.has(source.letterId),
+  );
 
-  const observedQueueState = (letter: (typeof eligible)[number]) => and(
-    eq(letters.id, letter.id),
+  const observedQueueState = (candidate: (typeof eligible)[number]) => and(
+    expectedSourceCondition(candidate.source),
     ...transcriptionPrerequisiteConditions(),
-    ...observedTranscriptionStateConditions(observeTranscriptionState(letter)),
+    ...observedTranscriptionStateConditions(
+      observeTranscriptionState(candidate.letter),
+    ),
   );
 
   const queueLetters = async (
@@ -124,18 +189,24 @@ export async function bulkTranscribe(letterIds: string[], overwrite = false): Pr
   ];
   const queuedIds = queued.map(letter => letter.id);
   const queuedIdSet = new Set(queuedIds);
-  for (const letter of eligible) {
-    if (!queuedIdSet.has(letter.id)) {
+  for (const { source } of eligible) {
+    if (!queuedIdSet.has(source.letterId)) {
       skipReasons.push({
-        letterId: letter.id,
-        reason: 'Transcription changed before it could be queued',
+        letterId: source.letterId,
+        code: 'SOURCE_CHANGED_OR_INELIGIBLE',
+        reason: 'Transcription eligibility changed before it could be queued',
       });
     }
   }
 
   if (queuedIds.length === 0) {
     log.info({ skipped: skipReasons.length }, 'Bulk transcribe: no letters remained eligible');
-    return { queued: 0, skipped: skipReasons.length, skipReasons };
+    return {
+      requested: sources.length,
+      queued: 0,
+      skipped: skipReasons.length,
+      skipReasons,
+    };
   }
 
   await requestBackgroundWorkerRun('bulk:transcription');
@@ -144,58 +215,129 @@ export async function bulkTranscribe(letterIds: string[], overwrite = false): Pr
     { queued: queuedIds.length, skipped: skipReasons.length },
     'Bulk transcribe queued',
   );
-  return { queued: queuedIds.length, skipped: skipReasons.length, skipReasons };
+  return {
+    requested: sources.length,
+    queued: queuedIds.length,
+    skipped: skipReasons.length,
+    skipReasons,
+  };
 }
 
+/*
+ * Each source is classified from the same snapshot used to build the guarded
+ * update below. A failed update predicate is reported as a truthful skip
+ * instead of being counted as queued.
+ */
 export async function bulkExtractMetadata(
-  letterIds: string[],
+  sources: BulkSourceEntry[],
 ): Promise<BulkResult> {
-  const allRequested = await db.query.letters.findMany({
-    where: and(
-      inArray(letters.id, letterIds)
-    ),
-  });
-
-  const foundIds = new Set(allRequested.map(l => l.id));
-  const eligible: typeof allRequested = [];
-  const skipReasons: Array<{ letterId: string; reason: string }> = [];
-  let unconfirmedCount = 0;
-
-  for (const id of letterIds) {
-    if (!foundIds.has(id)) {
-      skipReasons.push({ letterId: id, reason: 'Letter not found or deleted' });
-    }
+  if (sources.length === 0) {
+    return {
+      requested: 0,
+      queued: 0,
+      skipped: 0,
+      skipReasons: [],
+      unconfirmedCount: 0,
+    };
   }
 
-  for (const letter of allRequested) {
-    if (letter.type !== 'L') {
-      skipReasons.push({ letterId: letter.id, reason: `Type '${letter.type}' does not support metadata extraction (only letters)` });
+  const allRequested = await db.query.letters.findMany({
+    where: inArray(letters.id, sources.map(({ letterId }) => letterId)),
+  });
+
+  const requestedById = new Map(allRequested.map(letter => [letter.id, letter]));
+  const eligible: Array<{
+    letter: (typeof allRequested)[number];
+    source: BulkSourceEntry;
+  }> = [];
+  const skipReasons: BulkResult['skipReasons'] = [];
+  let unconfirmedCount = 0;
+
+  for (const source of sources) {
+    const letter = requestedById.get(source.letterId);
+    if (!letter) {
+      skipReasons.push({
+        letterId: source.letterId,
+        code: 'NOT_FOUND',
+        reason: 'Letter not found or deleted',
+      });
+    } else if (
+      (letter.primarySourceRevision ?? 0) !== source.primarySourceRevision
+    ) {
+      skipReasons.push({
+        letterId: source.letterId,
+        code: 'SOURCE_CHANGED',
+        reason: 'Letter source changed; refresh and reselect',
+      });
+    } else if (letter.type !== 'L') {
+      skipReasons.push({
+        letterId: letter.id,
+        code: 'INELIGIBLE',
+        reason: `Type '${letter.type}' does not support metadata extraction (only letters)`,
+      });
     } else if (!isTranscribableType(letter.type)) {
-      skipReasons.push({ letterId: letter.id, reason: `Type '${letter.type}' is not transcribable` });
+      skipReasons.push({
+        letterId: letter.id,
+        code: 'INELIGIBLE',
+        reason: `Type '${letter.type}' is not transcribable`,
+      });
     } else if (letter.transcriptionStatus === 'RUNNING') {
-      skipReasons.push({ letterId: letter.id, reason: 'Transcription already running' });
+      skipReasons.push({
+        letterId: letter.id,
+        code: 'INELIGIBLE',
+        reason: 'Transcription already running',
+      });
     } else if (letter.workflow === 'UPLOADED') {
-      skipReasons.push({ letterId: letter.id, reason: 'Needs transcription first (workflow: UPLOADED)' });
+      skipReasons.push({
+        letterId: letter.id,
+        code: 'INELIGIBLE',
+        reason: 'Needs transcription first (workflow: UPLOADED)',
+      });
     } else if (letter.workflow !== 'TRANSCRIBED') {
-      skipReasons.push({ letterId: letter.id, reason: `Already processed (workflow: ${letter.workflow})` });
+      skipReasons.push({
+        letterId: letter.id,
+        code: 'INELIGIBLE',
+        reason: `Already processed (workflow: ${letter.workflow})`,
+      });
     } else if (!letter.transcriptConfirmedAt) {
       unconfirmedCount++;
-      skipReasons.push({ letterId: letter.id, reason: 'Transcript not yet confirmed' });
+      skipReasons.push({
+        letterId: letter.id,
+        code: 'INELIGIBLE',
+        reason: 'Transcript not yet confirmed',
+      });
     } else if (!letter.transcriptionText?.trim()) {
-      skipReasons.push({ letterId: letter.id, reason: 'No transcript text available' });
+      skipReasons.push({
+        letterId: letter.id,
+        code: 'INELIGIBLE',
+        reason: 'No transcript text available',
+      });
     } else if (letter.metadataStatus === 'RUNNING') {
-      skipReasons.push({ letterId: letter.id, reason: 'Metadata extraction already running' });
+      skipReasons.push({
+        letterId: letter.id,
+        code: 'INELIGIBLE',
+        reason: 'Metadata extraction already running',
+      });
     } else if (letter.entityExtractionStatus === 'RUNNING') {
-      skipReasons.push({ letterId: letter.id, reason: 'Entity extraction already running' });
+      skipReasons.push({
+        letterId: letter.id,
+        code: 'INELIGIBLE',
+        reason: 'Entity extraction already running',
+      });
     } else if (letter.extraContentJobStatus === 'RUNNING') {
-      skipReasons.push({ letterId: letter.id, reason: 'Extra-content transcription already running' });
+      skipReasons.push({
+        letterId: letter.id,
+        code: 'INELIGIBLE',
+        reason: 'Extra-content transcription already running',
+      });
     } else {
-      eligible.push(letter);
+      eligible.push({ letter, source });
     }
   }
 
   if (eligible.length === 0) {
     return {
+      requested: sources.length,
       queued: 0,
       skipped: skipReasons.length,
       skipReasons,
@@ -215,35 +357,30 @@ export async function bulkExtractMetadata(
     metadataAttemptCount: 0,
     deadLetter: false,
     updatedAt: new Date(),
-  }).where(or(...eligible.map(letter => and(
-    eq(letters.id, letter.id),
+  }).where(or(...eligible.map(({ letter, source }) => and(
+    expectedSourceCondition(source),
     ...metadataPrerequisiteConditions(),
     ...observedMetadataStateConditions(observeMetadataState(letter)),
   )))).returning({ id: letters.id });
 
   const queuedIds = queuedRows.map(row => row.id);
   const queuedIdSet = new Set(queuedIds);
-  for (const letter of eligible) {
-    if (!queuedIdSet.has(letter.id)) {
+  for (const { source } of eligible) {
+    if (!queuedIdSet.has(source.letterId)) {
       skipReasons.push({
-        letterId: letter.id,
-        reason: 'Letter processing state changed before metadata could be queued',
+        letterId: source.letterId,
+        code: 'SOURCE_CHANGED_OR_INELIGIBLE',
+        reason: 'Metadata eligibility changed before it could be queued',
       });
     }
   }
 
-  if (queuedIds.length === 0) {
-    return {
-      queued: 0,
-      skipped: skipReasons.length,
-      skipReasons,
-      unconfirmedCount,
-    };
+  if (queuedIds.length > 0) {
+    await requestBackgroundWorkerRun('bulk:metadata');
   }
 
-  await requestBackgroundWorkerRun('bulk:metadata');
-
   return {
+    requested: sources.length,
     queued: queuedIds.length,
     skipped: skipReasons.length,
     skipReasons,
@@ -251,8 +388,75 @@ export async function bulkExtractMetadata(
   };
 }
 
-export async function bulkClearTranscriptions(letterIds: string[]): Promise<BulkClearResult> {
-  log.info({ count: letterIds.length }, 'Bulk clear transcriptions requested');
+export async function bulkClearTranscriptions(
+  sources: BulkSourceEntry[],
+): Promise<BulkClearResult> {
+  log.info({ count: sources.length }, 'Bulk clear transcriptions requested');
+
+  if (sources.length === 0) {
+    return { requested: 0, applied: 0, skipped: 0, skipReasons: [] };
+  }
+
+  const allRequested = await db.query.letters.findMany({
+    where: inArray(letters.id, sources.map(({ letterId }) => letterId)),
+  });
+  const requestedById = new Map(allRequested.map(letter => [letter.id, letter]));
+  const eligibleSources: BulkSourceEntry[] = [];
+  const skipReasons: BulkClearResult['skipReasons'] = [];
+
+  for (const source of sources) {
+    const letter = requestedById.get(source.letterId);
+    if (!letter) {
+      skipReasons.push({
+        letterId: source.letterId,
+        code: 'NOT_FOUND',
+        reason: 'Letter not found or deleted',
+      });
+    } else if (
+      (letter.primarySourceRevision ?? 0) !== source.primarySourceRevision
+    ) {
+      skipReasons.push({
+        letterId: source.letterId,
+        code: 'SOURCE_CHANGED',
+        reason: 'Letter source changed; refresh and reselect',
+      });
+    } else if (letter.transcriptionStatus === 'RUNNING') {
+      skipReasons.push({
+        letterId: source.letterId,
+        code: 'INELIGIBLE',
+        reason: 'Transcription is running',
+      });
+    } else if (letter.metadataStatus === 'RUNNING') {
+      skipReasons.push({
+        letterId: source.letterId,
+        code: 'INELIGIBLE',
+        reason: 'Metadata extraction is running',
+      });
+    } else if (letter.entityExtractionStatus === 'RUNNING') {
+      skipReasons.push({
+        letterId: source.letterId,
+        code: 'INELIGIBLE',
+        reason: 'Entity extraction is running',
+      });
+    } else if (letter.extraContentJobStatus === 'RUNNING') {
+      skipReasons.push({
+        letterId: source.letterId,
+        code: 'INELIGIBLE',
+        reason: 'Extra-content transcription is running',
+      });
+    } else {
+      eligibleSources.push(source);
+    }
+  }
+
+  if (eligibleSources.length === 0) {
+    return {
+      requested: sources.length,
+      applied: 0,
+      skipped: skipReasons.length,
+      skipReasons,
+    };
+  }
 
   const clearedIds = await db.transaction(async (tx) => {
     const cleared = await tx.update(letters).set({
@@ -316,7 +520,7 @@ export async function bulkClearTranscriptions(letterIds: string[]): Promise<Bulk
       updatedAt: new Date(),
     }).where(
       and(
-        inArray(letters.id, letterIds),
+        or(...eligibleSources.map(expectedSourceCondition)),
         ne(letters.transcriptionStatus, 'RUNNING'),
         ne(letters.metadataStatus, 'RUNNING'),
         ne(letters.entityExtractionStatus, 'RUNNING'),
@@ -333,14 +537,27 @@ export async function bulkClearTranscriptions(letterIds: string[]): Promise<Bulk
     return ids;
   });
 
+  const clearedIdSet = new Set(clearedIds);
+  for (const source of eligibleSources) {
+    if (!clearedIdSet.has(source.letterId)) {
+      skipReasons.push({
+        letterId: source.letterId,
+        code: 'SOURCE_CHANGED_OR_INELIGIBLE',
+        reason: 'Letter source or processing state changed before it could be cleared',
+      });
+    }
+  }
+
   log.info(
-    { updated: clearedIds.length, skippedActive: letterIds.length - clearedIds.length },
+    { applied: clearedIds.length, skipped: skipReasons.length },
     'Bulk clear transcriptions completed',
   );
 
   return {
-    message: 'Transcriptions cleared',
-    updated: clearedIds.length,
+    requested: sources.length,
+    applied: clearedIds.length,
+    skipped: skipReasons.length,
+    skipReasons,
   };
 }
 
@@ -348,30 +565,40 @@ async function updateBulkIdentityField(
   letter: IdentityState,
   field: IdentityField,
   value: string | null,
+  expectedPrimarySourceRevision: number,
+  database: IdentityMutationDatabase & ParticipantSyncDatabase,
 ): Promise<{ letter: IdentityState; changed: boolean }> {
+  assertCurrentPrimarySourceRevision(
+    letter.primarySourceRevision ?? 0,
+    expectedPrimarySourceRevision,
+    'Letter source changed before names could be saved; reload the dashboard and try again',
+  );
   if (letter[field] === value) return { letter, changed: false };
 
   const observed = observeIdentityField(letter, field);
   let committed: IdentityState;
 
   if (value === null) {
-    committed = await commitDirectIdentityField({ letter, field, value });
+    committed = await commitDirectIdentityField(
+      { letter, field, value },
+      database,
+    );
   } else {
     try {
       const result = isPlaceholderValue(letter[field]) || !letter[field]
         ? await propagatePlaceholderReplacement({
             letterId: letter.id,
             field,
-            newName: value,
-            observed,
-          })
+          newName: value,
+          observed,
+        }, database)
         : await propagateName({
             letterId: letter.id,
             field,
             oldName: letter[field],
-            newName: value,
-            observed,
-          });
+          newName: value,
+          observed,
+        }, database);
       committed = result.letter;
     } catch (error) {
       if (isIdentityRevisionConflict(error)) throw error;
@@ -380,13 +607,17 @@ async function updateBulkIdentityField(
         { letterId: letter.id, field, error },
         'Bulk identity propagation failed, using guarded direct update',
       );
-      committed = await commitDirectIdentityField({ letter, field, value });
+      committed = await commitDirectIdentityField(
+        { letter, field, value },
+        database,
+      );
     }
   }
 
   await syncLetterParticipantsFromMetadata({
     letterId: letter.id,
     [field]: value,
+    database,
   });
 
   return { letter: committed, changed: true };
@@ -395,44 +626,152 @@ async function updateBulkIdentityField(
 export async function bulkUpdateFields(updates: BulkUpdateFieldEntry[]): Promise<BulkUpdateFieldsResult> {
   log.info({ updateCount: updates.length }, 'Bulk update fields request received');
 
-  let successCount = 0;
+  let applied = 0;
+  let updated = 0;
+  const skipReasons: BulkUpdateFieldsResult['skipReasons'] = [];
   for (const update of updates) {
     const sender = update.sender !== undefined ? (update.sender || null) : undefined;
     const recipient = update.recipient !== undefined ? (update.recipient || null) : undefined;
 
-    if (sender === undefined && recipient === undefined) continue;
+    try {
+      const changed = await db.transaction(async (tx) => {
+        const letter = await tx.query.letters.findFirst({
+          where: eq(letters.id, update.letterId),
+        });
+        if (!letter) return null;
+        assertCurrentPrimarySourceRevision(
+          letter.primarySourceRevision ?? 0,
+          update.primarySourceRevision,
+          'Letter source changed before names could be saved; reload the dashboard and try again',
+        );
 
-    const letter = await db.query.letters.findFirst({
-      where: eq(letters.id, update.letterId),
-    });
-    if (!letter) continue;
-
-    let current: IdentityState = letter;
-    let changed = false;
-
-    if (sender !== undefined) {
-      const result = await updateBulkIdentityField(current, 'sender', sender);
-      current = result.letter;
-      changed ||= result.changed;
+        let current: IdentityState = letter;
+        let entryChanged = false;
+        if (sender !== undefined) {
+          const result = await updateBulkIdentityField(
+            current,
+            'sender',
+            sender,
+            update.primarySourceRevision,
+            tx,
+          );
+          current = result.letter;
+          entryChanged ||= result.changed;
+        }
+        if (recipient !== undefined) {
+          const result = await updateBulkIdentityField(
+            current,
+            'recipient',
+            recipient,
+            update.primarySourceRevision,
+            tx,
+          );
+          current = result.letter;
+          entryChanged ||= result.changed;
+        }
+        return entryChanged;
+      });
+      if (changed === null) {
+        skipReasons.push({ letterId: update.letterId, code: 'NOT_FOUND' });
+        continue;
+      }
+      applied += 1;
+      if (changed) updated += 1;
+    } catch (error) {
+      const latest = await db.query.letters.findFirst({
+        where: eq(letters.id, update.letterId),
+      });
+      const code = !latest
+        ? 'NOT_FOUND'
+        : (latest.primarySourceRevision ?? 0) !== update.primarySourceRevision
+          ? 'SOURCE_CHANGED'
+          : isIdentityRevisionConflict(error)
+            ? 'WRITE_CONFLICT'
+            : 'MUTATION_FAILED';
+      skipReasons.push({ letterId: update.letterId, code });
+      log.warn(
+        { letterId: update.letterId, code, error },
+        'Bulk identity update skipped',
+      );
     }
-    if (recipient !== undefined) {
-      const result = await updateBulkIdentityField(current, 'recipient', recipient);
-      current = result.letter;
-      changed ||= result.changed;
-    }
-
-    if (changed) successCount++;
   }
 
-  log.info({ updated: successCount }, 'Bulk update fields completed');
+  log.info(
+    { requested: updates.length, applied, skipped: skipReasons.length, updated },
+    'Bulk update fields completed',
+  );
 
   return {
-    message: 'Fields updated',
-    updated: successCount,
+    requested: updates.length,
+    applied,
+    skipped: skipReasons.length,
+    updated,
+    skipReasons,
   };
 }
 
-export async function bulkClearMetadata(letterIds: string[]): Promise<BulkClearResult> {
+export async function bulkClearMetadata(
+  sources: BulkSourceEntry[],
+): Promise<BulkClearResult> {
+  if (sources.length === 0) {
+    return { requested: 0, applied: 0, skipped: 0, skipReasons: [] };
+  }
+
+  const allRequested = await db.query.letters.findMany({
+    where: inArray(letters.id, sources.map(({ letterId }) => letterId)),
+  });
+  const requestedById = new Map(allRequested.map(letter => [letter.id, letter]));
+  const eligibleSources: BulkSourceEntry[] = [];
+  const skipReasons: BulkClearResult['skipReasons'] = [];
+
+  for (const source of sources) {
+    const letter = requestedById.get(source.letterId);
+    if (!letter) {
+      skipReasons.push({
+        letterId: source.letterId,
+        code: 'NOT_FOUND',
+        reason: 'Letter not found or deleted',
+      });
+    } else if (
+      (letter.primarySourceRevision ?? 0) !== source.primarySourceRevision
+    ) {
+      skipReasons.push({
+        letterId: source.letterId,
+        code: 'SOURCE_CHANGED',
+        reason: 'Letter source changed; refresh and reselect',
+      });
+    } else if (letter.transcriptionStatus === 'RUNNING') {
+      skipReasons.push({
+        letterId: source.letterId,
+        code: 'INELIGIBLE',
+        reason: 'Transcription is running',
+      });
+    } else if (letter.metadataStatus === 'RUNNING') {
+      skipReasons.push({
+        letterId: source.letterId,
+        code: 'INELIGIBLE',
+        reason: 'Metadata extraction is running',
+      });
+    } else if (letter.entityExtractionStatus === 'RUNNING') {
+      skipReasons.push({
+        letterId: source.letterId,
+        code: 'INELIGIBLE',
+        reason: 'Entity extraction is running',
+      });
+    } else {
+      eligibleSources.push(source);
+    }
+  }
+
+  if (eligibleSources.length === 0) {
+    return {
+      requested: sources.length,
+      applied: 0,
+      skipped: skipReasons.length,
+      skipReasons,
+    };
+  }
+
   const metadataFields = {
     sender: null,
     recipient: null,
@@ -476,7 +815,7 @@ export async function bulkClearMetadata(letterIds: string[]): Promise<BulkClearR
         ELSE 'TRANSCRIBED'
       END`,
     }).where(and(
-      inArray(letters.id, letterIds),
+      or(...eligibleSources.map(expectedSourceCondition)),
       ne(letters.transcriptionStatus, 'RUNNING'),
       ne(letters.metadataStatus, 'RUNNING'),
       ne(letters.entityExtractionStatus, 'RUNNING'),
@@ -491,8 +830,21 @@ export async function bulkClearMetadata(letterIds: string[]): Promise<BulkClearR
     return ids;
   });
 
+  const clearedIdSet = new Set(clearedIds);
+  for (const source of eligibleSources) {
+    if (!clearedIdSet.has(source.letterId)) {
+      skipReasons.push({
+        letterId: source.letterId,
+        code: 'SOURCE_CHANGED_OR_INELIGIBLE',
+        reason: 'Letter source or processing state changed before metadata could be cleared',
+      });
+    }
+  }
+
   return {
-    message: 'Metadata cleared',
-    updated: clearedIds.length,
+    requested: sources.length,
+    applied: clearedIds.length,
+    skipped: skipReasons.length,
+    skipReasons,
   };
 }

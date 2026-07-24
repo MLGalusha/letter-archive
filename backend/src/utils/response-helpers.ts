@@ -3,6 +3,7 @@ export class AppError extends Error {
     public statusCode: number,
     message: string,
     public details?: unknown,
+    public code?: string,
   ) {
     super(message);
     this.name = new.target.name;

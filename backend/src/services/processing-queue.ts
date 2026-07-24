@@ -1,11 +1,15 @@
-import { eq, and, inArray, sql, or, type SQL } from 'drizzle-orm';
-import { z } from 'zod';
+import { eq, and, sql, or, type SQL } from 'drizzle-orm';
 import { PAGINATION } from '../constants/pagination.js';
 import { TIMING } from '../constants/timing.js';
 import { db, letters } from '../db/index.js';
 import { createLogger } from '../utils/logger.js';
+import { AppError } from '../utils/response-helpers.js';
 import { notify } from './notifications.js';
 import { observedTimestampMatches } from './letter/shared.js';
+import {
+  sourceRevisionChanged,
+  SOURCE_REVISION_CHANGED_ERROR_CODE,
+} from './letter/source-revision.js';
 import {
   cancelTranscriptionAttempt,
   recoverExpiredTranscriptions,
@@ -41,7 +45,26 @@ import {
   queuedTranscriptionConditions,
   transcriptionPrerequisiteConditions,
 } from './processing-eligibility.js';
+import {
+  processingJobStateToken,
+  queueJobTypeSchema,
+  type ProcessingJobPhase,
+  type ProcessingJobSnapshot,
+  type ProcessingJobStateSource,
+  type QueueJobType,
+} from './processing-queue-snapshot.js';
 import { getWorkerState } from './worker-state.js';
+
+export {
+  clearProcessingQueueSnapshotSchema,
+  processingJobActionSchema,
+  processingJobSnapshotSchema,
+  queueJobTypeSchema,
+} from './processing-queue-snapshot.js';
+export type {
+  ProcessingJobSnapshot,
+  QueueJobType,
+} from './processing-queue-snapshot.js';
 
 const log = createLogger({ module: 'processing-queue' });
 
@@ -277,7 +300,9 @@ export async function getQueueStatus() {
       collectionCode: string;
       sender: string | null;
       recipient: string | null;
-      type: string;
+      type: QueueJobType;
+      primarySourceRevision: number;
+      jobStateToken: string;
       startedAt: string;
     }> = [];
     if (l.transcriptionStatus === 'RUNNING') {
@@ -288,6 +313,8 @@ export async function getQueueStatus() {
         sender: l.sender,
         recipient: l.recipient,
         type: 'transcription',
+        primarySourceRevision: l.primarySourceRevision,
+        jobStateToken: processingJobStateToken(l, 'transcription', 'active'),
         startedAt: l.updatedAt?.toISOString() ?? now.toISOString(),
       });
     }
@@ -299,6 +326,8 @@ export async function getQueueStatus() {
         sender: l.sender,
         recipient: l.recipient,
         type: 'metadata',
+        primarySourceRevision: l.primarySourceRevision,
+        jobStateToken: processingJobStateToken(l, 'metadata', 'active'),
         startedAt: l.updatedAt?.toISOString() ?? now.toISOString(),
       });
     }
@@ -310,6 +339,12 @@ export async function getQueueStatus() {
         sender: l.sender,
         recipient: l.recipient,
         type: 'entity_extraction',
+        primarySourceRevision: l.primarySourceRevision,
+        jobStateToken: processingJobStateToken(
+          l,
+          'entity_extraction',
+          'active',
+        ),
         startedAt: l.updatedAt?.toISOString() ?? now.toISOString(),
       });
     }
@@ -321,6 +356,8 @@ export async function getQueueStatus() {
         sender: l.sender,
         recipient: l.recipient,
         type: 'extra_content',
+        primarySourceRevision: l.primarySourceRevision,
+        jobStateToken: processingJobStateToken(l, 'extra_content', 'active'),
         startedAt: l.updatedAt?.toISOString() ?? now.toISOString(),
       });
     }
@@ -384,8 +421,10 @@ export async function getQueueStatus() {
     letterId: string;
     letterTitle: string;
     collectionCode: string;
-    type: string;
+    type: QueueJobType;
     status: string;
+    primarySourceRevision: number;
+    jobStateToken: string;
     error?: string;
     completedAt: string;
   }> = [];
@@ -413,6 +452,8 @@ export async function getQueueStatus() {
         collectionCode: l.collection.collectionCode,
         type: 'transcription',
         status: l.transcriptionStatus,
+        primarySourceRevision: l.primarySourceRevision,
+        jobStateToken: processingJobStateToken(l, 'transcription', 'recent'),
         error: l.transcriptionStatus === 'FAILED' ? (l.transcriptionError ?? undefined) : undefined,
         completedAt: l.transcribedAt!.toISOString(),
       });
@@ -424,6 +465,8 @@ export async function getQueueStatus() {
         collectionCode: l.collection.collectionCode,
         type: 'metadata',
         status: isBulkCleared(l.metadataError) ? 'CLEARED' : l.metadataStatus,
+        primarySourceRevision: l.primarySourceRevision,
+        jobStateToken: processingJobStateToken(l, 'metadata', 'recent'),
         error: l.metadataStatus === 'FAILED' && !isBulkCleared(l.metadataError) ? (l.metadataError ?? undefined) : undefined,
         completedAt: letterUpdatedAt,
       });
@@ -435,6 +478,12 @@ export async function getQueueStatus() {
         collectionCode: l.collection.collectionCode,
         type: 'entity_extraction',
         status: isBulkCleared(l.entityExtractionError) ? 'CLEARED' : l.entityExtractionStatus,
+        primarySourceRevision: l.primarySourceRevision,
+        jobStateToken: processingJobStateToken(
+          l,
+          'entity_extraction',
+          'recent',
+        ),
         error: l.entityExtractionStatus === 'FAILED' && !isBulkCleared(l.entityExtractionError) ? (l.entityExtractionError ?? undefined) : undefined,
         completedAt: letterUpdatedAt,
       });
@@ -445,7 +494,11 @@ export async function getQueueStatus() {
   recent.sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime());
   recent.splice(20);
 
-  const mapQueued = (items: typeof queuedTranscription, queuedAtField?: 'createdAt' | 'transcriptConfirmedAt') =>
+  const mapQueued = (
+    items: typeof queuedTranscription,
+    type: QueueJobType,
+    queuedAtField?: 'createdAt' | 'transcriptConfirmedAt',
+  ) =>
     items.map(l => {
       // Use the specified field, falling back to createdAt
       let queuedAt: string;
@@ -460,6 +513,8 @@ export async function getQueueStatus() {
         collectionCode: l.collection.collectionCode,
         sender: l.sender,
         recipient: l.recipient,
+        primarySourceRevision: l.primarySourceRevision,
+        jobStateToken: processingJobStateToken(l, type, 'queued'),
         queuedAt,
       };
     });
@@ -474,6 +529,8 @@ export async function getQueueStatus() {
       collectionCode: l.collection.collectionCode,
       sender: l.sender,
       recipient: l.recipient,
+      primarySourceRevision: l.primarySourceRevision,
+      jobStateToken: processingJobStateToken(l, 'extra_content', 'queued'),
       queuedAt: null,
     }));
 
@@ -482,9 +539,13 @@ export async function getQueueStatus() {
   return {
     active,
     queued: {
-      transcription: mapQueued(queuedTranscription, 'createdAt'),
-      metadata: mapQueued(queuedMetadata, 'transcriptConfirmedAt'),
-      entityExtraction: mapQueued(queuedEntityExtraction, 'createdAt'),
+      transcription: mapQueued(queuedTranscription, 'transcription', 'createdAt'),
+      metadata: mapQueued(queuedMetadata, 'metadata', 'transcriptConfirmedAt'),
+      entityExtraction: mapQueued(
+        queuedEntityExtraction,
+        'entity_extraction',
+        'createdAt',
+      ),
       extraContent: mapQueuedExtraContent(),
     },
     recent,
@@ -506,31 +567,119 @@ export async function getQueueStatus() {
 // QUEUE MANAGEMENT
 // ============================================================================
 
-export const queueJobTypeSchema = z.enum([
-  'transcription',
-  'metadata',
-  'entity_extraction',
-  'extra_content',
-]);
-export type QueueJobType = z.infer<typeof queueJobTypeSchema>;
+export const PROCESSING_JOB_CHANGED_ERROR_CODE = 'PROCESSING_JOB_CHANGED';
 
-/**
- * Remove a letter from the processing queue. Only works for PENDING items.
- */
-export async function removeFromQueue(letterId: string, type: QueueJobType): Promise<{ message: string }> {
+export type ClearQueueSkipCode =
+  | 'NOT_FOUND'
+  | typeof SOURCE_REVISION_CHANGED_ERROR_CODE
+  | typeof PROCESSING_JOB_CHANGED_ERROR_CODE;
+
+export interface ClearQueueResult {
+  message: string;
+  requested: number;
+  cleared: number;
+  skipped: number;
+  skipReasons: Array<{
+    letterId: string;
+    code: ClearQueueSkipCode;
+  }>;
+}
+
+type ExpectedJobSnapshot = Pick<
+  ProcessingJobSnapshot,
+  'primarySourceRevision' | 'jobStateToken'
+>;
+
+function processingJobChanged(message: string): AppError {
+  return new AppError(
+    409,
+    message,
+    undefined,
+    PROCESSING_JOB_CHANGED_ERROR_CODE,
+  );
+}
+
+function clearQueueSkipCode(error: unknown): ClearQueueSkipCode | null {
+  if (
+    error instanceof AppError
+    && error.code === SOURCE_REVISION_CHANGED_ERROR_CODE
+  ) {
+    return SOURCE_REVISION_CHANGED_ERROR_CODE;
+  }
+  if (
+    error instanceof AppError
+    && error.code === PROCESSING_JOB_CHANGED_ERROR_CODE
+  ) {
+    return PROCESSING_JOB_CHANGED_ERROR_CODE;
+  }
+  if (error instanceof ProcessingError && error.statusCode === 404) {
+    return 'NOT_FOUND';
+  }
+  return null;
+}
+
+function assertObservedJob(
+  letter: ProcessingJobStateSource & { primarySourceRevision: number },
+  type: QueueJobType,
+  phase: ProcessingJobPhase,
+  expected: ExpectedJobSnapshot,
+): void {
+  if (letter.primarySourceRevision !== expected.primarySourceRevision) {
+    throw sourceRevisionChanged(
+      'Letter source changed after this processing snapshot was loaded; refresh and try again',
+    );
+  }
+  if (
+    processingJobStateToken(letter, type, phase) !== expected.jobStateToken
+  ) {
+    throw processingJobChanged(
+      'Processing job changed after this queue snapshot was loaded; refresh and try again',
+    );
+  }
+}
+
+async function throwCurrentJobConflict(
+  letterId: string,
+  expectedPrimarySourceRevision: number,
+): Promise<never> {
+  const latest = await db.query.letters.findFirst({
+    where: eq(letters.id, letterId),
+  });
+  if (!latest) {
+    throw new ProcessingError('Letter not found', 404);
+  }
+  if (latest.primarySourceRevision !== expectedPrimarySourceRevision) {
+    throw sourceRevisionChanged(
+      'Letter source changed while the processing action was being applied; refresh and try again',
+    );
+  }
+  throw processingJobChanged(
+    'Processing job changed while the queue action was being applied; refresh and try again',
+  );
+}
+
+async function transitionQueuedJob(
+  letterId: string,
+  type: QueueJobType,
+  expected: ExpectedJobSnapshot,
+  adminReason: string,
+): Promise<void> {
   const letter = await db.query.letters.findFirst({
     where: eq(letters.id, letterId),
   });
-
   if (!letter) {
     throw new ProcessingError('Letter not found', 404);
   }
+  assertObservedJob(letter, type, 'queued', expected);
 
+  let changed: Array<{ id: string }>;
   if (type === 'transcription') {
     if (letter.transcriptionStatus !== 'PENDING') {
-      throw new ProcessingError(`Cannot remove: transcription status is ${letter.transcriptionStatus}`, 400);
+      throw processingJobChanged(
+        'Transcription is no longer queued; refresh and try again',
+      );
     }
-    const removed = await db
+    changed = await db
       .update(letters)
       .set({
         transcriptionStatus: 'FAILED',
@@ -538,22 +687,23 @@ export async function removeFromQueue(letterId: string, type: QueueJobType): Pro
         transcriptionLeaseExpiresAt: null,
         transcriptionLeaseRunId: null,
         transcriptionClaimKind: null,
-        transcriptionError: 'Removed from queue by admin',
+        transcriptionError: adminReason,
         updatedAt: new Date(),
       })
       .where(and(
         eq(letters.id, letterId),
-        eq(letters.transcriptionStatus, 'PENDING'),
+        eq(letters.primarySourceRevision, expected.primarySourceRevision),
+        ...queuedTranscriptionConditions(),
+        observedTimestampMatches(letters.updatedAt, letter.updatedAt),
       ))
       .returning({ id: letters.id });
-    if (removed.length === 0) {
-      throw new ProcessingError('Cannot remove: transcription is no longer pending', 409);
-    }
   } else if (type === 'metadata') {
     if (letter.metadataStatus !== 'PENDING') {
-      throw new ProcessingError(`Cannot remove: metadata status is ${letter.metadataStatus}`, 400);
+      throw processingJobChanged(
+        'Metadata extraction is no longer queued; refresh and try again',
+      );
     }
-    const removed = await db
+    changed = await db
       .update(letters)
       .set({
         metadataStatus: 'FAILED',
@@ -563,43 +713,49 @@ export async function removeFromQueue(letterId: string, type: QueueJobType): Pro
         metadataLeaseRunId: null,
         metadataClaimKind: null,
         metadataRevision: sql`${letters.metadataRevision} + 1`,
-        metadataError: 'Removed from queue by admin',
+        metadataError: adminReason,
         updatedAt: new Date(),
       })
       .where(and(
         eq(letters.id, letterId),
-        eq(letters.metadataStatus, 'PENDING'),
+        eq(letters.primarySourceRevision, expected.primarySourceRevision),
+        ...queuedMetadataConditions(),
         eq(letters.metadataRevision, letter.metadataRevision),
         observedTimestampMatches(letters.updatedAt, letter.updatedAt),
       ))
       .returning({ id: letters.id });
-    if (removed.length === 0) {
-      throw new ProcessingError('Cannot remove: metadata changed since it was loaded', 409);
-    }
   } else if (type === 'entity_extraction') {
     if (letter.entityExtractionStatus !== 'PENDING') {
-      throw new ProcessingError(`Cannot remove: entity extraction status is ${letter.entityExtractionStatus}`, 400);
-    }
-    const removed = await db.update(letters).set({
-      entityExtractionStatus: 'FAILED',
-      ...clearedEntityExtractionOwnership(),
-      entityExtractionError: 'Removed from queue by admin',
-      updatedAt: new Date(),
-    }).where(and(
-      eq(letters.id, letterId),
-      eq(letters.entityExtractionStatus, 'PENDING'),
-    )).returning({ id: letters.id });
-    if (removed.length === 0) {
-      throw new ProcessingError('Cannot remove: entity extraction is no longer pending', 409);
-    }
-  } else if (type === 'extra_content') {
-    if (letter.extraContentJobStatus !== 'PENDING') {
-      throw new ProcessingError(
-        `Cannot remove: extra content status is ${letter.extraContentJobStatus}`,
-        400,
+      throw processingJobChanged(
+        'Entity extraction is no longer queued; refresh and try again',
       );
     }
-    const removed = await db
+    changed = await db
+      .update(letters)
+      .set({
+        entityExtractionStatus: 'FAILED',
+        ...clearedEntityExtractionOwnership(),
+        entityExtractionError: adminReason,
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(letters.id, letterId),
+        eq(letters.primarySourceRevision, expected.primarySourceRevision),
+        ...queuedEntityExtractionConditions(),
+        eq(
+          letters.entityExtractionRevision,
+          letter.entityExtractionRevision,
+        ),
+        observedTimestampMatches(letters.updatedAt, letter.updatedAt),
+      ))
+      .returning({ id: letters.id });
+  } else {
+    if (letter.extraContentJobStatus !== 'PENDING') {
+      throw processingJobChanged(
+        'Extra-content transcription is no longer queued; refresh and try again',
+      );
+    }
+    changed = await db
       .update(letters)
       .set({
         extraContentJobStatus: 'FAILED',
@@ -608,134 +764,87 @@ export async function removeFromQueue(letterId: string, type: QueueJobType): Pro
         extraContentJobLeaseRunId: null,
         extraContentJobClaimKind: null,
         extraContentJobDirty: false,
-        extraContentJobError: 'Removed from queue by admin',
+        extraContentJobError: adminReason,
         updatedAt: new Date(),
       })
       .where(and(
         eq(letters.id, letterId),
+        eq(letters.primarySourceRevision, expected.primarySourceRevision),
         ...queuedExtraContentConditions(),
         observedTimestampMatches(letters.updatedAt, letter.updatedAt),
       ))
       .returning({ id: letters.id });
-    if (removed.length === 0) {
-      throw new ProcessingError('Cannot remove: extra content changed since it was loaded', 409);
-    }
   }
 
+  if (changed.length === 0) {
+    await throwCurrentJobConflict(
+      letterId,
+      expected.primarySourceRevision,
+    );
+  }
+}
+
+/**
+ * Remove a letter from the processing queue. Only works for PENDING items.
+ */
+export async function removeFromQueue(
+  letterId: string,
+  type: QueueJobType,
+  expected: ExpectedJobSnapshot,
+): Promise<{ message: string }> {
+  await transitionQueuedJob(
+    letterId,
+    type,
+    expected,
+    'Removed from queue by admin',
+  );
   return { message: 'Removed from queue' };
 }
 
 /**
- * Clear all queued items of a given type.
+ * Clears only the exact rows shown in one queue snapshot. Work queued after
+ * that read is not part of the command and cannot be cleared accidentally.
  */
-export async function clearQueue(type: QueueJobType): Promise<{ message: string; cleared: number }> {
+export async function clearQueue(
+  type: QueueJobType,
+  snapshots: ProcessingJobSnapshot[],
+): Promise<ClearQueueResult> {
+  const skipReasons: ClearQueueResult['skipReasons'] = [];
   let cleared = 0;
 
-  if (type === 'transcription') {
-    const queued = await db.query.letters.findMany({
-      where: and(...queuedTranscriptionConditions()),
-      columns: { id: true },
-    });
-    if (queued.length > 0) {
-      const clearedRows = await db
-        .update(letters)
-        .set({
-          transcriptionStatus: 'FAILED',
-          transcriptionRunId: null,
-          transcriptionLeaseExpiresAt: null,
-          transcriptionLeaseRunId: null,
-          transcriptionClaimKind: null,
-          transcriptionError: 'Cleared from queue by admin',
-          updatedAt: new Date(),
-        })
-        .where(and(
-          inArray(letters.id, queued.map(l => l.id)),
-          ...queuedTranscriptionConditions(),
-        ))
-        .returning({ id: letters.id });
-      cleared = clearedRows.length;
-    }
-  } else if (type === 'metadata') {
-    const queued = await db.query.letters.findMany({
-      where: and(...queuedMetadataConditions()),
-      columns: { id: true },
-    });
-    if (queued.length > 0) {
-      const clearedRows = await db
-        .update(letters)
-        .set({
-          metadataStatus: 'FAILED',
-          metadataRunId: null,
-          metadataRunRevision: null,
-          metadataLeaseExpiresAt: null,
-          metadataLeaseRunId: null,
-          metadataClaimKind: null,
-          metadataRevision: sql`${letters.metadataRevision} + 1`,
-          metadataError: 'Cleared from queue by admin',
-          updatedAt: new Date(),
-        })
-        .where(and(
-          inArray(letters.id, queued.map(l => l.id)),
-          ...queuedMetadataConditions(),
-        ))
-        .returning({ id: letters.id });
-      cleared = clearedRows.length;
-    }
-  } else if (type === 'entity_extraction') {
-    const queued = await db.query.letters.findMany({
-      where: and(...queuedEntityExtractionConditions()),
-      columns: { id: true },
-    });
-    if (queued.length > 0) {
-      const clearedRows = await db
-        .update(letters)
-        .set({
-          entityExtractionStatus: 'FAILED',
-          ...clearedEntityExtractionOwnership(),
-          entityExtractionError: 'Cleared from queue by admin',
-          updatedAt: new Date(),
-        })
-        .where(and(
-          inArray(letters.id, queued.map(l => l.id)),
-          ...queuedEntityExtractionConditions(),
-        ))
-        .returning({ id: letters.id });
-      cleared = clearedRows.length;
-    }
-  } else if (type === 'extra_content') {
-    const queued = await db.query.letters.findMany({
-      where: and(...queuedExtraContentConditions()),
-      columns: { id: true },
-    });
-    if (queued.length > 0) {
-      const clearedRows = await db
-        .update(letters)
-        .set({
-          extraContentJobStatus: 'FAILED',
-          extraContentJobRunId: null,
-          extraContentJobLeaseExpiresAt: null,
-          extraContentJobLeaseRunId: null,
-          extraContentJobClaimKind: null,
-          extraContentJobDirty: false,
-          extraContentJobError: 'Cleared from queue by admin',
-          updatedAt: new Date(),
-        })
-        .where(and(
-          inArray(letters.id, queued.map(l => l.id)),
-          ...queuedExtraContentConditions(),
-        ))
-        .returning({ id: letters.id });
-      cleared = clearedRows.length;
+  for (const snapshot of snapshots) {
+    try {
+      await transitionQueuedJob(
+        snapshot.letterId,
+        type,
+        snapshot,
+        'Cleared from queue by admin',
+      );
+      cleared += 1;
+    } catch (error) {
+      const code = clearQueueSkipCode(error);
+      if (!code) throw error;
+      skipReasons.push({ letterId: snapshot.letterId, code });
     }
   }
 
-  return { message: `Cleared ${cleared} items from ${type} queue`, cleared };
+  return {
+    message: `Cleared ${cleared} of ${snapshots.length} displayed ${type} queue items`,
+    requested: snapshots.length,
+    cleared,
+    skipped: skipReasons.length,
+    skipReasons,
+  };
 }
 
 /**
  * Retry a failed job by resetting its status to PENDING.
  */
-export async function retryJob(letterId: string, type: QueueJobType): Promise<{ message: string }> {
+export async function retryJob(
+  letterId: string,
+  type: QueueJobType,
+  expected: ExpectedJobSnapshot,
+): Promise<{ message: string }> {
   const letter = await db.query.letters.findFirst({
     where: eq(letters.id, letterId),
   });
@@ -743,10 +852,13 @@ export async function retryJob(letterId: string, type: QueueJobType): Promise<{ 
   if (!letter) {
     throw new ProcessingError('Letter not found', 404);
   }
+  assertObservedJob(letter, type, 'recent', expected);
 
   if (type === 'transcription') {
     if (letter.transcriptionStatus !== 'FAILED') {
-      throw new ProcessingError(`Cannot retry: transcription status is ${letter.transcriptionStatus}`, 400);
+      throw processingJobChanged(
+        'Transcription is no longer retryable; refresh and try again',
+      );
     }
     if (!isTranscriptionStateEligible(letter)) {
       throw new ProcessingError('Cannot retry: transcription prerequisites are not satisfied', 400);
@@ -767,17 +879,20 @@ export async function retryJob(letterId: string, type: QueueJobType): Promise<{ 
       })
       .where(and(
         eq(letters.id, letterId),
+        eq(letters.primarySourceRevision, expected.primarySourceRevision),
         eq(letters.transcriptionStatus, 'FAILED'),
         ...transcriptionPrerequisiteConditions(),
         observedTimestampMatches(letters.updatedAt, letter.updatedAt),
       ))
       .returning({ id: letters.id });
     if (retried.length === 0) {
-      throw new ProcessingError('Cannot retry: transcription prerequisites changed since it was loaded', 409);
+      await throwCurrentJobConflict(letterId, expected.primarySourceRevision);
     }
   } else if (type === 'metadata') {
     if (letter.metadataStatus !== 'FAILED') {
-      throw new ProcessingError(`Cannot retry: metadata status is ${letter.metadataStatus}`, 400);
+      throw processingJobChanged(
+        'Metadata extraction is no longer retryable; refresh and try again',
+      );
     }
     if (!isMetadataStateEligible(letter)) {
       throw new ProcessingError('Cannot retry: metadata prerequisites are not satisfied', 400);
@@ -800,6 +915,7 @@ export async function retryJob(letterId: string, type: QueueJobType): Promise<{ 
       })
       .where(and(
         eq(letters.id, letterId),
+        eq(letters.primarySourceRevision, expected.primarySourceRevision),
         eq(letters.metadataStatus, 'FAILED'),
         ...metadataPrerequisiteConditions(),
         eq(letters.metadataRevision, letter.metadataRevision),
@@ -807,11 +923,13 @@ export async function retryJob(letterId: string, type: QueueJobType): Promise<{ 
       ))
       .returning({ id: letters.id });
     if (retried.length === 0) {
-      throw new ProcessingError('Cannot retry: metadata changed since it was loaded', 409);
+      await throwCurrentJobConflict(letterId, expected.primarySourceRevision);
     }
   } else if (type === 'entity_extraction') {
     if (letter.entityExtractionStatus !== 'FAILED') {
-      throw new ProcessingError(`Cannot retry: entity extraction status is ${letter.entityExtractionStatus}`, 400);
+      throw processingJobChanged(
+        'Entity extraction is no longer retryable; refresh and try again',
+      );
     }
     if (
       letter.type !== 'L'
@@ -828,18 +946,19 @@ export async function retryJob(letterId: string, type: QueueJobType): Promise<{ 
       updatedAt: new Date(),
     }).where(and(
       eq(letters.id, letterId),
+      eq(letters.primarySourceRevision, expected.primarySourceRevision),
       ...entityExtractionPrerequisiteConditions(),
       eq(letters.entityExtractionStatus, 'FAILED'),
+      eq(letters.entityExtractionRevision, letter.entityExtractionRevision),
       observedTimestampMatches(letters.updatedAt, letter.updatedAt),
     )).returning({ id: letters.id });
     if (retried.length === 0) {
-      throw new ProcessingError('Cannot retry: entity extraction changed since it was loaded', 409);
+      await throwCurrentJobConflict(letterId, expected.primarySourceRevision);
     }
   } else if (type === 'extra_content') {
     if (letter.extraContentJobStatus !== 'FAILED') {
-      throw new ProcessingError(
-        `Cannot retry: extra content status is ${letter.extraContentJobStatus}`,
-        400,
+      throw processingJobChanged(
+        'Extra-content transcription is no longer retryable; refresh and try again',
       );
     }
     if (letter.type !== 'L') {
@@ -859,13 +978,14 @@ export async function retryJob(letterId: string, type: QueueJobType): Promise<{ 
       })
       .where(and(
         eq(letters.id, letterId),
+        eq(letters.primarySourceRevision, expected.primarySourceRevision),
         eq(letters.extraContentJobStatus, 'FAILED'),
         ...extraContentPrerequisiteConditions(),
         observedTimestampMatches(letters.updatedAt, letter.updatedAt),
       ))
       .returning({ id: letters.id });
     if (retried.length === 0) {
-      throw new ProcessingError('Cannot retry: extra content changed since it was loaded', 409);
+      await throwCurrentJobConflict(letterId, expected.primarySourceRevision);
     }
   }
 
@@ -877,7 +997,11 @@ export async function retryJob(letterId: string, type: QueueJobType): Promise<{ 
 /**
  * Cancel an active (RUNNING) job by marking it FAILED with an admin reason.
  */
-export async function cancelActiveJob(letterId: string, type: QueueJobType): Promise<{ message: string }> {
+export async function cancelActiveJob(
+  letterId: string,
+  type: QueueJobType,
+  expected: ExpectedJobSnapshot,
+): Promise<{ message: string }> {
   const letter = await db.query.letters.findFirst({
     where: eq(letters.id, letterId),
   });
@@ -885,37 +1009,55 @@ export async function cancelActiveJob(letterId: string, type: QueueJobType): Pro
   if (!letter) {
     throw new ProcessingError('Letter not found', 404);
   }
+  assertObservedJob(letter, type, 'active', expected);
 
   if (type === 'transcription') {
     if (letter.transcriptionStatus !== 'RUNNING') {
-      throw new ProcessingError(`Cannot cancel: transcription status is ${letter.transcriptionStatus}`, 400);
+      throw processingJobChanged(
+        'Transcription is no longer active; refresh and try again',
+      );
     }
     if (!letter.transcriptionRunId) {
       throw new ProcessingError('Cannot cancel: transcription job has no active run ID', 409);
     }
-    if (!await cancelTranscriptionAttempt(letterId, letter.transcriptionRunId)) {
-      throw new ProcessingError('Cannot cancel: transcription attempt changed since it was loaded', 409);
+    if (!await cancelTranscriptionAttempt(
+      letterId,
+      letter.transcriptionRunId,
+      'Cancelled by admin',
+      expected.primarySourceRevision,
+    )) {
+      await throwCurrentJobConflict(letterId, expected.primarySourceRevision);
     }
   } else if (type === 'metadata') {
     if (letter.metadataStatus !== 'RUNNING') {
-      throw new ProcessingError(`Cannot cancel: metadata status is ${letter.metadataStatus}`, 400);
+      throw processingJobChanged(
+        'Metadata extraction is no longer active; refresh and try again',
+      );
     }
     if (!letter.metadataRunId) {
       throw new ProcessingError('Cannot cancel: metadata job has no active run ID', 409);
     }
-    if (!await cancelMetadataAttempt(letterId, letter.metadataRunId)) {
-      throw new ProcessingError('Cannot cancel: metadata attempt changed since it was loaded', 409);
+    if (!await cancelMetadataAttempt(
+      letterId,
+      letter.metadataRunId,
+      'Cancelled by admin',
+      expected.primarySourceRevision,
+    )) {
+      await throwCurrentJobConflict(letterId, expected.primarySourceRevision);
     }
   } else if (type === 'entity_extraction') {
     if (letter.entityExtractionStatus !== 'RUNNING') {
-      throw new ProcessingError(`Cannot cancel: entity extraction status is ${letter.entityExtractionStatus}`, 400);
+      throw processingJobChanged(
+        'Entity extraction is no longer active; refresh and try again',
+      );
     }
     if (!letter.entityExtractionRunId && letter.entityExtractionRunRevision === null) {
-      if (!await cancelLegacyEntityExtraction(letterId, 'Cancelled by admin')) {
-        throw new ProcessingError(
-          'Cannot cancel: legacy entity extraction attempt changed since it was loaded',
-          409,
-        );
+      if (!await cancelLegacyEntityExtraction(
+        letterId,
+        'Cancelled by admin',
+        expected.primarySourceRevision,
+      )) {
+        await throwCurrentJobConflict(letterId, expected.primarySourceRevision);
       }
     } else if (!letter.entityExtractionRunId || letter.entityExtractionRunRevision === null) {
       throw new ProcessingError('Cannot cancel: entity extraction job has no active run identity', 409);
@@ -926,23 +1068,28 @@ export async function cancelActiveJob(letterId: string, type: QueueJobType): Pro
         revision: letter.entityExtractionRunRevision,
       },
       'Cancelled by admin',
+      expected.primarySourceRevision,
     )) {
       // If commit held the row lock first, its SUCCESS transition clears this
       // token and the stale cancellation cannot overwrite the new projection.
-      throw new ProcessingError('Cannot cancel: entity extraction attempt changed since it was loaded', 409);
+      await throwCurrentJobConflict(letterId, expected.primarySourceRevision);
     }
   } else if (type === 'extra_content') {
     if (letter.extraContentJobStatus !== 'RUNNING') {
-      throw new ProcessingError(
-        `Cannot cancel: extra content status is ${letter.extraContentJobStatus}`,
-        400,
+      throw processingJobChanged(
+        'Extra-content transcription is no longer active; refresh and try again',
       );
     }
     if (!letter.extraContentJobRunId) {
       throw new ProcessingError('Cannot cancel: extra content job has no active run ID', 409);
     }
-    if (!await cancelExtraContentAttempt(letterId, letter.extraContentJobRunId)) {
-      throw new ProcessingError('Cannot cancel: extra content attempt changed since it was loaded', 409);
+    if (!await cancelExtraContentAttempt(
+      letterId,
+      letter.extraContentJobRunId,
+      'Cancelled by admin',
+      expected.primarySourceRevision,
+    )) {
+      await throwCurrentJobConflict(letterId, expected.primarySourceRevision);
     }
     await requestWorkerAfterExtraContentCancellation();
   }
@@ -959,12 +1106,8 @@ export async function cancelActiveJob(letterId: string, type: QueueJobType): Pro
 /**
  * Custom error class for processing queue errors with HTTP status codes.
  */
-class ProcessingError extends Error {
-  public statusCode: number;
-
+class ProcessingError extends AppError {
   constructor(message: string, statusCode: number) {
-    super(message);
-    this.name = 'ProcessingError';
-    this.statusCode = statusCode;
+    super(statusCode, message);
   }
 }

@@ -149,6 +149,7 @@ export interface LetterImage {
   pageNumber?: number; // only for letter pages
   imageUrl: string;
   originalFilename?: string;
+  sourceChecksum?: string;
   width?: number;
   height?: number;
   lineSegments?: LineSegment[];
@@ -387,6 +388,7 @@ export interface Letter {
   id: string;
   title: string;
   collectionCode?: string;
+  primarySourceRevision: number;
   images: LetterImage[];
   transcript: LetterTranscript;
   metadata: LetterMetadata;

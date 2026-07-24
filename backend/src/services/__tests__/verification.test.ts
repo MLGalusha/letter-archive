@@ -44,6 +44,7 @@ vi.mock('../../db/index.js', () => {
       metadataStatus: 'letters.metadataStatus',
       metadataRevision: 'letters.metadataRevision',
       metadataContentStatus: 'letters.metadataContentStatus',
+      primarySourceRevision: 'letters.primarySourceRevision',
       extraContentStatus: 'letters.extraContentStatus',
       photoDescription: 'letters.photoDescription',
       photoDescriptionStatus: 'letters.photoDescriptionStatus',
@@ -76,6 +77,7 @@ import {
   verifyPhotoDescription,
   verifyTranscript,
 } from '../letter/verification.js';
+import { SourceRevisionChangedError } from '../letter/source-revision.js';
 
 describe('transcript verification ownership', () => {
   beforeEach(() => {
@@ -91,9 +93,10 @@ describe('transcript verification ownership', () => {
       transcriptionText: 'Reviewed text',
       transcriptStatus: 'EDITED',
       readingText: null,
+      primarySourceRevision: 7,
     });
 
-    await expect(verifyTranscript('letter-1', 'reviewer-1')).resolves.toEqual({
+    await expect(verifyTranscript('letter-1', 7, 'reviewer-1')).resolves.toEqual({
       previousStatus: 'EDITED',
     });
 
@@ -107,10 +110,57 @@ describe('transcript verification ownership', () => {
       kind: 'and',
       clauses: [
         { kind: 'eq', field: 'letters.id', value: 'letter-1' },
+        { kind: 'eq', field: 'letters.primarySourceRevision', value: 7 },
         { kind: 'eq', field: 'letters.transcriptionStatus', value: 'SUCCESS' },
         { kind: 'eq', field: 'letters.transcriptStatus', value: 'EDITED' },
         { kind: 'eq', field: 'letters.transcriptionText', value: 'Reviewed text' },
       ],
+    });
+  });
+
+  it('binds automatic reading-view generation to the verified source epoch', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-reading-view',
+      type: 'L',
+      transcriptionStatus: 'SUCCESS',
+      transcriptionText: 'Reviewed text',
+      transcriptStatus: 'EDITED',
+      readingText: null,
+      primarySourceRevision: 7,
+    });
+    generateAndSaveReadingViewMock.mockResolvedValueOnce('Reading view');
+
+    await expect(
+      verifyTranscript('letter-reading-view', 7, 'reviewer-1'),
+    ).resolves.toEqual({ previousStatus: 'EDITED' });
+
+    expect(generateAndSaveReadingViewMock).toHaveBeenCalledWith(
+      'letter-reading-view',
+      7,
+    );
+  });
+
+  it('surfaces a source replacement that wins during automatic reading-view generation', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-reading-view-raced',
+      type: 'L',
+      transcriptionStatus: 'SUCCESS',
+      transcriptionText: 'Reviewed text',
+      transcriptStatus: 'EDITED',
+      readingText: null,
+      primarySourceRevision: 7,
+    });
+    generateAndSaveReadingViewMock.mockRejectedValueOnce(
+      new SourceRevisionChangedError(
+        'Letter source changed before the reading view could be saved',
+      ),
+    );
+
+    await expect(
+      verifyTranscript('letter-reading-view-raced', 7, 'reviewer-1'),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'SOURCE_REVISION_CHANGED',
     });
   });
 
@@ -122,8 +172,9 @@ describe('transcript verification ownership', () => {
       transcriptionText: 'Previously reviewed text',
       transcriptStatus: 'EDITED',
       readingText: null,
+      primarySourceRevision: 7,
     });
-    await expect(verifyTranscript('letter-2', 'reviewer-1')).rejects.toMatchObject({
+    await expect(verifyTranscript('letter-2', 7, 'reviewer-1')).rejects.toMatchObject({
       status: 400,
       message: expect.stringContaining('must be complete'),
     });
@@ -139,15 +190,37 @@ describe('transcript verification ownership', () => {
       transcriptionText: null,
       transcriptStatus: 'EMPTY',
       readingText: null,
+      primarySourceRevision: 7,
     });
     updateReturningMock.mockResolvedValue([]);
 
-    await expect(verifyTranscript('letter-3', 'reviewer-1')).rejects.toMatchObject({ status: 409 });
+    await expect(verifyTranscript('letter-3', 7, 'reviewer-1')).rejects.toMatchObject({ status: 409 });
     expect(updateWhereMock).toHaveBeenCalledWith(expect.objectContaining({
       clauses: expect.arrayContaining([
         { kind: 'isNull', field: 'letters.transcriptionText' },
       ]),
     }));
+  });
+
+  it('rejects transcript verification loaded before a page-source change', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-source-raced',
+      type: 'L',
+      transcriptionStatus: 'SUCCESS',
+      transcriptionText: 'Newer source transcript',
+      transcriptStatus: 'EDITED',
+      readingText: null,
+      primarySourceRevision: 8,
+    });
+
+    await expect(
+      verifyTranscript('letter-source-raced', 7, 'reviewer-1'),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'SOURCE_REVISION_CHANGED',
+      message: expect.stringContaining('source changed'),
+    });
+    expect(dbUpdateMock).not.toHaveBeenCalled();
   });
 
   it('unverifies only the exact idle transcript revision the reviewer loaded', async () => {
@@ -156,9 +229,10 @@ describe('transcript verification ownership', () => {
       transcriptionStatus: 'SUCCESS',
       transcriptionText: 'Verified text',
       transcriptStatus: 'VERIFIED',
+      primarySourceRevision: 7,
     });
 
-    await expect(unverifyTranscript('letter-4')).resolves.toBe(true);
+    await expect(unverifyTranscript('letter-4', 7)).resolves.toBe(true);
 
     expect(updateSetMock).toHaveBeenCalledWith({
       transcriptStatus: 'EDITED',
@@ -171,6 +245,7 @@ describe('transcript verification ownership', () => {
       kind: 'and',
       clauses: [
         { kind: 'eq', field: 'letters.id', value: 'letter-4' },
+        { kind: 'eq', field: 'letters.primarySourceRevision', value: 7 },
         { kind: 'eq', field: 'letters.transcriptionStatus', value: 'SUCCESS' },
         { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
         { kind: 'eq', field: 'letters.transcriptStatus', value: 'VERIFIED' },
@@ -185,13 +260,33 @@ describe('transcript verification ownership', () => {
       transcriptionStatus: 'RUNNING',
       transcriptionText: 'Verified text',
       transcriptStatus: 'VERIFIED',
+      primarySourceRevision: 7,
     });
     updateReturningMock.mockResolvedValue([]);
 
-    await expect(unverifyTranscript('letter-5')).rejects.toMatchObject({
+    await expect(unverifyTranscript('letter-5', 7)).rejects.toMatchObject({
       status: 409,
       message: expect.stringContaining('changed before verification could be removed'),
     });
+  });
+
+  it('does not remove transcript verification loaded before a page-source change', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      id: 'transcript-unverify-source-raced',
+      transcriptionStatus: 'SUCCESS',
+      transcriptionText: 'Replacement transcript',
+      transcriptStatus: 'VERIFIED',
+      primarySourceRevision: 8,
+    });
+
+    await expect(
+      unverifyTranscript('transcript-unverify-source-raced', 7),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'SOURCE_REVISION_CHANGED',
+      message: expect.stringContaining('source changed'),
+    });
+    expect(dbUpdateMock).not.toHaveBeenCalled();
   });
 });
 
@@ -209,9 +304,10 @@ describe('metadata verification ownership', () => {
       metadataRevision: 4,
       metadataContentStatus: 'EDITED',
       updatedAt,
+      primarySourceRevision: 7,
     });
 
-    await expect(verifyMetadata('letter-1', 'reviewer-1')).resolves.toEqual({
+    await expect(verifyMetadata('letter-1', 7, 'reviewer-1')).resolves.toEqual({
       previousStatus: 'EDITED',
     });
 
@@ -233,6 +329,7 @@ describe('metadata verification ownership', () => {
       clauses: [
         { kind: 'eq', field: 'letters.id', value: 'letter-1' },
         { kind: 'eq', field: 'letters.metadataRevision', value: 4 },
+        { kind: 'eq', field: 'letters.primarySourceRevision', value: 7 },
         { kind: 'eq', field: 'letters.metadataStatus', value: 'SUCCESS' },
         { kind: 'eq', field: 'letters.metadataContentStatus', value: 'EDITED' },
       ],
@@ -246,8 +343,9 @@ describe('metadata verification ownership', () => {
       metadataRevision: 0,
       metadataContentStatus: 'EDITED',
       updatedAt: new Date('2026-07-17T12:00:00.000Z'),
+      primarySourceRevision: 7,
     });
-    await expect(verifyMetadata('letter-2', 'reviewer-1')).rejects.toMatchObject({
+    await expect(verifyMetadata('letter-2', 7, 'reviewer-1')).rejects.toMatchObject({
       status: 400,
       message: expect.stringContaining('must be complete'),
     });
@@ -261,11 +359,32 @@ describe('metadata verification ownership', () => {
       metadataRevision: 0,
       metadataContentStatus: 'EMPTY',
       updatedAt: new Date('2026-07-17T12:00:00.000Z'),
+      primarySourceRevision: 7,
     });
 
-    await expect(verifyMetadata('letter-empty', 'reviewer-1')).rejects.toMatchObject({
+    await expect(verifyMetadata('letter-empty', 7, 'reviewer-1')).rejects.toMatchObject({
       status: 400,
       message: expect.stringContaining('contain content'),
+    });
+    expect(dbUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects metadata verification loaded before a page-source change', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      id: 'metadata-source-raced',
+      metadataStatus: 'SUCCESS',
+      metadataRevision: 4,
+      metadataContentStatus: 'EDITED',
+      updatedAt: new Date('2026-07-17T12:00:00.000Z'),
+      primarySourceRevision: 8,
+    });
+
+    await expect(
+      verifyMetadata('metadata-source-raced', 7, 'reviewer-1'),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'SOURCE_REVISION_CHANGED',
+      message: expect.stringContaining('source changed'),
     });
     expect(dbUpdateMock).not.toHaveBeenCalled();
   });
@@ -278,9 +397,10 @@ describe('metadata verification ownership', () => {
       metadataRevision: 9,
       metadataContentStatus: 'VERIFIED',
       updatedAt,
+      primarySourceRevision: 7,
     });
 
-    await expect(unverifyMetadata('letter-3')).resolves.toBe(true);
+    await expect(unverifyMetadata('letter-3', 7)).resolves.toBe(true);
     expect(updateSetMock).toHaveBeenCalledWith({
       metadataContentStatus: 'EDITED',
       metadataVerifiedAt: null,
@@ -295,10 +415,31 @@ describe('metadata verification ownership', () => {
     });
     expect(updateWhereMock).toHaveBeenCalledWith(expect.objectContaining({
       clauses: expect.arrayContaining([
+        { kind: 'eq', field: 'letters.primarySourceRevision', value: 7 },
         { kind: 'ne', field: 'letters.metadataStatus', value: 'RUNNING' },
         { kind: 'eq', field: 'letters.metadataRevision', value: 9 },
       ]),
     }));
+  });
+
+  it('does not remove metadata verification loaded before a page-source change', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      id: 'metadata-unverify-source-raced',
+      metadataStatus: 'SUCCESS',
+      metadataRevision: 10,
+      metadataContentStatus: 'VERIFIED',
+      updatedAt: new Date('2026-07-17T12:00:01.000Z'),
+      primarySourceRevision: 8,
+    });
+
+    await expect(
+      unverifyMetadata('metadata-unverify-source-raced', 7),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'SOURCE_REVISION_CHANGED',
+      message: expect.stringContaining('source changed'),
+    });
+    expect(dbUpdateMock).not.toHaveBeenCalled();
   });
 });
 
@@ -315,10 +456,11 @@ describe('extra-content verification ownership', () => {
       extraContentJobStatus: 'RUNNING',
       extraContentJobRunId: 'old-run',
       extraContentJobDirty: true,
+      primarySourceRevision: 7,
       updatedAt: new Date('2026-07-17T12:00:00.000Z'),
     });
 
-    await expect(verifyExtraContent('letter-1', 'reviewer-1')).resolves.toEqual({
+    await expect(verifyExtraContent('letter-1', 7, 'reviewer-1')).resolves.toEqual({
       previousStatus: 'EDITED',
     });
 
@@ -338,6 +480,13 @@ describe('extra-content verification ownership', () => {
     });
     expect(updateWhereMock).toHaveBeenCalledWith(expect.objectContaining({
       kind: 'and',
+      clauses: expect.arrayContaining([
+        {
+          kind: 'eq',
+          field: 'letters.primarySourceRevision',
+          value: 7,
+        },
+      ]),
     }));
   });
 
@@ -348,10 +497,11 @@ describe('extra-content verification ownership', () => {
       extraContentJobStatus: 'RUNNING',
       extraContentJobRunId: 'old-run',
       extraContentJobDirty: false,
+      primarySourceRevision: 7,
       updatedAt: new Date('2026-07-17T12:00:00.000Z'),
     });
 
-    await expect(unverifyExtraContent('letter-2')).resolves.toBe(true);
+    await expect(unverifyExtraContent('letter-2', 7)).resolves.toBe(true);
 
     expect(updateSetMock).toHaveBeenCalledTimes(1);
     expect(updateSetMock).toHaveBeenCalledWith({
@@ -369,6 +519,13 @@ describe('extra-content verification ownership', () => {
     });
     expect(updateWhereMock).toHaveBeenCalledWith(expect.objectContaining({
       kind: 'and',
+      clauses: expect.arrayContaining([
+        {
+          kind: 'eq',
+          field: 'letters.primarySourceRevision',
+          value: 7,
+        },
+      ]),
     }));
   });
 
@@ -376,14 +533,33 @@ describe('extra-content verification ownership', () => {
     getLetterByIdMock.mockResolvedValue({
       id: 'letter-3',
       extraContentStatus: 'EDITED',
+      primarySourceRevision: 7,
       updatedAt: new Date('2026-07-17T12:00:00.000Z'),
     });
     updateReturningMock.mockResolvedValue([]);
 
-    await expect(verifyExtraContent('letter-3', 'reviewer-1')).rejects.toMatchObject({
+    await expect(verifyExtraContent('letter-3', 7, 'reviewer-1')).rejects.toMatchObject({
       status: 409,
       message: expect.stringContaining('changed before it could be verified'),
     });
+  });
+
+  it('rejects an extra-content verification loaded before a page-source change', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-source-raced',
+      extraContentStatus: 'EDITED',
+      primarySourceRevision: 8,
+      updatedAt: new Date('2026-07-17T12:00:00.000Z'),
+    });
+
+    await expect(
+      verifyExtraContent('letter-source-raced', 7, 'reviewer-1'),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'SOURCE_REVISION_CHANGED',
+      message: expect.stringContaining('source changed'),
+    });
+    expect(dbUpdateMock).not.toHaveBeenCalled();
   });
 });
 
@@ -399,10 +575,13 @@ describe('photo-description verification ownership', () => {
       id: 'photo-1',
       photoDescription: 'Two children standing beside a porch railing.',
       photoDescriptionStatus: 'EDITED',
+      primarySourceRevision: 11,
       updatedAt,
     });
 
-    await expect(verifyPhotoDescription('photo-1', 'reviewer-1')).resolves.toEqual({
+    await expect(
+      verifyPhotoDescription('photo-1', 11, 'reviewer-1'),
+    ).resolves.toEqual({
       previousStatus: 'EDITED',
     });
 
@@ -416,6 +595,11 @@ describe('photo-description verification ownership', () => {
       kind: 'and',
       clauses: [
         { kind: 'eq', field: 'letters.id', value: 'photo-1' },
+        {
+          kind: 'eq',
+          field: 'letters.primarySourceRevision',
+          value: 11,
+        },
         {
           kind: 'sql',
           strings: ["date_trunc('milliseconds', ", ') = ', '::timestamptz'],
@@ -436,11 +620,14 @@ describe('photo-description verification ownership', () => {
       id: 'photo-2',
       photoDescription: 'The description the reviewer loaded.',
       photoDescriptionStatus: 'AI_DRAFT',
+      primarySourceRevision: 11,
       updatedAt: new Date('2026-07-18T12:00:00.000Z'),
     });
     updateReturningMock.mockResolvedValue([]);
 
-    await expect(verifyPhotoDescription('photo-2', 'reviewer-1')).rejects.toMatchObject({
+    await expect(
+      verifyPhotoDescription('photo-2', 11, 'reviewer-1'),
+    ).rejects.toMatchObject({
       status: 409,
       message: expect.stringContaining('changed before it could be verified'),
     });
@@ -452,10 +639,11 @@ describe('photo-description verification ownership', () => {
       id: 'photo-3',
       photoDescription: 'A verified porch scene.',
       photoDescriptionStatus: 'VERIFIED',
+      primarySourceRevision: 11,
       updatedAt,
     });
 
-    await expect(unverifyPhotoDescription('photo-3')).resolves.toBe(true);
+    await expect(unverifyPhotoDescription('photo-3', 11)).resolves.toBe(true);
 
     expect(updateSetMock).toHaveBeenCalledWith({
       photoDescriptionStatus: 'EDITED',
@@ -467,6 +655,11 @@ describe('photo-description verification ownership', () => {
       kind: 'and',
       clauses: [
         { kind: 'eq', field: 'letters.id', value: 'photo-3' },
+        {
+          kind: 'eq',
+          field: 'letters.primarySourceRevision',
+          value: 11,
+        },
         {
           kind: 'sql',
           strings: ["date_trunc('milliseconds', ", ') = ', '::timestamptz'],
@@ -487,13 +680,33 @@ describe('photo-description verification ownership', () => {
       id: 'photo-4',
       photoDescription: 'The description the reviewer loaded.',
       photoDescriptionStatus: 'VERIFIED',
+      primarySourceRevision: 11,
       updatedAt: new Date('2026-07-18T12:00:00.000Z'),
     });
     updateReturningMock.mockResolvedValue([]);
 
-    await expect(unverifyPhotoDescription('photo-4')).rejects.toMatchObject({
+    await expect(unverifyPhotoDescription('photo-4', 11)).rejects.toMatchObject({
       status: 409,
       message: expect.stringContaining('changed before verification could be removed'),
     });
+  });
+
+  it('rejects photo verification loaded before a page-source change', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      id: 'photo-source-raced',
+      photoDescription: 'Stale photo description.',
+      photoDescriptionStatus: 'EDITED',
+      primarySourceRevision: 12,
+      updatedAt: new Date('2026-07-18T12:00:00.000Z'),
+    });
+
+    await expect(
+      verifyPhotoDescription('photo-source-raced', 11, 'reviewer-1'),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'SOURCE_REVISION_CHANGED',
+      message: expect.stringContaining('source changed'),
+    });
+    expect(dbUpdateMock).not.toHaveBeenCalled();
   });
 });

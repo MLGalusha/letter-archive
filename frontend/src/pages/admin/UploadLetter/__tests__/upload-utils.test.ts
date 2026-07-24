@@ -18,6 +18,7 @@ function makeImage(filename: string, overrides?: Partial<UploadedImage>): Upload
     originalFilename: filename,
     parsed: parseFilename(filename),
     isDuplicate: false,
+    sourceExpectation: null,
     ...overrides,
   };
 }

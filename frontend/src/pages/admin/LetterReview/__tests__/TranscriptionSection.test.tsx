@@ -12,8 +12,6 @@ const buildProps = (overrides: Partial<ComponentProps<typeof TranscriptionSectio
   letterTranscribeState: "idle" as const,
   letterTranscribeMessage: null,
   isTranscriptEditing: false,
-  hasTranscriptChanges: false,
-  originalTranscriptText: null,
   transcriptFontSize: "1rem",
   showEditTooltip: false,
   tooltipPosition: { x: 100, y: 100 },

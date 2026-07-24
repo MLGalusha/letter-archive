@@ -1,6 +1,7 @@
 import {
   startTransition,
   useCallback,
+  useLayoutEffect,
   useState,
   type Dispatch,
   type MouseEvent,
@@ -38,6 +39,20 @@ interface UseTranscriptEditingOptions {
   triggerAutoSave: (data: AutoSaveData) => Promise<void>;
 }
 
+interface TranscriptEditingSession {
+  owner: LetterReviewVisit;
+  isTranscriptEditing: boolean;
+  originalTranscriptText: string | null;
+  hasTranscriptChanges: boolean;
+}
+
+const sessionFrom = (owner: LetterReviewVisit): TranscriptEditingSession => ({
+  owner,
+  isTranscriptEditing: false,
+  originalTranscriptText: null,
+  hasTranscriptChanges: false,
+});
+
 export function useTranscriptEditing({
   visit,
   letterId,
@@ -52,44 +67,79 @@ export function useTranscriptEditing({
   editorRef,
   triggerAutoSave,
 }: UseTranscriptEditingOptions) {
-  const [isTranscriptEditing, setIsTranscriptEditing] = useState(false);
-  const [originalTranscriptText, setOriginalTranscriptText] = useState<
-    string | null
-  >(null);
-  const [originalTranscriptVerified, setOriginalTranscriptVerified] =
-    useState(false);
-  const [hasTranscriptChanges, setHasTranscriptChanges] = useState(false);
+  const [storedSession, setStoredSession] = useState(
+    () => sessionFrom(visit),
+  );
+  const sessionIsCurrent = storedSession.owner === visit;
+  const session = sessionIsCurrent
+    ? storedSession
+    : sessionFrom(visit);
+  const {
+    hasTranscriptChanges,
+    isTranscriptEditing,
+    originalTranscriptText,
+  } = session;
 
   const {
-    show: showEditTooltip,
+    show: storedTooltipIsOpen,
     position: tooltipPosition,
     ref: editTooltipRef,
     showAt: showEditTooltipAt,
     close: closeEditTooltip,
   } = useTooltip();
 
+  useLayoutEffect(() => {
+    setStoredSession((current) => (
+      current.owner === visit ? current : sessionFrom(visit)
+    ));
+    closeEditTooltip();
+  }, [closeEditTooltip, visit]);
+
+  const updateSession = useCallback((
+    patch: Partial<Omit<TranscriptEditingSession, 'owner'>>,
+  ) => {
+    setStoredSession((current) => (
+      current.owner === visit
+        ? { ...current, ...patch }
+        : current
+    ));
+  }, [visit]);
+
   const resetEditingState = useCallback(() => {
-    setIsTranscriptEditing(false);
-    setOriginalTranscriptText(null);
-    setOriginalTranscriptVerified(false);
-    setHasTranscriptChanges(false);
-  }, []);
+    updateSession({
+      isTranscriptEditing: false,
+      originalTranscriptText: null,
+      hasTranscriptChanges: false,
+    });
+  }, [updateSession]);
 
   const handleTranscriptInput = useCallback(
     (newText: string) => {
+      if (!visit.isActive()) {
+        return;
+      }
+
       startTransition(() => {
         setTranscript(newText);
-        setHasTranscriptChanges(
-          originalTranscriptText !== null && newText !== originalTranscriptText,
-        );
+        updateSession({
+          hasTranscriptChanges:
+            originalTranscriptText !== null
+            && newText !== originalTranscriptText,
+        });
       });
       void triggerAutoSave({ transcriptionText: newText });
     },
-    [originalTranscriptText, setTranscript, triggerAutoSave],
+    [
+      originalTranscriptText,
+      setTranscript,
+      triggerAutoSave,
+      updateSession,
+      visit,
+    ],
   );
 
   const handleVerifyTranscript = useCallback(async () => {
-    if (!letterId || !letter) {
+    if (!visit.isActive() || !letterId || !letter) {
       return;
     }
 
@@ -132,6 +182,7 @@ export function useTranscriptEditing({
   const handleTranscriptClick = useCallback(
     (event: MouseEvent) => {
       if (
+        !visit.isActive() ||
         !letter?.transcriptStatus ||
         letter.transcriptStatus !== 'VERIFIED' ||
         isTranscriptEditing
@@ -141,11 +192,17 @@ export function useTranscriptEditing({
 
       showEditTooltipAt(event.clientX, event.clientY);
     },
-    [isTranscriptEditing, letter?.transcriptStatus, showEditTooltipAt],
+    [
+      isTranscriptEditing,
+      letter?.transcriptStatus,
+      showEditTooltipAt,
+      visit,
+    ],
   );
 
   const handleTranscriptDoubleClick = useCallback(async () => {
     if (
+      !visit.isActive() ||
       !letter?.transcriptStatus ||
       letter.transcriptStatus !== 'VERIFIED' ||
       !letterId
@@ -154,8 +211,9 @@ export function useTranscriptEditing({
     }
 
     closeEditTooltip();
-    setOriginalTranscriptText(transcript);
-    setOriginalTranscriptVerified(true);
+    updateSession({
+      originalTranscriptText: transcript,
+    });
     const releaseSaving = beginSaving();
 
     try {
@@ -167,8 +225,10 @@ export function useTranscriptEditing({
       );
       if (!tryAdoptLetter(updated)) return;
       setTranscript(updated.transcript.fullText);
-      setIsTranscriptEditing(true);
-      setHasTranscriptChanges(false);
+      updateSession({
+        isTranscriptEditing: true,
+        hasTranscriptChanges: false,
+      });
       showToast('Verification removed', 'info');
     } catch (error) {
       handleMutationError(error, 'Failed to unverify transcript');
@@ -186,11 +246,17 @@ export function useTranscriptEditing({
     setTranscript,
     transcript,
     tryAdoptLetter,
+    updateSession,
     visit,
   ]);
 
   const handleTranscriptRevert = useCallback(async () => {
-    if (!letterId || !letter || originalTranscriptText === null) {
+    if (
+      !visit.isActive()
+      || !letterId
+      || !letter
+      || originalTranscriptText === null
+    ) {
       return;
     }
 
@@ -215,16 +281,12 @@ export function useTranscriptEditing({
           highlightTranscriptMarkers(originalTranscriptText);
       }
 
-      if (originalTranscriptVerified) {
-        const verifiedLetter = await verifyTranscript(
-          letterId,
-          updated.primarySourceRevision,
-        );
-        if (!tryAdoptLetter(verifiedLetter)) return;
-        showToast('Changes reverted and verification restored', 'success');
-      } else {
-        showToast('Changes reverted', 'success');
-      }
+      const verifiedLetter = await verifyTranscript(
+        letterId,
+        updated.primarySourceRevision,
+      );
+      if (!tryAdoptLetter(verifiedLetter)) return;
+      showToast('Changes reverted and verification restored', 'success');
 
       resetEditingState();
     } catch (error) {
@@ -238,7 +300,6 @@ export function useTranscriptEditing({
     letter,
     letterId,
     originalTranscriptText,
-    originalTranscriptVerified,
     resetEditingState,
     beginSaving,
     flushPendingSaves,
@@ -257,8 +318,7 @@ export function useTranscriptEditing({
     handleVerifyTranscript,
     hasTranscriptChanges,
     isTranscriptEditing,
-    originalTranscriptText,
-    showEditTooltip,
+    showEditTooltip: sessionIsCurrent && storedTooltipIsOpen,
     tooltipPosition,
   };
 }

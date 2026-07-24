@@ -284,7 +284,6 @@ export default function LetterReviewPage() {
     handleVerifyTranscript,
     hasTranscriptChanges,
     isTranscriptEditing,
-    originalTranscriptText,
     showEditTooltip,
     tooltipPosition,
   } = useTranscriptEditing({
@@ -1277,8 +1276,6 @@ export default function LetterReviewPage() {
                 letterTranscribeState={letterTranscribeState}
                 letterTranscribeMessage={letterTranscribeMessage}
                 isTranscriptEditing={isTranscriptEditing}
-                hasTranscriptChanges={hasTranscriptChanges}
-                originalTranscriptText={originalTranscriptText}
                 transcriptFontSize={transcriptFontSize}
                 showEditTooltip={showEditTooltip}
                 tooltipPosition={tooltipPosition}

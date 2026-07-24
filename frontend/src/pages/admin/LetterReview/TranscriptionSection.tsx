@@ -22,8 +22,6 @@ interface TranscriptionSectionProps {
   letterTranscribeState: "idle" | "transcribing" | "done";
   letterTranscribeMessage: string | null;
   isTranscriptEditing: boolean;
-  hasTranscriptChanges: boolean;
-  originalTranscriptText: string | null;
   transcriptFontSize: string;
   showEditTooltip: boolean;
   tooltipPosition: { x: number; y: number };

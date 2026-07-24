@@ -7,11 +7,11 @@ Last updated: July 24, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 027 — validated, replay-safe Dashboard stored state
-- Last sealed cleanup implementation: Dashboard stored-state ownership at `4c72423f`
+- Current checkpoint: 028 — intent-owned Dashboard filter state
+- Last sealed cleanup implementation: Dashboard filter ownership at `557e01bf`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Current slice: 028 — intent-owned Dashboard filter state
+- Current slice: 029 — next ownership boundary orientation
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -93,7 +93,7 @@ tree:
 
 ### D. Frontend change isolation
 
-- [ ] Replace field-by-field dashboard filter plumbing with one serializable query
+- [x] Replace field-by-field dashboard filter plumbing with one serializable query
   state, reducer/actions, and pure adapters.
 - [x] Model explicit versus all-filtered selection and make counts truthful.
 - [ ] Delete verified dead dashboard CSS and establish one style owner per surface.
@@ -2104,7 +2104,7 @@ deployment, or external state changed in this slice.
 
 ## Slice 028 — Intent-Owned Dashboard Filter State
 
-Status: in progress
+Status: complete at `557e01bf`
 
 Problem:
 
@@ -2123,7 +2123,7 @@ panel tests must fabricate the inferred controller through unsafe casts. The bro
 surface makes internal implementation details a de facto component contract and leaves
 the prepared frontend-isolation program item incomplete.
 
-Target invariant:
+Delivered invariant:
 
 One pure Dashboard filter model owns a serializable `{ query, dateMode }` state.
 `query` is the exact `DashboardCommittedQuerySource` consumed by the route and retains
@@ -2138,58 +2138,68 @@ overwrite clear-all, search clear, or saved-view replacement. Presentation compo
 consume explicit state/draft/action contracts and never coordinate multiple committed
 writes themselves.
 
-Scope:
+What changed:
 
-- Add a pure reducer/model for initial-state construction and every committed filter
-  transition. Characterize no-op identity, array ownership, every toggle/removal,
-  collection ordering/deduplication, date exclusivity, stored replacement, and
-  clear-all before migrating behavior.
-- Load the already-validated persisted snapshot once at the route composition
-  boundary, seed filter and sort owners separately, and pass `filterState.query`
-  directly into committed-query construction.
-- Keep draft search debouncing in the hook, with explicit cancellation before clear or
-  replacement transitions. Keep the existing 300 ms delay and bounded input.
-- Replace raw setter and `ReturnType<typeof useDashboardFilters>` contracts with
-  explicit `{ state, drafts, actions }` contracts. Narrow search, date, collection,
-  panel, toolbar, and active-chip boundaries around user intents.
-- Make chip removals idempotent named removals rather than toggles, preserving exact
-  chip order, labels, and count semantics.
-- Add a one-way source tripwire against restored field-by-field route projection,
-  raw committed setters in presentation components, or inferred controller contracts.
+- `dashboardFilterStateModel.ts` is the pure owner of the serializable
+  `{ query, dateMode }` state and its explicit action union. Its reducer preserves
+  state and query identity for semantic no-ops, owns copied arrays, normalizes and
+  de-duplicates collections, applies date modes atomically, and makes removals
+  idempotent.
+- `useDashboardFilters` fell from 286 to 231 lines and now returns the explicit
+  `{ state, drafts, actions }` controller contract. Only search, collection input,
+  and content-tab selection remain drafts. The hook owns the unchanged 300 ms search
+  debounce and cancels pending commits before search clear, clear-all, or stored-state
+  replacement.
+- `AdminDashboard` fell from 457 to 405 lines. It loads the validated stored snapshot
+  once, seeds the filter and sort owners independently, and composes reads directly
+  from `dashboardFilters.state.query` plus sort columns. The former 15-field
+  projection and dependency list are gone.
+- Toolbar, panel, date, collection, search, chip, and section contracts now accept
+  named state/draft/action capabilities instead of the inferred whole hook or raw
+  committed setters. Date mode and collection clear are single intents rather than
+  presentation-layer write coordination.
+- Active-filter projection is a pure adapter. Chip dismissals call explicit,
+  idempotent removals instead of toggles, while preserving existing labels, order,
+  and count behavior.
+- Source-level architecture tests guard the nested route query, exact memo
+  dependencies, explicit controller contract, and absence of raw committed-setter
+  plumbing. A mocked browser flow exercises collection add/remove, visibility,
+  range dates, debounced search, and clear-all against exact normalized requests.
 
-Non-goals:
+Evidence:
 
-- No filter meaning, default, debounce duration, date formatting, storage schema,
-  saved-view behavior, sort behavior, fetching, selection, backend, API, CSS, layout,
-  or visual change.
-- Do not repair the known range-date text-entry defect. It needs a separate display
-  draft/commit owner because incomplete `mm/dd/yyyy` text is not committed query state.
-- Keep sort, columns, Dashboard mode, manager-open state, and collection view outside
-  the filter reducer.
-- No React context, external state library, generic form reducer, or application-wide
-  query framework.
+- Focused final filter suite: 7 files / 39 tests passed.
+- Complete Dashboard neighborhood: 28 files / 197 tests passed.
+- Mocked Dashboard browser spec: 10/10 passed.
+- Aggregate `CI=1 ./scripts/verify-all.sh`: backend 104 files / 1,016 tests,
+  backend typecheck, frontend 137 files / 953 tests, frontend production build, and
+  mocked browser 60/60 passed.
+- Frontend TypeScript, ESLint over every changed/new frontend TypeScript file, and
+  `git diff --check` passed.
+- Independent architecture, correctness, and adversarial-coverage reviews approved
+  the final tree with no remaining P0–P2 finding. Their final independent reruns
+  included the focused filter suites, the Dashboard neighborhood, TypeScript, lint,
+  diff checking, and the mocked Dashboard browser spec.
+- The production build retains its existing large-chunk warning:
+  `LetterReviewPage` is 527.84 kB and `UpdateEditorPage` is 1,182.96 kB after
+  minification.
 
-Acceptance:
+Residuals:
 
-- Pure transition-table tests cover every action, replayed removals, no-op state/query
-  identity, owned arrays, date-mode exclusivity, normalized collections, stored
-  replacement, and clear-all.
-- Draft-only changes and date-mode-only changes with no incompatible committed values
-  preserve committed query identity. Search commits after 300 ms; clear and stored-view
-  replacement win immediately over pending drafts.
-- The route consumes the nested query without re-enumerating its 15 fields. Existing
-  list, selection, persistence, saved-view, sort, and query serialization behavior
-  remains exact.
-- Existing chip labels/order/count and filter-panel behavior remain exact, with a
-  compound mocked-browser flow proving normalized request parity through add, toggle,
-  remove, date-mode, search, and clear actions.
-- Focused model/hook/component/architecture tests, the complete Dashboard unit
-  neighborhood, touched lint and TypeScript, the mocked Dashboard browser spec, and
-  `CI=1 ./scripts/verify-all.sh` pass.
-- Independent architecture, correctness, and adversarial-coverage reviews find no
-  unresolved P0–P2 issue.
+- The known range-date partial text-entry defect remains. Incomplete display text is
+  not committed query state and needs a separate draft/commit boundary rather than a
+  widening of the filter reducer.
+- Sort, columns, Dashboard mode, manager-open state, and collection view remain
+  separate owners intentionally.
+- The 464-line pure transition model is cohesive and heavily characterized. Do not
+  split it by line count alone; extract only when another stable responsibility or
+  consumer appears.
+- `AdminDashboard.css` remains a 4,281-line global style owner and is still a
+  high-value cleanup candidate, but deleting or partitioning it requires a fresh
+  selector-usage and visual-regression orientation.
 
-Rollback base: `4c72423f`.
+No product feature, filter behavior, API, backend, storage schema, CSS, visual layout,
+deployment, or external state changed in this slice.
 
 ## Slice 027 — Validated, Replay-Safe Dashboard Stored State
 

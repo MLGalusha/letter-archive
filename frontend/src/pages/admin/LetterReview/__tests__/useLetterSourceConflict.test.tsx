@@ -1,14 +1,22 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../../../api/client';
+import { useLetterReviewVisit } from '../useLetterReviewVisit';
 import { useLetterSourceConflict } from '../useLetterSourceConflict';
+
+type ShowToast = (message: string, type: 'success' | 'error' | 'info') => void;
+
+function useConflictOwner(showToast: ShowToast, letterId: string) {
+  const visit = useLetterReviewVisit(letterId);
+  return useLetterSourceConflict(showToast, visit);
+}
 
 describe('useLetterSourceConflict', () => {
   it('enters one terminal conflict state for source-bound 409 responses', () => {
     const showToast = vi.fn();
-    const { result } = renderHook(() => useLetterSourceConflict(showToast, {
-      letterId: 'letter-1',
-    }));
+    const { result } = renderHook(() =>
+      useConflictOwner(showToast, 'letter-1'),
+    );
 
     act(() => {
       expect(result.current.handleMutationError(
@@ -44,9 +52,9 @@ describe('useLetterSourceConflict', () => {
 
   it('keeps ordinary write conflicts recoverable without blocking the editor', () => {
     const showToast = vi.fn();
-    const { result } = renderHook(() => useLetterSourceConflict(showToast, {
-      letterId: 'letter-1',
-    }));
+    const { result } = renderHook(() =>
+      useConflictOwner(showToast, 'letter-1'),
+    );
 
     act(() => {
       expect(result.current.handleMutationError(
@@ -61,9 +69,9 @@ describe('useLetterSourceConflict', () => {
 
   it('reports non-conflict errors without blocking the editor', () => {
     const showToast = vi.fn();
-    const { result } = renderHook(() => useLetterSourceConflict(showToast, {
-      letterId: 'letter-1',
-    }));
+    const { result } = renderHook(() =>
+      useConflictOwner(showToast, 'letter-1'),
+    );
 
     act(() => {
       expect(result.current.handleMutationError(
@@ -83,7 +91,7 @@ describe('useLetterSourceConflict', () => {
     const showToast = vi.fn();
     const { result, rerender } = renderHook(
       ({ letterId, primarySourceRevision }) => ({
-        owner: useLetterSourceConflict(showToast, { letterId }),
+        owner: useConflictOwner(showToast, letterId),
         primarySourceRevision,
       }),
       {
@@ -122,7 +130,7 @@ describe('useLetterSourceConflict', () => {
   it('resets terminal state when navigation changes the letter owner', () => {
     const showToast = vi.fn();
     const { result, rerender } = renderHook(
-      ({ letterId }) => useLetterSourceConflict(showToast, { letterId }),
+      ({ letterId }) => useConflictOwner(showToast, letterId),
       { initialProps: { letterId: 'letter-1' } },
     );
 
@@ -150,11 +158,45 @@ describe('useLetterSourceConflict', () => {
     expect(result.current.isMutationBlocked()).toBe(false);
   });
 
+  it('ignores errors and conflicts from an earlier visit after A -> B -> A', () => {
+    const showToast = vi.fn();
+    const { result, rerender } = renderHook(
+      ({ letterId }) => useConflictOwner(showToast, letterId),
+      { initialProps: { letterId: 'letter-a' } },
+    );
+    const staleHandleErrorA = result.current.handleMutationError;
+    const staleMarkConflictA = result.current.markSourceConflict;
+    const staleIsBlockedA = result.current.isMutationBlocked;
+
+    rerender({ letterId: 'letter-b' });
+    rerender({ letterId: 'letter-a' });
+
+    act(() => {
+      expect(staleHandleErrorA(
+        new Error('Old request failed'),
+        'Save failed',
+      )).toBe(true);
+      expect(staleHandleErrorA(
+        new ApiError(409, 'Old source changed', {
+          code: 'SOURCE_REVISION_CHANGED',
+        }),
+        'Save failed',
+      )).toBe(true);
+      staleMarkConflictA('Old source changed');
+    });
+
+    expect(staleIsBlockedA()).toBe(true);
+    expect(showToast).not.toHaveBeenCalled();
+    expect(result.current.sourceConflict).toBeNull();
+    expect(result.current.mutationsBlocked).toBe(false);
+    expect(result.current.isMutationBlocked()).toBe(false);
+  });
+
   it('starts clean after a full application remount', () => {
     const showToast = vi.fn();
-    const first = renderHook(() => useLetterSourceConflict(showToast, {
-      letterId: 'letter-1',
-    }));
+    const first = renderHook(() =>
+      useConflictOwner(showToast, 'letter-1'),
+    );
     act(() => {
       first.result.current.handleMutationError(
         new ApiError(409, 'Primary source changed', {
@@ -166,9 +208,9 @@ describe('useLetterSourceConflict', () => {
     expect(first.result.current.isMutationBlocked()).toBe(true);
     first.unmount();
 
-    const reloaded = renderHook(() => useLetterSourceConflict(showToast, {
-      letterId: 'letter-1',
-    }));
+    const reloaded = renderHook(() =>
+      useConflictOwner(showToast, 'letter-1'),
+    );
     expect(reloaded.result.current.sourceConflict).toBeNull();
     expect(reloaded.result.current.isMutationBlocked()).toBe(false);
   });

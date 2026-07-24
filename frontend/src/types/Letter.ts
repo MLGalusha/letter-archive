@@ -26,26 +26,27 @@ export type ContentStatus = 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
 export type DateConfidence = 'exact' | 'unknown' | 'inferred';
 
 // V2 Metadata types
-export type EmotionalTone = 'joyful' | 'hopeful' | 'neutral' | 'anxious' | 'sad' | 'angry' | 'desperate';
+export type EmotionalTone =
+  | 'joyful'
+  | 'affectionate'
+  | 'hopeful'
+  | 'grateful'
+  | 'matter-of-fact'
+  | 'nostalgic'
+  | 'anxious'
+  | 'sad'
+  | 'angry';
 
 export type RelationshipType =
   | 'spouse'
-  | 'fiancé/fiancée'
   | 'romantic-partner'
-  | 'parent'
-  | 'child'
+  | 'parent-child'
   | 'sibling'
-  | 'grandparent'
-  | 'grandchild'
-  | 'aunt/uncle'
-  | 'nephew/niece'
-  | 'cousin'
-  | 'in-law'
+  | 'extended-family'
   | 'friend'
   | 'acquaintance'
-  | 'business-associate'
-  | 'employer'
-  | 'employee'
+  | 'professional'
+  | 'institutional'
   | 'unknown';
 
 export type PersonRelationshipType =
@@ -244,6 +245,7 @@ export interface LetterMetadata {
   sender?: string;
   recipient?: string;
   date?: string;
+  extractedDate?: string;
   dateRaw?: string;
   dateConfidence?: DateConfidence;
   location?: string;

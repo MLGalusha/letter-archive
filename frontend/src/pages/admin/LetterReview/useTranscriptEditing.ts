@@ -16,17 +16,21 @@ import { useTooltip } from '../../../hooks/useTooltip';
 import type { Letter } from '../../../types/Letter';
 import { highlightTranscriptMarkers } from '../../../utils/transcriptHighlight';
 import type { AutoSaveData } from './useAutoSave';
+import type { BeginLetterSaving } from './useLetterSavingState';
+import type { LetterReviewVisit } from './useLetterReviewVisit';
 
 type ToastType = 'success' | 'error' | 'info';
 type ShowToast = (message: string, type: ToastType) => void;
 type HandleMutationError = (error: unknown, fallback: string) => boolean;
 
 interface UseTranscriptEditingOptions {
+  visit: LetterReviewVisit;
   letterId?: string;
   letter: Letter | null;
   transcript: string;
-  setLetter: Dispatch<SetStateAction<Letter | null>>;
-  setSaving: Dispatch<SetStateAction<boolean>>;
+  tryAdoptLetter: (letter: Letter) => boolean;
+  beginSaving: BeginLetterSaving;
+  flushPendingSaves: () => Promise<boolean>;
   setTranscript: Dispatch<SetStateAction<string>>;
   handleMutationError: HandleMutationError;
   showToast: ShowToast;
@@ -35,11 +39,13 @@ interface UseTranscriptEditingOptions {
 }
 
 export function useTranscriptEditing({
+  visit,
   letterId,
   letter,
   transcript,
-  setLetter,
-  setSaving,
+  tryAdoptLetter,
+  beginSaving,
+  flushPendingSaves,
   setTranscript,
   handleMutationError,
   showToast,
@@ -87,15 +93,18 @@ export function useTranscriptEditing({
       return;
     }
 
-    setSaving(true);
+    const releaseSaving = beginSaving();
 
     try {
+      if (!visit.isActive() || !await flushPendingSaves()) return;
+
       const updated = await verifyTranscript(
         letterId,
         letter.primarySourceRevision,
       );
       const hadReadingText = letter?.readingText;
-      setLetter(updated);
+      if (!tryAdoptLetter(updated)) return;
+      setTranscript(updated.transcript.fullText);
       resetEditingState();
       if (!hadReadingText && updated.readingText) {
         showToast('Transcript verified — reading view generated', 'success');
@@ -105,16 +114,19 @@ export function useTranscriptEditing({
     } catch (error) {
       handleMutationError(error, 'Failed to verify transcript');
     } finally {
-      setSaving(false);
+      releaseSaving();
     }
   }, [
     handleMutationError,
     letter,
     letterId,
     resetEditingState,
-    setLetter,
-    setSaving,
+    beginSaving,
+    flushPendingSaves,
+    setTranscript,
     showToast,
+    tryAdoptLetter,
+    visit,
   ]);
 
   const handleTranscriptClick = useCallback(
@@ -144,31 +156,37 @@ export function useTranscriptEditing({
     closeEditTooltip();
     setOriginalTranscriptText(transcript);
     setOriginalTranscriptVerified(true);
-    setSaving(true);
+    const releaseSaving = beginSaving();
 
     try {
+      if (!visit.isActive() || !await flushPendingSaves()) return;
+
       const updated = await unverifyTranscript(
         letterId,
         letter.primarySourceRevision,
       );
-      setLetter(updated);
+      if (!tryAdoptLetter(updated)) return;
+      setTranscript(updated.transcript.fullText);
       setIsTranscriptEditing(true);
       setHasTranscriptChanges(false);
       showToast('Verification removed', 'info');
     } catch (error) {
       handleMutationError(error, 'Failed to unverify transcript');
     } finally {
-      setSaving(false);
+      releaseSaving();
     }
   }, [
     closeEditTooltip,
     handleMutationError,
     letter,
     letterId,
-    setLetter,
-    setSaving,
+    beginSaving,
+    flushPendingSaves,
     showToast,
+    setTranscript,
     transcript,
+    tryAdoptLetter,
+    visit,
   ]);
 
   const handleTranscriptRevert = useCallback(async () => {
@@ -180,14 +198,16 @@ export function useTranscriptEditing({
       return;
     }
 
-    setSaving(true);
+    const releaseSaving = beginSaving();
 
     try {
+      if (!visit.isActive() || !await flushPendingSaves()) return;
+
       const updated = await updateLetter(letterId, {
         primarySourceRevision: letter.primarySourceRevision,
         transcriptionText: originalTranscriptText,
       });
-      setLetter(updated);
+      if (!tryAdoptLetter(updated)) return;
       setTranscript(originalTranscriptText);
 
       if (editorRef.current) {
@@ -200,7 +220,7 @@ export function useTranscriptEditing({
           letterId,
           updated.primarySourceRevision,
         );
-        setLetter(verifiedLetter);
+        if (!tryAdoptLetter(verifiedLetter)) return;
         showToast('Changes reverted and verification restored', 'success');
       } else {
         showToast('Changes reverted', 'success');
@@ -210,7 +230,7 @@ export function useTranscriptEditing({
     } catch (error) {
       handleMutationError(error, 'Failed to revert changes');
     } finally {
-      setSaving(false);
+      releaseSaving();
     }
   }, [
     editorRef,
@@ -220,10 +240,12 @@ export function useTranscriptEditing({
     originalTranscriptText,
     originalTranscriptVerified,
     resetEditingState,
-    setLetter,
-    setSaving,
+    beginSaving,
+    flushPendingSaves,
     setTranscript,
     showToast,
+    tryAdoptLetter,
+    visit,
   ]);
 
   return {

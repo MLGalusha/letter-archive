@@ -89,6 +89,7 @@ export const ExtraContentSection = React.memo(function ExtraContentSection({
       <ReviewableDynamicEditor
         value={extraContent}
         verified={letter.extraContentStatus === "VERIFIED"}
+        disabled={saving}
         onChange={onExtraContentChange}
         onRequestEdit={onVerifyExtraContent}
         placeholder=""

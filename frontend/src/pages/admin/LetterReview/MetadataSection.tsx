@@ -8,6 +8,7 @@ import {
   METADATA_RELATIONSHIP_OPTIONS,
   PRIMARY_TOPIC_OPTIONS,
 } from "../../../constants/enums";
+import type { AutoSaveData } from "./useAutoSave";
 
 interface MetadataSectionProps {
   letter: Letter;
@@ -38,7 +39,7 @@ interface MetadataSectionProps {
   onTopicsDropdownOpenChange: (value: boolean) => void;
 
   // Auto-save
-  onTriggerAutoSave: (updates: Record<string, unknown>) => void;
+  onTriggerAutoSave: (updates: AutoSaveData) => void;
 
   // Regenerate state
   regenerateState: string;
@@ -101,6 +102,15 @@ const MetadataSection = memo(function MetadataSection({
   metadataTooltipRef,
   saving,
 }: MetadataSectionProps) {
+  const metadataLocked = saving || letter.metadataContentStatus === "VERIFIED";
+  const identityLocked = metadataLocked || identityUpdateState === "saving";
+  const updatePrimaryTopics = (nextTopics: string[]) => {
+    onPrimaryTopicsChange(nextTopics);
+    onTriggerAutoSave({
+      primaryTopics: nextTopics.length > 0 ? nextTopics : null,
+    });
+  };
+
   return (
     <div className="metadata-section">
       <div className="metadata-header">
@@ -170,8 +180,8 @@ const MetadataSection = memo(function MetadataSection({
       </div>
       <div
         className={`metadata-form ${letter.metadataContentStatus === "VERIFIED" ? "verified" : ""}`}
-        onClick={onMetadataFieldClick}
-        onDoubleClick={onMetadataFieldDoubleClick}
+        onClick={saving ? undefined : onMetadataFieldClick}
+        onDoubleClick={saving ? undefined : onMetadataFieldDoubleClick}
       >
         <div className="form-row">
           <div className="form-group sender-border">
@@ -185,7 +195,7 @@ const MetadataSection = memo(function MetadataSection({
                 onTriggerAutoSave({ sender: e.target.value || null });
               }}
               placeholder="Who wrote the letter"
-              readOnly={letter.metadataContentStatus === "VERIFIED"}
+              readOnly={identityLocked}
               className={
                 letter.metadataContentStatus === "VERIFIED"
                   ? "verified-field"
@@ -204,7 +214,7 @@ const MetadataSection = memo(function MetadataSection({
                 onTriggerAutoSave({ recipient: e.target.value || null });
               }}
               placeholder="Who received the letter"
-              readOnly={letter.metadataContentStatus === "VERIFIED"}
+              readOnly={identityLocked}
               className={
                 letter.metadataContentStatus === "VERIFIED"
                   ? "verified-field"
@@ -256,12 +266,16 @@ const MetadataSection = memo(function MetadataSection({
           <div className="form-group">
             <label htmlFor="date">Date</label>
             <input
-              type="text"
+              type="date"
               id="date"
               value={date}
-              onChange={(e) => onDateChange(e.target.value)}
-              placeholder="e.g., March 15, 1920"
-              readOnly={letter.metadataContentStatus === "VERIFIED"}
+              onChange={(e) => {
+                onDateChange(e.target.value);
+                onTriggerAutoSave({
+                  extractedDate: e.target.value || null,
+                });
+              }}
+              readOnly={metadataLocked}
               className={
                 letter.metadataContentStatus === "VERIFIED"
                   ? "verified-field"
@@ -284,7 +298,7 @@ const MetadataSection = memo(function MetadataSection({
               });
             }}
             placeholder="e.g., New York, NY"
-            readOnly={letter.metadataContentStatus === "VERIFIED"}
+            readOnly={metadataLocked}
             className={
               letter.metadataContentStatus === "VERIFIED"
                 ? "verified-field"
@@ -304,7 +318,7 @@ const MetadataSection = memo(function MetadataSection({
             placeholder="Short teaser to engage readers (shown in list view)"
             maxLength={150}
             singleLine
-            readOnly={letter.metadataContentStatus === "VERIFIED"}
+            readOnly={metadataLocked}
           />
           <span className="help-text">
             Max 150 characters - displayed on letter cards
@@ -320,7 +334,7 @@ const MetadataSection = memo(function MetadataSection({
               onTriggerAutoSave({ summary: val || null });
             }}
             placeholder="Factual description of letter content (shown in detail view)"
-            readOnly={letter.metadataContentStatus === "VERIFIED"}
+            readOnly={metadataLocked}
             className="multi-line"
           />
         </div>
@@ -335,14 +349,14 @@ const MetadataSection = memo(function MetadataSection({
                 <select
                   id="emotionalTone"
                   value={emotionalTone}
-                  onChange={(e) =>
-                    onEmotionalToneChange(
-                      e.target.value as EmotionalTone | "",
-                    )
-                  }
-                  disabled={
-                    letter.metadataContentStatus === "VERIFIED"
-                  }
+                  onChange={(e) => {
+                    const nextTone = e.target.value as EmotionalTone | "";
+                    onEmotionalToneChange(nextTone);
+                    onTriggerAutoSave({
+                      emotionalTone: nextTone || null,
+                    });
+                  }}
+                  disabled={metadataLocked}
                   className={
                     letter.metadataContentStatus === "VERIFIED"
                       ? "verified-field"
@@ -362,14 +376,17 @@ const MetadataSection = memo(function MetadataSection({
                 <select
                   id="relationship"
                   value={relationship}
-                  onChange={(e) =>
-                    onRelationshipChange(
-                      e.target.value as RelationshipType | "",
-                    )
-                  }
-                  disabled={
-                    letter.metadataContentStatus === "VERIFIED"
-                  }
+                  onChange={(e) => {
+                    const nextRelationship = (
+                      e.target.value as RelationshipType | ""
+                    );
+                    onRelationshipChange(nextRelationship);
+                    onTriggerAutoSave({
+                      senderRecipientRelationship:
+                        nextRelationship || null,
+                    });
+                  }}
+                  disabled={metadataLocked}
                   className={
                     letter.metadataContentStatus === "VERIFIED"
                       ? "verified-field"
@@ -394,11 +411,15 @@ const MetadataSection = memo(function MetadataSection({
                     {primaryTopics.map((topic) => (
                       <span key={topic} className="topic-tag">
                         {topic.replace("/", " / ")}
-                        {letter.metadataContentStatus !== "VERIFIED" && (
+                        {!metadataLocked && (
                           <button
                             type="button"
                             className="topic-tag-remove"
-                            onClick={() => onPrimaryTopicsChange(primaryTopics.filter((t) => t !== topic))}
+                            onClick={() => {
+                              updatePrimaryTopics(
+                                primaryTopics.filter((t) => t !== topic),
+                              );
+                            }}
                             title="Remove topic"
                           >
                             ×
@@ -410,7 +431,7 @@ const MetadataSection = memo(function MetadataSection({
                 ) : (
                   <span className="no-topics">No topics selected</span>
                 )}
-                {letter.metadataContentStatus !== "VERIFIED" && (
+                {!metadataLocked && (
                   <Dropdown
                     trigger={
                       <button
@@ -432,7 +453,7 @@ const MetadataSection = memo(function MetadataSection({
                           key={topic}
                           title={topic.replace("/", " / ")}
                           onClick={() => {
-                            onPrimaryTopicsChange([...primaryTopics, topic]);
+                            updatePrimaryTopics([...primaryTopics, topic]);
                             onTopicsDropdownOpenChange(false);
                           }}
                         />

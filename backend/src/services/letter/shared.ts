@@ -1,4 +1,9 @@
 import { sql, type AnyColumn } from 'drizzle-orm';
+import type {
+  EmotionalTone,
+  PrimaryTopic,
+  Relationship,
+} from '../../ai/schemas/metadataV2.js';
 import { createLogger } from '../../utils/logger.js';
 
 export const log = createLogger({ module: 'letter-operations' });
@@ -162,6 +167,9 @@ export interface UpdateLetterInput {
   hook?: string | null;
   summary?: string | null;
   extractedDate?: string | null;
+  emotionalTone?: EmotionalTone | null;
+  senderRecipientRelationship?: Relationship | null;
+  primaryTopics?: PrimaryTopic[] | null;
   tags?: string[] | null;
   visibility?: 'PUBLISHED' | 'HIDDEN';
   transcriptPublished?: boolean;

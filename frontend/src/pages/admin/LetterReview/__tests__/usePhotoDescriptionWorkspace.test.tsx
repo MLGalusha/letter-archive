@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Letter } from '../../../../types/Letter';
 import { usePhotoDescriptionWorkspace } from '../usePhotoDescriptionWorkspace';
+import type { LetterReviewVisit } from '../useLetterReviewVisit';
 
 const {
   describePhotoMock,
@@ -63,6 +64,15 @@ function deferred<T>() {
   return { promise, reject, resolve };
 }
 
+function activeVisit(letterId = 'letter-a'): LetterReviewVisit {
+  return {
+    letterId,
+    isActive: () => true,
+  };
+}
+
+const flushPendingSaves = async () => true;
+
 describe('usePhotoDescriptionWorkspace', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -76,11 +86,13 @@ describe('usePhotoDescriptionWorkspace', () => {
     });
     const tryAdoptLetter = vi.fn(() => true);
     const options = {
+      visit: activeVisit(),
       letter,
       saving: false,
-      setSaving: vi.fn(),
+      beginSaving: vi.fn(() => vi.fn()),
       tryAdoptLetter,
       scheduleDebouncedSave: vi.fn(),
+      flushPendingSaves,
       handleMutationError: vi.fn(() => false),
     };
     describePhotoMock.mockResolvedValue({
@@ -134,11 +146,13 @@ describe('usePhotoDescriptionWorkspace', () => {
     });
     const { result } = renderHook(() =>
       usePhotoDescriptionWorkspace({
+        visit: activeVisit(),
         letter,
         saving: false,
-        setSaving: vi.fn(),
+        beginSaving: vi.fn(() => vi.fn()),
         tryAdoptLetter: vi.fn(() => false),
         scheduleDebouncedSave: vi.fn(),
+        flushPendingSaves,
         handleMutationError: vi.fn(() => false),
       }),
     );
@@ -167,11 +181,13 @@ describe('usePhotoDescriptionWorkspace', () => {
     describePhotoMock.mockReturnValue(pending.promise);
     const { result } = renderHook(() =>
       usePhotoDescriptionWorkspace({
+        visit: activeVisit(),
         letter: makeLetter(),
         saving: false,
-        setSaving: vi.fn(),
+        beginSaving: vi.fn(() => vi.fn()),
         tryAdoptLetter: vi.fn(() => true),
         scheduleDebouncedSave: vi.fn(),
+        flushPendingSaves,
         handleMutationError: vi.fn(() => false),
       }),
     );
@@ -213,10 +229,12 @@ describe('usePhotoDescriptionWorkspace', () => {
     describePhotoMock.mockReturnValue(pending.promise);
     const tryAdoptLetter = vi.fn(() => true);
     const shared = {
+      visit: activeVisit(),
       saving: false,
-      setSaving: vi.fn(),
+      beginSaving: vi.fn(() => vi.fn()),
       tryAdoptLetter,
       scheduleDebouncedSave: vi.fn(),
+      flushPendingSaves,
       handleMutationError: vi.fn(() => false),
     };
     const { result, rerender } = renderHook(
@@ -259,10 +277,12 @@ describe('usePhotoDescriptionWorkspace', () => {
 
   it('hydrates a fresh session when returning from B to A', () => {
     const shared = {
+      visit: activeVisit(),
       saving: false,
-      setSaving: vi.fn(),
+      beginSaving: vi.fn(() => vi.fn()),
       tryAdoptLetter: vi.fn(() => true),
       scheduleDebouncedSave: vi.fn(),
+      flushPendingSaves,
       handleMutationError: vi.fn(() => false),
     };
     const letterA = makeLetter();
@@ -300,10 +320,12 @@ describe('usePhotoDescriptionWorkspace', () => {
     describePhotoMock.mockReturnValue(pending.promise);
     const tryAdoptLetter = vi.fn(() => true);
     const shared = {
+      visit: activeVisit(),
       saving: false,
-      setSaving: vi.fn(),
+      beginSaving: vi.fn(() => vi.fn()),
       tryAdoptLetter,
       scheduleDebouncedSave: vi.fn(),
+      flushPendingSaves,
       handleMutationError: vi.fn(() => false),
     };
     const { result, rerender } = renderHook(
@@ -348,18 +370,22 @@ describe('usePhotoDescriptionWorkspace', () => {
     const saved = makeLetter({ photoDescription: 'Edited description' });
     const tryAdoptLetter = vi.fn(() => true);
     const scheduleDebouncedSave = vi.fn();
-    const setSaving = vi.fn();
+    const releaseSaving = vi.fn();
+    const beginSaving = vi.fn(() => releaseSaving);
+    const flushPendingSavesMock = vi.fn(async () => true);
     verifyPhotoDescriptionMock.mockResolvedValue({
       ...saved,
       photoDescriptionStatus: 'VERIFIED',
     });
     const { result } = renderHook(() =>
       usePhotoDescriptionWorkspace({
+        visit: activeVisit(),
         letter,
         saving: false,
-        setSaving,
+        beginSaving,
         tryAdoptLetter,
         scheduleDebouncedSave,
+        flushPendingSaves: flushPendingSavesMock,
         handleMutationError: vi.fn(() => false),
       }),
     );
@@ -390,7 +416,9 @@ describe('usePhotoDescriptionWorkspace', () => {
     await waitFor(() => {
       expect(verifyPhotoDescriptionMock).toHaveBeenCalledWith('letter-a', 3);
     });
-    expect(setSaving.mock.calls).toEqual([[true], [false]]);
+    expect(beginSaving).toHaveBeenCalledTimes(1);
+    expect(flushPendingSavesMock).toHaveBeenCalledTimes(1);
+    expect(releaseSaving).toHaveBeenCalledTimes(1);
     expect(showToastMock).toHaveBeenCalledWith(
       'Photo description verified',
       'success',
@@ -400,16 +428,19 @@ describe('usePhotoDescriptionWorkspace', () => {
   it('uses the same transition to remove verification', async () => {
     const letter = makeLetter({ photoDescriptionStatus: 'VERIFIED' });
     const updated = makeLetter({ photoDescriptionStatus: 'EDITED' });
-    const setSaving = vi.fn();
+    const releaseSaving = vi.fn();
+    const beginSaving = vi.fn(() => releaseSaving);
     const tryAdoptLetter = vi.fn(() => true);
     unverifyPhotoDescriptionMock.mockResolvedValue(updated);
     const { result } = renderHook(() =>
       usePhotoDescriptionWorkspace({
+        visit: activeVisit(),
         letter,
         saving: false,
-        setSaving,
+        beginSaving,
         tryAdoptLetter,
         scheduleDebouncedSave: vi.fn(),
+        flushPendingSaves,
         handleMutationError: vi.fn(() => false),
       }),
     );
@@ -423,11 +454,40 @@ describe('usePhotoDescriptionWorkspace', () => {
     });
     expect(verifyPhotoDescriptionMock).not.toHaveBeenCalled();
     expect(tryAdoptLetter).toHaveBeenCalledWith(updated);
-    expect(setSaving.mock.calls).toEqual([[true], [false]]);
+    expect(beginSaving).toHaveBeenCalledTimes(1);
+    expect(releaseSaving).toHaveBeenCalledTimes(1);
     expect(showToastMock).toHaveBeenCalledWith(
       'Photo description verification removed',
       'info',
     );
+  });
+
+  it('does not verify when a pending save cannot be flushed', async () => {
+    const releaseSaving = vi.fn();
+    const handleMutationError = vi.fn(() => false);
+    const { result } = renderHook(() =>
+      usePhotoDescriptionWorkspace({
+        visit: activeVisit(),
+        letter: makeLetter(),
+        saving: false,
+        beginSaving: vi.fn(() => releaseSaving),
+        tryAdoptLetter: vi.fn(() => true),
+        scheduleDebouncedSave: vi.fn(),
+        flushPendingSaves: vi.fn(async () => false),
+        handleMutationError,
+      }),
+    );
+
+    act(() => {
+      result.current.sectionProps.onVerifyPhotoDescription();
+    });
+
+    await waitFor(() => {
+      expect(releaseSaving).toHaveBeenCalledTimes(1);
+    });
+    expect(verifyPhotoDescriptionMock).not.toHaveBeenCalled();
+    expect(handleMutationError).not.toHaveBeenCalled();
+    expect(showToastMock).not.toHaveBeenCalled();
   });
 
   it('does not adopt an in-flight A edit after navigation to B', async () => {
@@ -436,10 +496,12 @@ describe('usePhotoDescriptionWorkspace', () => {
     const scheduleDebouncedSave = vi.fn();
     const tryAdoptLetter = vi.fn(() => true);
     const shared = {
+      visit: activeVisit(),
       saving: false,
-      setSaving: vi.fn(),
+      beginSaving: vi.fn(() => vi.fn()),
       tryAdoptLetter,
       scheduleDebouncedSave,
+      flushPendingSaves,
       handleMutationError: vi.fn(() => false),
     };
     const { result, rerender } = renderHook(
@@ -469,15 +531,17 @@ describe('usePhotoDescriptionWorkspace', () => {
     expect(tryAdoptLetter).not.toHaveBeenCalled();
   });
 
-  it('swallows a late first-A save failure after returning to A', async () => {
+  it('reports a late first-A save failure to the shared coordinator', async () => {
     const pending = deferred<Letter>();
     updatePhotoDescriptionMock.mockReturnValue(pending.promise);
     const scheduleDebouncedSave = vi.fn();
     const shared = {
+      visit: activeVisit(),
       saving: false,
-      setSaving: vi.fn(),
+      beginSaving: vi.fn(() => vi.fn()),
       tryAdoptLetter: vi.fn(() => true),
       scheduleDebouncedSave,
+      flushPendingSaves,
       handleMutationError: vi.fn(() => false),
     };
     const { result, rerender } = renderHook(
@@ -496,7 +560,7 @@ describe('usePhotoDescriptionWorkspace', () => {
 
     await act(async () => {
       pending.reject(new Error('late first-A conflict'));
-      await expect(savePromise).resolves.toBeUndefined();
+      await expect(savePromise).rejects.toThrow('late first-A conflict');
     });
 
     expect(result.current.sectionProps.photoDescription).toBe('Fresh second A');
@@ -509,11 +573,13 @@ describe('usePhotoDescriptionWorkspace', () => {
     updatePhotoDescriptionMock.mockRejectedValue(error);
     const { result } = renderHook(() =>
       usePhotoDescriptionWorkspace({
+        visit: activeVisit(),
         letter: makeLetter(),
         saving: false,
-        setSaving: vi.fn(),
+        beginSaving: vi.fn(() => vi.fn()),
         tryAdoptLetter: vi.fn(() => true),
         scheduleDebouncedSave,
+        flushPendingSaves,
         handleMutationError: vi.fn(() => false),
       }),
     );
@@ -531,11 +597,13 @@ describe('usePhotoDescriptionWorkspace', () => {
     describePhotoMock.mockRejectedValue(error);
     const { result } = renderHook(() =>
       usePhotoDescriptionWorkspace({
+        visit: activeVisit(),
         letter: makeLetter(),
         saving: false,
-        setSaving: vi.fn(),
+        beginSaving: vi.fn(() => vi.fn()),
         tryAdoptLetter: vi.fn(() => false),
         scheduleDebouncedSave: vi.fn(),
+        flushPendingSaves,
         handleMutationError,
       }),
     );

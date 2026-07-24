@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   ApiError,
   getErrorMessage,
   SOURCE_REVISION_CHANGED_ERROR_CODE,
 } from '../../../api/client';
+import type { LetterReviewVisit } from './useLetterReviewVisit';
 
 type ToastType = 'success' | 'error' | 'info';
 type ShowToast = (message: string, type: ToastType) => void;
@@ -12,12 +13,8 @@ export interface LetterSourceConflict {
   detail: string;
 }
 
-export interface LetterSourceIdentity {
-  letterId?: string;
-}
-
 interface LetterSourceConflictState extends LetterSourceConflict {
-  identityKey: string;
+  visit: LetterReviewVisit;
 }
 
 /**
@@ -30,32 +27,23 @@ interface LetterSourceConflictState extends LetterSourceConflict {
  */
 export function useLetterSourceConflict(
   showToast: ShowToast,
-  identity: LetterSourceIdentity,
+  visit: LetterReviewVisit,
 ) {
   const [conflictState, setConflictState] =
     useState<LetterSourceConflictState | null>(null);
   const conflictStateRef = useRef<LetterSourceConflictState | null>(null);
-  // A same-letter DTO refresh must never rehabilitate drafts derived from the
-  // stale source. Only navigating to another letter (a new owner key) or a
-  // complete application reload may clear this terminal state.
-  const identityKey = identity.letterId ?? '';
-  const previousIdentityKeyRef = useRef(identityKey);
-  useEffect(() => {
-    if (previousIdentityKeyRef.current === identityKey) return;
-    previousIdentityKeyRef.current = identityKey;
-    conflictStateRef.current = null;
-    // This is an intentional state-machine transition: committed navigation
-    // owns a different draft, so the previous letter's terminal state expires.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setConflictState(null);
-  }, [identityKey]);
-  const sourceConflict = conflictState?.identityKey === identityKey
+  // A same-visit DTO refresh must never rehabilitate drafts derived from the
+  // stale source. A different route visit owns a clean draft even after an
+  // A -> B -> A navigation to the same letter ID.
+  const sourceConflict = conflictState?.visit === visit && visit.isActive()
     ? { detail: conflictState.detail }
     : null;
 
   const markSourceConflict = useCallback((detail: string): void => {
-    if (conflictStateRef.current?.identityKey !== identityKey) {
-      const nextConflict = { detail, identityKey };
+    if (!visit.isActive()) return;
+
+    if (conflictStateRef.current?.visit !== visit) {
+      const nextConflict = { detail, visit };
       conflictStateRef.current = nextConflict;
       setConflictState(nextConflict);
     }
@@ -63,12 +51,16 @@ export function useLetterSourceConflict(
       'This letter changed in another session. Your local draft is still here; reload before making more changes.',
       'error',
     );
-  }, [identityKey, showToast]);
+  }, [showToast, visit]);
 
   const handleMutationError = useCallback((
     error: unknown,
     fallback: string,
   ): boolean => {
+    // Stale mutation owners are terminal from their own perspective, but they
+    // cannot report into or block the active visit.
+    if (!visit.isActive()) return true;
+
     const detail = getErrorMessage(error, fallback);
     if (
       error instanceof ApiError
@@ -81,11 +73,14 @@ export function useLetterSourceConflict(
 
     showToast(detail, 'error');
     return false;
-  }, [markSourceConflict, showToast]);
+  }, [markSourceConflict, showToast, visit]);
 
   const isMutationBlocked = useCallback(
-    () => conflictStateRef.current?.identityKey === identityKey,
-    [identityKey],
+    () => (
+      !visit.isActive()
+      || conflictStateRef.current?.visit === visit
+    ),
+    [visit],
   );
 
   return {

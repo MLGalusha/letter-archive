@@ -118,6 +118,71 @@ describe("MetadataSection", () => {
     expect(onTriggerAutoSave).toHaveBeenCalledWith({ sender: "Ada" });
   });
 
+  it("autosaves date, tone, and relationship changes", () => {
+    const onTriggerAutoSave = vi.fn();
+    const props = buildProps({ onTriggerAutoSave });
+
+    render(<MetadataSection {...props} />);
+
+    fireEvent.change(screen.getByLabelText("Date"), {
+      target: { value: "1920-03-15" },
+    });
+    fireEvent.change(screen.getByLabelText("Emotional Tone"), {
+      target: { value: "matter-of-fact" },
+    });
+    fireEvent.change(screen.getByLabelText("Relationship"), {
+      target: { value: "parent-child" },
+    });
+
+    expect(onTriggerAutoSave).toHaveBeenCalledWith({
+      extractedDate: "1920-03-15",
+    });
+    expect(onTriggerAutoSave).toHaveBeenCalledWith({
+      emotionalTone: "matter-of-fact",
+    });
+    expect(onTriggerAutoSave).toHaveBeenCalledWith({
+      senderRecipientRelationship: "parent-child",
+    });
+  });
+
+  it("autosaves topic additions and removals", async () => {
+    const user = userEvent.setup();
+    const onPrimaryTopicsChange = vi.fn();
+    const onTriggerAutoSave = vi.fn();
+    const { rerender } = render(
+      <MetadataSection
+        {...buildProps({
+          onPrimaryTopicsChange,
+          onTriggerAutoSave,
+          topicsDropdownOpen: true,
+        })}
+      />,
+    );
+
+    await user.click(screen.getByText("family / marriage"));
+    expect(onPrimaryTopicsChange).toHaveBeenCalledWith([
+      "family/marriage",
+    ]);
+    expect(onTriggerAutoSave).toHaveBeenCalledWith({
+      primaryTopics: ["family/marriage"],
+    });
+
+    rerender(
+      <MetadataSection
+        {...buildProps({
+          onPrimaryTopicsChange,
+          onTriggerAutoSave,
+          primaryTopics: ["family/marriage"],
+        })}
+      />,
+    );
+    await user.click(screen.getByTitle("Remove topic"));
+    expect(onPrimaryTopicsChange).toHaveBeenCalledWith([]);
+    expect(onTriggerAutoSave).toHaveBeenCalledWith({
+      primaryTopics: null,
+    });
+  });
+
   it("shows verified metadata as read-only", () => {
     const props = buildProps({
       letter: buildLetter({

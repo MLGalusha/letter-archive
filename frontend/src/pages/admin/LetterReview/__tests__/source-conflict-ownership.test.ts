@@ -26,6 +26,14 @@ const guardedLetterStatePath = path.resolve(
   process.cwd(),
   'src/pages/admin/LetterReview/useGuardedLetterState.ts',
 );
+const reviewVisitPath = path.resolve(
+  process.cwd(),
+  'src/pages/admin/LetterReview/useLetterReviewVisit.ts',
+);
+const autoSaveCoordinatorPath = path.resolve(
+  process.cwd(),
+  'src/pages/admin/LetterReview/letterReviewAutosaveCoordinator.ts',
+);
 const photoDescriptionSectionPath = path.resolve(
   process.cwd(),
   'src/pages/admin/LetterReview/PhotoDescriptionSection.tsx',
@@ -72,7 +80,7 @@ describe('Letter Review source-conflict ownership', () => {
       readFile(reviewableDynamicEditorPath, 'utf8'),
     ]);
 
-    expect(page).toContain('useLetterSourceConflict(showToast, {');
+    expect(page).toContain('useLetterSourceConflict(showToast, visit)');
     for (const callback of [
       'handleTranscribeLetter',
       'handleTranscribeExtrasWithConfirm',
@@ -87,6 +95,7 @@ describe('Letter Review source-conflict ownership', () => {
       'handleDelete',
       'handleNoteStatusChange',
       'handleAddNote',
+      'handleFlagToggle',
     ]) {
       expect(callbackBlock(page, callback)).toContain('handleMutationError(');
     }
@@ -127,7 +136,12 @@ describe('Letter Review source-conflict ownership', () => {
     expect(page).toMatch(
       /<ExtraContentSection[\s\S]*?onVerifyExtraContent=\{[\s\S]*?handleUnverifyExtraContent[\s\S]*?: handleVerifyExtraContent/,
     );
-    expect(reviewableDynamicEditor).toContain('if (!verified) return');
+    expect(reviewableDynamicEditor).toContain(
+      'if (!verified || disabled) return',
+    );
+    expect(reviewableDynamicEditor).toContain(
+      'readOnly={verified || disabled}',
+    );
     expect(reviewableDynamicEditor).toContain('onRequestEdit();');
     expect(reviewableDynamicEditor).not.toMatch(/api\//);
     expect(page).toContain('sourceConflict &&');
@@ -145,45 +159,51 @@ describe('Letter Review source-conflict ownership', () => {
     expect(page).toContain('mutationsBlocked={mutationsBlocked}');
   });
 
-  it('keys terminal state to the letter and stops queued writers', async () => {
+  it('keys terminal and queued ownership to an opaque route visit', async () => {
     const [
       page,
       autoSave,
       sourceConflict,
       guardedLetterState,
+      reviewVisit,
+      autoSaveCoordinator,
       lineReview,
     ] = await Promise.all([
       readFile(pagePath, 'utf8'),
       readFile(autoSavePath, 'utf8'),
       readFile(sourceConflictPath, 'utf8'),
       readFile(guardedLetterStatePath, 'utf8'),
+      readFile(reviewVisitPath, 'utf8'),
+      readFile(autoSaveCoordinatorPath, 'utf8'),
       readFile(lineReviewPath, 'utf8'),
     ]);
 
-    expect(page).toContain('useLetterSourceConflict(showToast, {');
-    expect(page).toContain('letterId,');
+    expect(page).toContain('const visit = useLetterReviewVisit(letterId)');
+    expect(page).toContain('useLetterSourceConflict(showToast, visit)');
+    expect(page).toContain(
+      'useGuardedLetterState(markSourceConflict, visit)',
+    );
     expect(page).not.toContain(
       'primarySourceRevision: letter?.primarySourceRevision',
     );
-    expect(sourceConflict).toContain('identityKey');
-    expect(sourceConflict).toContain("const identityKey = identity.letterId ?? ''");
-    expect(sourceConflict).toContain(
-      'previousIdentityKeyRef.current === identityKey',
-    );
-    expect(sourceConflict).toContain('setConflictState(null)');
+    expect(reviewVisit).toContain('activeVisitRef.current === nextVisit');
+    expect(reviewVisit).toContain('activeVisitRef.current = null');
+    expect(sourceConflict).toContain('visit: LetterReviewVisit');
+    expect(sourceConflict).toContain('conflictState?.visit === visit');
+    expect(sourceConflict).toContain('visit.isActive()');
     expect(sourceConflict).toContain('markSourceConflict');
     expect(sourceConflict).toContain(
-      'conflictState?.identityKey === identityKey',
+      'conflictStateRef.current?.visit === visit',
     );
     expect(sourceConflict).toContain('conflictStateRef.current');
-    expect(page).toContain(
-      'useGuardedLetterState(markSourceConflict, letterId)',
-    );
     expect(page.match(/setAuthoritativeLetter\(/g)).toHaveLength(1);
     expect(page).toContain('loadCurrentLetter({');
     expect(page).toContain('isCurrent: () => requestIsCurrent');
     expect(page).toContain('requestIsCurrent = false');
-    expect(guardedLetterState).toContain('activeLetterIdRef.current');
+    expect(guardedLetterState).toContain('if (!visit.isActive())');
+    expect(guardedLetterState).toContain(
+      'nextLetter.id !== visit.letterId',
+    );
     expect(guardedLetterState).toContain(
       'currentLetter.primarySourceRevision',
     );
@@ -193,8 +213,19 @@ describe('Letter Review source-conflict ownership', () => {
     expect(guardedLetterState).toContain(
       'markSourceConflict(SOURCE_REFRESH_CONFLICT)',
     );
-    expect(autoSave).toContain('if (isMutationBlocked()) return');
-    expect(autoSave).toContain('if (!mutationsBlocked) return');
+    expect(autoSave).toContain('useLetterReviewAutosaveCoordinator({');
+    expect(autoSave).toContain(
+      'new Map<LetterReviewVisit, PendingLetterFields>()',
+    );
+    expect(autoSaveCoordinator).toContain(
+      'queuedByLane: Map<LetterReviewAutosaveLane, Job>',
+    );
+    expect(autoSaveCoordinator).toContain(
+      'if (next.visit.isActive() && next.isMutationBlocked())',
+    );
+    expect(autoSaveCoordinator).toContain(
+      'this.cancelQueuedTarget(owner.targetKey)',
+    );
     expect(lineReview).toContain('mutationsBlockedRef.current');
     expect(lineReview).toContain('clearTimeout(autoSaveTimerRef.current)');
     expect(page).toContain('toggleLetterFlag(letter.id, newFlagged)');
@@ -202,6 +233,89 @@ describe('Letter Review source-conflict ownership', () => {
       /getAdminLetterById\(letterId\)\.then\(\(updated\) => \{[\s\S]*?setLetter\(updated\)/,
     );
     expect(page).toContain('window.location.reload();');
+  });
+
+  it('flushes pending lanes before source-dependent transitions', async () => {
+    const [
+      page,
+      autoSave,
+      transcriptEditing,
+      metadataEditing,
+      photoDescriptionWorkspace,
+      autoSaveCoordinator,
+    ] = await Promise.all([
+      readFile(pagePath, 'utf8'),
+      readFile(autoSavePath, 'utf8'),
+      readFile(transcriptEditingPath, 'utf8'),
+      readFile(metadataEditingPath, 'utf8'),
+      readFile(photoDescriptionWorkspacePath, 'utf8'),
+      readFile(autoSaveCoordinatorPath, 'utf8'),
+    ]);
+
+    expect(autoSave).toContain(
+      'flushDebouncedSaves(ALL_LETTER_REVIEW_AUTOSAVE_LANES)',
+    );
+    expect(autoSave).toContain(
+      'if (!visit.isActive() || !target) return false',
+    );
+    expect(page).toContain('flushPendingSaves,');
+    for (const callback of [
+      'handleTranscribeLetter',
+      'handleTranscribeExtrasWithConfirm',
+      'handleVisibilityChange',
+      'handleContentPublishToggle',
+      'executeConfirmTranscript',
+      'executeMetadataRegenerate',
+      'handleReExtract',
+      'handleVerifyExtraContent',
+      'handleUnverifyExtraContent',
+      'handleNoteStatusChange',
+      'handleAddNote',
+      'handleFlagToggle',
+      'handleGenerateReadingView',
+    ]) {
+      const block = callbackBlock(page, callback);
+      expect(block).toContain('await flushPendingSaves()');
+      expect(block).toContain(
+        'if (!visit.isActive() || !await flushPendingSaves())',
+      );
+      expect(block).toContain('hydrateAdoptedLetter(');
+    }
+    const deleteBlock = callbackBlock(page, 'handleDelete');
+    expect(deleteBlock).toContain(
+      'if (!visit.isActive() || !await flushPendingSaves())',
+    );
+    expect(deleteBlock).toContain('if (!visit.isActive()) return');
+    expect(deleteBlock).toContain(
+      'if (visit.isActive()) navigate("/admin")',
+    );
+    for (const [source, callback] of [
+      [transcriptEditing, 'handleVerifyTranscript'],
+      [transcriptEditing, 'handleTranscriptDoubleClick'],
+      [metadataEditing, 'handleVerifyMetadata'],
+      [metadataEditing, 'handleMetadataFieldDoubleClick'],
+      [photoDescriptionWorkspace, 'describe'],
+      [photoDescriptionWorkspace, 'toggleVerification'],
+    ] as const) {
+      expect(callbackBlock(source, callback)).toContain(
+        'await flushPendingSaves()',
+      );
+    }
+    expect(autoSaveCoordinator).toContain(
+      'if (!this.active || target.running) return',
+    );
+    expect(autoSaveCoordinator).toContain(
+      '.sort((left, right) => left.sequence - right.sequence)[0]',
+    );
+    expect(callbackBlock(transcriptEditing, 'handleVerifyTranscript')).toContain(
+      'setTranscript(updated.transcript.fullText)',
+    );
+    expect(callbackBlock(metadataEditing, 'handleVerifyMetadata')).toContain(
+      'applyLetterMetadata(updated)',
+    );
+    expect(callbackBlock(photoDescriptionWorkspace, 'toggleVerification')).toContain(
+      'hydratePersistedLetter(updated)',
+    );
   });
 
   it('routes transcript and metadata verification removal through that owner', async () => {

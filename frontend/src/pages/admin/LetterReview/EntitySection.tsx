@@ -72,6 +72,7 @@ interface EntitySectionProps {
   recipientName?: string | null;
   reExtractState?: "idle" | "extracting" | "done";
   onReExtractEntities?: () => void;
+  disabled?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -391,6 +392,7 @@ const EntitySection = memo(function EntitySection({
   recipientName,
   reExtractState = "idle",
   onReExtractEntities,
+  disabled = false,
 }: EntitySectionProps) {
   const data = useMemo(
     () => parseEntityData(entityExtractionJson),
@@ -418,7 +420,7 @@ const EntitySection = memo(function EntitySection({
           <button
             className={`action-btn entity-re-extract-btn ${reExtractState}`}
             onClick={onReExtractEntities}
-            disabled={reExtractState === "extracting"}
+            disabled={disabled || reExtractState === "extracting"}
             title="Regenerate entities from transcript"
           >
             {reExtractState === "extracting" ? (

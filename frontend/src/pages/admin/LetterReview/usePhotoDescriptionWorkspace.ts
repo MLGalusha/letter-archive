@@ -1,11 +1,10 @@
 import {
   startTransition,
+  useCallback,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
-  type Dispatch,
-  type SetStateAction,
 } from 'react';
 import {
   describePhoto,
@@ -16,13 +15,17 @@ import {
 import { useToast } from '../../../contexts/ToastContext';
 import type { Letter } from '../../../types/Letter';
 import type { ScheduleDebouncedSave } from './useAutoSave';
+import type { BeginLetterSaving } from './useLetterSavingState';
+import type { LetterReviewVisit } from './useLetterReviewVisit';
 
 type Options = {
+  visit: LetterReviewVisit;
   letter: Letter | null;
   saving: boolean;
-  setSaving: Dispatch<SetStateAction<boolean>>;
+  beginSaving: BeginLetterSaving;
   tryAdoptLetter: (letter: Letter) => boolean;
   scheduleDebouncedSave: ScheduleDebouncedSave;
+  flushPendingSaves: () => Promise<boolean>;
   handleMutationError: (error: unknown, fallback: string) => boolean;
 };
 
@@ -46,11 +49,13 @@ const stateFrom = (letter: Letter | null, owner: symbol): State => ({
 });
 
 export function usePhotoDescriptionWorkspace({
+  visit,
   letter,
   saving,
-  setSaving,
+  beginSaving,
   tryAdoptLetter,
   scheduleDebouncedSave,
+  flushPendingSaves,
   handleMutationError,
 }: Options) {
   const { showToast } = useToast();
@@ -76,13 +81,28 @@ export function usePhotoDescriptionWorkspace({
       ...patch,
     }));
   };
-  const isActive = () => activeOwner.current === owner;
+  const isActive = () => (
+    visit.isActive() && activeOwner.current === owner
+  );
+  const hydratePersistedLetter = useCallback((updatedLetter: Letter) => {
+    if (!visit.isActive() || activeOwner.current !== owner) return;
+    setStored((current) => ({
+      ...(current.owner === owner
+        ? current
+        : stateFrom(updatedLetter, owner)),
+      description: updatedLetter.photoDescription ?? '',
+      draftContext: updatedLetter.photoDescriptionContext ?? '',
+    }));
+  }, [owner, visit]);
 
   const describe = async () => {
     if (!letter) return;
     update({ generating: true });
+    const releaseSaving = beginSaving();
 
     try {
+      if (!isActive() || !await flushPendingSaves()) return;
+
       const result = await describePhoto(
         letter.id,
         state.draftContext,
@@ -108,19 +128,23 @@ export function usePhotoDescriptionWorkspace({
       }
     } finally {
       if (isActive()) update({ generating: false });
+      releaseSaving();
     }
   };
 
   const toggleVerification = async () => {
     if (!letter) return;
     const verified = letter.photoDescriptionStatus === 'VERIFIED';
-    setSaving(true);
+    const releaseSaving = beginSaving();
 
     try {
+      if (!isActive() || !await flushPendingSaves()) return;
+
       const updated = await (verified
         ? unverifyPhotoDescription
         : verifyPhotoDescription)(letter.id, letter.primarySourceRevision);
       if (!isActive() || !tryAdoptLetter(updated)) return;
+      hydratePersistedLetter(updated);
 
       showToast(
         verified
@@ -136,7 +160,7 @@ export function usePhotoDescriptionWorkspace({
         );
       }
     } finally {
-      setSaving(false);
+      releaseSaving();
     }
   };
 
@@ -146,21 +170,15 @@ export function usePhotoDescriptionWorkspace({
 
     scheduleDebouncedSave(
       async () => {
-        try {
-          const updated = await updatePhotoDescription(
-            letter.id,
-            description,
-            letter.primarySourceRevision,
-          );
-          if (isActive()) tryAdoptLetter(updated);
-        } catch (error) {
-          // The shared scheduler owns current-session errors. A stale session
-          // resolves quietly so its captured mutation owner cannot poison a
-          // later visit to the same letter.
-          if (isActive()) throw error;
-        }
+        const updated = await updatePhotoDescription(
+          letter.id,
+          description,
+          letter.primarySourceRevision,
+        );
+        if (isActive()) tryAdoptLetter(updated);
       },
       {
+        lane: 'photo-description',
         errorMessage: 'Failed to save photo description',
         onError: (error) => {
           console.error('Photo description auto-save error:', error);
@@ -170,6 +188,7 @@ export function usePhotoDescriptionWorkspace({
   };
 
   return {
+    hydratePersistedLetter,
     sectionProps: {
       letter: {
         photoDescriptionStatus: letter?.photoDescriptionStatus,

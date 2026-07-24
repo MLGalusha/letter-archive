@@ -1,5 +1,11 @@
 import { apiGet, apiPost, apiPut, apiPatch } from "../client";
-import type { Letter, LineSegment, SegmentTrustState } from "../../types/Letter";
+import type {
+  EmotionalTone,
+  Letter,
+  LineSegment,
+  RelationshipType,
+  SegmentTrustState,
+} from "../../types/Letter";
 
 export interface UpdateLetterData {
   primarySourceRevision: number;
@@ -10,6 +16,9 @@ export interface UpdateLetterData {
   hook?: string | null;
   summary?: string | null;
   extractedDate?: string | null;
+  emotionalTone?: EmotionalTone | null;
+  senderRecipientRelationship?: RelationshipType | null;
+  primaryTopics?: string[] | null;
   tags?: string[] | null;
   visibility?: "PUBLISHED" | "HIDDEN";
   transcriptPublished?: boolean;

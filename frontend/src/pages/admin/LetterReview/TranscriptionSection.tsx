@@ -209,13 +209,16 @@ const TranscriptionSection = memo(function TranscriptionSection({
 
       <div
         className="editor-container"
-        onClick={onTranscriptClick}
-        onDoubleClick={onTranscriptDoubleClick}
+        onClick={saving ? undefined : onTranscriptClick}
+        onDoubleClick={saving ? undefined : onTranscriptDoubleClick}
       >
         <div
           ref={editorRef}
           className={`transcript-editor ${letter.transcriptStatus === "VERIFIED" && !isTranscriptEditing ? "verified" : ""}`}
-          contentEditable={letter.transcriptStatus !== "VERIFIED" || isTranscriptEditing}
+          contentEditable={
+            !saving
+            && (letter.transcriptStatus !== "VERIFIED" || isTranscriptEditing)
+          }
           suppressContentEditableWarning
           data-placeholder=""
           style={{ "--transcript-font-size": transcriptFontSize } as CSSProperties}
@@ -264,7 +267,7 @@ const TranscriptionSection = memo(function TranscriptionSection({
                     type="button"
                     className="action-btn"
                     onClick={onGenerateReadingView}
-                    disabled={readingViewGenerating}
+                    disabled={saving || readingViewGenerating}
                   >
                     {readingViewGenerating ? (
                       <>
@@ -315,6 +318,7 @@ const TranscriptionSection = memo(function TranscriptionSection({
                           type="button"
                           className="action-btn generate-reading-view-cta"
                           onClick={onGenerateReadingView}
+                          disabled={saving || readingViewGenerating}
                         >
                           <Icon name="process" size={14} />
                           <span>Generate Reading View</span>

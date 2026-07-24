@@ -96,6 +96,7 @@ export const PhotoDescriptionSection = React.memo(function PhotoDescriptionSecti
       <ReviewableDynamicEditor
         value={photoDescription}
         verified={photoDescriptionStatus === "VERIFIED"}
+        disabled={saving}
         onChange={onPhotoDescriptionChange}
         onRequestEdit={onVerifyPhotoDescription}
         placeholder="Describe what is visible in this photo, or generate an AI draft."

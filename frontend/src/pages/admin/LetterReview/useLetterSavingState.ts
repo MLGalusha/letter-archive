@@ -1,45 +1,59 @@
-import {
-  useCallback,
-  useMemo,
-  useState,
-  type Dispatch,
-  type SetStateAction,
-} from 'react';
+import { useCallback, useState } from 'react';
+import type { LetterReviewVisit } from './useLetterReviewVisit';
+
+export type ReleaseLetterSaving = () => void;
+export type BeginLetterSaving = () => ReleaseLetterSaving;
+
+interface SavingOwner {
+  visit: LetterReviewVisit;
+  leases: ReadonlySet<symbol>;
+}
 
 /**
- * Keeps the shared busy flag owned by the route that started the mutation.
+ * Owns explicit-mutation busy leases for the active route visit.
  *
- * Letter Review stays mounted during A -> B navigation. A late `finally`
- * must therefore clear only A's flag, never a newer mutation started by B.
+ * Each operation releases only its own idempotent lease. Route changes expose
+ * a fresh unlocked owner immediately, while late releases from an earlier A
+ * visit cannot unlock B or a later A visit.
  */
-export function useLetterSavingState(
-  activeLetterId: string | undefined,
-): readonly [boolean, Dispatch<SetStateAction<boolean>>] {
-  const [savingBySession, setSavingBySession] = useState(
-    () => new Map<symbol, boolean>(),
-  );
-  const ownerKey = useMemo(
-    () => Symbol(activeLetterId ?? 'no-letter'),
-    [activeLetterId],
-  );
+export function useLetterSavingState(visit: LetterReviewVisit) {
+  const [stored, setStored] = useState<SavingOwner>(() => ({
+    visit,
+    leases: new Set(),
+  }));
+  const saving = stored.visit === visit && stored.leases.size > 0;
 
-  const setSaving = useCallback<Dispatch<SetStateAction<boolean>>>(
-    (nextAction) => {
-      setSavingBySession((currentBySession) => {
-        const current = currentBySession.get(ownerKey) ?? false;
-        const next = typeof nextAction === 'function'
-          ? nextAction(current)
-          : nextAction;
+  const beginSaving = useCallback<BeginLetterSaving>(() => {
+    if (!visit.isActive()) {
+      return () => {};
+    }
 
-        if (next === current) return currentBySession;
-        const updated = new Map(currentBySession);
-        if (next) updated.set(ownerKey, true);
-        else updated.delete(ownerKey);
-        return updated;
+    const lease = Symbol('letter-saving');
+    let released = false;
+    setStored((current) => {
+      const leases = current.visit === visit
+        ? new Set(current.leases)
+        : new Set<symbol>();
+      leases.add(lease);
+      return { visit, leases };
+    });
+
+    return () => {
+      if (released) return;
+      released = true;
+      if (!visit.isActive()) return;
+
+      setStored((current) => {
+        if (current.visit !== visit || !current.leases.has(lease)) {
+          return current;
+        }
+
+        const leases = new Set(current.leases);
+        leases.delete(lease);
+        return { visit, leases };
       });
-    },
-    [ownerKey],
-  );
+    };
+  }, [visit]);
 
-  return [savingBySession.get(ownerKey) ?? false, setSaving] as const;
+  return { saving, beginSaving } as const;
 }

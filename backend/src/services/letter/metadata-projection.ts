@@ -8,6 +8,9 @@ export interface MetadataProjectionUpdates {
   hook?: string | null;
   summary?: string | null;
   extractedDate?: string | null;
+  emotionalTone?: string | null;
+  senderRecipientRelationship?: string | null;
+  primaryTopics?: string[] | null;
   tags?: string[] | null;
 }
 
@@ -18,6 +21,9 @@ const structuredKeyByField = {
   hook: 'hook',
   summary: 'summary',
   extractedDate: 'extracted_date',
+  emotionalTone: 'emotional_tone',
+  senderRecipientRelationship: 'sender_recipient_relationship',
+  primaryTopics: 'primary_topics',
   tags: 'primary_topics',
 } as const;
 
@@ -28,6 +34,9 @@ const legacyKeyByField = {
   hook: 'hook',
   summary: 'summary',
   extractedDate: 'extractedDate',
+  emotionalTone: 'emotionalTone',
+  senderRecipientRelationship: 'senderRecipientRelationship',
+  primaryTopics: 'tags',
   tags: 'tags',
 } as const;
 
@@ -44,7 +53,9 @@ function projectDocument(
   >) {
     if (value === undefined) continue;
     const key = keyByField[field];
-    projected[key] = field === 'tags' ? value ?? [] : value;
+    projected[key] = field === 'tags' || field === 'primaryTopics'
+      ? value ?? []
+      : value;
   }
   return projected;
 }

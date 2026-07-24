@@ -1,4 +1,9 @@
 import { z } from 'zod';
+import {
+  EmotionalToneEnum,
+  PrimaryTopicEnum,
+  RelationshipEnum,
+} from '../../../ai/schemas/metadataV2.js';
 
 export const MAX_BULK_SOURCE_ITEMS = 1_000;
 
@@ -43,7 +48,10 @@ export const updateLetterSchema = z.object({
   locationWritten: z.string().nullable().optional(),
   hook: z.string().nullable().optional(),
   summary: z.string().nullable().optional(),
-  extractedDate: z.string().nullable().optional(),
+  extractedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  emotionalTone: EmotionalToneEnum.nullable().optional(),
+  senderRecipientRelationship: RelationshipEnum.nullable().optional(),
+  primaryTopics: z.array(PrimaryTopicEnum).nullable().optional(),
   tags: z.array(z.string()).nullable().optional(),
   visibility: z.enum(['PUBLISHED', 'HIDDEN']).optional(),
   transcriptPublished: z.boolean().optional(),

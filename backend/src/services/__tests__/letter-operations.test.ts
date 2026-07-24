@@ -920,6 +920,70 @@ describe('letter operations service', () => {
     }));
   });
 
+  it('persists reviewer V2 metadata and synchronizes its derived relationship', async () => {
+    updateReturningMock.mockResolvedValueOnce([{ id: 'letter-reviewer-v2' }]);
+    getLetterByIdMock.mockResolvedValue({
+      id: 'letter-reviewer-v2',
+      extractedDate: '1947-09-20',
+      emotionalTone: 'hopeful',
+      senderRecipientRelationship: 'friend',
+      primaryTopics: ['family/marriage'],
+      tags: ['family/marriage'],
+      workflow: 'METADATA_DRAFTED',
+      metadataStatus: 'SUCCESS',
+      metadataRevision: 2,
+      metadataRunId: null,
+      metadataContentStatus: 'AI_DRAFT',
+      entityExtractionStatus: 'SUCCESS',
+      metadataV2Json: {
+        extracted_date: '1947-09-20',
+        emotional_tone: 'hopeful',
+        sender_recipient_relationship: 'friend',
+        primary_topics: ['family/marriage'],
+        notable_quotes: [{ text: 'Preserved verbatim' }],
+      },
+      updatedAt: new Date('2026-07-17T12:00:00.000Z'),
+    });
+
+    await updateLetter('letter-reviewer-v2', {
+      primarySourceRevision: 0,
+      extractedDate: '1947-09-21',
+      emotionalTone: 'nostalgic',
+      senderRecipientRelationship: 'extended-family',
+      primaryTopics: ['family/separation-reunion'],
+    });
+
+    expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
+      extractedDate: '1947-09-21',
+      emotionalTone: 'nostalgic',
+      senderRecipientRelationship: 'extended-family',
+      primaryTopics: ['family/separation-reunion'],
+      tags: ['family/separation-reunion'],
+      metadataV2Json: {
+        extracted_date: '1947-09-21',
+        emotional_tone: 'nostalgic',
+        sender_recipient_relationship: 'extended-family',
+        primary_topics: ['family/separation-reunion'],
+        notable_quotes: [{ text: 'Preserved verbatim' }],
+      },
+      metadataJson: {
+        extracted_date: '1947-09-21',
+        emotional_tone: 'nostalgic',
+        sender_recipient_relationship: 'extended-family',
+        primary_topics: ['family/separation-reunion'],
+        notable_quotes: [{ text: 'Preserved verbatim' }],
+      },
+    }));
+    expect(syncLetterParticipantsFromMetadataMock).toHaveBeenCalledWith({
+      letterId: 'letter-reviewer-v2',
+      sender: undefined,
+      recipient: undefined,
+      relationshipType: 'extended-family',
+      actor: 'admin',
+      database: { transaction: 'test' },
+    });
+  });
+
   it('updates a legacy structured metadata document when the V2 projection is absent', async () => {
     updateReturningMock.mockResolvedValueOnce([{ id: 'letter-legacy-metadata' }]);
     getLetterByIdMock.mockResolvedValue({

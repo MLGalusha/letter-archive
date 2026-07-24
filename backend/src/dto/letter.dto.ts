@@ -99,6 +99,7 @@ export interface FrontendLetterMetadata {
   sender?: string;
   recipient?: string;
   date?: string;
+  extractedDate?: string;
   dateRaw?: string;
   dateConfidence?: 'exact' | 'unknown' | 'inferred';
   location?: string;
@@ -387,10 +388,18 @@ export function formatPartialDate(dateRaw: string): string {
 
 /**
  * Formats a letter date for display.
- * Always uses dateRaw to avoid JavaScript Date timezone issues with historical dates.
+ * Prefers the reviewed/extracted ISO date, then falls back to filename dateRaw.
+ * Both paths are parsed as calendar components rather than JavaScript Dates,
+ * avoiding timezone shifts for historical dates.
  * (e.g., new Date('1886-03-14') in UTC becomes March 13 in PST)
  */
 export function formatLetterDate(letter: Letter): string | undefined {
+  if (letter.extractedDate) {
+    const isoParts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(letter.extractedDate);
+    if (isoParts) {
+      return formatPartialDate(`${isoParts[1]}${isoParts[2]}${isoParts[3]}`);
+    }
+  }
   if (letter.dateRaw) {
     return formatPartialDate(letter.dateRaw);
   }
@@ -498,6 +507,7 @@ export function transformLetterToDTO(letter: LetterWithRelations): FrontendLette
       sender: letter.sender || undefined,
       recipient: letter.recipient || undefined,
       date: formatLetterDate(letter),
+      extractedDate: letter.extractedDate || undefined,
       dateRaw: letter.dateRaw,
       dateConfidence: letter.dateConfidence,
       location: letter.locationWritten || undefined,

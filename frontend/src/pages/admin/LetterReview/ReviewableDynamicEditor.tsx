@@ -9,6 +9,7 @@ import { useTooltip } from "../../../hooks/useTooltip";
 interface ReviewableDynamicEditorProps {
   value: string;
   verified: boolean;
+  disabled?: boolean;
   onChange: (value: string) => void;
   onRequestEdit: () => void;
   placeholder?: string;
@@ -17,6 +18,7 @@ interface ReviewableDynamicEditorProps {
 export function ReviewableDynamicEditor({
   value,
   verified,
+  disabled = false,
   onChange,
   onRequestEdit,
   placeholder,
@@ -31,29 +33,29 @@ export function ReviewableDynamicEditor({
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
-      if (event.key !== "Tab") return;
+      if (disabled || event.key !== "Tab") return;
 
       event.preventDefault();
       event.stopPropagation();
       event.currentTarget.focus();
       document.execCommand("insertText", false, "    ");
     },
-    [],
+    [disabled],
   );
 
   const handleClick = useCallback(
     (event: MouseEvent<HTMLDivElement>) => {
-      if (!verified) return;
+      if (!verified || disabled) return;
       showAt(event.clientX, event.clientY);
     },
-    [showAt, verified],
+    [disabled, showAt, verified],
   );
 
   const handleDoubleClick = useCallback(() => {
-    if (!verified) return;
+    if (!verified || disabled) return;
     close();
     onRequestEdit();
-  }, [close, onRequestEdit, verified]);
+  }, [close, disabled, onRequestEdit, verified]);
 
   return (
     <div className="extra-content-container">
@@ -64,7 +66,7 @@ export function ReviewableDynamicEditor({
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
         placeholder={placeholder}
-        readOnly={verified}
+        readOnly={verified || disabled}
         verified={verified}
         baseFontSize={1}
         minHeight={180}

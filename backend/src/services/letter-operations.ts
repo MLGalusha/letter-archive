@@ -31,11 +31,11 @@ import {
 export * from './letter/index.js';
 
 function sameNullableStringArray(
-  left: string[] | null,
-  right: string[] | null,
+  left: readonly string[] | null | undefined,
+  right: readonly string[] | null | undefined,
 ): boolean {
   if (left === right) return true;
-  if (left === null || right === null || left.length !== right.length) return false;
+  if (left == null || right == null || left.length !== right.length) return false;
   return left.every((value, index) => value === right[index]);
 }
 
@@ -98,15 +98,27 @@ export async function updateLetter(
         : undefined;
   const extractedDateChanged = normalizedExtractedDate !== undefined
     && normalizedExtractedDate !== existingLetter.extractedDate;
-  const tagsChanged = updates.tags !== undefined
-    && !sameNullableStringArray(updates.tags, existingLetter.tags);
+  const emotionalToneChanged = updates.emotionalTone !== undefined
+    && updates.emotionalTone !== existingLetter.emotionalTone;
+  const relationshipChanged = updates.senderRecipientRelationship !== undefined
+    && updates.senderRecipientRelationship !== existingLetter.senderRecipientRelationship;
+  const requestedPrimaryTopics = updates.primaryTopics !== undefined
+    ? updates.primaryTopics
+    : updates.tags;
+  const primaryTopicsChanged = requestedPrimaryTopics !== undefined
+    && (
+      !sameNullableStringArray(requestedPrimaryTopics, existingLetter.primaryTopics)
+      || !sameNullableStringArray(requestedPrimaryTopics, existingLetter.tags)
+    );
   const hasMetadataUpdate = senderChanged
     || recipientChanged
     || locationChanged
     || summaryChanged
     || hookChanged
     || extractedDateChanged
-    || tagsChanged;
+    || emotionalToneChanged
+    || relationshipChanged
+    || primaryTopicsChanged;
 
   if (senderChanged) {
     dbUpdates.sender = updates.sender;
@@ -126,12 +138,18 @@ export async function updateLetter(
   if (extractedDateChanged) {
     dbUpdates.extractedDate = normalizedExtractedDate;
   }
+  if (emotionalToneChanged) {
+    dbUpdates.emotionalTone = updates.emotionalTone;
+  }
+  if (relationshipChanged) {
+    dbUpdates.senderRecipientRelationship = updates.senderRecipientRelationship;
+  }
   if (updates.notes !== undefined && updates.notes !== existingLetter.notes) {
     dbUpdates.notes = updates.notes;
   }
-  if (tagsChanged) {
-    dbUpdates.tags = updates.tags;
-    dbUpdates.primaryTopics = updates.tags;
+  if (primaryTopicsChanged) {
+    dbUpdates.tags = requestedPrimaryTopics;
+    dbUpdates.primaryTopics = requestedPrimaryTopics;
   }
   if (updates.readingText !== undefined && updates.readingText !== existingLetter.readingText) {
     dbUpdates.readingText = updates.readingText;
@@ -181,7 +199,11 @@ export async function updateLetter(
       ...(hookChanged ? { hook: updates.hook } : {}),
       ...(summaryChanged ? { summary: updates.summary } : {}),
       ...(extractedDateChanged ? { extractedDate: normalizedExtractedDate } : {}),
-      ...(tagsChanged ? { tags: updates.tags } : {}),
+      ...(emotionalToneChanged ? { emotionalTone: updates.emotionalTone } : {}),
+      ...(relationshipChanged
+        ? { senderRecipientRelationship: updates.senderRecipientRelationship }
+        : {}),
+      ...(primaryTopicsChanged ? { primaryTopics: requestedPrimaryTopics } : {}),
     };
     Object.assign(
       dbUpdates,
@@ -200,6 +222,9 @@ export async function updateLetter(
       ...(recipientChanged && updates.recipient ? ['recipient'] : []),
       ...(locationChanged && updates.locationWritten ? ['locationWritten'] : []),
       ...(extractedDateChanged && normalizedExtractedDate ? ['extractedDate'] : []),
+      ...(relationshipChanged && updates.senderRecipientRelationship
+        ? ['senderRecipientRelationship']
+        : []),
       ...(transcriptChanged ? ['transcriptionText'] : []),
     ],
   );
@@ -258,12 +283,16 @@ export async function updateLetter(
             eq(letters.primarySourceRevision, updates.primarySourceRevision),
           ]
         : undefined,
-      afterRootMutation: hasRootContentPatch && (senderChanged || recipientChanged)
+      afterRootMutation: hasRootContentPatch
+        && (senderChanged || recipientChanged || relationshipChanged)
         ? async (database) => {
             await syncLetterParticipantsFromMetadata({
               letterId,
               sender: senderChanged ? updates.sender : undefined,
               recipient: recipientChanged ? updates.recipient : undefined,
+              relationshipType: relationshipChanged
+                ? updates.senderRecipientRelationship
+                : undefined,
               actor: userId,
               database,
             });

@@ -3,9 +3,7 @@ import {
   useEffect,
   useRef,
   useState,
-  type Dispatch,
   type MouseEvent,
-  type SetStateAction,
 } from 'react';
 import { unverifyMetadata, verifyMetadata } from '../../../api/admin';
 import { useTooltip } from '../../../hooks/useTooltip';
@@ -15,6 +13,8 @@ import type {
   LetterMetadata,
   RelationshipType,
 } from '../../../types/Letter';
+import type { BeginLetterSaving } from './useLetterSavingState';
+import type { LetterReviewVisit } from './useLetterReviewVisit';
 
 type ToastType = 'success' | 'error' | 'info';
 type ShowToast = (message: string, type: ToastType) => void;
@@ -37,10 +37,12 @@ interface ApplyLetterMetadataOptions {
 }
 
 interface UseMetadataEditingOptions {
+  visit: LetterReviewVisit;
   letterId?: string;
   letter: Letter | null;
-  setLetter: Dispatch<SetStateAction<Letter | null>>;
-  setSaving: Dispatch<SetStateAction<boolean>>;
+  tryAdoptLetter: (letter: Letter) => boolean;
+  beginSaving: BeginLetterSaving;
+  flushPendingSaves: () => Promise<boolean>;
   handleMutationError: HandleMutationError;
   showToast: ShowToast;
 }
@@ -52,7 +54,7 @@ function buildMetadataValues(
   return {
     sender: metadata.sender || '',
     recipient: metadata.recipient || '',
-    date: metadata.date || '',
+    date: metadata.extractedDate || '',
     location: metadata.location || '',
     hook: metadata.taggedHook || metadata.hook || '',
     description: metadata.taggedDescription || metadata.description || '',
@@ -72,10 +74,12 @@ function areTopicsEqual(left: string[], right: string[]): boolean {
 }
 
 export function useMetadataEditing({
+  visit,
   letterId,
   letter,
-  setLetter,
-  setSaving,
+  tryAdoptLetter,
+  beginSaving,
+  flushPendingSaves,
   handleMutationError,
   showToast,
 }: UseMetadataEditingOptions) {
@@ -208,27 +212,33 @@ export function useMetadataEditing({
       return;
     }
 
-    setSaving(true);
+    const releaseSaving = beginSaving();
 
     try {
+      if (!visit.isActive() || !await flushPendingSaves()) return;
+
       const updated = await verifyMetadata(
         letterId,
         letter.primarySourceRevision,
       );
-      setLetter(updated);
+      if (!tryAdoptLetter(updated)) return;
+      applyLetterMetadata(updated);
       showToast('Metadata verified', 'success');
     } catch (error) {
       handleMutationError(error, 'Failed to verify metadata');
     } finally {
-      setSaving(false);
+      releaseSaving();
     }
   }, [
     handleMutationError,
     letter,
     letterId,
-    setLetter,
-    setSaving,
+    applyLetterMetadata,
+    beginSaving,
+    flushPendingSaves,
     showToast,
+    tryAdoptLetter,
+    visit,
   ]);
 
   const handleMetadataFieldClick = useCallback(
@@ -248,28 +258,34 @@ export function useMetadataEditing({
     }
 
     closeMetadataTooltip();
-    setSaving(true);
+    const releaseSaving = beginSaving();
 
     try {
+      if (!visit.isActive() || !await flushPendingSaves()) return;
+
       const updated = await unverifyMetadata(
         letterId,
         letter.primarySourceRevision,
       );
-      setLetter(updated);
+      if (!tryAdoptLetter(updated)) return;
+      applyLetterMetadata(updated);
       showToast('Verification removed', 'info');
     } catch (error) {
       handleMutationError(error, 'Failed to unverify metadata');
     } finally {
-      setSaving(false);
+      releaseSaving();
     }
   }, [
     closeMetadataTooltip,
+    applyLetterMetadata,
     handleMutationError,
     letter,
     letterId,
-    setLetter,
-    setSaving,
+    beginSaving,
+    flushPendingSaves,
     showToast,
+    tryAdoptLetter,
+    visit,
   ]);
 
   return {

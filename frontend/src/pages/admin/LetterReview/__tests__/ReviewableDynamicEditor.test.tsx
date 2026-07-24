@@ -50,6 +50,27 @@ describe("ReviewableDynamicEditor", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("locks edits and verification removal while a transition owns the workspace", () => {
+    const props = buildProps();
+    const { container, rerender } = render(
+      <ReviewableDynamicEditor {...props} disabled />,
+    );
+    const editor = container.querySelector(".dynamic-editor");
+
+    expect(editor).toHaveAttribute("contenteditable", "false");
+    fireEvent.keyDown(editor!, { key: "Tab" });
+    expect(props.onChange).not.toHaveBeenCalled();
+
+    rerender(<ReviewableDynamicEditor {...props} verified disabled />);
+    fireEvent.click(editor!, { clientX: 100, clientY: 120 });
+    fireEvent.doubleClick(editor!, { clientX: 100, clientY: 120 });
+
+    expect(props.onRequestEdit).not.toHaveBeenCalled();
+    expect(
+      screen.queryByText("Verified. Double-click to edit and unverify."),
+    ).not.toBeInTheDocument();
+  });
+
   it("keeps Tab indentation inside the editor and reports the resulting text", () => {
     const props = buildProps();
     const execCommand = vi.fn(

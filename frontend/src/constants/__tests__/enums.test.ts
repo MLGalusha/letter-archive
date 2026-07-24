@@ -29,8 +29,8 @@ describe('shared enum options', () => {
   it('keeps expected baseline vocab entries', () => {
     expect(PERSON_RELATIONSHIP_OPTIONS.some((o) => o.value === 'unknown')).toBe(true);
     expect(METADATA_RELATIONSHIP_OPTIONS.some((o) => o.value === 'spouse')).toBe(true);
-    expect(EMOTIONAL_TONE_OPTIONS.some((o) => o.value === 'neutral')).toBe(true);
+    expect(EMOTIONAL_TONE_OPTIONS.some((o) => o.value === 'matter-of-fact')).toBe(true);
     expect(PLACE_ROLE_OPTIONS.some((o) => o.value === 'written_from')).toBe(true);
-    expect(PRIMARY_TOPIC_OPTIONS.length).toBeGreaterThan(20);
+    expect(PRIMARY_TOPIC_OPTIONS).toContain('family/separation-reunion');
   });
 });

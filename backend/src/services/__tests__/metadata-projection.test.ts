@@ -13,20 +13,26 @@ describe('structured metadata projection', () => {
         recipient: 'Bob',
         location_written: 'Boston',
         primary_topics: ['old'],
+        emotional_tone: 'hopeful',
+        sender_recipient_relationship: 'friend',
         notable_quotes: [{ text: 'Preserved verbatim' }],
       },
       {
         sender: 'Alicia',
         locationWritten: null,
         summary: 'Reviewer summary',
-        tags: ['family'],
+        emotionalTone: 'nostalgic',
+        senderRecipientRelationship: 'extended-family',
+        primaryTopics: ['family/marriage'],
       },
     )).toEqual({
       sender: 'Alicia',
       recipient: 'Bob',
       location_written: null,
       summary: 'Reviewer summary',
-      primary_topics: ['family'],
+      emotional_tone: 'nostalgic',
+      sender_recipient_relationship: 'extended-family',
+      primary_topics: ['family/marriage'],
       notable_quotes: [{ text: 'Preserved verbatim' }],
     });
   });
@@ -37,11 +43,23 @@ describe('structured metadata projection', () => {
 
   it('preserves the historical camelCase document shape', () => {
     expect(projectLegacyMetadata(
-      { locationWritten: 'Boston', tags: ['old'] },
-      { locationWritten: 'Cambridge', tags: ['family'] },
+      {
+        locationWritten: 'Boston',
+        tags: ['old'],
+        emotionalTone: 'hopeful',
+        senderRecipientRelationship: 'friend',
+      },
+      {
+        locationWritten: 'Cambridge',
+        emotionalTone: null,
+        senderRecipientRelationship: 'professional',
+        primaryTopics: ['work/employment'],
+      },
     )).toEqual({
       locationWritten: 'Cambridge',
-      tags: ['family'],
+      tags: ['work/employment'],
+      emotionalTone: null,
+      senderRecipientRelationship: 'professional',
     });
   });
 

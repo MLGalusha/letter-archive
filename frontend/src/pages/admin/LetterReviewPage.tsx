@@ -1,7 +1,13 @@
-import { startTransition, useState, useEffect, useRef, useCallback } from "react";
+import {
+  startTransition,
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useCallback,
+} from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { isAuthenticated } from "../../api/auth";
-import { getErrorMessage } from "../../api/client";
 import { getAdminLetterById, deleteLetter } from "../../api/letters";
 import {
   updateLetter,
@@ -32,7 +38,7 @@ import {
 } from "../../components/common";
 import { trackEdit } from "../../utils/recentEdits";
 import { highlightTranscriptMarkers } from "../../utils/transcriptHighlight";
-import type { LetterImage, VisibilityState } from "../../types/Letter";
+import type { Letter, LetterImage, VisibilityState } from "../../types/Letter";
 import {
   getPrimaryImageType,
   hasPrimaryTranscriptContent,
@@ -56,6 +62,8 @@ import { useTranscriptEditing } from "./LetterReview/useTranscriptEditing";
 import { useLetterSourceConflict } from "./LetterReview/useLetterSourceConflict";
 import { useGuardedLetterState } from "./LetterReview/useGuardedLetterState";
 import { useLetterSavingState } from "./LetterReview/useLetterSavingState";
+import { useLetterReviewVisit } from "./LetterReview/useLetterReviewVisit";
+import { useLetterReviewStatusResets } from "./LetterReview/useLetterReviewStatusResets";
 import { usePhotoDescriptionWorkspace } from "./LetterReview/usePhotoDescriptionWorkspace";
 import { loadCurrentLetter } from "./LetterReview/loadCurrentLetter";
 import { usePretextFontSize } from "../../hooks/usePretextFontSize";
@@ -67,6 +75,7 @@ import "./LetterReviewPage.css";
 
 export default function LetterReviewPage() {
   const { letterId } = useParams<{ letterId: string }>();
+  const visit = useLetterReviewVisit(letterId);
   const navigate = useNavigate();
   const routeLocation = useLocation();
   const { showToast } = useToast();
@@ -77,15 +86,13 @@ export default function LetterReviewPage() {
     markSourceConflict,
     mutationsBlocked,
     sourceConflict,
-  } = useLetterSourceConflict(showToast, {
-    letterId,
-  });
+  } = useLetterSourceConflict(showToast, visit);
   const {
     letter,
     setAuthoritativeLetter,
     setLetter,
     tryAdoptLetter,
-  } = useGuardedLetterState(markSourceConflict, letterId);
+  } = useGuardedLetterState(markSourceConflict, visit);
 
   const [transcript, setTranscript] = useState("");
   const [transcriptViewMode, setTranscriptViewMode] = useState<"edit" | "preview">("edit");
@@ -148,7 +155,7 @@ export default function LetterReviewPage() {
 
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
-  const [saving, setSaving] = useLetterSavingState(letterId);
+  const { saving, beginSaving } = useLetterSavingState(visit);
   const [message, setMessage] = useState("");
   const [currentFilename, setCurrentFilename] = useState<string | undefined>(
     undefined,
@@ -172,12 +179,52 @@ export default function LetterReviewPage() {
   const [selectedText, setSelectedText] = useState("");
   const [mappingText, setMappingText] = useState<string | undefined>(undefined);
 
+  useLayoutEffect(() => {
+    setReadingViewGenerating(false);
+    setExtraContentTranscribing(false);
+    setRegenerateState("idle");
+    setReExtractState("idle");
+    setEntityReExtractState("idle");
+    setLetterTranscribeState("idle");
+    setLetterTranscribeMessage(null);
+    setShowTranscriptRegeneratePopup(false);
+    setShowMetadataRegeneratePopup(false);
+    setShowExtractionPopup(false);
+    segmentFirstTriggeredRef.current = false;
+  }, [visit]);
+
   const transcriptFontSize = usePretextFontSize(
     editorRef,
     transcript,
     { fontFamily: "Georgia, 'Times New Roman', serif" },
   );
   const notesRef = useRef<HTMLTextAreaElement>(null);
+  const identityMetadataSyncRef = useRef<(updatedLetter: Letter) => void>(
+    () => {},
+  );
+  const syncIdentityMetadataForAutoSave = useCallback(
+    (updatedLetter: Letter) => {
+      identityMetadataSyncRef.current(updatedLetter);
+    },
+    [],
+  );
+  const {
+    autoSaveStatus,
+    flushPendingSaves,
+    identityUpdateSecondsRemaining,
+    identityUpdateState,
+    retagState,
+    scheduleDebouncedSave,
+    triggerAutoSave,
+  } = useAutoSave({
+    visit,
+    letter,
+    tryAdoptLetter,
+    handleMutationError,
+    isMutationBlocked,
+    mutationsBlocked,
+    syncIdentityMetadata: syncIdentityMetadataForAutoSave,
+  });
   const {
     applyLetterMetadata,
     date,
@@ -210,38 +257,36 @@ export default function LetterReviewPage() {
     syncIdentityMetadata,
     topicsDropdownOpen,
   } = useMetadataEditing({
+    visit,
     letterId,
     letter,
-    setLetter,
-    setSaving,
+    tryAdoptLetter,
+    beginSaving,
+    flushPendingSaves,
     handleMutationError,
     showToast,
   });
-  const {
-    autoSaveStatus,
-    identityUpdateSecondsRemaining,
-    identityUpdateState,
-    retagState,
-    scheduleDebouncedSave,
-    scheduleStatusReset,
-    triggerAutoSave,
-  } = useAutoSave({
-    letterId,
-    letter,
-    setLetter,
-    handleMutationError,
-    isMutationBlocked,
-    mutationsBlocked,
-    syncIdentityMetadata,
-  });
+  useLayoutEffect(() => {
+    identityMetadataSyncRef.current = syncIdentityMetadata;
+    return () => {
+      if (identityMetadataSyncRef.current === syncIdentityMetadata) {
+        identityMetadataSyncRef.current = () => {};
+      }
+    };
+  }, [syncIdentityMetadata]);
+  const scheduleStatusReset = useLetterReviewStatusResets(visit);
   const photoDescriptionWorkspace = usePhotoDescriptionWorkspace({
+    visit,
     letter,
     saving,
-    setSaving,
+    beginSaving,
     tryAdoptLetter,
     scheduleDebouncedSave,
+    flushPendingSaves,
     handleMutationError,
   });
+  const hydratePhotoDescription =
+    photoDescriptionWorkspace.hydratePersistedLetter;
   const {
     editTooltipRef,
     handleTranscriptClick,
@@ -255,17 +300,29 @@ export default function LetterReviewPage() {
     showEditTooltip,
     tooltipPosition,
   } = useTranscriptEditing({
+    visit,
     letterId,
     letter,
     transcript,
-    setLetter,
-    setSaving,
+    tryAdoptLetter,
+    beginSaving,
+    flushPendingSaves,
     setTranscript,
     handleMutationError,
     showToast,
     editorRef,
     triggerAutoSave,
   });
+  const hydrateAdoptedLetter = useCallback((updatedLetter: Letter) => {
+    setTranscript(updatedLetter.transcript.fullText);
+    setReaderText(updatedLetter.readingText ?? null);
+    applyLetterMetadata(updatedLetter);
+    setExtraContent(updatedLetter.extraContentTranscript || "");
+    hydratePhotoDescription(updatedLetter);
+  }, [
+    applyLetterMetadata,
+    hydratePhotoDescription,
+  ]);
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -384,18 +441,20 @@ export default function LetterReviewPage() {
       }
 
       setShowTranscriptRegeneratePopup(false);
-      setLetterTranscribeState("transcribing");
-      setLetterTranscribeMessage("Transcribing letter...");
+      const releaseSaving = beginSaving();
 
       try {
+        if (!visit.isActive() || !await flushPendingSaves()) return;
+
+        setLetterTranscribeState("transcribing");
+        setLetterTranscribeMessage("Transcribing letter...");
         const result = await transcribeLetter(
           letterId,
           letter.primarySourceRevision,
         );
 
-        // Update local state with transcribed letter
-        setLetter(result.letter);
-        setTranscript(result.letter.transcript.fullText);
+        if (!tryAdoptLetter(result.letter)) return;
+        hydrateAdoptedLetter(result.letter);
 
         setLetterTranscribeState("done");
         setLetterTranscribeMessage(
@@ -406,24 +465,32 @@ export default function LetterReviewPage() {
           "success",
         );
 
-        scheduleStatusReset(() => {
+        scheduleStatusReset("transcription", () => {
           setLetterTranscribeState("idle");
           setLetterTranscribeMessage(null);
         }, 3000);
       } catch (err) {
-        setLetterTranscribeState("idle");
-        setLetterTranscribeMessage(null);
+        if (visit.isActive()) {
+          setLetterTranscribeState("idle");
+          setLetterTranscribeMessage(null);
+        }
         handleMutationError(err, "Transcription failed");
         console.error("Letter transcription error:", err);
+      } finally {
+        releaseSaving();
       }
     },
     [
+      beginSaving,
+      flushPendingSaves,
       handleMutationError,
+      hydrateAdoptedLetter,
       letterId,
       letter,
       scheduleStatusReset,
-      setLetter,
       showToast,
+      tryAdoptLetter,
+      visit,
     ],
   );
 
@@ -437,14 +504,17 @@ export default function LetterReviewPage() {
         if (!window.confirm("Replace extra content transcription? This will overwrite the current content.")) return;
       }
 
-      setExtraContentTranscribing(true);
+      const releaseSaving = beginSaving();
       try {
+        if (!visit.isActive() || !await flushPendingSaves()) return;
+
+        setExtraContentTranscribing(true);
         const result = await transcribeExtras(
           letterId,
           letter.primarySourceRevision,
         );
-        setLetter(result.letter);
-        setExtraContent(result.letter.extraContentTranscript || "");
+        if (!tryAdoptLetter(result.letter)) return;
+        hydrateAdoptedLetter(result.letter);
         if (result.transcribedCount > 0) {
           showToast(
             `Transcribed ${result.transcribedCount} extra item(s)`,
@@ -456,24 +526,38 @@ export default function LetterReviewPage() {
       } catch (err) {
         handleMutationError(err, "Failed to transcribe extras");
       } finally {
-        setExtraContentTranscribing(false);
+        if (visit.isActive()) setExtraContentTranscribing(false);
+        releaseSaving();
       }
     },
-    [handleMutationError, letterId, letter, setLetter, showToast],
+    [
+      beginSaving,
+      flushPendingSaves,
+      handleMutationError,
+      hydrateAdoptedLetter,
+      letterId,
+      letter,
+      showToast,
+      tryAdoptLetter,
+      visit,
+    ],
   );
 
   const handleVisibilityChange = useCallback(async (newVisibility: VisibilityState) => {
     if (!letterId || !letter) return;
     if (letter.visibility === newVisibility) return;
 
-    setSaving(true);
+    const releaseSaving = beginSaving();
 
     try {
+      if (!visit.isActive() || !await flushPendingSaves()) return;
+
       const updated = await updateLetter(letterId, {
         primarySourceRevision: letter.primarySourceRevision,
         visibility: newVisibility,
       });
-      setLetter(updated);
+      if (!tryAdoptLetter(updated)) return;
+      hydrateAdoptedLetter(updated);
       showToast(
         newVisibility === "PUBLISHED" ? "Letter published" : "Letter hidden",
         "success",
@@ -482,30 +566,53 @@ export default function LetterReviewPage() {
       handleMutationError(err, "Failed to update visibility");
       console.error("Visibility change error:", err);
     } finally {
-      setSaving(false);
+      releaseSaving();
     }
-  }, [handleMutationError, letter, letterId, setLetter, setSaving, showToast]);
+  }, [
+    beginSaving,
+    flushPendingSaves,
+    handleMutationError,
+    hydrateAdoptedLetter,
+    letter,
+    letterId,
+    showToast,
+    tryAdoptLetter,
+    visit,
+  ]);
 
   const handleContentPublishToggle = useCallback(async (
     field: 'transcriptPublished' | 'metadataPublished',
     value: boolean,
   ) => {
     if (!letterId || !letter) return;
-    setSaving(true);
+    const releaseSaving = beginSaving();
     try {
+      if (!visit.isActive() || !await flushPendingSaves()) return;
+
       const updated = await updateLetter(letterId, {
         primarySourceRevision: letter.primarySourceRevision,
         [field]: value,
       });
-      setLetter(updated);
+      if (!tryAdoptLetter(updated)) return;
+      hydrateAdoptedLetter(updated);
       const label = field === 'transcriptPublished' ? 'Transcript' : 'Metadata';
       showToast(`${label} ${value ? 'published' : 'hidden'}`, 'success');
     } catch (err) {
       handleMutationError(err, 'Failed to update content visibility');
     } finally {
-      setSaving(false);
+      releaseSaving();
     }
-  }, [handleMutationError, letter, letterId, setLetter, setSaving, showToast]);
+  }, [
+    beginSaving,
+    flushPendingSaves,
+    handleMutationError,
+    hydrateAdoptedLetter,
+    letter,
+    letterId,
+    showToast,
+    tryAdoptLetter,
+    visit,
+  ]);
 
   const handleConfirmTranscript = useCallback(() => {
     if (!letterId) return;
@@ -517,9 +624,11 @@ export default function LetterReviewPage() {
   const executeConfirmTranscript = useCallback(async () => {
     if (!letterId || !letter) return;
     setShowExtractionPopup(false);
-    setSaving(true);
+    const releaseSaving = beginSaving();
 
     try {
+      if (!visit.isActive() || !await flushPendingSaves()) return;
+
       const updated = await confirmTranscript(
         letterId,
         letter.primarySourceRevision,
@@ -528,8 +637,8 @@ export default function LetterReviewPage() {
           confirmedRecipient: extractionRecipient || undefined,
         },
       );
-      setLetter(updated);
-      applyLetterMetadata(updated, { includeNotes: false });
+      if (!tryAdoptLetter(updated)) return;
+      hydrateAdoptedLetter(updated);
       showToast(
         "Transcript confirmed — metadata extracted",
         "success",
@@ -538,18 +647,20 @@ export default function LetterReviewPage() {
       handleMutationError(err, "Failed to confirm transcript");
       console.error("Confirm transcript error:", err);
     } finally {
-      setSaving(false);
+      releaseSaving();
     }
   }, [
-    applyLetterMetadata,
+    beginSaving,
     extractionRecipient,
     extractionSender,
+    flushPendingSaves,
     handleMutationError,
+    hydrateAdoptedLetter,
     letter,
     letterId,
-    setLetter,
-    setSaving,
     showToast,
+    tryAdoptLetter,
+    visit,
   ]);
 
   // Regenerate metadata handler — shows popup for options
@@ -564,8 +675,11 @@ export default function LetterReviewPage() {
   const executeMetadataRegenerate = useCallback(async () => {
     if (!letterId || !letter) return;
     setShowMetadataRegeneratePopup(false);
-    setRegenerateState("regenerating");
+    const releaseSaving = beginSaving();
     try {
+      if (!visit.isActive() || !await flushPendingSaves()) return;
+
+      setRegenerateState("regenerating");
       const updated = await regenerateMetadata(
         letterId,
         letter.primarySourceRevision,
@@ -574,29 +688,34 @@ export default function LetterReviewPage() {
           confirmedRecipient: extractionRecipient || undefined,
         },
       );
-      setLetter(updated);
-      applyLetterMetadata(updated, { includeNotes: false });
+      if (!tryAdoptLetter(updated)) return;
+      hydrateAdoptedLetter(updated);
       setRegenerateState("done");
       showToast("Metadata regenerated", "success");
 
-      scheduleStatusReset(() => {
+      scheduleStatusReset("metadata-regeneration", () => {
         setRegenerateState("idle");
       }, 2000);
     } catch (err) {
-      setRegenerateState("idle");
+      if (visit.isActive()) setRegenerateState("idle");
       handleMutationError(err, "Failed to regenerate metadata");
       console.error("Regenerate metadata error:", err);
+    } finally {
+      releaseSaving();
     }
   }, [
-    applyLetterMetadata,
+    beginSaving,
     extractionRecipient,
     extractionSender,
+    flushPendingSaves,
     handleMutationError,
+    hydrateAdoptedLetter,
     letter,
     letterId,
     scheduleStatusReset,
-    setLetter,
     showToast,
+    tryAdoptLetter,
+    visit,
   ]);
 
   // Re-extract handler — calls the re-extract API with corrected sender/recipient
@@ -616,13 +735,16 @@ export default function LetterReviewPage() {
       }
 
       const isEntityOnly = mode === "entities_only";
-      if (isEntityOnly) {
-        setEntityReExtractState("extracting");
-      } else {
-        setReExtractState("extracting");
-      }
+      const releaseSaving = beginSaving();
 
       try {
+        if (!visit.isActive() || !await flushPendingSaves()) return;
+
+        if (isEntityOnly) {
+          setEntityReExtractState("extracting");
+        } else {
+          setReExtractState("extracting");
+        }
         const updated = await reExtractLetter(letterId, {
           primarySourceRevision: letter.primarySourceRevision,
           confirmedSender: nameOverrides?.sender || sender || undefined,
@@ -630,23 +752,21 @@ export default function LetterReviewPage() {
           mode,
         });
 
-        // Update letter state
-        setLetter(updated);
+        if (!tryAdoptLetter(updated)) return;
+        hydrateAdoptedLetter(updated);
 
         if (!isEntityOnly) {
-          applyLetterMetadata(updated, { includeNotes: false });
-
           setReExtractState("done");
           showToast("Metadata re-extracted with corrections", "success");
 
-          scheduleStatusReset(() => {
+          scheduleStatusReset("metadata-reextract", () => {
             setReExtractState("idle");
           }, 2000);
         } else {
           setEntityReExtractState("done");
           showToast("Entities re-extracted", "success");
 
-          scheduleStatusReset(() => {
+          scheduleStatusReset("entity-reextract", () => {
             setEntityReExtractState("idle");
           }, 2000);
         }
@@ -658,25 +778,32 @@ export default function LetterReviewPage() {
           collectionCode: updated.collectionCode,
         });
       } catch (err) {
-        if (isEntityOnly) {
-          setEntityReExtractState("idle");
-        } else {
-          setReExtractState("idle");
+        if (visit.isActive()) {
+          if (isEntityOnly) {
+            setEntityReExtractState("idle");
+          } else {
+            setReExtractState("idle");
+          }
         }
         handleMutationError(err, "Re-extraction failed");
         console.error("Re-extract error:", err);
+      } finally {
+        releaseSaving();
       }
     },
     [
-      applyLetterMetadata,
+      beginSaving,
+      flushPendingSaves,
       handleMutationError,
+      hydrateAdoptedLetter,
       letterId,
       letter,
       recipient,
       scheduleStatusReset,
       sender,
-      setLetter,
       showToast,
+      tryAdoptLetter,
+      visit,
     ],
   );
 
@@ -687,25 +814,32 @@ export default function LetterReviewPage() {
       return;
     }
 
-    setSaving(true);
+    const releaseSaving = beginSaving();
 
     try {
+      if (!visit.isActive() || !await flushPendingSaves()) return;
+
       await deleteLetter(letterId, primarySourceRevision);
+      if (!visit.isActive()) return;
       showToast("Letter deleted", "success");
-      setTimeout(() => navigate("/admin"), 1500);
+      setTimeout(() => {
+        if (visit.isActive()) navigate("/admin");
+      }, 1500);
     } catch (err) {
       handleMutationError(err, "Failed to delete");
       console.error("Delete error:", err);
     } finally {
-      setSaving(false);
+      releaseSaving();
     }
   }, [
+    beginSaving,
+    flushPendingSaves,
     handleMutationError,
     letter,
     letterId,
     navigate,
-    setSaving,
     showToast,
+    visit,
   ]);
 
   const handlePageChange = useCallback((index: number, image: LetterImage) => {
@@ -765,41 +899,67 @@ export default function LetterReviewPage() {
   // Extra content verification handlers
   const handleVerifyExtraContent = useCallback(async () => {
     if (!letterId || !letter) return;
-    setSaving(true);
+    const releaseSaving = beginSaving();
     try {
+      if (!visit.isActive() || !await flushPendingSaves()) return;
+
       const updated = await verifyExtraContent(
         letterId,
         letter.primarySourceRevision,
       );
-      setLetter(updated);
+      if (!tryAdoptLetter(updated)) return;
+      hydrateAdoptedLetter(updated);
       setIsExtraContentEditing(false);
       showToast("Extra content verified", "success");
     } catch (err) {
       handleMutationError(err, "Failed to verify extra content");
     } finally {
-      setSaving(false);
+      releaseSaving();
     }
-  }, [handleMutationError, letter, letterId, setLetter, setSaving, showToast]);
+  }, [
+    beginSaving,
+    flushPendingSaves,
+    handleMutationError,
+    hydrateAdoptedLetter,
+    letter,
+    letterId,
+    showToast,
+    tryAdoptLetter,
+    visit,
+  ]);
 
   const handleUnverifyExtraContent = useCallback(async () => {
     if (!letterId || !letter) return;
     if (letter.extraContentStatus !== "VERIFIED") return;
 
-    setSaving(true);
+    const releaseSaving = beginSaving();
     try {
+      if (!visit.isActive() || !await flushPendingSaves()) return;
+
       const updated = await unverifyExtraContent(
         letterId,
         letter.primarySourceRevision,
       );
-      setLetter(updated);
+      if (!tryAdoptLetter(updated)) return;
+      hydrateAdoptedLetter(updated);
       setIsExtraContentEditing(true);
       showToast("Extra content verification removed", "info");
     } catch (err) {
       handleMutationError(err, "Failed to unverify extra content");
     } finally {
-      setSaving(false);
+      releaseSaving();
     }
-  }, [handleMutationError, letterId, letter, setLetter, setSaving, showToast]);
+  }, [
+    beginSaving,
+    flushPendingSaves,
+    handleMutationError,
+    hydrateAdoptedLetter,
+    letterId,
+    letter,
+    showToast,
+    tryAdoptLetter,
+    visit,
+  ]);
 
   // Extra content auto-save
   const handleExtraContentChange = useCallback(
@@ -819,6 +979,7 @@ export default function LetterReviewPage() {
           setLetter(updated);
         },
         {
+          lane: "extra-content",
           errorMessage: "Failed to save extra content",
           onError: (error) => {
             console.error("Extra content auto-save error:", error);
@@ -833,39 +994,100 @@ export default function LetterReviewPage() {
   const handleNoteStatusChange = useCallback(
     async (noteId: string, status: 'resolved' | 'dismissed') => {
       if (!letterId || !letter) return;
+      const releaseSaving = beginSaving();
       try {
+        if (!visit.isActive() || !await flushPendingSaves()) return;
+
         const updated = await updateNoteStatus(
           letterId,
           letter.primarySourceRevision,
           noteId,
           status,
         );
-        setLetter(updated);
+        if (!tryAdoptLetter(updated)) return;
+        hydrateAdoptedLetter(updated);
         showToast(`Note ${status}`, 'success');
       } catch (err) {
         handleMutationError(err, `Failed to ${status} note`);
+      } finally {
+        releaseSaving();
       }
     },
-    [handleMutationError, letter, letterId, setLetter, showToast],
+    [
+      beginSaving,
+      flushPendingSaves,
+      handleMutationError,
+      hydrateAdoptedLetter,
+      letter,
+      letterId,
+      showToast,
+      tryAdoptLetter,
+      visit,
+    ],
   );
 
   const handleAddNote = useCallback(
     async (note: { content: string; category: string; priority: string }) => {
       if (!letterId || !letter) return;
+      const releaseSaving = beginSaving();
       try {
+        if (!visit.isActive() || !await flushPendingSaves()) return;
+
         const updated = await addNote(
           letterId,
           letter.primarySourceRevision,
           note,
         );
-        setLetter(updated);
+        if (!tryAdoptLetter(updated)) return;
+        hydrateAdoptedLetter(updated);
         showToast('Note added', 'success');
       } catch (err) {
         handleMutationError(err, 'Failed to add note');
+      } finally {
+        releaseSaving();
       }
     },
-    [handleMutationError, letter, letterId, setLetter, showToast],
+    [
+      beginSaving,
+      flushPendingSaves,
+      handleMutationError,
+      hydrateAdoptedLetter,
+      letter,
+      letterId,
+      showToast,
+      tryAdoptLetter,
+      visit,
+    ],
   );
+
+  const handleFlagToggle = useCallback(async () => {
+    if (!letter) return;
+    const newFlagged = !letter.flagged;
+    const releaseSaving = beginSaving();
+
+    try {
+      if (!visit.isActive() || !await flushPendingSaves()) return;
+
+      const updated = await toggleLetterFlag(letter.id, newFlagged);
+      if (!tryAdoptLetter(updated)) return;
+      hydrateAdoptedLetter(updated);
+    } catch (error) {
+      handleMutationError(
+        error,
+        `Failed to ${newFlagged ? 'flag' : 'unflag'} letter`,
+      );
+    } finally {
+      releaseSaving();
+    }
+  }, [
+    beginSaving,
+    flushPendingSaves,
+    handleMutationError,
+    hydrateAdoptedLetter,
+    letter,
+    tryAdoptLetter,
+    visit,
+  ]);
 
   const handleImageClick = useCallback((pageIndex: number) => {
     if (
@@ -889,26 +1111,38 @@ export default function LetterReviewPage() {
 
   const handleGenerateReadingView = useCallback(async () => {
     if (!letterId || !letter) return;
-    setReadingViewGenerating(true);
+    const releaseSaving = beginSaving();
     try {
+      if (!visit.isActive() || !await flushPendingSaves()) return;
+
+      setReadingViewGenerating(true);
       const updated = await generateReadingView(
         letterId,
         letter.primarySourceRevision,
       );
-      setLetter(updated);
-      if (updated.readingText) {
-        setReaderText(updated.readingText);
-      }
+      if (!tryAdoptLetter(updated)) return;
+      hydrateAdoptedLetter(updated);
       showToast("Reading view generated", "success");
     } catch (error) {
       handleMutationError(error, "Failed to generate reading view");
     } finally {
-      setReadingViewGenerating(false);
+      if (visit.isActive()) setReadingViewGenerating(false);
+      releaseSaving();
     }
-  }, [handleMutationError, letter, letterId, setLetter, showToast]);
+  }, [
+    beginSaving,
+    flushPendingSaves,
+    handleMutationError,
+    hydrateAdoptedLetter,
+    letter,
+    letterId,
+    showToast,
+    tryAdoptLetter,
+    visit,
+  ]);
 
-  const handleMetadataAutoSave = useCallback((updates: Record<string, unknown>) => {
-    void triggerAutoSave(updates as AutoSaveData);
+  const handleMetadataAutoSave = useCallback((updates: AutoSaveData) => {
+    void triggerAutoSave(updates);
   }, [triggerAutoSave]);
 
   const handleReExtractEntities = useCallback(() => {
@@ -1016,18 +1250,8 @@ export default function LetterReviewPage() {
       <div className="header-actions">
         <button
           className={`header-action flag ${letter.flagged ? "active" : ""}`}
-          onClick={async () => {
-            const newFlagged = !letter.flagged;
-            try {
-              const updated = await toggleLetterFlag(letter.id, newFlagged);
-              setLetter(updated);
-            } catch (err) {
-              showToast(
-                getErrorMessage(err, `Failed to ${newFlagged ? 'flag' : 'unflag'} letter`),
-                'error',
-              );
-            }
-          }}
+          onClick={() => void handleFlagToggle()}
+          disabled={saving}
           data-tooltip={letter.flagged ? "Unflag" : "Flag for follow-up"}
         >
           <Icon name={letter.flagged ? "flag-filled" : "flag"} size={18} />
@@ -1386,6 +1610,7 @@ export default function LetterReviewPage() {
                 recipientName={letter.metadata.recipient}
                 reExtractState={entityReExtractState}
                 onReExtractEntities={handleReExtractEntities}
+                disabled={saving}
               />
             ) : null}
 
@@ -1395,6 +1620,7 @@ export default function LetterReviewPage() {
                 <NotesSection
                   notes={letter.aiNotes as import("./LetterReview/NotesSection").StructuredNote[] | string | null}
                   letterId={letterId!}
+                  disabled={saving}
                   onNoteStatusChange={handleNoteStatusChange}
                   onAddNote={handleAddNote}
                 />
@@ -1415,7 +1641,9 @@ export default function LetterReviewPage() {
                     value={notes}
                     onChange={handlePersonalNotesChange}
                     placeholder="Personal notes (not shown publicly)"
-                    readOnly={letter.metadataContentStatus === "VERIFIED"}
+                    readOnly={
+                      saving || letter.metadataContentStatus === "VERIFIED"
+                    }
                     className={
                       letter.metadataContentStatus === "VERIFIED"
                         ? "verified-field"

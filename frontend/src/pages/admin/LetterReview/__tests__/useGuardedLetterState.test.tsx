@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Letter } from '../../../../types/Letter';
 import { useGuardedLetterState } from '../useGuardedLetterState';
+import { useLetterReviewVisit } from '../useLetterReviewVisit';
 import { useLetterSourceConflict } from '../useLetterSourceConflict';
 
 function letterAtRevision(
@@ -28,12 +29,11 @@ describe('useGuardedLetterState', () => {
       const rev2 = letterAtRevision(2, { flagged: true });
       const saveDraft = vi.fn();
       const { result } = renderHook(() => {
-        const conflict = useLetterSourceConflict(showToast, {
-          letterId: 'letter-1',
-        });
+        const visit = useLetterReviewVisit('letter-1');
+        const conflict = useLetterSourceConflict(showToast, visit);
         const state = useGuardedLetterState(
           conflict.markSourceConflict,
-          'letter-1',
+          visit,
         );
         return { ...conflict, ...state };
       });
@@ -64,9 +64,10 @@ describe('useGuardedLetterState', () => {
   it('preserves React Dispatch behavior for same-revision updates', () => {
     const markSourceConflict = vi.fn();
     const rev1 = letterAtRevision(1);
-    const { result } = renderHook(() =>
-      useGuardedLetterState(markSourceConflict, 'letter-1'),
-    );
+    const { result } = renderHook(() => {
+      const visit = useLetterReviewVisit('letter-1');
+      return useGuardedLetterState(markSourceConflict, visit);
+    });
 
     act(() => {
       result.current.setAuthoritativeLetter(rev1);
@@ -87,9 +88,10 @@ describe('useGuardedLetterState', () => {
   it('reports whether an incremental DTO became authoritative', () => {
     const markSourceConflict = vi.fn();
     const rev1 = letterAtRevision(1);
-    const { result } = renderHook(() =>
-      useGuardedLetterState(markSourceConflict, 'letter-1'),
-    );
+    const { result } = renderHook(() => {
+      const visit = useLetterReviewVisit('letter-1');
+      return useGuardedLetterState(markSourceConflict, visit);
+    });
 
     act(() => {
       result.current.setAuthoritativeLetter(rev1);
@@ -120,8 +122,10 @@ describe('useGuardedLetterState', () => {
     const letterA = letterAtRevision(1, { id: 'letter-a' });
     const letterB = letterAtRevision(1, { id: 'letter-b' });
     const { result, rerender } = renderHook(
-      ({ activeLetterId }) =>
-        useGuardedLetterState(markSourceConflict, activeLetterId),
+      ({ activeLetterId }) => {
+        const visit = useLetterReviewVisit(activeLetterId);
+        return useGuardedLetterState(markSourceConflict, visit);
+      },
       { initialProps: { activeLetterId: 'letter-a' } },
     );
 
@@ -159,5 +163,47 @@ describe('useGuardedLetterState', () => {
     });
     expect(accepted).toBe(false);
     expect(result.current.letter).toBe(letterB);
+  });
+
+  it('rejects callbacks from an earlier visit after A -> B -> A', () => {
+    const markSourceConflict = vi.fn();
+    const firstA = letterAtRevision(1, { id: 'letter-a', flagged: false });
+    const letterB = letterAtRevision(1, { id: 'letter-b' });
+    const freshA = letterAtRevision(1, { id: 'letter-a', flagged: false });
+    const { result, rerender } = renderHook(
+      ({ activeLetterId }) => {
+        const visit = useLetterReviewVisit(activeLetterId);
+        return useGuardedLetterState(markSourceConflict, visit);
+      },
+      { initialProps: { activeLetterId: 'letter-a' } },
+    );
+
+    act(() => {
+      result.current.setAuthoritativeLetter(firstA);
+    });
+    const staleSetAuthoritativeA = result.current.setAuthoritativeLetter;
+    const staleSetLetterA = result.current.setLetter;
+    const staleTryAdoptA = result.current.tryAdoptLetter;
+
+    rerender({ activeLetterId: 'letter-b' });
+    act(() => {
+      result.current.setAuthoritativeLetter(letterB);
+    });
+    rerender({ activeLetterId: 'letter-a' });
+    act(() => {
+      result.current.setAuthoritativeLetter(freshA);
+    });
+
+    let accepted = true;
+    act(() => {
+      staleSetAuthoritativeA({ ...firstA, flagged: true });
+      staleSetLetterA({ ...firstA, flagged: true });
+      accepted = staleTryAdoptA({ ...firstA, flagged: true });
+    });
+
+    expect(accepted).toBe(false);
+    expect(result.current.letter).toBe(freshA);
+    expect(result.current.letter?.flagged).toBe(false);
+    expect(markSourceConflict).not.toHaveBeenCalled();
   });
 });

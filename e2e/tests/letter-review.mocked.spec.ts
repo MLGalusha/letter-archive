@@ -270,6 +270,55 @@ test.describe('@mocked Letter Review', () => {
     ]);
   });
 
+  test('saves structured metadata before immediate verification', async ({
+    page,
+  }) => {
+    const mutationOrder: string[] = [];
+    page.on('request', (request) => {
+      const pathname = new URL(request.url()).pathname;
+      if (
+        (
+          request.method() === 'PUT'
+          && pathname.endsWith('/admin/letters/letter-review-1')
+        )
+        || pathname.endsWith('/verify-metadata')
+      ) {
+        mutationOrder.push(`${request.method()} ${pathname}`);
+      }
+    });
+    const mockedApi = await openMockLetterReview(
+      page,
+      createMockLetterReviewLetter({
+        metadata: { primaryTopics: [] },
+      }),
+    );
+
+    await page.locator('#date').fill('1932-07-07');
+    await page.locator('#emotionalTone').selectOption('matter-of-fact');
+    await page.locator('#relationship').selectOption('parent-child');
+    await page.getByRole('button', { name: 'Add Topic' }).click();
+    await page.getByText('family / marriage', { exact: true }).click();
+    await page
+      .locator('.metadata-section .verify-btn')
+      .dispatchEvent('click');
+
+    await expect(
+      page.locator('.toast:has-text("Metadata verified")'),
+    ).toBeVisible();
+    expect(mockedApi.updateLetterRequests).toHaveLength(1);
+    expect(mockedApi.updateLetterRequests[0]?.body).toMatchObject({
+      primarySourceRevision: 4,
+      extractedDate: '1932-07-07',
+      emotionalTone: 'matter-of-fact',
+      senderRecipientRelationship: 'parent-child',
+      primaryTopics: ['family/marriage'],
+    });
+    expect(mutationOrder).toEqual([
+      'PUT /admin/letters/letter-review-1',
+      'POST /admin/letters/letter-review-1/verify-metadata',
+    ]);
+  });
+
   test('removes metadata verification on double-click', async ({ page }) => {
     const initialLetter = createMockLetterReviewLetter({
       metadataContentStatus: 'VERIFIED',
@@ -380,6 +429,16 @@ test.describe('@mocked Letter Review', () => {
 
   test('edits and verifies extra content through the review UI', async ({ page }) => {
     const initialLetter = createMockLetterWithExtras();
+    const mutationOrder: string[] = [];
+    page.on('request', (request) => {
+      const pathname = new URL(request.url()).pathname;
+      if (
+        pathname.endsWith('/extra-content')
+        || pathname.endsWith('/verify-extra-content')
+      ) {
+        mutationOrder.push(pathname);
+      }
+    });
     const mockedApi = await openMockLetterReview(page, initialLetter);
 
     const extraSection = page.locator('.extra-content-section');
@@ -388,9 +447,11 @@ test.describe('@mocked Letter Review', () => {
 
     await editor.fill('Corrected cover note for the review record.');
 
-    await expect
-      .poll(() => mockedApi.updateExtraContentRequests.length)
-      .toBe(1);
+    const extraVerifyBtn = extraSection.locator('.verify-btn');
+    await extraVerifyBtn.dispatchEvent('click');
+
+    await expect(page.locator('.toast:has-text("Extra content verified")')).toBeVisible();
+    await expect(extraSection.locator('.verified-info')).toContainText('Verified');
     expect(mockedApi.updateExtraContentRequests).toEqual([
       {
         url: `${API_BASE_URL}/admin/letters/letter-review-1/extra-content`,
@@ -400,15 +461,41 @@ test.describe('@mocked Letter Review', () => {
         },
       },
     ]);
-
-    const extraVerifyBtn = extraSection.locator('.verify-btn');
-    await extraVerifyBtn.dispatchEvent('click');
-
-    await expect(page.locator('.toast:has-text("Extra content verified")')).toBeVisible();
-    await expect(extraSection.locator('.verified-info')).toContainText('Verified');
     expect(mockedApi.verifyExtraContentRequests).toEqual([
       `${API_BASE_URL}/admin/letters/letter-review-1/verify-extra-content`,
     ]);
+    expect(mutationOrder).toEqual([
+      '/admin/letters/letter-review-1/extra-content',
+      '/admin/letters/letter-review-1/verify-extra-content',
+    ]);
+  });
+
+  test('does not let an extra-content edit cancel a metadata edit', async ({ page }) => {
+    const mockedApi = await openMockLetterReview(
+      page,
+      createMockLetterWithExtras(),
+    );
+    const extraEditor = page
+      .locator('.extra-content-section [contenteditable="true"]')
+      .first();
+
+    await page.locator('#location').fill('Philadelphia, PA');
+    await extraEditor.fill('A newly corrected envelope note.');
+
+    await expect
+      .poll(() => ({
+        extra: mockedApi.updateExtraContentRequests.length,
+        letter: mockedApi.updateLetterRequests.length,
+      }))
+      .toEqual({ extra: 1, letter: 1 });
+    expect(mockedApi.updateLetterRequests[0]?.body).toMatchObject({
+      locationWritten: 'Philadelphia, PA',
+      primarySourceRevision: 4,
+    });
+    expect(mockedApi.updateExtraContentRequests[0]?.body).toMatchObject({
+      extraContent: 'A newly corrected envelope note.',
+      primarySourceRevision: 4,
+    });
   });
 
   test('unlocks verified extra content through the shared review interaction', async ({ page }) => {

@@ -18,6 +18,7 @@ export interface StructuredNote {
 interface NotesSectionProps {
   notes: StructuredNote[] | string | null;
   letterId: string;
+  disabled?: boolean;
   onNoteStatusChange: (noteId: string, status: 'resolved' | 'dismissed') => void;
   onAddNote: (note: { content: string; category: string; priority: string }) => void;
 }
@@ -40,6 +41,7 @@ function formatCategory(cat: string): string {
 
 const NotesSection = memo(function NotesSection({
   notes,
+  disabled = false,
   onNoteStatusChange,
   onAddNote,
 }: NotesSectionProps) {
@@ -77,7 +79,7 @@ const NotesSection = memo(function NotesSection({
   }, [structuredNotes, filter]);
 
   const handleAddNote = () => {
-    if (!newContent.trim()) return;
+    if (disabled || !newContent.trim()) return;
     onAddNote({
       content: newContent.trim(),
       category: newCategory,
@@ -123,6 +125,7 @@ const NotesSection = memo(function NotesSection({
             <button
               className="notes-sec-add-btn"
               onClick={() => setShowAddForm(true)}
+              disabled={disabled}
             >
               <Icon name="plus" size={12} /> Add note
             </button>
@@ -133,6 +136,7 @@ const NotesSection = memo(function NotesSection({
             category={newCategory}
             priority={newPriority}
             content={newContent}
+            disabled={disabled}
             onCategoryChange={setNewCategory}
             onPriorityChange={setNewPriority}
             onContentChange={setNewContent}
@@ -183,6 +187,7 @@ const NotesSection = memo(function NotesSection({
           <button
             className="notes-sec-add-btn"
             onClick={() => setShowAddForm(true)}
+            disabled={disabled}
           >
             <Icon name="plus" size={12} /> Add note
           </button>
@@ -200,6 +205,7 @@ const NotesSection = memo(function NotesSection({
             <NoteCard
               key={note.id}
               note={note}
+              disabled={disabled}
               onResolve={() => onNoteStatusChange(note.id, 'resolved')}
               onDismiss={() => onNoteStatusChange(note.id, 'dismissed')}
             />
@@ -213,6 +219,7 @@ const NotesSection = memo(function NotesSection({
           category={newCategory}
           priority={newPriority}
           content={newContent}
+          disabled={disabled}
           onCategoryChange={setNewCategory}
           onPriorityChange={setNewPriority}
           onContentChange={setNewContent}
@@ -232,10 +239,12 @@ export default NotesSection;
 
 function NoteCard({
   note,
+  disabled,
   onResolve,
   onDismiss,
 }: {
   note: StructuredNote;
+  disabled: boolean;
   onResolve: () => void;
   onDismiss: () => void;
 }) {
@@ -275,6 +284,7 @@ function NoteCard({
           <button
             className="note-card-action resolve"
             onClick={onResolve}
+            disabled={disabled}
             title="Mark as resolved"
           >
             <Icon name="check" size={14} />
@@ -282,6 +292,7 @@ function NoteCard({
           <button
             className="note-card-action dismiss"
             onClick={onDismiss}
+            disabled={disabled}
             title="Dismiss"
           >
             <Icon name="close" size={14} />
@@ -298,6 +309,7 @@ function AddNoteForm({
   category,
   priority,
   content,
+  disabled,
   onCategoryChange,
   onPriorityChange,
   onContentChange,
@@ -307,6 +319,7 @@ function AddNoteForm({
   category: string;
   priority: string;
   content: string;
+  disabled: boolean;
   onCategoryChange: (v: string) => void;
   onPriorityChange: (v: string) => void;
   onContentChange: (v: string) => void;
@@ -319,6 +332,7 @@ function AddNoteForm({
         <select
           className="note-add-select"
           value={category}
+          disabled={disabled}
           onChange={e => onCategoryChange(e.target.value)}
         >
           {CATEGORY_OPTIONS.map(c => (
@@ -328,6 +342,7 @@ function AddNoteForm({
         <select
           className="note-add-select"
           value={priority}
+          disabled={disabled}
           onChange={e => onPriorityChange(e.target.value)}
         >
           {PRIORITY_OPTIONS.map(p => (
@@ -340,6 +355,7 @@ function AddNoteForm({
         rows={2}
         placeholder="Add a note..."
         value={content}
+        disabled={disabled}
         onChange={e => onContentChange(e.target.value)}
         autoFocus
       />
@@ -350,7 +366,7 @@ function AddNoteForm({
         <button
           className="note-add-btn save"
           onClick={onSave}
-          disabled={!content.trim()}
+          disabled={disabled || !content.trim()}
         >
           Save
         </button>

@@ -32,11 +32,14 @@ interface MockLetterReviewLetter {
     sender?: string;
     recipient?: string;
     date?: string;
+    extractedDate?: string;
     dateRaw?: string;
     location?: string;
     description?: string;
     hook?: string;
     notes?: string;
+    emotionalTone?: string;
+    senderRecipientRelationship?: string;
     primaryTopics?: string[];
     verified: boolean;
   };
@@ -73,6 +76,10 @@ interface MockUpdateLetterRequest {
     locationWritten?: string | null;
     hook?: string | null;
     summary?: string | null;
+    extractedDate?: string | null;
+    emotionalTone?: string | null;
+    senderRecipientRelationship?: string | null;
+    primaryTopics?: string[] | null;
     notes?: string | null;
   };
 }
@@ -123,6 +130,7 @@ interface MockExtraContentRequest {
   body: {
     extraContent?: string | null;
     extraContentTranscript?: string | null;
+    primarySourceRevision?: number;
   };
 }
 
@@ -558,6 +566,34 @@ export async function installMockLetterReviewApi(
         const nextDescription = body.summary ?? undefined;
         metadataChanged = metadataChanged || nextDescription !== letter.metadata.description;
         letter.metadata.description = nextDescription;
+      }
+      if (body.extractedDate !== undefined) {
+        const nextDate = body.extractedDate ?? undefined;
+        metadataChanged = metadataChanged
+          || nextDate !== letter.metadata.extractedDate;
+        letter.metadata.extractedDate = nextDate;
+      }
+      if (body.emotionalTone !== undefined) {
+        const nextTone = body.emotionalTone ?? undefined;
+        metadataChanged = metadataChanged
+          || nextTone !== letter.metadata.emotionalTone;
+        letter.metadata.emotionalTone = nextTone;
+      }
+      if (body.senderRecipientRelationship !== undefined) {
+        const nextRelationship = (
+          body.senderRecipientRelationship ?? undefined
+        );
+        metadataChanged = metadataChanged
+          || nextRelationship
+            !== letter.metadata.senderRecipientRelationship;
+        letter.metadata.senderRecipientRelationship = nextRelationship;
+      }
+      if (body.primaryTopics !== undefined) {
+        const nextTopics = body.primaryTopics ?? undefined;
+        metadataChanged = metadataChanged
+          || JSON.stringify(nextTopics)
+            !== JSON.stringify(letter.metadata.primaryTopics);
+        letter.metadata.primaryTopics = nextTopics;
       }
       if (body.notes !== undefined) {
         const nextNotes = body.notes ?? undefined;

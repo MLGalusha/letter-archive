@@ -1,12 +1,12 @@
 import {
   useCallback,
-  useLayoutEffect,
   useRef,
   useState,
   type Dispatch,
   type SetStateAction,
 } from 'react';
 import type { Letter } from '../../../types/Letter';
+import type { LetterReviewVisit } from './useLetterReviewVisit';
 
 type MarkSourceConflict = (detail: string) => void;
 
@@ -23,29 +23,29 @@ const SOURCE_REFRESH_CONFLICT =
  */
 export function useGuardedLetterState(
   markSourceConflict: MarkSourceConflict,
-  activeLetterId: string | undefined,
+  visit: LetterReviewVisit,
 ) {
   const [storedLetter, setLetterState] = useState<Letter | null>(null);
   const currentLetterRef = useRef<Letter | null>(null);
-  const activeLetterIdRef = useRef(activeLetterId);
-  useLayoutEffect(() => {
-    activeLetterIdRef.current = activeLetterId;
-  }, [activeLetterId]);
   // Route ownership is synchronous: during A -> B navigation no hook may see
   // A's DTO paired with B's URL while the B request is still loading.
-  const letter = storedLetter?.id === activeLetterId ? storedLetter : null;
+  const letter = storedLetter?.id === visit.letterId ? storedLetter : null;
 
   const setAuthoritativeLetter = useCallback((nextLetter: Letter) => {
-    if (nextLetter.id !== activeLetterIdRef.current) return;
+    if (!visit.isActive() || nextLetter.id !== visit.letterId) return;
     currentLetterRef.current = nextLetter;
     setLetterState(nextLetter);
-  }, []);
+  }, [visit]);
 
   const adoptIncrementalLetter = useCallback(
     (nextLetter: Letter | null): boolean => {
+      if (!visit.isActive()) {
+        return false;
+      }
+
       const currentLetter = currentLetterRef.current;
 
-      if (nextLetter && nextLetter.id !== activeLetterIdRef.current) {
+      if (nextLetter && nextLetter.id !== visit.letterId) {
         return false;
       }
 
@@ -74,7 +74,7 @@ export function useGuardedLetterState(
       setLetterState(nextLetter);
       return true;
     },
-    [markSourceConflict],
+    [markSourceConflict, visit],
   );
 
   const tryAdoptLetter = useCallback(
@@ -84,12 +84,16 @@ export function useGuardedLetterState(
 
   const setLetter = useCallback<Dispatch<SetStateAction<Letter | null>>>(
     (nextAction) => {
+      if (!visit.isActive()) return;
+      const currentLetter = currentLetterRef.current?.id === visit.letterId
+        ? currentLetterRef.current
+        : null;
       const nextLetter = typeof nextAction === 'function'
-        ? nextAction(currentLetterRef.current)
+        ? nextAction(currentLetter)
         : nextAction;
       adoptIncrementalLetter(nextLetter);
     },
-    [adoptIncrementalLetter],
+    [adoptIncrementalLetter, visit],
   );
 
   return {

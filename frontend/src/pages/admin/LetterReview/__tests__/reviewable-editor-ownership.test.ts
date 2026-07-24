@@ -31,8 +31,9 @@ describe("reviewable dynamic editor ownership", () => {
     }
 
     expect(page).not.toContain("isPhotoDescriptionEditing");
+    expect(page).not.toContain("isExtraContentEditing");
     expect(page).toMatch(
-      /const handleImageClick[\s\S]*?isTranscriptEditing[\s\S]*?isExtraContentEditing/,
+      /const handleImageClick[\s\S]*?isTranscriptEditing[\s\S]*?extraContentWorkspace\.lineReviewBlocked/,
     );
   });
 

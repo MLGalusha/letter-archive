@@ -5,6 +5,15 @@ import {
 } from './utils/mock-letter-review-api';
 import { API_BASE_URL } from './utils/test-helpers';
 
+function transcriptionSection(page: Page) {
+  return page.locator('.editor-section').filter({
+    has: page.getByRole('heading', {
+      name: 'Transcription',
+      exact: true,
+    }),
+  });
+}
+
 async function openMockLetterReview(page: Page, initialLetter = createMockLetterReviewLetter()) {
   const mockedApi = await installMockLetterReviewApi(page, { initialLetter });
   await page.goto(`/admin/letters/${initialLetter.id}`);
@@ -210,7 +219,7 @@ test.describe('@mocked Letter Review', () => {
       },
     );
 
-    await page.locator('.editor-section').first().locator('.transcribe-btn').click();
+    await transcriptionSection(page).locator('.transcribe-btn').click();
     await page.locator('.regenerate-popup .btn-option', {
       hasText: 'Letter Transcript',
     }).click();
@@ -229,6 +238,127 @@ test.describe('@mocked Letter Review', () => {
       url: `${API_BASE_URL}/admin/letters/letter-review-1/transcribe-letter`,
       body: { primarySourceRevision: 4 },
     }]);
+  });
+
+  test('runs both transcription mutations in order against one source revision', async ({ page }) => {
+    const mutationOrder: string[] = [];
+    page.on('request', (request) => {
+      const pathname = new URL(request.url()).pathname;
+      if (
+        pathname.endsWith('/transcribe-letter')
+        || pathname.endsWith('/transcribe-extras')
+      ) {
+        mutationOrder.push(pathname);
+      }
+    });
+    const mockedApi = await openMockLetterReview(
+      page,
+      createMockLetterWithExtras(),
+    );
+
+    await transcriptionSection(page).locator('.transcribe-btn').click();
+    await page.locator('.regenerate-popup .btn-option', {
+      hasText: 'Both',
+    }).click();
+
+    await expect
+      .poll(() => ({
+        extras: mockedApi.transcribeExtrasRequests.length,
+        letter: mockedApi.transcribeLetterRequests.length,
+      }))
+      .toEqual({ extras: 1, letter: 1 });
+    expect(mutationOrder).toEqual([
+      '/admin/letters/letter-review-1/transcribe-letter',
+      '/admin/letters/letter-review-1/transcribe-extras',
+    ]);
+    expect(mockedApi.transcribeLetterRequests[0]?.body).toEqual({
+      primarySourceRevision: 4,
+    });
+    expect(mockedApi.transcribeExtrasRequests[0]?.body).toEqual({
+      primarySourceRevision: 4,
+    });
+    await expect(
+      page.locator('.extra-content-section .dynamic-editor'),
+    ).toContainText('AI-transcribed extra content.');
+  });
+
+  test('does not transcribe extras when the letter half of both fails', async ({ page }) => {
+    const mockedApi = await openMockLetterReviewWithOptions(
+      page,
+      createMockLetterWithExtras(),
+      {
+        routeFailures: {
+          transcribeLetter: {
+            status: 503,
+            error: 'Letter transcription unavailable',
+            requestId: 'req-both-letter-503',
+          },
+        },
+      },
+    );
+
+    await transcriptionSection(page).locator('.transcribe-btn').click();
+    await page.locator('.regenerate-popup .btn-option', {
+      hasText: 'Both',
+    }).click();
+
+    await expect(page.locator('.toast')).toContainText(
+      'Letter transcription unavailable (Request ID: req-both-letter-503)',
+    );
+    expect(mockedApi.transcribeLetterRequests).toHaveLength(1);
+    expect(mockedApi.transcribeExtrasRequests).toHaveLength(0);
+  });
+
+  test('does not continue both after its Letter Review visit becomes stale', async ({ page }) => {
+    const initialLetter = createMockLetterWithExtras();
+    const mockedApi = await openMockLetterReview(page, initialLetter);
+    let markRequestStarted!: () => void;
+    let releaseResponse!: () => void;
+    const requestStarted = new Promise<void>((resolve) => {
+      markRequestStarted = resolve;
+    });
+    const responseGate = new Promise<void>((resolve) => {
+      releaseResponse = resolve;
+    });
+    await page.route(/\/transcribe-letter$/, async (route) => {
+      markRequestStarted();
+      await responseGate;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          letter: initialLetter,
+          transcribed: {
+            pageCount: initialLetter.transcript.pages.length,
+            textLength: initialLetter.transcript.fullText.length,
+          },
+        }),
+      });
+    });
+
+    await transcriptionSection(page).locator('.transcribe-btn').click();
+    await page.locator('.regenerate-popup .btn-option', {
+      hasText: 'Both',
+    }).click();
+    await requestStarted;
+
+    await page.getByRole('link', {
+      name: 'Dashboard',
+      exact: true,
+    }).click();
+    await expect(page).toHaveURL(/\/admin$/);
+    await expect(page.locator('.letter-review-page')).toHaveCount(0);
+    const response = page.waitForResponse(/\/transcribe-letter$/);
+    releaseResponse();
+    await response;
+    await page.evaluate(() => new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    }));
+
+    expect(mockedApi.transcribeExtrasRequests).toHaveLength(0);
+    await expect(page.locator('.toast', {
+      hasText: 'Letter transcribed',
+    })).toHaveCount(0);
   });
 
   test('removes transcript verification on double-click', async ({ page }) => {
@@ -517,6 +647,30 @@ test.describe('@mocked Letter Review', () => {
     expect(mockedApi.unverifyExtraContentRequests).toEqual([
       `${API_BASE_URL}/admin/letters/letter-review-1/unverify-extra-content`,
     ]);
+  });
+
+  test('keeps line review closed while newly unlocked extra content is being edited', async ({
+    page,
+  }) => {
+    const initialLetter = createMockLetterWithExtras({
+      extraContentStatus: 'VERIFIED',
+      extraContentVerifiedAt: '2025-03-02T00:00:00.000Z',
+    });
+    await openMockLetterReview(page, initialLetter);
+    const editor = page.locator(
+      '.extra-content-section .dynamic-editor',
+    );
+
+    await editor.dblclick();
+    await expect(
+      page.locator('.toast:has-text("Extra content verification removed")'),
+    ).toBeVisible();
+    await expect(editor).toHaveAttribute('contenteditable', 'true');
+
+    await page.locator('.viewer-image').click();
+
+    await expect(page.locator('.viewer-image')).toBeVisible();
+    await expect(page.locator('.line-review-mode')).toHaveCount(0);
   });
 
   test('keeps verified extra content locked after a source conflict', async ({ page }) => {

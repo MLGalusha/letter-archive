@@ -13,10 +13,6 @@ import {
   updateLetter,
   confirmTranscript,
   regenerateMetadata,
-  transcribeExtras,
-  updateExtraContent,
-  verifyExtraContent,
-  unverifyExtraContent,
   transcribeLetter,
 } from "../../api/admin";
 import {
@@ -65,6 +61,7 @@ import { useLetterReviewMutationExecutor } from "./LetterReview/useLetterReviewM
 import { useLetterReviewStatusResets } from "./LetterReview/useLetterReviewStatusResets";
 import { useStructuredNoteActions } from "./LetterReview/useStructuredNoteActions";
 import { usePhotoDescriptionWorkspace } from "./LetterReview/usePhotoDescriptionWorkspace";
+import { useExtraContentWorkspace } from "./LetterReview/useExtraContentWorkspace";
 import { loadCurrentLetter } from "./LetterReview/loadCurrentLetter";
 import { usePretextFontSize } from "../../hooks/usePretextFontSize";
 import LineReviewMode, {
@@ -118,11 +115,6 @@ export default function LetterReviewPage() {
     }
   }, [letter?.readingText, readerText]);
 
-  // Extra content state
-  const [extraContent, setExtraContent] = useState("");
-  const [extraContentTranscribing, setExtraContentTranscribing] =
-    useState(false);
-
   // Metadata regeneration state
   const [regenerateState, setRegenerateState] = useState<
     "idle" | "regenerating" | "done"
@@ -163,9 +155,6 @@ export default function LetterReviewPage() {
   const editorRef = useRef<HTMLDivElement>(null);
   const lineReviewRef = useRef<LineReviewModeHandle>(null);
 
-  // Verified extra content editing flow state
-  const [isExtraContentEditing, setIsExtraContentEditing] = useState(false);
-
   // Line highlighting state
   const [, setCurrentLineIndex] = useState<number | null>(
     null,
@@ -181,7 +170,6 @@ export default function LetterReviewPage() {
 
   useLayoutEffect(() => {
     setReadingViewGenerating(false);
-    setExtraContentTranscribing(false);
     setRegenerateState("idle");
     setReExtractState("idle");
     setEntityReExtractState("idle");
@@ -317,7 +305,6 @@ export default function LetterReviewPage() {
     setTranscript(updatedLetter.transcript.fullText);
     setReaderText(updatedLetter.readingText ?? null);
     applyLetterMetadata(updatedLetter);
-    setExtraContent(updatedLetter.extraContentTranscript || "");
     hydratePhotoDescription(updatedLetter);
   }, [
     applyLetterMetadata,
@@ -330,6 +317,14 @@ export default function LetterReviewPage() {
     tryAdoptLetter,
     hydrateAdoptedLetter,
     handleMutationError,
+  });
+  const extraContentWorkspace = useExtraContentWorkspace({
+    visit,
+    letter,
+    saving,
+    scheduleDebouncedSave,
+    tryAdoptLetter,
+    executeLetterMutation,
   });
   const {
     handleAddNote,
@@ -360,10 +355,6 @@ export default function LetterReviewPage() {
               setAuthoritativeLetter(foundLetter);
               setTranscript(foundLetter.transcript.fullText);
               applyLetterMetadata(foundLetter);
-              // Extra content
-              setExtraContent(foundLetter.extraContentTranscript || "");
-              // Reset extra content editing state for new letter
-              setIsExtraContentEditing(false);
             },
           });
         } catch (err) {
@@ -447,20 +438,20 @@ export default function LetterReviewPage() {
   // Clear any pending sync timer
   // Letter transcription handler (transcribes only the letter, not extras)
   const handleTranscribeLetter = useCallback(
-    async (skipConfirm = false) => {
-      if (!letterId || !letter) return;
+    async (skipConfirm = false): Promise<boolean> => {
+      if (!letterId || !letter) return false;
 
       // Check if transcript already has content — show regenerate popup
       if (!skipConfirm && letter.transcript.fullText.trim()) {
         setShowTranscriptRegeneratePopup(true);
-        return;
+        return false;
       }
 
       setShowTranscriptRegeneratePopup(false);
       const releaseSaving = beginSaving();
 
       try {
-        if (!visit.isActive() || !await flushPendingSaves()) return;
+        if (!visit.isActive() || !await flushPendingSaves()) return false;
 
         setLetterTranscribeState("transcribing");
         setLetterTranscribeMessage("Transcribing letter...");
@@ -469,7 +460,7 @@ export default function LetterReviewPage() {
           letter.primarySourceRevision,
         );
 
-        if (!tryAdoptLetter(result.letter)) return;
+        if (!tryAdoptLetter(result.letter)) return false;
         hydrateAdoptedLetter(result.letter);
 
         setLetterTranscribeState("done");
@@ -485,6 +476,7 @@ export default function LetterReviewPage() {
           setLetterTranscribeState("idle");
           setLetterTranscribeMessage(null);
         }, 3000);
+        return true;
       } catch (err) {
         if (visit.isActive()) {
           setLetterTranscribeState("idle");
@@ -492,6 +484,7 @@ export default function LetterReviewPage() {
         }
         handleMutationError(err, "Transcription failed");
         console.error("Letter transcription error:", err);
+        return false;
       } finally {
         releaseSaving();
       }
@@ -504,55 +497,6 @@ export default function LetterReviewPage() {
       letterId,
       letter,
       scheduleStatusReset,
-      showToast,
-      tryAdoptLetter,
-      visit,
-    ],
-  );
-
-  // Extra content transcription handler with confirmation
-  const handleTranscribeExtrasWithConfirm = useCallback(
-    async (skipConfirm = false) => {
-      if (!letterId || !letter) return;
-
-      // Check if extra content already has content — confirm before replacing
-      if (!skipConfirm && letter.extraContentTranscript?.trim()) {
-        if (!window.confirm("Replace extra content transcription? This will overwrite the current content.")) return;
-      }
-
-      const releaseSaving = beginSaving();
-      try {
-        if (!visit.isActive() || !await flushPendingSaves()) return;
-
-        setExtraContentTranscribing(true);
-        const result = await transcribeExtras(
-          letterId,
-          letter.primarySourceRevision,
-        );
-        if (!tryAdoptLetter(result.letter)) return;
-        hydrateAdoptedLetter(result.letter);
-        if (result.transcribedCount > 0) {
-          showToast(
-            `Transcribed ${result.transcribedCount} extra item(s)`,
-            "success",
-          );
-        } else {
-          showToast("No transcribable extra content found", "info");
-        }
-      } catch (err) {
-        handleMutationError(err, "Failed to transcribe extras");
-      } finally {
-        if (visit.isActive()) setExtraContentTranscribing(false);
-        releaseSaving();
-      }
-    },
-    [
-      beginSaving,
-      flushPendingSaves,
-      handleMutationError,
-      hydrateAdoptedLetter,
-      letterId,
-      letter,
       showToast,
       tryAdoptLetter,
       visit,
@@ -889,78 +833,6 @@ export default function LetterReviewPage() {
     }
   }, [isPageSepNode]);
 
-  // Extra content verification handlers
-  const handleVerifyExtraContent = useCallback(async () => {
-    if (!letterId || !letter) return;
-    await executeLetterMutation({
-      request: () => verifyExtraContent(
-        letterId,
-        letter.primarySourceRevision,
-      ),
-      failureMessage: "Failed to verify extra content",
-      afterAdopt: () => {
-        setIsExtraContentEditing(false);
-        showToast("Extra content verified", "success");
-      },
-    });
-  }, [
-    executeLetterMutation,
-    letter,
-    letterId,
-    showToast,
-  ]);
-
-  const handleUnverifyExtraContent = useCallback(async () => {
-    if (!letterId || !letter) return;
-    if (letter.extraContentStatus !== "VERIFIED") return;
-
-    await executeLetterMutation({
-      request: () => unverifyExtraContent(
-        letterId,
-        letter.primarySourceRevision,
-      ),
-      failureMessage: "Failed to unverify extra content",
-      afterAdopt: () => {
-        setIsExtraContentEditing(true);
-        showToast("Extra content verification removed", "info");
-      },
-    });
-  }, [
-    executeLetterMutation,
-    letterId,
-    letter,
-    showToast,
-  ]);
-
-  // Extra content auto-save
-  const handleExtraContentChange = useCallback(
-    (newContent: string) => {
-      startTransition(() => {
-        setExtraContent(newContent);
-      });
-      if (!letterId || !letter) return;
-
-      scheduleDebouncedSave(
-        async () => {
-          const updated = await updateExtraContent(
-            letterId,
-            newContent,
-            letter.primarySourceRevision,
-          );
-          setLetter(updated);
-        },
-        {
-          lane: "extra-content",
-          errorMessage: "Failed to save extra content",
-          onError: (error) => {
-            console.error("Extra content auto-save error:", error);
-          },
-        },
-      );
-    },
-    [letter, letterId, scheduleDebouncedSave, setLetter],
-  );
-
   const handleFlagToggle = useCallback(async () => {
     if (!letter) return;
     const newFlagged = !letter.flagged;
@@ -979,13 +851,17 @@ export default function LetterReviewPage() {
       !letter ||
       !hasPrimaryTranscriptContent(letter) ||
       isTranscriptEditing ||
-      isExtraContentEditing
+      extraContentWorkspace.lineReviewBlocked
     ) {
       return;
     }
     setViewerPageIndex(pageIndex);
     setReviewMode(true);
-  }, [isExtraContentEditing, isTranscriptEditing, letter]);
+  }, [
+    extraContentWorkspace.lineReviewBlocked,
+    isTranscriptEditing,
+    letter,
+  ]);
 
   const handleReaderTextChange = useCallback((text: string) => {
     startTransition(() => {
@@ -1430,19 +1306,7 @@ export default function LetterReviewPage() {
 
             {/* Extra Content Section - only shown when letter has transcribable extras */}
             {hasExtras ? (
-              <ExtraContentSection
-                letter={letter}
-                extraContent={extraContent}
-                extraContentTranscribing={extraContentTranscribing}
-                saving={saving}
-                onTranscribeExtras={handleTranscribeExtrasWithConfirm}
-                onVerifyExtraContent={
-                  letter.extraContentStatus === "VERIFIED"
-                    ? handleUnverifyExtraContent
-                    : handleVerifyExtraContent
-                }
-                onExtraContentChange={handleExtraContentChange}
-              />
+              <ExtraContentSection {...extraContentWorkspace.sectionProps} />
             ) : null}
 
             {showMetadataSections && (
@@ -1565,7 +1429,7 @@ export default function LetterReviewPage() {
                 className="btn-option"
                 onClick={() => {
                   setShowTranscriptRegeneratePopup(false);
-                  handleTranscribeLetter(true);
+                  void handleTranscribeLetter(true);
                 }}
               >
                 <Icon name="file" size={16} />
@@ -1576,7 +1440,9 @@ export default function LetterReviewPage() {
                   className="btn-option"
                   onClick={() => {
                     setShowTranscriptRegeneratePopup(false);
-                    handleTranscribeExtrasWithConfirm(true);
+                    void extraContentWorkspace.transcribe({
+                      confirmReplacement: false,
+                    });
                   }}
                 >
                   <Icon name="plus" size={16} />
@@ -1589,8 +1455,15 @@ export default function LetterReviewPage() {
                   onClick={async () => {
                     setShowTranscriptRegeneratePopup(false);
                     // Transcribe both: letter first, then extras
-                    await handleTranscribeLetter(true);
-                    await handleTranscribeExtrasWithConfirm(true);
+                    if (
+                      !await handleTranscribeLetter(true)
+                      || !visit.isActive()
+                    ) {
+                      return;
+                    }
+                    await extraContentWorkspace.transcribe({
+                      confirmReplacement: false,
+                    });
                   }}
                 >
                   <Icon name="process" size={16} />

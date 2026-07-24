@@ -413,6 +413,10 @@ export interface MockLetterReviewContext {
     url: string;
     body: { primarySourceRevision?: number };
   }>;
+  transcribeExtrasRequests: Array<{
+    url: string;
+    body: { primarySourceRevision?: number };
+  }>;
 }
 
 export async function installMockLetterReviewApi(
@@ -435,6 +439,7 @@ export async function installMockLetterReviewApi(
         | 'updateLetter'
         | 'verifyTranscript'
         | 'transcribeLetter'
+        | 'transcribeExtras'
         | 'verifyMetadata'
         | 'extraContent'
         | 'describePhoto'
@@ -475,6 +480,7 @@ export async function installMockLetterReviewApi(
   const updateLetterRequests: MockUpdateLetterRequest[] = [];
   const versionRequests: MockVersionRequest[] = [];
   const transcribeLetterRequests: MockLetterReviewContext['transcribeLetterRequests'] = [];
+  const transcribeExtrasRequests: MockLetterReviewContext['transcribeExtrasRequests'] = [];
   const letterPath = `${API_BASE_URL}/admin/letters/${letter.id}`;
   const detectLinesByPageId = options.detectLinesByPageId
     ? clone(options.detectLinesByPageId)
@@ -683,6 +689,39 @@ export async function installMockLetterReviewApi(
           pageCount: letter.transcript.pages.length,
           textLength: letter.transcript.fullText.length,
         },
+      }),
+    });
+  });
+
+  await page.route(new RegExp(`${escapeRegex(letterPath)}/transcribe-extras$`), async (route) => {
+    const body = route.request().postDataJSON() as {
+      primarySourceRevision?: number;
+    };
+    transcribeExtrasRequests.push({ url: route.request().url(), body });
+    if (routeFailures.transcribeExtras) {
+      await fulfillFailure(route, routeFailures.transcribeExtras);
+      return;
+    }
+    if (body.primarySourceRevision !== letter.primarySourceRevision) {
+      await fulfillFailure(route, {
+        status: 409,
+        error: 'Letter source changed; reload before transcribing extras',
+        code: 'SOURCE_REVISION_CHANGED',
+      });
+      return;
+    }
+
+    letter.extraContentTranscript = 'AI-transcribed extra content.';
+    letter.extraContentStatus = 'AI_DRAFT';
+    delete letter.extraContentVerifiedAt;
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        letter,
+        transcribedCount: 1,
+        extraContentStatus: 'AI_DRAFT',
       }),
     });
   });
@@ -1161,5 +1200,6 @@ export async function installMockLetterReviewApi(
     updateLetterRequests,
     versionRequests,
     transcribeLetterRequests,
+    transcribeExtrasRequests,
   };
 }

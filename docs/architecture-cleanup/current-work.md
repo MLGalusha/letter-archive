@@ -7,11 +7,11 @@ Last updated: July 24, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 028 — intent-owned Dashboard filter state
-- Last sealed cleanup implementation: Dashboard filter ownership at `557e01bf`
+- Current checkpoint: 029 — typed, lossless letter version snapshots
+- Last sealed cleanup implementation: lossless letter versions at `e76aa48d`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Current slice: 029 — typed, lossless letter version snapshots
+- Current slice: next-slice orientation; no implementation is open
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -2203,7 +2203,7 @@ deployment, or external state changed in this slice.
 
 ## Slice 029 — Typed, Lossless Letter Version Snapshots
 
-Status: in progress
+Status: complete at `e76aa48d`
 
 Problem:
 
@@ -2222,7 +2222,7 @@ ignored or coerced, and malformed transcript content can become an empty transcr
 while the restore is reported as successful. Current service tests characterize only
 the five-field metadata subset and happy-path transcript objects.
 
-Target invariant:
+Delivered invariant:
 
 A newly accepted metadata version is one complete, explicitly typed snapshot of all
 nine editable metadata fields. Under the existing letter/source lock, every supplied
@@ -2239,34 +2239,42 @@ metadata snapshot fails closed without updating the letter or its projections.
 Flattened columns, structured/legacy metadata documents, participant links, and the
 sender-recipient relationship projection remain transactionally coherent.
 
-Scope:
+What changed:
 
-- Introduce one domain codec with explicit transcript, complete metadata, and
-  legacy-partial metadata content types plus Zod schemas. Replace the route's
-  independent `fieldType`/arbitrary-content union with a discriminated request
-  contract while tolerating the already accepted legacy create shapes. Validate
-  tone and relationship against the full persisted database enum sets, including
-  historical values, and preserve topics as ordered strings rather than narrowing
-  historical rows to the current AI vocabulary.
-- Make the frontend version API accept the same discriminated intent. Build a complete
-  metadata snapshot at the autosave owner, normalizing absent DTO fields to explicit
-  `null` rather than relying on JSON to drop `undefined`, centralizing DTO/storage
-  field aliases, and copying the topics array.
-- Extend the locked create query and equality check to extracted date, emotional tone,
-  sender-recipient relationship, and primary topics. Compare arrays by value,
-  canonicalize accepted partial metadata candidates from the locked row, and keep the
-  existing source/content conflict outcomes.
-- Decode stored transcript versions and decode metadata versions through a
-  legacy-compatible, presence-sensitive partial schema. Apply only present metadata
-  fields, preserve absent fields, update both metadata document projections, and
-  synchronize participant/relationship projections inside the existing transaction.
-- Return an explicit invalid-content outcome before any write and map it to a stable
-  conflict response. Keep history-list content typed as `unknown`; one malformed
-  historical row must neither crash the list nor be presented as a validated snapshot.
-- Add service transition tests for all nine fields, explicit nulls, array ownership,
-  stale extended fields, legacy partial rows, malformed stored rows, and transactional
-  projection failure. Add route tests proving invalid field/content combinations
-  never reach the service.
+- `version-content.ts` is the pure domain boundary for transcript and metadata
+  version JSON. It decodes the accepted legacy shapes, distinguishes missing from
+  explicit `null`, preserves empty strings and ordered topic arrays, validates real
+  ISO calendar dates, and fails closed on malformed known fields. New versions use
+  one canonical transcript object or one complete nine-field metadata snapshot.
+- Persisted emotional-tone and relationship values, including historical database
+  values, now have one lightweight backend owner shared by the Drizzle schema,
+  version codec, and existing relationship normalization. The frontend version API
+  separately distinguishes persisted snapshot values from the narrower current
+  editor vocabulary.
+- The route and frontend API use discriminated transcript/metadata requests instead
+  of an arbitrary string-or-record contract. Route validation returns decoded
+  content rather than asserting a different runtime type, and history responses keep
+  stored content honestly typed as `unknown`.
+- Version creation locks and reads all nine metadata fields. It compares every field
+  supplied by the client, accepts recognized partial candidates for rolling-client
+  compatibility, and inserts only the complete canonical row observed under the
+  lock.
+- Restore decodes before writing. Current snapshots restore every field; historical
+  partial snapshots update only present fields. Flattened columns, ordered topics and
+  legacy tags, both metadata document projections, participant links, and relationship
+  edges update inside the existing transaction. Invalid stored content returns a
+  stable conflict without fetching a success DTO.
+- The autosave owner builds the exact complete snapshot through one pure alias adapter
+  and one exhaustive field owner. It copies arrays and preserves `null`, empty
+  strings, and legacy persisted enum values without widening the current writable
+  form contract.
+- The admin DTO now preserves authoritative empty strings so a later snapshot cannot
+  turn them into `null`. The public allowlist explicitly continues omitting empty
+  metadata, so this internal fidelity repair does not change serialized public
+  responses.
+- Independent review exposed a canonical `parent-child` mapping gap in participant
+  synchronization. The real mapper now preserves that value instead of degrading the
+  graph relationship to `unknown`.
 
 Non-goals:
 
@@ -2281,25 +2289,45 @@ Non-goals:
   rules, metadata job lifecycle, or valid transcript restore semantics.
 - Do not create a generic cross-package contract library for this single consumer.
 
-Acceptance:
+Evidence:
 
-- Existing baseline remains green: backend version service plus containing route
-  integration 2 files / 67 tests; frontend autosave 1 file / 14 tests.
-- New route and service tests reject wrong content shapes, stale extended metadata,
-  malformed stored transcript/metadata fields, and empty stored snapshots before any
-  write.
-- A legacy partial create candidate remains accepted during frontend/backend rollout,
-  but the inserted metadata snapshot is the complete canonical nine-field row observed
-  under the lock.
-- Complete snapshots restore all nine fields. Legacy partial snapshots preserve every
-  omitted flattened and document field while restoring the fields they contain.
-- Explicit nulls clear their fields; topic arrays are validated, copied, compared, and
-  restored without reference leakage; participant and relationship synchronization
-  stays inside the restore transaction.
-- Focused backend/frontend tests, both package typechecks, affected lint, full package
-  suites, `git diff --check`, and `CI=1 ./scripts/verify-all.sh` pass.
-- Independent contract, correctness, and adversarial reviews find no unresolved
-  P0–P2 issue.
+- Final focused backend boundary: 6 files / 144 tests passed, covering the codec,
+  version service, route integration, admin DTO fidelity, public projection, and the
+  real participant relationship mapper. Backend typecheck passed.
+- Final focused frontend boundary: 3 files / 22 tests passed. Frontend TypeScript and
+  ESLint over every changed/new frontend TypeScript file passed.
+- The rendered Letter Review browser flow passed 1/1 while asserting the exact
+  nine-field request, including an authoritative empty-string companion field.
+- Aggregate `CI=1 ./scripts/verify-all.sh`: backend 105 files / 1,070 tests,
+  backend typecheck, frontend 139 files / 961 tests, frontend production build, and
+  mocked browser 60/60 passed.
+- `git diff --check` passed.
+- Three independent architecture/API, end-to-end correctness, and adversarial
+  coverage reviews approved the final tree with no remaining P0–P2 finding. Review
+  findings drove the canonical relationship mapping, empty-string DTO/public
+  boundary, decoded route output, exhaustive frontend field owner, and persisted
+  legacy-value type repairs before approval.
+- The production build retains its existing large-chunk warning:
+  `LetterReviewPage` is 527.84 kB and `UpdateEditorPage` is 1,182.96 kB after
+  minification.
+
+Residuals:
+
+- Letter autosave and version creation remain two requests. A committed primary edit
+  can still succeed while its history request fails; the UI reports that partial
+  outcome, but the two writes are not atomic.
+- Identity-only re-tagging and other metadata mutation workflows still do not create
+  versions. They have separate ownership and need their own characterized history
+  decision.
+- Existing malformed historical version rows are rejected rather than migrated or
+  backfilled. Listing remains safe because history content stays `unknown`.
+- The general frontend `Letter` metadata types still describe the current editor
+  vocabulary. The version API now models persisted legacy values explicitly without
+  widening what the editor may write.
+- The next high-leverage Dashboard candidates are one transient-surface owner for
+  filters/saved views/sort/columns and a separately verified dead-selector tranche in
+  the 4,281-line stylesheet. Re-orient before choosing; do not combine state ownership
+  with CSS deletion.
 
 Rollback base: `5f6dd87a`.
 

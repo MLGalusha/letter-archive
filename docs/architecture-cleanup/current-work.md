@@ -7,10 +7,10 @@ Last updated: July 24, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 021 — Reading View workspace
-- Last sealed cleanup implementation: Reading View workspace at `e1ede201`
+- Current checkpoint: 022 — Letter transcription workspace
+- Last sealed cleanup implementation: Letter transcription workspace at `2f9e17bc`
 - Feedback reliability prerequisite: Express request deadlines at `c8ac080b`
-- Current slice: 022 — Letter transcription workspace
+- Current slice: 023 — single transcript-editor DOM owner
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -2101,9 +2101,63 @@ Residuals:
 No product feature, visual layout, backend production behavior, database schema,
 deployment, or external state changed in this slice.
 
-## Slice 022 — Letter Transcription Workspace
+## Slice 023 — Single Transcript-Editor DOM Owner
 
 Status: next
+
+Problem:
+
+The transcript contenteditable has three production DOM writers. `LetterReviewPage`
+reprojects highlighted HTML from a route effect keyed to transcript and Line Review
+mode; `TranscriptionSection` repeats that projection when Reading View closes, but
+skips empty text; and `useTranscriptEditing` writes the DOM imperatively after Revert.
+The route also owns editor-specific Tab insertion and page-separator deletion rules.
+The route effect currently masks the section's empty-text bug: removing or reordering
+one writer can leave the previous letter's transcript visible when the next
+authoritative transcript is empty.
+
+Target invariant:
+
+React transcript state is the sole content authority and `TranscriptionSection` is the
+sole owner that projects it into the contenteditable DOM, including an explicit empty
+value. The section also owns its keyboard/structural rules. Route and domain-mutation
+hooks never write editor HTML, so Line Review exit, Revert, generation, same-letter
+adoption, and A → B navigation all reach the same tested projection boundary.
+
+Planned minimum:
+
+- Characterize nonempty marker projection, nonempty → empty reconciliation, Tab
+  insertion, and adjacent page-separator deletion protection in section tests.
+- Make the section reconcile every authoritative transcript while its editor surface
+  is active, including the empty string.
+- Move the existing editor keydown behavior and page-separator helper into the section
+  boundary; remove the route callback/prop contract.
+- Remove the route transcript DOM effect and highlighter import.
+- Remove `editorRef` and the imperative highlighter write from
+  `useTranscriptEditing`; successful Revert should update React state only.
+- Add an ownership tripwire and a discriminating browser transition or Line Review
+  exit case proving stale text is cleared without the route effect.
+
+Non-goals:
+
+- No transcript edit-session, autosave, verification, Revert request ordering, marker
+  syntax, Reading View, generation, Line Review state, layout, CSS, or backend change.
+- No replacement of the existing `execCommand` Tab behavior in this structural slice.
+- No generic contenteditable framework.
+
+Acceptance:
+
+- One production module writes transcript editor HTML.
+- Empty authoritative text clears stale DOM on the same render path as nonempty text.
+- Existing typing, markers, Tab insertion, separator protection, Revert, Reading View,
+  and Line Review behavior remain executable and green.
+- Focused component/hook/ownership tests, relevant mocked browser behavior, complete
+  frontend/backend suites, production build, touched-file lint, CI-mode mocked browser
+  suite, and `git diff --check` pass.
+
+## Slice 022 — Letter Transcription Workspace
+
+Status: complete at `2f9e17bc`
 
 Problem:
 
@@ -2117,7 +2171,7 @@ therefore be flushed and immediately overwritten without a warning; a locally cl
 draft can prompt even though the visible editor is empty. An older completion-reset
 timer can also clear the progress of a newer run in the same visit.
 
-Target invariant:
+Delivered invariant:
 
 One visit-owned Letter transcription workspace owns request-envelope adaptation,
 progress/message state, accepted-result truth, success copy, and replacement intent
@@ -2127,37 +2181,90 @@ options, while `LetterReviewPage` retains only the intentional cross-domain
 composition: Letter first, then Extra Content only after an accepted Letter result
 from the same active visit.
 
-Planned minimum:
+What changed:
 
-- Add `useLetterTranscriptionWorkspace` after the direct-mutation executor and move
-  the `transcribeLetter` API import plus progress/message ownership into it.
-- Adapt the `{ letter, transcribed }` response to the Letter-returning executor while
-  preserving page-count copy and returning `true` only after guarded adoption.
-- Use the live transcript draft to decide whether replacement confirmation is needed.
-- Make visit changes synchronously idle/closed, reject captured old controls, and
-  guard delayed completion resets against a newer run.
-- Extract the existing chooser markup into a presentation-only
-  `TranscriptionRegenerationDialog`.
-- Keep Letter/Extras/Both orchestration explicit in the route and preserve the
-  existing sequential two-request behavior.
+- `useLetterTranscriptionWorkspace` is a 241-line visit-owned boundary constructed
+  after the direct-mutation executor. It owns visible-draft replacement intent,
+  progress/message state, response-envelope adaptation, accepted-result truth, and
+  transcription success copy.
+- The route no longer imports `transcribeLetter` or manually owns its
+  saving/flush/request/adopt/hydrate/error/release sequence. The workspace adapts the
+  `{ letter, transcribed }` envelope to the shared Letter-returning executor and
+  reports `true` only from the guarded `afterAdopt` boundary.
+- Replacement intent now reads the live `transcript` draft. A local nonempty draft
+  prompts even while the Letter DTO is empty, while a visibly cleared draft proceeds
+  without prompting solely because the DTO still contains old text.
+- Progress belongs to the opaque route visit and exact attempt. Mismatched visits
+  render idle/closed synchronously, captured old controls fail closed, and rejected
+  adoption or request failure clears only the attempt that actually started.
+- The existing shared visit-aware status-reset scheduler regained its `transcription`
+  lane. The workspace contributes only the domain predicate—current owner, `done`
+  phase, and exact attempt—so an older three-second reset cannot erase a newer run
+  without duplicating timer storage or visit cleanup.
+- `TranscriptionRegenerationDialog` is an 81-line presentation-only rendering
+  boundary. It renders only the options supplied by the route, provides an accessible
+  dialog name, and owns no API, visit, sequencing, or domain state.
+- `LetterReviewPage` keeps the intentional cross-domain composition and closes each
+  chooser selection once: Letter alone, Extras alone, or Letter followed by Extras
+  only after accepted Letter adoption and a still-active visit.
+- `LetterReviewPage.tsx` fell from 1,553 to 1,440 lines. Direct route state cells fell
+  from 22 to 19 and callback owners from 21 to 20; effect and ref counts did not
+  change. Across the five affected/new production files, physical source rose from
+  1,933 to 2,148 lines because the explicit visit/attempt owner and presentation
+  boundary replace implicit route coupling rather than optimizing only for raw LOC.
+- The mocked browser regression deliberately lets the visible editor diverge from
+  the authoritative DTO: it waits for a forced-failure autosave before clicking
+  Regenerate. The old persisted-DTO gate therefore cannot false-pass under a slow or
+  contended run.
 
-Non-goals:
+Evidence:
 
-- No Extra Content workspace changes and no combined regeneration endpoint.
-- No transcript editing, verification, autosave, Reading View, Line Review, metadata,
-  backend, API, prompt, timeout, CSS, or visual-layout change.
-- No generic transcription/action/dialog framework.
+- Focused workspace, dialog, section, reset-owner, and architecture coverage passed
+  5 files / 22 tests. The five workspace tests cover both live-versus-persisted intent
+  directions, exact envelope/request behavior, accepted and rejected adoption,
+  A → B → fresh A plus captured controls, and the older-reset/newer-attempt race.
+- The full Letter Review mocked browser spec passed 28/28. It proves the local-draft
+  chooser, exact source-revision request, coded source-conflict ownership,
+  Letter-before-Extras ordering, Letter failure short-circuiting, and stale-visit
+  short-circuiting.
+- Complete frontend suite passed 125 files / 839 tests. Frontend TypeScript and the
+  production build passed.
+- Complete backend suite passed 104 files / 1,016 tests; backend typecheck passed.
+- Definitive `CI=1 ./scripts/verify-all.sh` passed those suites, the production build,
+  and the complete mocked browser suite 54/54.
+- Touched frontend ESLint and `git diff --check` passed. Whole-frontend lint remains
+  the known backlog at 161 problems (141 errors and 20 warnings).
+- Three independent lifecycle, coverage, and architecture/simplicity reviews found no
+  remaining P0–P2 issue after a potentially false-passing browser proof, duplicated
+  timer infrastructure, ineffective dialog memoization, and duplicate close ownership
+  were challenged and repaired.
+- Existing production-build warnings remain: `LetterReviewPage` is 525.12 kB and
+  `UpdateEditorPage` is 1,182.96 kB after minification.
 
-Acceptance:
+Residuals:
 
-- Visible nonempty drafts always receive replacement confirmation; visible empty
-  drafts do not prompt solely because the DTO is stale.
-- Transcription uses the shared executor and reports accepted success truthfully.
-- A stale visit, rejected adoption, blocked flush, failed request, or older reset
-  cannot repaint/unlock a newer run or continue the Both sequence.
-- Focused behavior, existing Letter/Extras browser sequencing, complete
-  frontend/backend suites, production build, changed-file lint, CI-mode mocked browser
-  suite, and `git diff --check` pass.
+- The transcript contenteditable still has three DOM writers plus route-owned
+  keyboard rules. Slice 023 consolidates that smaller, already-characterized boundary
+  before beginning another stateful workspace.
+- Metadata/entity regeneration is the next coherent Letter Review boundary, but its
+  current labels and backend behavior do not yet describe distinct operations.
+  Characterize that contract before moving state or changing user-visible copy.
+- Dashboard committed query state remains repeated through filter controls,
+  persistence, saved views, list fetching, filtered selection, chips, and sort. A
+  canonical contract/reducer slice is ready after the narrower editor-owner repair;
+  do not migrate all consumers in one uncharacterized rewrite.
+- `LetterReviewPage` remains 1,440 lines with 20 direct callback owners. Transcript
+  confirmation, analysis regeneration/re-extraction, deletion, and Line Review
+  composition remain explicit until their own invariants are characterized.
+- Letter/Extras/Both stays route composition deliberately; merging it into either
+  workspace or inventing a generic action/dialog framework would blur domain
+  ownership.
+- The whole-frontend lint backlog remains explicit; every file touched by this slice
+  passes lint.
+
+No new product feature, visual-layout change, Extra Content behavior, transcript
+editing/verification behavior, Reading View behavior, backend production behavior,
+API, prompt, database schema, deployment, or external state changed in this slice.
 
 ## Slice 021 — Reading View Workspace
 

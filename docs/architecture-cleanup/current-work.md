@@ -7,10 +7,10 @@ Last updated: July 24, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 019 — Extra Content vertical workspace
-- Last sealed cleanup implementation: Extra Content workspace at `bf3be7dd`
+- Current checkpoint: 020 — transcript editing visit isolation
+- Last sealed cleanup implementation: transcript visit isolation at `7fe9d46e`
 - Feedback reliability prerequisite: Express request deadlines at `c8ac080b`
-- Current slice: 020 — transcript editing visit isolation
+- Current slice: 021 — Reading View workspace
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -2101,62 +2101,137 @@ Residuals:
 No product feature, visual layout, backend production behavior, database schema,
 deployment, or external state changed in this slice.
 
-## Slice 020 — Transcript Editing Visit Isolation
+## Slice 021 — Reading View Workspace
 
 Status: next
 
 Problem:
 
-`useTranscriptEditing` owns the verified-edit session, original transcript baseline,
-verification-restoration flag, dirty state, and tooltip, but none is keyed or reset by
-the opaque route visit. After unverify/edit on A, navigating to verified B can leave B
-visibly editable. A's dirty baseline can keep the header Revert action active, creating
-a path that can submit A's transcript text against B. A late first-A response must also
-remain unable to reopen editing during a fresh A visit.
+Reading View currently has two mode owners: `TranscriptionSection` stores the mode that
+actually opens the overlay, while `LetterReviewPage` separately stores
+`transcriptViewMode` to resize the split pane. They can disagree after route changes.
+The route also keeps a shadow `readerText` draft. Moving from A with reading text to B
+without it can leave A's text visible because the synchronization effects only adopt a
+truthy replacement. `onReaderTextChange` is passed into the section but never read, so
+its reading-text autosave path is dead. Generation manually repeats the direct-mutation
+boundary already owned by the executor.
 
 Target invariant:
 
-Every transcript edit session belongs to exactly one opaque route visit. Editing,
-baseline, verification-restoration intent, dirty state, and tooltip fail closed
-synchronously when ownership changes. Callbacks captured by an older visit cannot
-mutate a newer visit's local session. Existing guarded DTO adoption remains the
-authoritative fence for transcript responses.
+One visit-owned Reading View workspace controls preview mode, open/close behavior,
+generation progress, and the section contract. Displayed text is derived from the
+guarded authoritative Letter, so a letter without `readingText` is empty immediately.
+Generation reuses the ordered mutation executor, and neither late work nor captured
+controls from an older visit can repaint or reopen a newer visit.
 
 Planned minimum:
 
-- Replace independent edit-session fields with one owner-keyed local session in
-  `useTranscriptEditing`.
-- Close the edit tooltip and reset the session on every new visit.
-- Characterize accepted A editing followed by verified B, A → B → A with a late
-  unverify response, and the inability to invoke Revert from A's baseline on B.
-- Remove `hasTranscriptChanges` and `originalTranscriptText` from
-  `TranscriptionSection`'s prop contract; the section never reads them. Keep the hook
-  outputs in Page because the header Revert action owns that composition.
+- Introduce a narrow `useReadingViewWorkspace` after the direct-mutation executor.
+- Make `TranscriptionSection`'s view mode controlled so the overlay and split-pane
+  sizing have one owner.
+- Derive displayed text from `letter.readingText`; remove `readerText` state, both
+  synchronization effects, the global hydrator write, and the unused
+  `onReaderTextChange`/reading-text autosave path.
+- Move reading-view generation and its progress state behind the existing executor.
+- Characterize same-visit updates, A → B → A reset, A-with-text → B-without-text,
+  stale generation completion, and Close/Escape/overlay cleanup behavior.
 
 Non-goals:
 
-- No Reading View extraction, letter-transcription generation extraction, or full
-  transcript workspace in this correctness slice.
-- No change to transcript autosave, verify/unverify/revert request contracts, editor
-  DOM, Line Review, or transcript/Extras regeneration-popup composition.
-- No generic session/workspace factory and no visual/CSS change.
+- No letter-transcription generation extraction and no transcript/Extras regeneration
+  popup redesign.
+- No transcript editing, verification, revert, autosave, Line Review, backend, API,
+  schema, prompt, CSS, or visual-layout change.
+- No generic view/workspace framework and no editable reading-text UI.
 
 Acceptance:
 
-- Verified B is locked immediately after editing A, with no A baseline or dirty state.
-- A late first-A unverify cannot reopen editing during a fresh A visit.
-- Revert cannot submit a previous visit's transcript.
-- Focused hook/component behavior, complete frontend and mocked browser suites,
-  production build, changed-file lint, backend regression suite/typecheck, and
-  `git diff --check` pass.
+- Overlay mode and split-pane sizing cannot disagree.
+- B without `readingText` never displays A's text.
+- Reading-view generation uses the shared executor and stale completions remain inert.
+- The dead reader-edit prop and autosave callback are gone.
+- Focused behavior, complete frontend/backend suites, production build, changed-file
+  lint, CI-mode mocked browser suite, and `git diff --check` pass.
 
-Expected next slice:
+## Slice 020 — Transcript Editing Visit Isolation
 
-Extract the narrow visit-owned Reading View workspace: one controlled preview mode for
-both the overlay and split pane, authoritative `letter.readingText`, executor-backed
-generation, and removal of the dead reader-edit/autosave path. Keep letter generation
-and the cross-domain transcript/Extras popup separate until they are characterized as
-their own workflow.
+Status: complete at `7fe9d46e`
+
+Problem:
+
+`useTranscriptEditing` owned the verified-edit session, original transcript baseline,
+dirty state, and tooltip without keying them to the opaque route visit. After
+unverify/edit on A, navigating to verified B could leave B editable and keep A's
+header Revert intent alive, creating a path that submitted A's text against B. A late
+first-A response could also target a fresh A visit if local effects escaped the guarded
+Letter adoption boundary.
+
+Delivered invariant:
+
+Every transcript edit session belongs to exactly one `LetterReviewVisit`. A mismatched
+owner renders a fresh locked session synchronously; a layout effect then commits that
+owner and closes raw tooltip state. Session updates and interaction entry points reject
+captured older visits. In-flight responses still pass through the visit-bound guarded
+Letter adoption boundary before changing the route transcript, session, or toast.
+Same-visit DTO rerenders preserve the active edit session, while A → B → A creates a
+fresh owner.
+
+What changed:
+
+- Four independent edit-session state fields became one small owner-keyed session.
+  `LetterReviewVisit` itself is the owner; no second ID, symbol, registry, reducer, or
+  generic session framework was introduced.
+- The visible edit flag, dirty flag, and Revert baseline fail closed during the first
+  new-visit render. Owner-aware functional updates prevent late callbacks from writing
+  into the new session.
+- Tooltip visibility is owner-gated before paint, reset on visit commit, and protected
+  against captured old click/double-click handlers. Transcript input, verify, unverify,
+  and Revert entry points also reject an inactive captured visit.
+- The baseline remains private to the hook. The now-dead public
+  `originalTranscriptText` output and the unused `hasTranscriptChanges` and
+  `originalTranscriptText` section props were removed.
+- The `originalTranscriptVerified` flag and its false branch were removed. A Revert
+  baseline can only be created by double-clicking a verified transcript, so successful
+  Revert always restores verification just as the reachable path did before.
+- `LetterReviewPage.tsx` fell from 1,618 to 1,615 lines. The header retains only the
+  two values it actually needs to compose the Revert action.
+
+Evidence:
+
+- Focused visit/session/component coverage passed 5 files / 22 tests. The four new
+  behavior cases prove same-visit preservation, verified B locking, an inert B Revert,
+  late first-A response rejection during fresh A, no stale transcript/toast effect,
+  tooltip reset, and captured-tooltip-handler isolation.
+- Complete frontend suite passed 122 files / 826 tests. Frontend TypeScript,
+  changed-file ESLint, and the production build passed.
+- Complete backend suite passed 104 files / 1,016 tests; backend typecheck passed.
+- The CI-mode mocked browser suite passed 52/52. Two resource-contended local
+  four-worker runs timed out only on the existing five-second load-error readiness
+  assertion at 51/52; that case passed alone and the full one-worker CI configuration
+  passed without a code change.
+- `git diff --check` passed. Three independent lifecycle, coverage, and
+  architecture/simplicity reviews found no remaining P0–P2 blocker after stale
+  external effects, tooltip ownership, and unnecessary identity/state layers were
+  challenged and repaired.
+- The production build retains its existing large-chunk warning:
+  `LetterReviewPage` is 523.00 kB and `UpdateEditorPage` is 1,182.96 kB after
+  minification.
+
+Residuals:
+
+- Reading View still has duplicate mode owners, a route-level shadow text copy, a dead
+  edit/autosave prop, and manual generation orchestration. Slice 021 owns that narrow
+  correction.
+- `useTranscriptEditing` remains 324 lines because it cohesively owns transcript
+  typing/autosave, verification, unverify-to-edit, Revert, and the verified tooltip.
+  Do not split it by length or merge it with generation/Reading View without a clearer
+  responsibility boundary.
+- Whole-frontend lint remains an explicit repository backlog. Every file touched by
+  this slice passes lint; unrelated findings were not mixed into the correctness
+  repair.
+
+No product feature, visual layout, backend production behavior, database schema,
+deployment, or external state changed in this slice.
 
 ## Slice 019 — Extra Content Vertical Workspace
 

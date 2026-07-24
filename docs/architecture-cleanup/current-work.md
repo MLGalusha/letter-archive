@@ -7,10 +7,10 @@ Last updated: July 24, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 020 — transcript editing visit isolation
-- Last sealed cleanup implementation: transcript visit isolation at `7fe9d46e`
+- Current checkpoint: 021 — Reading View workspace
+- Last sealed cleanup implementation: Reading View workspace at `e1ede201`
 - Feedback reliability prerequisite: Express request deadlines at `c8ac080b`
-- Current slice: 021 — Reading View workspace
+- Current slice: 022 — Letter transcription workspace
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -2101,9 +2101,67 @@ Residuals:
 No product feature, visual layout, backend production behavior, database schema,
 deployment, or external state changed in this slice.
 
-## Slice 021 — Reading View Workspace
+## Slice 022 — Letter Transcription Workspace
 
 Status: next
+
+Problem:
+
+Letter transcription still has three route-owned state cells, visit-reset writes, a
+manual request boundary, and an inline cross-domain chooser. Its handler repeats
+saving-lease, autosave-flush, request, guarded adoption, hydration, error, and release
+logic instead of adapting its response envelope to the shared mutation executor. The
+replacement warning reads persisted `letter.transcript.fullText`, while the visible
+editor and user intent read the live `transcript` draft. A locally typed draft can
+therefore be flushed and immediately overwritten without a warning; a locally cleared
+draft can prompt even though the visible editor is empty. An older completion-reset
+timer can also clear the progress of a newer run in the same visit.
+
+Target invariant:
+
+One visit-owned Letter transcription workspace owns request-envelope adaptation,
+progress/message state, accepted-result truth, success copy, and replacement intent
+based on the visible transcript. It reuses the ordered direct-mutation executor and
+fails closed across A → B → A. A thin presentational chooser renders the existing
+options, while `LetterReviewPage` retains only the intentional cross-domain
+composition: Letter first, then Extra Content only after an accepted Letter result
+from the same active visit.
+
+Planned minimum:
+
+- Add `useLetterTranscriptionWorkspace` after the direct-mutation executor and move
+  the `transcribeLetter` API import plus progress/message ownership into it.
+- Adapt the `{ letter, transcribed }` response to the Letter-returning executor while
+  preserving page-count copy and returning `true` only after guarded adoption.
+- Use the live transcript draft to decide whether replacement confirmation is needed.
+- Make visit changes synchronously idle/closed, reject captured old controls, and
+  guard delayed completion resets against a newer run.
+- Extract the existing chooser markup into a presentation-only
+  `TranscriptionRegenerationDialog`.
+- Keep Letter/Extras/Both orchestration explicit in the route and preserve the
+  existing sequential two-request behavior.
+
+Non-goals:
+
+- No Extra Content workspace changes and no combined regeneration endpoint.
+- No transcript editing, verification, autosave, Reading View, Line Review, metadata,
+  backend, API, prompt, timeout, CSS, or visual-layout change.
+- No generic transcription/action/dialog framework.
+
+Acceptance:
+
+- Visible nonempty drafts always receive replacement confirmation; visible empty
+  drafts do not prompt solely because the DTO is stale.
+- Transcription uses the shared executor and reports accepted success truthfully.
+- A stale visit, rejected adoption, blocked flush, failed request, or older reset
+  cannot repaint/unlock a newer run or continue the Both sequence.
+- Focused behavior, existing Letter/Extras browser sequencing, complete
+  frontend/backend suites, production build, changed-file lint, CI-mode mocked browser
+  suite, and `git diff --check` pass.
+
+## Slice 021 — Reading View Workspace
+
+Status: complete at `e1ede201`
 
 Problem:
 
@@ -2116,42 +2174,80 @@ truthy replacement. `onReaderTextChange` is passed into the section but never re
 its reading-text autosave path is dead. Generation manually repeats the direct-mutation
 boundary already owned by the executor.
 
-Target invariant:
+Delivered invariant:
 
 One visit-owned Reading View workspace controls preview mode, open/close behavior,
 generation progress, and the section contract. Displayed text is derived from the
 guarded authoritative Letter, so a letter without `readingText` is empty immediately.
 Generation reuses the ordered mutation executor, and neither late work nor captured
-controls from an older visit can repaint or reopen a newer visit.
+controls from an older visit—or from the same visit while Line Review owns the
+surface—can repaint, reopen, or generate against an unavailable surface. The exact
+same normalized open value drives the portal and forced split ratio.
 
-Planned minimum:
+What changed:
 
-- Introduce a narrow `useReadingViewWorkspace` after the direct-mutation executor.
-- Make `TranscriptionSection`'s view mode controlled so the overlay and split-pane
-  sizing have one owner.
-- Derive displayed text from `letter.readingText`; remove `readerText` state, both
-  synchronization effects, the global hydrator write, and the unused
-  `onReaderTextChange`/reading-text autosave path.
-- Move reading-view generation and its progress state behind the existing executor.
-- Characterize same-visit updates, A → B → A reset, A-with-text → B-without-text,
-  stale generation completion, and Close/Escape/overlay cleanup behavior.
+- `useReadingViewWorkspace` is a 146-line domain boundary constructed after the
+  direct-mutation executor. One opaque route visit owns its open and progress state;
+  mismatched visits render closed/idle synchronously.
+- `TranscriptionSection` is controlled. Its toggle, portal, Escape/backdrop/Close
+  actions, body-overflow cleanup, and the route's `forceSplit` all consume the same
+  workspace value.
+- Displayed text is now `letter.readingText ?? ''`. The route shadow draft, two
+  truthy-only synchronization paths, hydrator write, unused edit prop/callback, and
+  dead reading-text autosave field were removed.
+- Generation uses `executeLetterMutation`, so target-wide autosaves flush first and
+  guarded Letter adoption remains the only success boundary. Progress begins when the
+  queued request actually starts.
+- A latest committed availability guard rejects controls captured before Line Review
+  or another eligibility loss. Owner-aware functional updates prevent late work from
+  mutating B or a fresh A visit.
+- `LetterReviewPage.tsx` fell from 1,615 to 1,553 lines. Route state calls fell from
+  15 to 14, effects from 7 to 6, and callback owners from 24 to 21. Across the four
+  affected/new production files, physical source rose by 76 lines because the
+  explicit visit owner and guards replaced implicit coupling rather than merely
+  moving route code.
+- The mocked Letter Review API now models revision-bound reading generation. Its
+  browser case leaves A's portal open during an SPA transition to B and proves the
+  portal, body lock, divider lock, split ratio, and authoritative empty text all reset
+  together.
 
-Non-goals:
+Evidence:
 
-- No letter-transcription generation extraction and no transcript/Extras regeneration
-  popup redesign.
-- No transcript editing, verification, revert, autosave, Line Review, backend, API,
-  schema, prompt, CSS, or visual-layout change.
-- No generic view/workspace framework and no editable reading-text UI.
+- Focused workspace, controlled-section, and ownership coverage passed 3 files /
+  16 tests. It covers same-visit authoritative updates, A → B → fresh A, missing
+  reading text, exact request/progress/adoption, failure cleanup, late completion,
+  captured controls, Line Review inactivity, and portal cleanup.
+- The discriminating mocked browser case measured a 60% → 40% → 60% split, divider
+  locking, body-scroll locking, exact revision payload, generated text adoption, and
+  the open-A → B reset. The complete mocked browser suite passed 53/53.
+- Complete frontend suite passed 123 files / 832 tests. Frontend TypeScript and the
+  production build passed.
+- Complete backend suite passed 104 files / 1,016 tests; backend typecheck passed.
+- Touched frontend ESLint and `git diff --check` passed. Whole-frontend lint remains
+  the known backlog at 161 problems (141 errors and 20 warnings).
+- Three independent lifecycle, adversarial, and architecture/simplicity reviews found
+  no remaining P0–P2 issue after captured Line Review controls, callback stability,
+  impossible revision fixtures, and a non-discriminating first browser draft were
+  challenged and repaired.
+- Existing production-build warnings remain: `LetterReviewPage` is 523.46 kB and
+  `UpdateEditorPage` is 1,182.96 kB after minification.
 
-Acceptance:
+Residuals:
 
-- Overlay mode and split-pane sizing cannot disagree.
-- B without `readingText` never displays A's text.
-- Reading-view generation uses the shared executor and stale completions remain inert.
-- The dead reader-edit prop and autosave callback are gone.
-- Focused behavior, complete frontend/backend suites, production build, changed-file
-  lint, CI-mode mocked browser suite, and `git diff --check` pass.
+- Letter transcription still owns a manual mutation boundary and uses persisted,
+  rather than visible, transcript content for replacement intent. Slice 022 owns that
+  narrow correction.
+- Metadata/entity regeneration is the next coherent workspace after transcription,
+  but its current “Metadata Only” and “Both” labels do not describe distinct backend
+  work: both paths run entity analysis. Characterize that contract and deterministic
+  dialog/API behavior before extracting it.
+- The dashboard's serializable query state remains repeated through filter state,
+  persistence, saved views, API adapters, chips, and selection. Begin that later with
+  a pure canonical query-state characterization, not a sweeping reducer migration.
+- The whole-frontend lint backlog remains explicit; touched files are clean.
+
+No product feature, visual layout, backend production behavior, database schema,
+deployment, or external state changed in this slice.
 
 ## Slice 020 — Transcript Editing Visit Isolation
 

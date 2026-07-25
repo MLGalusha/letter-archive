@@ -7,12 +7,12 @@ Last updated: July 25, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 038 — durable worker-owned transcript confirmation, complete
-- Last sealed cleanup implementation: durable worker-owned transcript confirmation
-  at `46418d6f`
+- Current checkpoint: 039 — fenced photo-description writes, complete
+- Last sealed cleanup implementation: fenced photo-description writes at `446ebdd9`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Active slice: 039 — fence photo-description writes, framed below.
+- Active slice: none; reassess the remaining program and frame the next smallest
+  behavior-preserving or correctness-focused boundary before editing production code.
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -116,7 +116,7 @@ tree:
 
 ## Slice 039 — Fence Photo-Description Writes
 
-Status: framed
+Status: complete at `446ebdd9`
 
 Problem:
 
@@ -185,6 +185,60 @@ Baseline:
   description-only or verification-only mutations.
 
 Rollback base: `f8cdc68b`.
+
+Delivered:
+
+- Generated publication and manual saves now bind their final update to the caller's
+  primary-source revision, the observed row timestamp, and the exact observed
+  description/status/context/verification tuple.
+- The exact tuple supplements the repository's millisecond timestamp comparison, so
+  a same-millisecond edit, generation, verification, or unverification cannot be
+  hidden by timestamp truncation.
+- A shared private conflict classifier reloads current state after a lost update.
+  Page-source drift retains `SOURCE_REVISION_CHANGED`; every same-source conflict is
+  an ordinary 409 and never performs a fallback write.
+- A stale manual save that derived `EDITED` from an older `AI_DRAFT` can no longer
+  land after verification and leave verified-at/by fields attached to unverified
+  content.
+- The HTTP contract explicitly distinguishes the ordinary write conflict from the
+  coded page-source conflict. Existing frontend ownership keeps the former
+  recoverable and the latter terminal.
+
+Evidence:
+
+- Focused photo-writer, verification, and route contracts: 3 files / 137 tests passed.
+- Backend suite: 108 files / 1,124 tests passed; backend typecheck passed.
+- Frontend suite: 149 files / 1,029 tests passed; the production build passed with
+  only the existing large-chunk warnings.
+- Mocked browser suite: 77/77 passed. No new browser case was added because a mocked
+  API cannot prove the durable conditional-write invariant and existing frontend
+  tests already prove ordinary versus coded 409 handling.
+- `CI=1 ./scripts/verify-all.sh`: passed with `Verification complete`.
+- `git diff --check`: passed.
+
+Independent review:
+
+- Backend review first found the unframed manual-save/verification race; the slice
+  expanded to fence both source-only writers. Final review then found that timestamp
+  truncation alone could miss a same-millisecond write; the exact observed tuple was
+  added. Final backend re-review reported no remaining P0-P2 finding.
+- Frontend/API and browser-test reviews reported no P0-P2 finding. Letter Review is
+  the only generation caller, already preserves local state on failure, treats an
+  ordinary 409 as recoverable, and treats only the coded source conflict as terminal.
+
+Residual:
+
+- Photo-description generation remains request-owned and synchronous. This slice
+  prevents destructive publication races; it does not make a committed response
+  durable across a later DTO-read or transport failure.
+- The global row-timestamp guard can conservatively reject publication after an
+  unrelated letter-row update even when the exact photo tuple is unchanged. That is
+  a safe retry rather than data loss; a dedicated photo revision would remove the
+  false conflict but is not justified by current evidence.
+- The first aggregate run exposed one unrelated `LetterDetailPage` robots-meta test
+  failure. The test immediately passed alone, in a fresh full frontend run, and in
+  the successful aggregate rerun. Treat it as feedback-reliability debt to
+  characterize if it recurs; do not attribute it to this backend-only slice.
 
 ## Slice 001 — Honest Browser Baseline
 

@@ -7,12 +7,14 @@ Last updated: July 24, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 033 — truthful Dashboard filter-availability feedback
-- Last sealed cleanup implementation: retired Dashboard collection-picker CSS deletion
-  at `61ccdbf4`
+- Current checkpoint: 033 — truthful Dashboard filter-panel feedback
+- Last sealed cleanup implementation: retired Dashboard filter-pills contract
+  at `6708ef6c`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Current slice: framed; production implementation has not started
+- Current slice: no implementation is open. Next orientation is deterministic
+  characterization of the Letter Review metadata/entity regeneration boundary before
+  any workspace extraction or product-contract change.
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -2735,7 +2737,7 @@ Rollback base: `0b2d6b52`.
 
 ## Slice 033 — Retire the Stale Dashboard Filter-Pills Contract
 
-Status: framed; production implementation has not started
+Status: complete at `6708ef6c`
 
 Problem:
 
@@ -2795,6 +2797,71 @@ Acceptance:
   suite/build, aggregate verifier, PostCSS parsing, and `git diff --check` pass.
 - Independent selector/cascade, E2E-contract, and skeptical-simplicity reviews find
   no remaining P0–P2 issue in the bounded cleanup.
+
+What changed:
+
+- Deleted the legacy-only `.filter-pills` comment and rule: one rule, one selector
+  branch, and four declarations. `AdminDashboard.css` fell from 3,811 to 3,803 lines.
+- Deleted the obsolete shared E2E `filterPills` selector.
+- Replaced the impossible class-visibility assertion with the current accessible
+  behavior contract: the exact `Filters` trigger starts collapsed, opens the panel
+  with `aria-expanded="true"` and a visible `Filters` heading, then closes the panel
+  through the same visible trigger and restores the collapsed state.
+- Added no production component, state, helper abstraction, selector rename, or
+  permanent negative assertion for the retired spelling.
+
+Evidence:
+
+- Git history shows `03559b81` removed the final `DashboardFilterBar` renderer and
+  responsive overrides while accidentally retaining the base rule, helper, and
+  assertion. Production source and E2E now contain zero exact `.filter-pills` or
+  `filterPills` reference.
+- PostCSS parsed 510 baseline rules and identified exactly one target rule, one
+  selector branch, and four declarations with no mixed live branch. The final
+  stylesheet has 509 rules; every surviving selector, at-rule ancestry, and
+  declaration sequence is identical.
+- Deterministic before/after captures opened the current filter panel at desktop
+  `1440×900` and phone `390×844`. Both states report zero legacy nodes, 26 current
+  `.filter-option` controls, one open current panel, and one `.collection-input`.
+  Their complete DOM/computed-style fingerprints are byte-identical with SHA-256
+  `50ca85d35000e73fb55143e74160fe854a4966cfb2620f1b4536e582a74172e9`.
+- Both screenshot pairs are byte- and therefore pixel-identical. Their SHA-256 values
+  are `c6954115ead1a1fcc01402d6f3391259adc92e023d1d9a6dc178bf5368b7aef2`
+  at desktop and
+  `dc87d66a9cccfcf8dd23ac0621584f0c6110a403e3d5b63f9852877e3c1a5aa7`
+  at phone.
+- The Dashboard neighborhood passed 31 files / 215 tests, the deterministic Dashboard
+  mocked-browser spec passed 11/11, the production build passed, and the data-backed
+  Dashboard spec discovered all 28 tests including the replacement contract.
+- Aggregate `CI=1 ./scripts/verify-all.sh` passed: backend 105 files / 1,070 tests,
+  backend typecheck, frontend 141 files / 974 tests, frontend production build, and
+  mocked browser 61/61.
+- `git diff --check` passed. Independent review caught that the first draft attempted
+  to dismiss through a footer action hidden at the configured desktop breakpoint; the
+  test was repaired before sealing to use the visible trigger. Final
+  selector/cascade, E2E/rendered-evidence, and skeptical-simplicity reviews approved
+  the implementation with no remaining P0–P2 production or test finding.
+
+Residuals:
+
+- The full 28-test data-backed Dashboard spec was discovered but not executed because
+  local frontend, backend, Postgres, and its letter fixture were unavailable. The
+  current filter behavior is covered by deterministic mocked-browser and unit tests;
+  this checkpoint does not claim the live spec is green.
+- `AdminDashboard.css` remains a 3,803-line global stylesheet. The Collections view
+  still reuses the live `.letters-table` family imported by the Dashboard route;
+  moving that shared owner requires separate cascade/import and rendered proof.
+- The next higher-value orientation is the Letter Review metadata/entity regeneration
+  boundary. Its user-facing intents currently converge on entity-producing backend
+  work, so deterministic contract characterization must precede extraction or copy
+  changes.
+- The production build retains its existing large-chunk warning:
+  `LetterReviewPage` is 527.84 kB and `UpdateEditorPage` is 1,182.96 kB after
+  minification.
+
+No product feature, filter semantics, request, production DOM, computed style,
+responsive behavior, screenshot pixel, backend behavior, deployment, or external
+state changed.
 
 Rollback base: `edc78994`.
 

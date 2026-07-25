@@ -398,6 +398,8 @@ describe('entity extraction commit boundary', () => {
       entityExtractionLeaseRunId: null,
       entityExtractionClaimKind: null,
       entityExtractionError: null,
+      metadataConfirmationGuidance: null,
+      metadataGuidanceRunId: null,
     });
     expect(events.at(-1)).toBe('update:letters');
   });

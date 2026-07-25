@@ -170,7 +170,13 @@ async function claimEntityExtraction(
       entityExtractionLeaseRunId: runId,
       entityExtractionClaimKind: claimKind,
       entityExtractionError: null,
-      ...(claimKind === 'REQUESTED' ? { deadLetter: false } : {}),
+      ...(claimKind === 'REQUESTED'
+        ? {
+            deadLetter: false,
+            metadataConfirmationGuidance: null,
+            metadataGuidanceRunId: null,
+          }
+        : {}),
       updatedAt: new Date(),
     })
     .where(and(

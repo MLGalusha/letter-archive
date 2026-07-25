@@ -214,6 +214,12 @@ async function claimMetadata(
       metadataLeaseExpiresAt: newLeaseDeadline(),
       metadataLeaseRunId: runId,
       metadataClaimKind: claimKind,
+      metadataGuidanceRunId: claimKind === 'QUEUED'
+        ? sql<string | null>`CASE
+            WHEN ${letters.metadataConfirmationGuidance} IS NULL THEN NULL
+            ELSE ${runId}::uuid
+          END`
+        : null,
       metadataError: null,
       workflow: 'METADATA_EXTRACTING',
       updatedAt: new Date(),
@@ -279,32 +285,7 @@ export async function claimRequestedMetadata(
   }
 
   return claimMetadata(letterId, observed, 'REQUESTED', {
-    metadataAttemptCount: 0,
-    deadLetter: false,
-    entityExtractionStatus: 'PENDING',
-    ...clearedEntityExtractionOwnership(),
-    entityExtractionError: null,
-  }, undefined, expectedPrimarySourceRevision);
-}
-
-/** Confirms the reviewed transcript and claims its first metadata attempt atomically. */
-export async function claimMetadataAfterTranscriptConfirmation(
-  letterId: string,
-  observed: ObservedMetadataState,
-  expectedPrimarySourceRevision: number,
-  confirmedBy: string,
-): Promise<MetadataClaim | null> {
-  if (
-    !hasClaimableSource(observed)
-    || observed.workflow !== 'TRANSCRIBED'
-    || (observed.status !== 'PENDING' && observed.status !== 'FAILED')
-  ) {
-    return null;
-  }
-
-  return claimMetadata(letterId, observed, 'QUEUED', {
-    transcriptConfirmedAt: new Date(),
-    transcriptConfirmedBy: confirmedBy,
+    ...clearedMetadataConfirmationGuidance(),
     metadataAttemptCount: 0,
     deadLetter: false,
     entityExtractionStatus: 'PENDING',
@@ -364,6 +345,25 @@ export function clearedMetadataOwnership() {
     metadataLeaseExpiresAt: null,
     metadataLeaseRunId: null,
     metadataClaimKind: null,
+  };
+}
+
+/** Clears reviewer guidance without changing the immutable confirmation receipt. */
+export function clearedMetadataConfirmationGuidance() {
+  return {
+    metadataConfirmationGuidance: null,
+    metadataGuidanceRunId: null,
+  };
+}
+
+/** Clears every field whose authority derives from one confirmed transcript. */
+export function clearedTranscriptConfirmationIntent() {
+  return {
+    transcriptConfirmationId: null,
+    transcriptConfirmationIntentHash: null,
+    transcriptConfirmationSourceRevision: null,
+    transcriptConfirmationTranscriptDigest: null,
+    ...clearedMetadataConfirmationGuidance(),
   };
 }
 
@@ -595,6 +595,7 @@ export async function recoverExpiredMetadataJobs(
 /** Spread into the same write as authoritative human metadata content. */
 export function buildHumanMetadataJobPatch() {
   return {
+    ...clearedMetadataConfirmationGuidance(),
     metadataStatus: sql<JobStatus>`CASE
       WHEN ${letters.metadataStatus} = 'RUNNING'
         AND ${letters.metadataRunId} IS NULL
@@ -696,6 +697,7 @@ export function buildHumanMetadataNotesPatch() {
 /** Spread into a transcript/source write so an older result cannot publish. */
 export function buildMetadataSourceInvalidationPatch() {
   return {
+    ...clearedMetadataConfirmationGuidance(),
     metadataStatus: sql<JobStatus>`CASE
       WHEN ${letters.metadataStatus} = 'RUNNING'
         AND ${letters.metadataRunId} IS NULL

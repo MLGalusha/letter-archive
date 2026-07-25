@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { access } from 'node:fs/promises';
 import path from 'node:path';
 import type { Page, Route } from '@playwright/test';
@@ -60,6 +61,8 @@ interface MockLetterReviewLetter {
   visibility: 'PUBLISHED' | 'HIDDEN';
   transcriptStatus: 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
   metadataContentStatus: 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
+  metadataJobStatus?: 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';
+  transcriptConfirmationId?: string;
   extraContentStatus: 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
   extraContentTranscript?: string;
   readingText?: string;
@@ -175,6 +178,7 @@ interface MockTranscriptConfirmationRequest {
   url: string;
   body: {
     primarySourceRevision?: number;
+    transcriptDigest?: string;
     confirmedSender?: string;
     confirmedRecipient?: string;
   };
@@ -458,6 +462,7 @@ export interface MockLetterReviewContext {
     url: string;
     body: { primarySourceRevision?: number };
   }>;
+  loadLetterRequests: string[];
   confirmTranscriptRequests: MockTranscriptConfirmationRequest[];
   regenerateMetadataRequests: MockAnalysisRegenerationRequest[];
   reExtractRequests: MockAnalysisRegenerationRequest[];
@@ -478,6 +483,10 @@ export async function installMockLetterReviewApi(
       { status?: number; error: string; requestId?: string }
     >;
     confirmTranscriptFailureAfterCommit?: MockApiFailure;
+    confirmTranscriptReceiptOnly?: boolean;
+    confirmTranscriptTransportAbort?: boolean;
+    confirmationIdAfterReceipt?: string;
+    loadLetterFailureAfterConfirmationAttempt?: MockApiFailure;
     routeFailures?: Partial<
       Record<
         | 'loadLetter'
@@ -531,9 +540,11 @@ export async function installMockLetterReviewApi(
   const transcribeLetterRequests: MockLetterReviewContext['transcribeLetterRequests'] = [];
   const transcribeExtrasRequests: MockLetterReviewContext['transcribeExtrasRequests'] = [];
   const generateReadingViewRequests: MockLetterReviewContext['generateReadingViewRequests'] = [];
+  const loadLetterRequests: string[] = [];
   const confirmTranscriptRequests: MockLetterReviewContext['confirmTranscriptRequests'] = [];
   const regenerateMetadataRequests: MockLetterReviewContext['regenerateMetadataRequests'] = [];
   const reExtractRequests: MockLetterReviewContext['reExtractRequests'] = [];
+  let confirmationAttempted = false;
   const letterPath = `${API_BASE_URL}/admin/letters/${letter.id}`;
   const detectLinesByPageId = options.detectLinesByPageId
     ? clone(options.detectLinesByPageId)
@@ -699,6 +710,17 @@ export async function installMockLetterReviewApi(
       return;
     }
 
+    loadLetterRequests.push(route.request().url());
+    if (
+      confirmationAttempted
+      && options.loadLetterFailureAfterConfirmationAttempt
+    ) {
+      await fulfillFailure(
+        route,
+        options.loadLetterFailureAfterConfirmationAttempt,
+      );
+      return;
+    }
     if (routeFailures.loadLetter) {
       await fulfillFailure(route, routeFailures.loadLetter);
       return;
@@ -815,6 +837,7 @@ export async function installMockLetterReviewApi(
 
   await page.route(new RegExp(`${escapeRegex(letterPath)}/confirm-transcript$`), async (route) => {
     const body = route.request().postDataJSON() as MockTranscriptConfirmationRequest['body'];
+    confirmationAttempted = true;
     confirmTranscriptRequests.push({
       url: route.request().url(),
       body,
@@ -831,27 +854,56 @@ export async function installMockLetterReviewApi(
       });
       return;
     }
+    if (
+      typeof body.transcriptDigest !== 'string'
+      || !/^[a-f0-9]{64}$/.test(body.transcriptDigest)
+    ) {
+      await fulfillFailure(route, {
+        status: 400,
+        error: 'A valid transcript digest is required',
+        code: 'INVALID_TRANSCRIPT_DIGEST',
+      });
+      return;
+    }
+    const currentTranscriptDigest = createHash('sha256')
+      .update(letter.transcript.fullText, 'utf8')
+      .digest('hex');
+    if (body.transcriptDigest !== currentTranscriptDigest) {
+      await fulfillFailure(route, {
+        status: 409,
+        error: 'Transcript changed; reload before confirming it',
+        code: 'TRANSCRIPT_DIGEST_CHANGED',
+      });
+      return;
+    }
+    if (options.confirmTranscriptTransportAbort) {
+      await route.abort('failed');
+      return;
+    }
 
-    letter.transcriptConfirmedAt = '2025-03-05T00:00:00.000Z';
-    if (body.confirmedSender !== undefined) {
-      letter.metadata.sender = body.confirmedSender;
-    }
-    if (body.confirmedRecipient !== undefined) {
-      letter.metadata.recipient = body.confirmedRecipient;
-    }
-    letter.metadata.location = 'Confirmed Response Location';
-    letter.metadata.hook = 'Confirmation response hydrated.';
-    letter.metadataContentStatus = 'AI_DRAFT';
-    letter.metadata.verified = false;
-    delete letter.metadataVerifiedAt;
-    letter.workflowState = 'METADATA_DRAFTED';
-    letter.entityExtractionStatus = 'SUCCESS';
-    letter.entityExtractionJson = {
-      people: [createRegeneratedEntity('Confirmation Result Entity')],
-      places: [],
-      relationships: [],
-      person_place_connections: [],
+    const confirmedAt = '2025-03-05T00:00:00.000Z';
+    const confirmationId = `mock-confirmation-${letter.id}`;
+    letter.transcriptConfirmedAt = confirmedAt;
+    letter.transcriptConfirmationId = confirmationId;
+    letter.workflowState = 'TRANSCRIBED';
+    letter.metadataJobStatus = 'PENDING';
+    letter.entityExtractionStatus = 'PENDING';
+    const receipt = {
+      confirmationId,
+      confirmedAt,
+      confirmedBy: 'admin',
+      transcriptSource: {
+        primarySourceRevision: letter.primarySourceRevision,
+        transcriptDigest: body.transcriptDigest,
+      },
+      metadataInputIdentity: `v1.${'1'.repeat(64)}`,
+      intentIdentity: `v1.${'2'.repeat(64)}`,
+      metadataDisposition: 'queued',
     };
+    if (options.confirmationIdAfterReceipt) {
+      letter.transcriptConfirmationId =
+        options.confirmationIdAfterReceipt;
+    }
     if (options.confirmTranscriptFailureAfterCommit) {
       await fulfillFailure(
         route,
@@ -861,9 +913,12 @@ export async function installMockLetterReviewApi(
     }
 
     await route.fulfill({
-      status: 200,
+      status: 202,
       contentType: 'application/json',
-      body: JSON.stringify(letter),
+      body: JSON.stringify({
+        receipt,
+        ...(options.confirmTranscriptReceiptOnly ? {} : { letter }),
+      }),
     });
   });
 
@@ -1466,6 +1521,7 @@ export async function installMockLetterReviewApi(
     transcribeLetterRequests,
     transcribeExtrasRequests,
     generateReadingViewRequests,
+    loadLetterRequests,
     confirmTranscriptRequests,
     regenerateMetadataRequests,
     reExtractRequests,

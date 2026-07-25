@@ -57,6 +57,8 @@ describe('letter DTO metadata fidelity', () => {
       transcriptionJson: null,
       transcriptStatus: 'EMPTY',
       metadataContentStatus: 'EDITED',
+      metadataStatus: 'FAILED',
+      transcriptConfirmationId: '38000000-0000-4000-8000-000000000001',
       workflow: 'TRANSCRIBED',
       visibility: 'HIDDEN',
       transcriptPublished: false,
@@ -68,12 +70,18 @@ describe('letter DTO metadata fidelity', () => {
       createdAt: new Date('2026-07-24T12:00:00.000Z'),
     } as unknown as LetterWithRelations;
 
-    expect(transformLetterToDTO(letter).metadata).toMatchObject({
+    const result = transformLetterToDTO(letter);
+
+    expect(result.metadata).toMatchObject({
       sender: '',
       recipient: '',
       location: '',
       hook: '',
       description: '',
     });
+    expect(result.metadataJobStatus).toBe(letter.metadataStatus);
+    expect(result.transcriptConfirmationId).toBe(
+      letter.transcriptConfirmationId,
+    );
   });
 });

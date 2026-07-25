@@ -45,15 +45,21 @@ describe('admin letter verification api', () => {
       body: { primarySourceRevision: 7 },
     },
     {
-      action: () => confirmTranscript('letter-1', 7, {
-        confirmedSender: 'Mabel',
-        confirmedRecipient: 'Theo',
-      }),
+      action: () => confirmTranscript(
+        'letter-1',
+        7,
+        'transcript-digest-1',
+        {
+          confirmedSender: 'Mabel',
+          confirmedRecipient: 'Theo',
+        },
+      ),
       path: 'confirm-transcript',
       body: {
         confirmedSender: 'Mabel',
         confirmedRecipient: 'Theo',
         primarySourceRevision: 7,
+        transcriptDigest: 'transcript-digest-1',
       },
     },
     {
@@ -143,6 +149,7 @@ describe('admin letter verification api', () => {
     const error = await confirmTranscript(
       'letter-1',
       7,
+      'transcript-digest-1',
       { confirmedSender: 'Mabel' },
     ).catch((caught: unknown) => caught);
 

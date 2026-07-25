@@ -8,6 +8,7 @@ import {
 } from '../db/index.js';
 import { isPlaceholderValue } from '../utils/placeholders.js';
 import { clearedEntityExtractionOwnership } from './letter/entity-extraction-job.js';
+import { clearedTranscriptConfirmationIntent } from './letter/metadata-job.js';
 import { transcriptionPrerequisiteConditions } from './processing-eligibility.js';
 import {
   isPublicCatalogueLetterType,
@@ -200,6 +201,7 @@ export async function resetLetterForProcessing(
       metadataContentStatus: 'EMPTY',
       transcriptConfirmedAt: null,
       transcriptConfirmedBy: null,
+      ...clearedTranscriptConfirmationIntent(),
       transcriptVerifiedAt: null,
       transcriptVerifiedBy: null,
       metadataVerifiedAt: null,

@@ -284,6 +284,10 @@ describe('entity extraction job lifecycle', () => {
       claimRequestedEntityExtraction(row.id, observed(), row.primarySourceRevision),
     ).resolves.toEqual({ runId: 'run-a', revision: 3 });
 
+    expect(updateSetMock).toHaveBeenLastCalledWith(expect.objectContaining({
+      metadataConfirmationGuidance: null,
+      metadataGuidanceRunId: null,
+    }));
     expect(row).toMatchObject({
       entityExtractionStatus: 'RUNNING',
       entityExtractionRunId: 'run-a',

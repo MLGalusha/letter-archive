@@ -13,7 +13,10 @@ import {
   withLeaseHeartbeat,
   type LeaseHeartbeat,
 } from './lease-heartbeat.js';
-import { buildMetadataSourceInvalidationPatch } from './metadata-job.js';
+import {
+  buildMetadataSourceInvalidationPatch,
+  clearedTranscriptConfirmationIntent,
+} from './metadata-job.js';
 import { hasIdleTranscriptionDownstream } from '../processing-eligibility.js';
 import { activeWorkerExecutionCondition } from '../worker-state.js';
 
@@ -307,6 +310,7 @@ export async function completeTranscription(
       transcriptStatus: transcriptionText === null ? 'EMPTY' : 'AI_DRAFT',
       transcriptConfirmedAt: null,
       transcriptConfirmedBy: null,
+      ...clearedTranscriptConfirmationIntent(),
       transcriptVerifiedAt: null,
       transcriptVerifiedBy: null,
       ...buildMetadataSourceInvalidationPatch(),

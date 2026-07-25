@@ -14,6 +14,7 @@ import { log, type UpdateLetterInput } from './letter/shared.js';
 import {
   buildHumanMetadataJobPatch,
   buildMetadataSourceInvalidationPatch,
+  clearedTranscriptConfirmationIntent,
   observedMetadataRevisionConditions,
 } from './letter/metadata-job.js';
 import {
@@ -72,6 +73,7 @@ export async function updateLetter(
     dbUpdates.transcriptVerifiedBy = null;
     dbUpdates.transcriptConfirmedAt = null;
     dbUpdates.transcriptConfirmedBy = null;
+    Object.assign(dbUpdates, clearedTranscriptConfirmationIntent());
     dbUpdates.workflow = hasTranscription ? 'TRANSCRIBED' : 'UPLOADED';
 
     log.debug(

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db, canonicalPersons, letterPages, letterPersons, letters } from '../../../db/index.js';
 import {
   savePageLineSegments,
@@ -40,11 +40,11 @@ import {
 } from '../../../pipeline/metadataV2.js';
 import {
   buildHumanMetadataJobPatch,
-  claimMetadataAfterTranscriptConfirmation,
   claimRequestedMetadata,
   observeMetadataState,
   observedMetadataRevisionConditions,
 } from '../../../services/letter/metadata-job.js';
+import { confirmTranscriptIntent } from '../../../services/letter/transcript-confirmation.js';
 import { buildMetadataDocumentProjectionPatch } from '../../../services/letter/metadata-projection.js';
 import {
   assertCurrentPrimarySourceRevision,
@@ -55,6 +55,7 @@ import { isPlaceholderValue } from '../../../utils/placeholders.js';
 import {
   addNoteSchema,
   confirmTranscriptSchema,
+  extractionGuidanceSchema,
   reExtractSchema,
   replaceAiNotesSchema,
   restoreVersionBodySchema,
@@ -79,22 +80,6 @@ import {
 } from './helpers.js';
 
 const router = Router();
-
-type ObservedTranscript = Pick<
-  Awaited<ReturnType<typeof requireLetter>>,
-  'workflow' | 'transcriptionStatus' | 'transcriptionText'
->;
-
-function observedTranscriptConditions(letterId: string, letter: ObservedTranscript) {
-  return [
-    eq(letters.id, letterId),
-    eq(letters.workflow, letter.workflow),
-    eq(letters.transcriptionStatus, letter.transcriptionStatus),
-    letter.transcriptionText === null
-      ? isNull(letters.transcriptionText)
-      : eq(letters.transcriptionText, letter.transcriptionText),
-  ];
-}
 
 function requireCompletedMetadataRun(outcome: MetadataRunOutcome): void {
   if (outcome.kind === 'completed') return;
@@ -224,85 +209,65 @@ router.post('/:letterId/confirm-transcript', async (req, res, next) => {
       req.body,
       'Letter source version is missing; reload before confirming its transcript',
     );
-    const { confirmedSender, confirmedRecipient } = confirmTranscriptSchema.parse(req.body ?? {});
-    const letter = await requireLetter(letterId);
-    assertCurrentPrimarySourceRevision(
-      letter.primarySourceRevision ?? 0,
-      primarySourceRevision,
-      'Letter source changed; reload before confirming its transcript',
+    const {
+      transcriptDigest,
+      confirmedSender,
+      confirmedRecipient,
+    } = parseOrThrow(
+      confirmTranscriptSchema,
+      req.body ?? {},
+      'Invalid transcript confirmation',
     );
-    if (letter.workflow !== 'TRANSCRIBED') {
-      throw new BadRequestError('Letter must be in TRANSCRIBED state', { currentState: letter.workflow });
-    }
-    if (letter.transcriptionStatus === 'RUNNING') {
-      throw new BadRequestError('Transcription is already in progress');
-    }
+    const result = await confirmTranscriptIntent({
+      letterId,
+      expectedPrimarySourceRevision: primarySourceRevision,
+      expectedTranscriptDigest: transcriptDigest,
+      confirmedBy: getUserId(req),
+      guidance: { confirmedSender, confirmedRecipient },
+    });
 
-    const confirmWhileTranscriptionIsIdle = async () => {
-      const confirmationResult = await db.update(letters).set({
-        transcriptConfirmedAt: new Date(),
-        transcriptConfirmedBy: getUserId(req),
-        updatedAt: new Date(),
-      }).where(and(
-        ...observedTranscriptConditions(letterId, letter),
-        eq(letters.primarySourceRevision, primarySourceRevision),
-      )).returning({ id: letters.id });
-
-      if (confirmationResult.length === 0) {
-        const latest = await requireLetter(letterId);
-        assertCurrentPrimarySourceRevision(
-          latest.primarySourceRevision ?? 0,
-          primarySourceRevision,
-          'Letter source changed before its transcript could be confirmed; reload and try again',
-        );
-        throw new AppError(409, 'Transcript changed before confirmation; reload and try again');
-      }
-    };
-
-    // Trigger extraction if status is PENDING or FAILED (e.g. cleared by admin).
-    // Skip only if already RUNNING or SUCCESS to avoid double-processing.
-    const shouldExtract = letter.type === 'L'
-      && (letter.metadataStatus === 'PENDING' || letter.metadataStatus === 'FAILED');
-    if (shouldExtract && !letter.transcriptionText?.trim()) {
-      throw new BadRequestError('Letter must have a transcription before extracting metadata');
-    }
-    if (shouldExtract && letter.entityExtractionStatus === 'RUNNING') {
-      throw new BadRequestError('Entity extraction is already in progress');
-    }
-
-    if (shouldExtract) {
-      const claim = await claimMetadataAfterTranscriptConfirmation(
-        letterId,
-        observeMetadataState(letter),
-        primarySourceRevision,
-        getUserId(req),
-      );
-
-      if (claim) {
-        const extractionOptions: ExtractionOptions = {};
-        if (confirmedSender) extractionOptions.confirmedSender = confirmedSender;
-        if (confirmedRecipient) extractionOptions.confirmedRecipient = confirmedRecipient;
-        requireCompletedMetadataRun(
-          await runMetadataExtractionV2(
+    if (result.newlyQueued) {
+      try {
+        await requestBackgroundWorkerRun('transcript-confirmation');
+      } catch (error) {
+        req.log.warn(
+          {
             letterId,
-            Object.keys(extractionOptions).length > 0 ? extractionOptions : undefined,
-            claim,
-          ),
+            confirmationId: result.receipt.confirmationId,
+            err: error,
+          },
+          'Transcript confirmation queued; advisory worker wake failed',
         );
-      } else {
-        // A metadata worker may have won the claim. Confirm only if a
-        // transcription attempt did not win the same race.
-        await confirmWhileTranscriptionIsIdle();
-        req.log.info({ letterId }, 'Metadata job already claimed by worker — skipping extraction');
       }
-    } else {
-      await confirmWhileTranscriptionIsIdle();
-      req.log.info(
-        { letterId, metadataStatus: letter.metadataStatus },
-        'Skipping metadata extraction — status is not PENDING or FAILED',
+    }
+
+    let letter;
+    try {
+      const hydrated = await requireLetterDto(
+        letterId,
+        'Failed to fetch confirmed letter',
+        500,
+      );
+      if (
+        hydrated.primarySourceRevision
+          === result.receipt.transcriptSource.primarySourceRevision
+        && hydrated.transcriptConfirmationId
+          === result.receipt.confirmationId
+        && hydrated.transcriptConfirmedAt
+      ) {
+        letter = hydrated;
+      }
+    } catch (error) {
+      req.log.warn(
+        { letterId, confirmationId: result.receipt.confirmationId, err: error },
+        'Transcript confirmation committed without Letter hydration',
       );
     }
-    res.json(await requireLetterDto(letterId, 'Failed to fetch updated letter', 500));
+
+    res.status(result.newlyQueued ? 202 : 200).json({
+      receipt: result.receipt,
+      ...(letter ? { letter } : {}),
+    });
   } catch (error) {
     next(error);
   }
@@ -315,7 +280,7 @@ router.post('/:letterId/regenerate-metadata', async (req, res, next) => {
       req.body,
       'Letter source version is missing; reload before regenerating metadata',
     );
-    const { confirmedSender, confirmedRecipient } = confirmTranscriptSchema.parse(req.body ?? {});
+    const { confirmedSender, confirmedRecipient } = extractionGuidanceSchema.parse(req.body ?? {});
     const letter = await requireLetter(letterId);
     assertCurrentPrimarySourceRevision(
       letter.primarySourceRevision ?? 0,

@@ -54,6 +54,14 @@ vi.mock('../letter/metadata-job.js', () => ({
     metadataPublished: false,
     transcriptPublished: false,
   }),
+  clearedTranscriptConfirmationIntent: () => ({
+    transcriptConfirmationId: null,
+    transcriptConfirmationIntentHash: null,
+    transcriptConfirmationSourceRevision: null,
+    transcriptConfirmationTranscriptDigest: null,
+    metadataConfirmationGuidance: null,
+    metadataGuidanceRunId: null,
+  }),
 }));
 
 vi.mock('../letter/transcription-job.js', () => ({

@@ -10,12 +10,17 @@ const workspacePath = path.resolve(
   process.cwd(),
   'src/pages/admin/LetterReview/useTranscriptConfirmationWorkspace.ts',
 );
+const outcomePath = path.resolve(
+  process.cwd(),
+  'src/pages/admin/transcriptConfirmationOutcome.ts',
+);
 
 describe('Letter Review transcript confirmation ownership', () => {
   it('keeps one visit-owned workspace and one shared presentation boundary', async () => {
-    const [page, workspace] = await Promise.all([
+    const [page, workspace, outcome] = await Promise.all([
       readFile(pagePath, 'utf8'),
       readFile(workspacePath, 'utf8'),
+      readFile(outcomePath, 'utf8'),
     ]);
 
     expect(page).toContain('useTranscriptConfirmationWorkspace({');
@@ -45,11 +50,12 @@ describe('Letter Review transcript confirmation ownership', () => {
 
     expect(workspace).toContain('visit: LetterReviewVisit');
     expect(workspace).toContain('executeLetterMutation({');
-    expect(workspace).toContain('confirmTranscript(');
+    expect(workspace).toContain('resolveTranscriptConfirmationOutcome({');
     expect(workspace).toContain('letter.primarySourceRevision');
-    expect(workspace).toContain(
-      "'Transcript confirmed — metadata extracted'",
-    );
+    expect(workspace).toContain('getTranscriptConfirmationFeedback(outcome)');
+    expect(outcome).toContain('confirmTranscript(');
+    expect(outcome).toContain('getAdminLetterById(letterId)');
+    expect(outcome).not.toContain('metadata extracted');
     for (const competingOwner of [
       'beginSaving',
       'flushPendingSaves',

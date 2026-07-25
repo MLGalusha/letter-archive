@@ -96,6 +96,12 @@ vi.mock('drizzle-orm', () => ({
 
 import { runEntityExtractionOnly, runMetadataExtractionV2 } from '../metadataV2.js';
 import { EntityExtractionClaimLostError } from '../../services/entities.js';
+import {
+  buildMetadataConfirmationGuidanceEnvelope,
+  metadataInputIdentity,
+  transcriptDigest,
+  type MetadataInputIdentitySource,
+} from '../../services/letter/metadata-input-identity.js';
 
 const entities = {
   people: [],
@@ -104,6 +110,7 @@ const entities = {
   person_place_connections: [],
 };
 const entityClaim = { runId: 'entity-run-a', revision: 1 };
+const confirmationId = 'e9db47b6-6bd5-47f2-b573-57e57aeb98f6';
 
 function letter() {
   const leaseExpiresAt = new Date('2026-07-17T12:05:00.000Z');
@@ -128,7 +135,13 @@ function letter() {
     entityExtractionLeaseExpiresAt: null,
     entityExtractionLeaseRunId: null,
     entityExtractionClaimKind: null,
-    extraContentJobStatus: 'PENDING',
+    metadataConfirmationGuidance: null,
+    metadataGuidanceRunId: null,
+    transcriptConfirmationId: null,
+    transcriptConfirmationSourceRevision: null,
+    transcriptConfirmationTranscriptDigest: null,
+    extraContentJobStatus: 'PENDING' as const,
+    extraContentStatus: 'EMPTY' as const,
     deadLetter: false,
     workflow: 'METADATA_EXTRACTING',
     updatedAt: new Date('2026-07-17T12:00:00.000Z'),
@@ -140,6 +153,59 @@ function letter() {
     dateRaw: '19470810',
     extraContentTranscript: null,
     collection: { collectionCode: '009' },
+  };
+}
+
+type GuidanceSource = Omit<
+  MetadataInputIdentitySource,
+  'collectionCode' | 'letterId'
+> & {
+  id: string;
+  primarySourceRevision: number;
+  collection: { collectionCode: string };
+};
+
+interface DurableGuidanceFields {
+  transcriptConfirmationId: string;
+  transcriptConfirmationSourceRevision: number;
+  transcriptConfirmationTranscriptDigest: string;
+  metadataConfirmationGuidance: ReturnType<
+    typeof buildMetadataConfirmationGuidanceEnvelope
+  >;
+  metadataGuidanceRunId: string;
+}
+
+function withDurableGuidance<T extends GuidanceSource>(
+  source: T,
+  guidance: {
+    confirmedSender?: string;
+    confirmedRecipient?: string;
+  },
+): Omit<T, keyof DurableGuidanceFields> & DurableGuidanceFields {
+  const inputIdentity = metadataInputIdentity({
+    letterId: source.id,
+    transcriptionText: source.transcriptionText,
+    collectionCode: source.collection.collectionCode,
+    dateRaw: source.dateRaw,
+    letterDate: source.letterDate,
+    extraContentTranscript: source.extraContentTranscript,
+    extraContentStatus: source.extraContentStatus,
+    extraContentJobStatus: source.extraContentJobStatus,
+  });
+  return {
+    ...source,
+    transcriptConfirmationId: confirmationId,
+    transcriptConfirmationSourceRevision: source.primarySourceRevision,
+    transcriptConfirmationTranscriptDigest: transcriptDigest(
+      source.transcriptionText,
+    ),
+    metadataConfirmationGuidance:
+      buildMetadataConfirmationGuidanceEnvelope({
+        confirmationId,
+        metadataInputIdentity: inputIdentity,
+        guidance,
+      }),
+    metadataGuidanceRunId: 'run-a',
   };
 }
 
@@ -408,6 +474,193 @@ describe('metadata entity persistence ownership', () => {
     expect(claimRequestedEntityExtractionMock).not.toHaveBeenCalled();
     expect(extractEntitiesMock).not.toHaveBeenCalled();
     expect(processEntityExtractionMock).not.toHaveBeenCalled();
+  });
+
+  it('resolves queued metadata guidance from the authoritative post-claim row', async () => {
+    getLetterWithPagesMock
+      .mockResolvedValueOnce({
+        ...withDurableGuidance(letter(), {
+          confirmedSender: 'Alice',
+          confirmedRecipient: 'Bob',
+        }),
+        workflow: 'TRANSCRIBED',
+        metadataStatus: 'PENDING',
+        metadataRunId: null,
+        metadataRunRevision: null,
+        metadataLeaseExpiresAt: null,
+        metadataLeaseRunId: null,
+        metadataClaimKind: null,
+        metadataGuidanceRunId: null,
+      })
+      .mockResolvedValueOnce(withDurableGuidance(letter(), {
+        confirmedSender: 'Alice',
+        confirmedRecipient: 'Bob',
+      }));
+
+    await expect(runMetadataExtractionV2('letter-1', {
+      entityExtraction: 'deferred',
+      workerExecutionToken: 'execution-a',
+    })).resolves.toEqual({ kind: 'completed' });
+
+    expect(extractMetadataV2Mock).toHaveBeenCalledWith(expect.objectContaining({
+      corrections: {
+        confirmedSender: 'Alice',
+        confirmedRecipient: 'Bob',
+      },
+    }));
+  });
+
+  it('ignores queued metadata guidance whose complete input identity is stale', async () => {
+    const accepted = withDurableGuidance(letter(), {
+      confirmedSender: 'Alice',
+    });
+    getLetterWithPagesMock
+      .mockResolvedValueOnce({
+        ...accepted,
+        workflow: 'TRANSCRIBED',
+        metadataStatus: 'PENDING',
+        metadataRunId: null,
+        metadataRunRevision: null,
+        metadataLeaseExpiresAt: null,
+        metadataLeaseRunId: null,
+        metadataClaimKind: null,
+        metadataGuidanceRunId: null,
+      })
+      .mockResolvedValueOnce({
+        ...accepted,
+        extraContentTranscript: 'Context changed after confirmation',
+        extraContentStatus: 'EDITED',
+      });
+
+    await runMetadataExtractionV2('letter-1', {
+      entityExtraction: 'deferred',
+    });
+
+    expect(extractMetadataV2Mock).toHaveBeenCalledWith(expect.objectContaining({
+      corrections: undefined,
+      context: expect.objectContaining({
+        extraContentTranscript: 'Context changed after confirmation',
+      }),
+    }));
+  });
+
+  it('resolves the same durable guidance for deferred queued entity work', async () => {
+    const ready = withDurableGuidance(entityReadyLetter(), {
+      confirmedSender: 'Alice',
+      confirmedRecipient: 'Bob',
+    });
+    const owned = {
+      ...withDurableGuidance(ownedEntityLetter('QUEUED'), {
+        confirmedSender: 'Alice',
+        confirmedRecipient: 'Bob',
+      }),
+      metadataGuidanceRunId: 'run-a',
+    };
+    getLetterWithPagesMock
+      .mockResolvedValueOnce(ready)
+      .mockResolvedValueOnce(owned);
+
+    await expect(runEntityExtractionOnly('letter-1', {
+      claimKind: 'QUEUED',
+      workerExecutionToken: 'execution-a',
+    })).resolves.toEqual({ kind: 'completed' });
+
+    expect(extractEntitiesMock).toHaveBeenCalledWith(expect.objectContaining({
+      corrections: expect.objectContaining({
+        confirmedSender: 'Alice',
+        confirmedRecipient: 'Bob',
+      }),
+    }));
+  });
+
+  it('keeps envelope-validated reviewer guidance distinct from stored AI identities in deferred entity work', async () => {
+    const guidance = {
+      confirmedSender: 'Reviewer-confirmed Alice',
+      confirmedRecipient: 'Reviewer-confirmed Bob',
+    };
+    const storedAiIdentity = {
+      sender: 'Stored AI Sender',
+      recipient: 'Stored AI Recipient',
+    };
+    const ready = withDurableGuidance({
+      ...entityReadyLetter(),
+      ...storedAiIdentity,
+    }, guidance);
+    const owned = withDurableGuidance({
+      ...ownedEntityLetter('QUEUED'),
+      ...storedAiIdentity,
+    }, guidance);
+    getLetterWithPagesMock
+      .mockResolvedValueOnce(ready)
+      .mockResolvedValueOnce(owned);
+
+    await expect(runEntityExtractionOnly('letter-1', {
+      claimKind: 'QUEUED',
+      workerExecutionToken: 'execution-a',
+    })).resolves.toEqual({ kind: 'completed' });
+
+    expect(extractEntitiesMock).toHaveBeenCalledWith(expect.objectContaining({
+      basicMetadata: expect.objectContaining(storedAiIdentity),
+      corrections: guidance,
+    }));
+  });
+
+  it('uses explicit requested guidance instead of persisted confirmation guidance', async () => {
+    getLetterWithPagesMock
+      .mockResolvedValueOnce(withDurableGuidance(entityReadyLetter(), {
+        confirmedSender: 'Stale Alice',
+        confirmedRecipient: 'Stale Bob',
+      }))
+      .mockResolvedValueOnce(withDurableGuidance(
+        ownedEntityLetter('REQUESTED'),
+        {
+          confirmedSender: 'Stale Alice',
+          confirmedRecipient: 'Stale Bob',
+        },
+      ));
+
+    await runEntityExtractionOnly('letter-1', {
+      claimKind: 'REQUESTED',
+      expectedPrimarySourceRevision: 0,
+      confirmedSender: 'Requested Alice',
+      confirmedRecipient: 'Requested Bob',
+    });
+
+    expect(claimRequestedEntityExtractionMock).toHaveBeenCalled();
+    expect(extractEntitiesMock).toHaveBeenCalledWith(expect.objectContaining({
+      corrections: expect.objectContaining({
+        confirmedSender: 'Requested Alice',
+        confirmedRecipient: 'Requested Bob',
+      }),
+    }));
+  });
+
+  it('uses explicit requested metadata guidance instead of a persisted envelope', async () => {
+    getLetterWithPagesMock.mockResolvedValueOnce({
+      ...withDurableGuidance(letter(), {
+        confirmedSender: 'Stale Alice',
+        confirmedRecipient: 'Stale Bob',
+      }),
+      metadataClaimKind: 'REQUESTED',
+      metadataGuidanceRunId: null,
+    });
+
+    await runMetadataExtractionV2(
+      'letter-1',
+      {
+        confirmedSender: 'Requested Alice',
+        confirmedRecipient: 'Requested Bob',
+        entityExtraction: 'deferred',
+      },
+      { runId: 'run-a', revision: 4 },
+    );
+
+    expect(extractMetadataV2Mock).toHaveBeenCalledWith(expect.objectContaining({
+      corrections: expect.objectContaining({
+        confirmedSender: 'Requested Alice',
+        confirmedRecipient: 'Requested Bob',
+      }),
+    }));
   });
 
   it('fails only the exact standalone run when extraction throws', async () => {

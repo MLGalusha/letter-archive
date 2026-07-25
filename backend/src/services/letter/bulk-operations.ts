@@ -34,6 +34,8 @@ import {
   observedTranscriptionStateConditions,
 } from './transcription-job.js';
 import {
+  clearedMetadataConfirmationGuidance,
+  clearedTranscriptConfirmationIntent,
   observeMetadataState,
   observedMetadataStateConditions,
 } from './metadata-job.js';
@@ -464,6 +466,7 @@ export async function bulkClearTranscriptions(
       transcriptionText: null,
       transcriptConfirmedAt: null,
       transcriptConfirmedBy: null,
+      ...clearedTranscriptConfirmationIntent(),
       transcriptionStatus: 'FAILED',
       transcriptionRunId: null,
       transcriptionLeaseExpiresAt: null,
@@ -773,6 +776,7 @@ export async function bulkClearMetadata(
   }
 
   const metadataFields = {
+    ...clearedMetadataConfirmationGuidance(),
     sender: null,
     recipient: null,
     locationWritten: null,

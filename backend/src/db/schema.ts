@@ -255,6 +255,20 @@ export const letters = pgTable(
     metadataClaimKind: metadataClaimKindEnum('metadata_claim_kind'),
     metadataError: text('metadata_error'),
     metadataAttemptCount: integer('metadata_attempt_count').notNull().default(0),
+    // Durable reviewer guidance for a transcript-confirmation-owned metadata
+    // intent. Nullable during the expand phase so legacy confirmations and
+    // metadata attempts retain their unknown provenance.
+    metadataConfirmationGuidance: jsonb('metadata_confirmation_guidance').$type<{
+      version: 1;
+      confirmationId: string;
+      metadataInputIdentity: string;
+      confirmedSender: string | null;
+      confirmedRecipient: string | null;
+    }>(),
+    // A current metadata claimant binds durable guidance to its exact run.
+    // Guidance remains available after metadata completion for deferred entity
+    // extraction, so this intentionally need not match a terminal run tuple.
+    metadataGuidanceRunId: uuid('metadata_guidance_run_id'),
 
     // V2 Metadata fields
     emotionalTone: emotionalToneEnum('emotional_tone'),
@@ -283,6 +297,10 @@ export const letters = pgTable(
     // Transcript confirmation (gates metadata extraction)
     transcriptConfirmedAt: timestamp('transcript_confirmed_at', { withTimezone: true }),
     transcriptConfirmedBy: text('transcript_confirmed_by'),
+    transcriptConfirmationId: uuid('transcript_confirmation_id'),
+    transcriptConfirmationIntentHash: text('transcript_confirmation_intent_hash'),
+    transcriptConfirmationSourceRevision: integer('transcript_confirmation_source_revision'),
+    transcriptConfirmationTranscriptDigest: text('transcript_confirmation_transcript_digest'),
 
     // Extra content transcription (telegrams, covers, ephemera)
     extraContentTranscript: text('extra_content_transcript'),
@@ -359,6 +377,9 @@ export const letters = pgTable(
     // V2 indexes
     index('idx_letters_emotional_tone').on(table.emotionalTone),
     index('idx_letters_primary_topics').using('gin', table.primaryTopics),
+    uniqueIndex('letters_transcript_confirmation_id_unique')
+      .on(table.transcriptConfirmationId)
+      .where(sql`${table.transcriptConfirmationId} IS NOT NULL`),
     // Check constraint: type_sequence >= 1
     check('type_sequence_positive', sql`type_sequence >= 1`),
     // Check constraint: attempt counts >= 0
@@ -409,6 +430,85 @@ export const letters = pgTable(
         AND ${table.metadataLeaseRunId} = ${table.metadataRunId}
         AND ${table.metadataClaimKind} IS NOT NULL
       )`,
+    ),
+    check(
+      'transcript_confirmation_identity_shape',
+      sql`(
+        ${table.transcriptConfirmationId} IS NULL
+        AND ${table.transcriptConfirmationIntentHash} IS NULL
+        AND ${table.transcriptConfirmationSourceRevision} IS NULL
+        AND ${table.transcriptConfirmationTranscriptDigest} IS NULL
+      ) OR (
+        ${table.transcriptConfirmedAt} IS NOT NULL
+        AND ${table.transcriptConfirmationId} IS NOT NULL
+        AND ${table.transcriptConfirmationIntentHash} IS NOT NULL
+        AND ${table.transcriptConfirmationSourceRevision} IS NOT NULL
+        AND ${table.transcriptConfirmationTranscriptDigest} IS NOT NULL
+      )`,
+    ),
+    check(
+      'transcript_confirmation_hashes_valid',
+      sql`(
+        ${table.transcriptConfirmationIntentHash} IS NULL
+        OR ${table.transcriptConfirmationIntentHash} ~ '^v1[.][0-9a-f]{64}$'
+      ) AND (
+        ${table.transcriptConfirmationTranscriptDigest} IS NULL
+        OR ${table.transcriptConfirmationTranscriptDigest} ~ '^[0-9a-f]{64}$'
+      )`,
+    ),
+    check(
+      'transcript_confirmation_source_revision_nonnegative',
+      sql`${table.transcriptConfirmationSourceRevision} IS NULL
+        OR ${table.transcriptConfirmationSourceRevision} >= 0`,
+    ),
+    check(
+      'metadata_confirmation_guidance_shape',
+      sql`(
+          ${table.metadataConfirmationGuidance} IS NULL
+          OR (
+            ${table.transcriptConfirmationId} IS NOT NULL
+            AND jsonb_typeof(${table.metadataConfirmationGuidance}) = 'object'
+            AND ${table.metadataConfirmationGuidance}
+              ?& ARRAY[
+                'version',
+                'confirmationId',
+                'metadataInputIdentity',
+                'confirmedSender',
+                'confirmedRecipient'
+              ]
+            AND ${table.metadataConfirmationGuidance}
+              - ARRAY[
+                'version',
+                'confirmationId',
+                'metadataInputIdentity',
+                'confirmedSender',
+                'confirmedRecipient'
+              ] = '{}'::jsonb
+            AND ${table.metadataConfirmationGuidance}->'version' = '1'::jsonb
+            AND ${table.metadataConfirmationGuidance}->>'confirmationId'
+              = ${table.transcriptConfirmationId}::text
+            AND ${table.metadataConfirmationGuidance}->>'metadataInputIdentity'
+              ~ '^v1[.][0-9a-f]{64}$'
+            AND jsonb_typeof(${table.metadataConfirmationGuidance}->'confirmedSender')
+              IN ('string', 'null')
+            AND jsonb_typeof(${table.metadataConfirmationGuidance}->'confirmedRecipient')
+              IN ('string', 'null')
+          )
+        )
+        AND (
+          ${table.metadataConfirmationGuidance} IS NOT NULL
+          OR ${table.metadataGuidanceRunId} IS NULL
+        )`,
+    ),
+    check(
+      'metadata_guidance_running_bound_to_run',
+      sql`${table.metadataConfirmationGuidance} IS NULL
+        OR ${table.metadataStatus} <> 'RUNNING'
+        OR (
+          ${table.metadataGuidanceRunId} IS NOT NULL
+          AND ${table.metadataRunId} IS NOT NULL
+          AND ${table.metadataGuidanceRunId} = ${table.metadataRunId}
+        )`,
     ),
     check(
       'transcription_run_id_matches_running',

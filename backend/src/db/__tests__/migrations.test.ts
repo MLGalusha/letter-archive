@@ -343,6 +343,220 @@ describe("migration validation", () => {
     );
   });
 
+  it("adds replay-safe transcript confirmation persistence behind an old-worker gate", () => {
+    const journal = readJournal();
+    const sourceRevisions = journal.entries.find(
+      (entry) => entry.tag === "0054_add_page_source_revisions",
+    );
+    const confirmationIntent = journal.entries.find(
+      (entry) => entry.tag === "0055_add_transcript_confirmation_intent",
+    );
+    const sql = readMigrationSql("0055_add_transcript_confirmation_intent");
+
+    expect(confirmationIntent).toBeDefined();
+    expect(confirmationIntent!.idx).toBe(sourceRevisions!.idx + 1);
+    expect(confirmationIntent!.breakpoints).toBe(true);
+
+    for (const column of [
+      '"transcript_confirmation_id" uuid',
+      '"transcript_confirmation_intent_hash" text',
+      '"transcript_confirmation_source_revision" integer',
+      '"transcript_confirmation_transcript_digest" text',
+      '"metadata_confirmation_guidance" jsonb',
+      '"metadata_guidance_run_id" uuid',
+    ]) {
+      expect(sql).toContain(`ALTER TABLE "letters" ADD COLUMN ${column}`);
+      expect(sql).not.toMatch(
+        new RegExp(
+          `ADD COLUMN ${column.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[^;]*(?:NOT NULL|DEFAULT)`,
+          "i",
+        ),
+      );
+    }
+
+    expect(sql).not.toMatch(/\bUPDATE\s+"letters"\b/i);
+    expect(sql).not.toMatch(/\bALTER\s+COLUMN\b/i);
+    expect(sql).not.toMatch(/\bVALIDATE\s+CONSTRAINT\b/i);
+    expect(sql.match(/NOT VALID/g)).toHaveLength(5);
+
+    const identityShape = sql.match(
+      /ADD CONSTRAINT "transcript_confirmation_identity_shape"([\s\S]*?)NOT VALID;/,
+    )?.[1];
+    expect(identityShape).toBeDefined();
+    expect(identityShape).toMatch(
+      /"transcript_confirmation_id" IS NULL[\s\S]*"transcript_confirmation_intent_hash" IS NULL[\s\S]*"transcript_confirmation_source_revision" IS NULL[\s\S]*"transcript_confirmation_transcript_digest" IS NULL/,
+    );
+    expect(identityShape).toMatch(
+      /"transcript_confirmed_at" IS NOT NULL[\s\S]*"transcript_confirmation_id" IS NOT NULL[\s\S]*"transcript_confirmation_intent_hash" IS NOT NULL[\s\S]*"transcript_confirmation_source_revision" IS NOT NULL[\s\S]*"transcript_confirmation_transcript_digest" IS NOT NULL/,
+    );
+
+    expect(sql).toMatch(
+      /ADD CONSTRAINT "transcript_confirmation_hashes_valid"[\s\S]*"transcript_confirmation_intent_hash" ~ '\^v1\[.\]\[0-9a-f\]\{64\}\$'[\s\S]*"transcript_confirmation_transcript_digest" ~ '\^\[0-9a-f\]\{64\}\$'[\s\S]*NOT VALID;/,
+    );
+    expect(sql).toMatch(
+      /ADD CONSTRAINT "transcript_confirmation_source_revision_nonnegative"[\s\S]*"transcript_confirmation_source_revision" >= 0[\s\S]*NOT VALID;/,
+    );
+
+    const guidanceShape = sql.match(
+      /ADD CONSTRAINT "metadata_confirmation_guidance_shape"([\s\S]*?)NOT VALID;/,
+    )?.[1];
+    expect(guidanceShape).toBeDefined();
+    expect(guidanceShape).toContain(
+      '"transcript_confirmation_id" IS NOT NULL',
+    );
+    expect(guidanceShape).toContain(
+      `jsonb_typeof("metadata_confirmation_guidance") = 'object'`,
+    );
+    expect(guidanceShape).toContain(
+      `'confirmationId'`,
+    );
+    expect(guidanceShape).toContain(
+      `'metadataInputIdentity'`,
+    );
+    expect(guidanceShape).toContain(
+      `"metadata_confirmation_guidance"->'version' = '1'::jsonb`,
+    );
+    expect(guidanceShape).toMatch(
+      /"metadata_confirmation_guidance"->>'confirmationId'\s*=\s*"transcript_confirmation_id"::text/,
+    );
+    expect(guidanceShape).toMatch(
+      /"metadata_confirmation_guidance"->>'metadataInputIdentity'\s*~ '\^v1\[.\]\[0-9a-f\]\{64\}\$'/,
+    );
+    expect(guidanceShape).toContain(
+      `"metadata_confirmation_guidance" IS NOT NULL`,
+    );
+    expect(guidanceShape).toContain(
+      `"metadata_guidance_run_id" IS NULL`,
+    );
+
+    const runningGate = sql.match(
+      /ADD CONSTRAINT "metadata_guidance_running_bound_to_run"([\s\S]*?)NOT VALID;/,
+    )?.[1];
+    expect(runningGate).toBeDefined();
+    expect(runningGate).toMatch(
+      /"metadata_confirmation_guidance" IS NULL[\s\S]*"metadata_status" <> 'RUNNING'[\s\S]*"metadata_guidance_run_id" IS NOT NULL[\s\S]*"metadata_run_id" IS NOT NULL[\s\S]*"metadata_guidance_run_id" = "metadata_run_id"/,
+    );
+
+    expect(sql).toMatch(
+      /CREATE UNIQUE INDEX "letters_transcript_confirmation_id_unique"[\s\S]*ON "letters" \("transcript_confirmation_id"\)[\s\S]*WHERE "transcript_confirmation_id" IS NOT NULL/,
+    );
+
+    const invalidationFunction = sql.match(
+      /CREATE FUNCTION clear_stale_transcript_confirmation_guidance\(\) RETURNS trigger AS \$\$([\s\S]*?)\$\$ LANGUAGE plpgsql;/,
+    )?.[1];
+    expect(invalidationFunction).toBeDefined();
+    expect(invalidationFunction).toMatch(
+      /NEW\.transcript_confirmed_at IS NULL[\s\S]*NEW\.primary_source_revision IS DISTINCT FROM OLD\.primary_source_revision[\s\S]*NEW\.transcription_text IS DISTINCT FROM OLD\.transcription_text/,
+    );
+    for (const field of [
+      "transcript_confirmation_id",
+      "transcript_confirmation_intent_hash",
+      "transcript_confirmation_source_revision",
+      "transcript_confirmation_transcript_digest",
+      "metadata_confirmation_guidance",
+      "metadata_guidance_run_id",
+    ]) {
+      expect(invalidationFunction).toContain(`NEW.${field} := NULL`);
+    }
+    for (const field of [
+      "type",
+      "collection_id",
+      "letter_date",
+      "date_raw",
+      "extra_content_transcript",
+      "extra_content_status",
+      "extra_content_job_status",
+    ]) {
+      expect(invalidationFunction).toContain(`NEW.${field}`);
+      expect(invalidationFunction).toContain(`OLD.${field}`);
+    }
+    expect(invalidationFunction).toMatch(
+      /NEW\.entity_extraction_status = 'SUCCESS'[\s\S]*OLD\.entity_extraction_status IS DISTINCT FROM 'SUCCESS'[\s\S]*NEW\.metadata_confirmation_guidance := NULL[\s\S]*NEW\.metadata_guidance_run_id := NULL/,
+    );
+    expect(sql).toMatch(
+      /CREATE TRIGGER transcript_confirmation_guidance_invalidation_guard[\s\S]*BEFORE UPDATE OF[\s\S]*transcript_confirmed_at,[\s\S]*primary_source_revision,[\s\S]*transcription_text,[\s\S]*extra_content_transcript,[\s\S]*entity_extraction_status[\s\S]*EXECUTE FUNCTION clear_stale_transcript_confirmation_guidance\(\)/,
+    );
+  });
+
+  it("retires an identified confirmation when a legacy writer changes its reviewer stamp", () => {
+    const sql = readMigrationSql("0055_add_transcript_confirmation_intent");
+    const invalidationFunction = sql.match(
+      /CREATE FUNCTION clear_stale_transcript_confirmation_guidance\(\) RETURNS trigger AS \$\$([\s\S]*?)\$\$ LANGUAGE plpgsql;/,
+    )?.[1];
+
+    expect(invalidationFunction).toBeDefined();
+    expect(invalidationFunction).toMatch(
+      /OLD\.transcript_confirmation_id IS NOT NULL/,
+    );
+    expect(invalidationFunction).toMatch(
+      /NEW\.transcript_confirmed_at IS DISTINCT FROM OLD\.transcript_confirmed_at/,
+    );
+    expect(invalidationFunction).toMatch(
+      /NEW\.transcript_confirmed_by IS DISTINCT FROM OLD\.transcript_confirmed_by/,
+    );
+
+    const legacyIdCondition = invalidationFunction!.indexOf(
+      "OLD.transcript_confirmation_id IS NOT NULL",
+    );
+    const confirmedAtComparison = invalidationFunction!.indexOf(
+      "NEW.transcript_confirmed_at IS DISTINCT FROM OLD.transcript_confirmed_at",
+    );
+    const confirmedByComparison = invalidationFunction!.indexOf(
+      "NEW.transcript_confirmed_by IS DISTINCT FROM OLD.transcript_confirmed_by",
+    );
+    const receiptClearing = invalidationFunction!.indexOf(
+      "NEW.transcript_confirmation_id := NULL",
+    );
+    expect(legacyIdCondition).toBeGreaterThanOrEqual(0);
+    expect(confirmedAtComparison).toBeGreaterThan(legacyIdCondition);
+    expect(confirmedByComparison).toBeGreaterThan(legacyIdCondition);
+    expect(receiptClearing).toBeGreaterThan(confirmedAtComparison);
+    expect(receiptClearing).toBeGreaterThan(confirmedByComparison);
+    for (const field of [
+      "transcript_confirmation_id",
+      "transcript_confirmation_intent_hash",
+      "transcript_confirmation_source_revision",
+      "transcript_confirmation_transcript_digest",
+      "metadata_confirmation_guidance",
+      "metadata_guidance_run_id",
+    ]) {
+      expect(invalidationFunction!.indexOf(`NEW.${field} := NULL`))
+        .toBeGreaterThan(confirmedByComparison);
+    }
+
+    expect(sql).toMatch(
+      /CREATE TRIGGER transcript_confirmation_guidance_invalidation_guard[\s\S]*BEFORE UPDATE OF[\s\S]*transcript_confirmed_at,[\s\S]*transcript_confirmed_by,[\s\S]*EXECUTE FUNCTION clear_stale_transcript_confirmation_guidance\(\)/,
+    );
+
+    const activeConsumerGuard = invalidationFunction?.match(
+      /BEGIN([\s\S]*?)END IF;\s*IF NEW\.transcript_confirmed_at/,
+    )?.[1];
+    expect(activeConsumerGuard).toBeDefined();
+    for (const requiredGuardClause of [
+      "OLD.metadata_confirmation_guidance IS NOT NULL",
+      "NEW.metadata_status = 'RUNNING'",
+      "NEW.entity_extraction_status = 'RUNNING'",
+      "NEW.transcript_confirmed_at IS DISTINCT FROM OLD.transcript_confirmed_at",
+      "NEW.transcript_confirmed_by IS DISTINCT FROM OLD.transcript_confirmed_by",
+      "NEW.extra_content_transcript",
+      "OLD.extra_content_transcript",
+      "RAISE EXCEPTION",
+      "cannot change guided metadata input without superseding its active consumer",
+      "ERRCODE = '23514'",
+    ]) {
+      expect(activeConsumerGuard).toContain(requiredGuardClause);
+    }
+    expect(activeConsumerGuard).not.toContain(
+      "OLD.metadata_guidance_run_id",
+    );
+    expect(activeConsumerGuard).not.toContain(
+      "OLD.metadata_run_id",
+    );
+    expect(invalidationFunction!.lastIndexOf(
+      "NEW.metadata_confirmation_guidance := NULL",
+    )).toBeGreaterThan(invalidationFunction!.indexOf("RAISE EXCEPTION"));
+  });
+
   it("protects current entity liveness ownership while allowing renewals and 0051 terminal writers", () => {
     const sql = readMigrationSql("0053_add_entity_extraction_liveness");
     const guardFunction = sql.match(

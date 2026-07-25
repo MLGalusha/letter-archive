@@ -40,6 +40,7 @@ vi.mock('../../db/index.js', () => ({
   letters: {
     id: 'letters.id',
     primarySourceRevision: 'letters.primarySourceRevision',
+    metadataStatus: 'letters.metadataStatus',
     entityExtractionStatus: 'letters.entityExtractionStatus',
     extraContentJobStatus: 'letters.extraContentJobStatus',
     extraContentJobRunId: 'letters.extraContentJobRunId',
@@ -65,6 +66,7 @@ import {
 interface JobRow {
   id: string;
   primarySourceRevision: number;
+  metadataStatus: 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';
   entityExtractionStatus: 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';
   extraContentJobStatus: 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';
   extraContentJobError: string | null;
@@ -182,6 +184,7 @@ describe('extra-content job lifecycle', () => {
     row = {
       id: 'letter-1',
       primarySourceRevision: 4,
+      metadataStatus: 'PENDING',
       entityExtractionStatus: 'PENDING',
       extraContentJobStatus: 'PENDING',
       extraContentJobError: null,
@@ -247,6 +250,23 @@ describe('extra-content job lifecycle', () => {
       expectedStatus: 'PENDING',
       expectedUpdatedAt: row.updatedAt,
       claimKind: 'REQUESTED',
+      produce,
+    })).resolves.toEqual({ kind: 'claim_lost' });
+
+    expect(produce).not.toHaveBeenCalled();
+    expect(row.extraContentJobStatus).toBe('PENDING');
+  });
+
+  it('does not claim extra-content work while metadata extraction is running', async () => {
+    row.metadataStatus = 'RUNNING';
+    const produce = vi.fn();
+
+    await expect(runExtraContentJob({
+      letterId: row.id,
+      expectedPrimarySourceRevision: row.primarySourceRevision,
+      expectedStatus: 'PENDING',
+      expectedUpdatedAt: row.updatedAt,
+      claimKind: 'QUEUED',
       produce,
     })).resolves.toEqual({ kind: 'claim_lost' });
 

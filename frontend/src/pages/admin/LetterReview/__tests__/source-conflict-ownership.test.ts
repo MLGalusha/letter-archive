@@ -140,7 +140,7 @@ describe('Letter Review source-conflict ownership', () => {
       'executeLetterMutation({',
     );
     expect(transcriptConfirmationWorkspace).toContain(
-      'confirmTranscript(',
+      'resolveTranscriptConfirmationOutcome({',
     );
     expect(callbackBlock(
       analysisRegenerationWorkspace,

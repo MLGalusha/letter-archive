@@ -244,6 +244,7 @@ export default function LetterReviewPage() {
     useTranscriptConfirmationWorkspace({
       visit,
       letter,
+      transcriptText: transcript,
       sender,
       recipient,
       executeLetterMutation,
@@ -496,7 +497,8 @@ export default function LetterReviewPage() {
         </button>
         {/* Confirm button - only for TRANSCRIBED without confirmation */}
         {letter.workflowState === "TRANSCRIBED" &&
-          !letter.transcriptConfirmedAt && (
+          !letter.transcriptConfirmedAt &&
+          !transcriptConfirmationWorkspace.replayBlocked && (
             <button
               className="header-action confirm"
               onClick={transcriptConfirmationWorkspace.openDialog}
@@ -789,6 +791,9 @@ export default function LetterReviewPage() {
                 onVerifyMetadata={handleVerifyMetadata}
                 onConfirmTranscript={
                   transcriptConfirmationWorkspace.openDialog
+                }
+                confirmationReplayBlocked={
+                  transcriptConfirmationWorkspace.replayBlocked
                 }
                 {...analysisRegenerationWorkspace.metadataSectionProps}
                 onMetadataFieldClick={handleMetadataFieldClick}

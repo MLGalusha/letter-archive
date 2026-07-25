@@ -14,6 +14,7 @@ import type {
 import { buildExtraContentSourceInvalidationPatch } from './extra-content-job.js';
 import {
   buildMetadataSourceInvalidationPatch,
+  clearedTranscriptConfirmationIntent,
 } from './metadata-job.js';
 import { clearedTranscriptionOwnership } from './transcription-job.js';
 
@@ -92,6 +93,7 @@ function primarySourceInvalidationPatch(sourceRevision: number) {
     readingText: null,
     transcriptConfirmedAt: null,
     transcriptConfirmedBy: null,
+    ...clearedTranscriptConfirmationIntent(),
     transcriptVerifiedAt: null,
     transcriptVerifiedBy: null,
     transcriptPublished: false,

@@ -2,13 +2,19 @@ import { useCallback, useMemo, useState } from "react";
 import {
   bulkExtractMetadata,
   bulkTranscribe,
-  confirmTranscript,
   regenerateMetadata,
   type BulkProcessResponse,
   type BulkSource,
 } from "../../../api/admin";
 import { useToast } from "../../../contexts/ToastContext";
 import type { Letter } from "../../../types/Letter";
+import { sha256Utf8 } from "../../../utils/sha256";
+import {
+  getTranscriptConfirmationFeedback,
+  resolveTranscriptConfirmationOutcome,
+  TranscriptConfirmationAcceptedError,
+  TranscriptConfirmationOutcomeUnknownError,
+} from "../transcriptConfirmationOutcome";
 import {
   includeUnobservedSelections,
   summarizeSourceSkips,
@@ -152,6 +158,23 @@ export function useDashboardProcessingActions({
   const handleOpenMetadataExtraction = useCallback(() => {
     if (selectedIds.size === 0) return;
     if (selectedIds.size === 1 && singleSelectedLetter) {
+      if (
+        singleSelectedLetter.metadataJobStatus === "PENDING"
+        && Boolean(singleSelectedLetter.transcriptConfirmedAt)
+      ) {
+        showToast("Metadata extraction is queued.", "info");
+        return;
+      }
+      if (
+        singleSelectedLetter.metadataJobStatus === "RUNNING"
+        || (
+          singleSelectedLetter.metadataJobStatus === undefined
+          && singleSelectedLetter.workflowState === "METADATA_EXTRACTING"
+        )
+      ) {
+        showToast("Metadata extraction is already in progress.", "info");
+        return;
+      }
       setSingleMetadataSender(singleSelectedLetter.metadata.sender ?? "");
       setSingleMetadataRecipient(singleSelectedLetter.metadata.recipient ?? "");
       setShowSingleMetadataModal(true);
@@ -159,7 +182,7 @@ export function useDashboardProcessingActions({
     }
 
     setShowMetadataConfirm(true);
-  }, [selectedIds, singleSelectedLetter]);
+  }, [selectedIds, showToast, singleSelectedLetter]);
 
   const handleSingleMetadataExtraction = useCallback(async () => {
     if (!singleSelectedLetter) return;
@@ -169,56 +192,63 @@ export function useDashboardProcessingActions({
       confirmedSender: singleMetadataSender.trim() || undefined,
       confirmedRecipient: singleMetadataRecipient.trim() || undefined,
     };
-    const hadExistingMetadata =
-      singleSelectedLetter.metadataContentStatus !== "EMPTY";
+    const target = {
+      id: singleSelectedLetter.id,
+      primarySourceRevision: singleSelectedLetter.primarySourceRevision,
+      transcriptText: singleSelectedLetter.transcript.fullText,
+      transcriptConfirmed: Boolean(singleSelectedLetter.transcriptConfirmedAt),
+      hadExistingMetadata:
+        singleSelectedLetter.metadataContentStatus !== "EMPTY",
+    };
 
     setShowSingleMetadataModal(false);
     setSingleMetadataSubmitting(true);
 
     try {
-      let updatedLetter: Letter | null = null;
-      let didRefresh = hadExistingMetadata;
-
-      if (!singleSelectedLetter.transcriptConfirmedAt) {
-        updatedLetter = await confirmTranscript(
-          singleSelectedLetter.id,
-          singleSelectedLetter.primarySourceRevision,
-          extractionOptions,
-        );
+      if (!target.transcriptConfirmed) {
+        const outcome = await resolveTranscriptConfirmationOutcome({
+          letterId: target.id,
+          primarySourceRevision: target.primarySourceRevision,
+          transcriptDigest: await sha256Utf8(target.transcriptText),
+          ...extractionOptions,
+        });
 
         if (
-          singleSelectedLetter.metadataContentStatus !== "EMPTY" ||
-          updatedLetter.metadataContentStatus === "EMPTY"
+          outcome.letter.primarySourceRevision
+          !== target.primarySourceRevision
         ) {
-          didRefresh = true;
-          updatedLetter = await regenerateMetadata(
-            singleSelectedLetter.id,
-            updatedLetter.primarySourceRevision,
-            extractionOptions,
+          showToast(
+            "Letter source changed; refreshed the latest state.",
+            "error",
           );
+        } else {
+          const feedback = getTranscriptConfirmationFeedback(outcome);
+          showToast(feedback.message, feedback.type);
         }
+        exitEditMode(mutationIntent);
       } else {
-        updatedLetter = await regenerateMetadata(
-          singleSelectedLetter.id,
-          singleSelectedLetter.primarySourceRevision,
+        await regenerateMetadata(
+          target.id,
+          target.primarySourceRevision,
           extractionOptions,
         );
-      }
 
-      if (!updatedLetter) {
-        throw new Error("Metadata extraction did not return an updated letter");
+        showToast(
+          target.hadExistingMetadata
+            ? "Metadata regenerated"
+            : "Metadata generated",
+          "success",
+        );
+        exitEditMode(mutationIntent);
       }
-
-      showToast(
-        didRefresh
-          ? "Metadata regenerated"
-          : "Metadata generated",
-        "success",
-      );
-      exitEditMode(mutationIntent);
-      await fetchLetters();
     } catch (err) {
       console.error("Failed to extract metadata for selected letter:", err);
+      if (
+        err instanceof TranscriptConfirmationAcceptedError
+        || err instanceof TranscriptConfirmationOutcomeUnknownError
+      ) {
+        exitEditMode(mutationIntent);
+      }
       showToast(
         err instanceof Error
           ? err.message
@@ -226,6 +256,14 @@ export function useDashboardProcessingActions({
         "error",
       );
     } finally {
+      try {
+        await fetchLetters();
+      } catch (err) {
+        console.error(
+          "Failed to refresh letters after metadata attempt:",
+          err,
+        );
+      }
       setSingleMetadataSubmitting(false);
     }
   }, [

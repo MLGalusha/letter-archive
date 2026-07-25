@@ -22,6 +22,10 @@ import {
   type MetadataHeartbeat,
 } from '../services/letter/metadata-job.js';
 import {
+  resolveMetadataConfirmationGuidance,
+  type MetadataInputIdentitySource,
+} from '../services/letter/metadata-input-identity.js';
+import {
   EntityExtractionClaimLostError,
   processEntityExtraction,
 } from '../services/entities.js';
@@ -71,6 +75,39 @@ interface ClaimedEntityExtractionResult {
   processingResult: Awaited<ReturnType<typeof processEntityExtraction>>;
 }
 
+type MetadataInputLetter = NonNullable<
+  Awaited<ReturnType<typeof getLetterWithPages>>
+>;
+
+function metadataInputFromLetter(
+  letter: MetadataInputLetter,
+): MetadataInputIdentitySource {
+  return {
+    letterId: letter.id,
+    transcriptionText: letter.transcriptionText ?? '',
+    collectionCode: letter.collection.collectionCode,
+    dateRaw: letter.dateRaw,
+    letterDate: letter.letterDate,
+    extraContentTranscript: letter.extraContentTranscript,
+    extraContentStatus: letter.extraContentStatus,
+    extraContentJobStatus: letter.extraContentJobStatus,
+  };
+}
+
+function durableConfirmationCorrections(
+  letter: MetadataInputLetter,
+): ExtractionCorrections | undefined {
+  return resolveMetadataConfirmationGuidance({
+    envelope: letter.metadataConfirmationGuidance,
+    confirmationId: letter.transcriptConfirmationId,
+    confirmationSourceRevision: letter.transcriptConfirmationSourceRevision,
+    confirmationTranscriptDigest:
+      letter.transcriptConfirmationTranscriptDigest,
+    primarySourceRevision: letter.primarySourceRevision,
+    metadataInput: metadataInputFromLetter(letter),
+  });
+}
+
 function correctionsMatchingClaimedIdentity(
   letter: Awaited<ReturnType<typeof getLetterWithPages>>,
   corrections: ExtractionCorrections | undefined,
@@ -110,7 +147,7 @@ async function executeClaimedEntityExtraction(
   claim: EntityExtractionClaim,
   heartbeat: EntityExtractionHeartbeat,
   corrections?: ExtractionCorrections,
-  requireCurrentIdentityMatch = false,
+  filterCorrectionsByClaimedIdentity = false,
 ): Promise<ClaimedEntityExtractionResult | null> {
   if (!heartbeat.hasOwnership()) return null;
 
@@ -134,6 +171,11 @@ async function executeClaimedEntityExtraction(
     throw new Error(`Letter ${letterId} has no transcription text`);
   }
 
+  const durableCorrections = letter.entityExtractionClaimKind === 'QUEUED'
+    ? durableConfirmationCorrections(letter)
+    : undefined;
+  const effectiveCorrections = corrections ?? durableCorrections;
+
   const entityResult = await extractEntities({
     transcriptionText: letter.transcriptionText,
     letterId,
@@ -149,9 +191,9 @@ async function executeClaimedEntityExtraction(
       dateFromFilename: letter.letterDate,
       extraContentTranscript: letter.extraContentTranscript,
     },
-    corrections: requireCurrentIdentityMatch
-      ? correctionsMatchingClaimedIdentity(letter, corrections)
-      : corrections,
+    corrections: filterCorrectionsByClaimedIdentity
+      ? correctionsMatchingClaimedIdentity(letter, effectiveCorrections)
+      : effectiveCorrections,
   });
 
   if (!heartbeat.hasOwnership()) return null;
@@ -290,10 +332,11 @@ async function executeClaimedMetadataExtractionV2(
     extraContentTranscript: letter.extraContentTranscript,
   };
 
-  // Only corrections explicitly bound to this requested claim are human
-  // authority. Stored sender/recipient scalars are usually prior AI output and
-  // must not be silently promoted to confirmed truth on a later source rebuild.
-  const effectiveCorrections: ExtractionCorrections | undefined = options && (
+  // Human authority comes either from this explicit requested claim or from a
+  // validated durable confirmation envelope bound to this exact queued run and
+  // complete provider input. Stored sender/recipient scalars remain ordinary AI
+  // output and are never promoted implicitly.
+  const explicitCorrections: ExtractionCorrections | undefined = options && (
     options.confirmedSender !== undefined
       || options.confirmedRecipient !== undefined
       || options.previousAiSender !== undefined
@@ -306,17 +349,20 @@ async function executeClaimedMetadataExtractionV2(
         previousAiRecipient: options.previousAiRecipient,
       }
     : undefined;
-  const embeddedEntityCorrections: ExtractionCorrections | undefined = options && (
-    options.confirmedSender !== undefined
-    || options.confirmedRecipient !== undefined
-  )
-    ? {
-        confirmedSender: options.confirmedSender,
-        confirmedRecipient: options.confirmedRecipient,
-        previousAiSender: options.previousAiSender,
-        previousAiRecipient: options.previousAiRecipient,
-      }
+  const durableCorrections = letter.metadataClaimKind === 'QUEUED'
+    && letter.metadataGuidanceRunId === claim.runId
+    ? durableConfirmationCorrections(letter)
     : undefined;
+  const effectiveCorrections = explicitCorrections ?? durableCorrections;
+  const correctionsComeFromDurableConfirmation =
+    explicitCorrections === undefined && durableCorrections !== undefined;
+  const embeddedEntityCorrections = effectiveCorrections
+    && (
+      effectiveCorrections.confirmedSender !== undefined
+      || effectiveCorrections.confirmedRecipient !== undefined
+    )
+      ? effectiveCorrections
+      : undefined;
 
   // ========================================================================
   // PHASE 1: Basic Metadata Extraction
@@ -449,7 +495,7 @@ async function executeClaimedMetadataExtractionV2(
         claimedEntity,
         heartbeat,
         embeddedEntityCorrections,
-        true,
+        !correctionsComeFromDurableConfirmation,
       ),
     );
     if (!claimedResult) {

@@ -3,10 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
+import type { TranscriptConfirmationReceipt } from "../../../api/admin/letters";
+import { ApiError } from "../../../api/client";
 import type { Letter } from "../../../types/Letter";
+import { sha256Utf8 } from "../../../utils/sha256";
 
 const {
   confirmTranscriptMock,
+  getAdminLetterByIdMock,
   getAdminLettersMock,
   getFilteredLetterSourcesMock,
   deleteLetterMock,
@@ -21,6 +25,7 @@ const {
   isAuthenticatedMock,
 } = vi.hoisted(() => ({
   confirmTranscriptMock: vi.fn(),
+  getAdminLetterByIdMock: vi.fn(),
   getAdminLettersMock: vi.fn(),
   getFilteredLetterSourcesMock: vi.fn(),
   deleteLetterMock: vi.fn(),
@@ -41,6 +46,9 @@ vi.mock("../../../api/auth", () => ({
 
 vi.mock("../../../api/letters", () => ({
   getAdminLetters: (...args: unknown[]) => getAdminLettersMock(...args),
+  getAdminLetterById: (...args: unknown[]) => (
+    getAdminLetterByIdMock(...args)
+  ),
   getFilteredLetterSources: (...args: unknown[]) => (
     getFilteredLetterSourcesMock(...args)
   ),
@@ -48,6 +56,7 @@ vi.mock("../../../api/letters", () => ({
 }));
 
 vi.mock("../../../api/admin/letters", () => ({
+  confirmTranscript: (...args: unknown[]) => confirmTranscriptMock(...args),
   toggleLetterFlag: (...args: unknown[]) => toggleLetterFlagMock(...args),
 }));
 
@@ -260,6 +269,24 @@ function createLettersResponse(letters: Letter[] = [makeLetter()]) {
   };
 }
 
+function makeConfirmationReceipt(
+  metadataDisposition:
+    TranscriptConfirmationReceipt["metadataDisposition"] = "queued",
+): TranscriptConfirmationReceipt {
+  return {
+    confirmationId: "confirmation-1",
+    confirmedAt: "2026-07-25T12:00:00.000Z",
+    confirmedBy: "admin-1",
+    transcriptSource: {
+      primarySourceRevision: 0,
+      transcriptDigest: "test-digest",
+    },
+    metadataInputIdentity: "metadata-input-1",
+    intentIdentity: "intent-1",
+    metadataDisposition,
+  };
+}
+
 let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
 describe("AdminDashboard processing", () => {
@@ -270,6 +297,7 @@ describe("AdminDashboard processing", () => {
     consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     getAdminLettersMock.mockResolvedValue(createLettersResponse());
+    getAdminLetterByIdMock.mockResolvedValue(makeLetter());
   });
 
   afterEach(() => {
@@ -424,7 +452,9 @@ describe("AdminDashboard processing", () => {
     getAdminLettersMock.mockResolvedValue(
       createLettersResponse([
         makeLetter({
+          metadataJobStatus: "PENDING",
           metadataContentStatus: "EMPTY",
+          transcriptConfirmedAt: undefined,
           metadata: {
             sender: "",
             recipient: "",
@@ -455,6 +485,46 @@ describe("AdminDashboard processing", () => {
       screen.queryByText(/Queue metadata extraction for 1 selected letter\?/i),
     ).not.toBeInTheDocument();
   });
+
+  it.each([
+    ["PENDING", "Metadata extraction is queued."],
+    ["RUNNING", "Metadata extraction is already in progress."],
+  ] as const)(
+    "does not offer single-letter extraction while metadata is %s",
+    async (metadataJobStatus, expectedMessage) => {
+      const user = userEvent.setup();
+      getAdminLettersMock.mockResolvedValue(
+        createLettersResponse([
+          makeLetter({
+            workflowState: "TRANSCRIBED",
+            metadataJobStatus,
+            metadataContentStatus: "EMPTY",
+            transcriptConfirmedAt: "2026-07-25T12:00:00.000Z",
+          }),
+        ]),
+      );
+
+      render(
+        <MemoryRouter>
+          <AdminDashboard />
+        </MemoryRouter>,
+      );
+
+      await user.click(await screen.findByRole("button", {
+        name: "Select Test Letter",
+      }));
+      await user.click(await screen.findByRole("button", {
+        name: /Extract Metadata \(1\)/,
+      }));
+
+      expect(showToastMock).toHaveBeenCalledWith(expectedMessage, "info");
+      expect(screen.queryByRole("heading", {
+        name: "Generate Metadata",
+      })).not.toBeInTheDocument();
+      expect(confirmTranscriptMock).not.toHaveBeenCalled();
+      expect(regenerateMetadataMock).not.toHaveBeenCalled();
+    },
+  );
 
   it("keeps the bulk confirmation flow when more than one letter is selected", async () => {
     const user = userEvent.setup();
@@ -508,12 +578,15 @@ describe("AdminDashboard processing", () => {
         }),
       ]),
     );
-    confirmTranscriptMock.mockResolvedValue(
-      makeLetter({
+    confirmTranscriptMock.mockResolvedValue({
+      receipt: makeConfirmationReceipt(),
+      letter: makeLetter({
+        workflowState: "METADATA_EXTRACTING",
         metadataContentStatus: "AI_DRAFT",
         transcriptConfirmedAt: "2026-03-30T12:00:00.000Z",
+        transcriptConfirmationId: "confirmation-1",
       }),
-    );
+    });
 
     render(
       <MemoryRouter>
@@ -533,10 +606,12 @@ describe("AdminDashboard processing", () => {
       screen.queryByRole("heading", { name: "Generate Metadata" }),
     ).not.toBeInTheDocument();
 
+    const transcriptDigest = await sha256Utf8("hello");
     await waitFor(() => {
       expect(confirmTranscriptMock).toHaveBeenCalledWith(
         "letter-1",
         0,
+        transcriptDigest,
         {
           confirmedSender: "Mabel",
           confirmedRecipient: "Theo",
@@ -546,7 +621,7 @@ describe("AdminDashboard processing", () => {
     expect(regenerateMetadataMock).not.toHaveBeenCalled();
   });
 
-  it("races confirmed empty metadata with synchronous regeneration", async () => {
+  it("confirms once and leaves queued metadata to the worker", async () => {
     const user = userEvent.setup();
 
     getAdminLettersMock.mockResolvedValue(
@@ -557,22 +632,16 @@ describe("AdminDashboard processing", () => {
         }),
       ]),
     );
-    confirmTranscriptMock.mockResolvedValue(
-      makeLetter({
-        primarySourceRevision: 7,
+    confirmTranscriptMock.mockResolvedValue({
+      receipt: makeConfirmationReceipt("queued"),
+      letter: makeLetter({
         workflowState: "METADATA_EXTRACTING",
+        metadataJobStatus: "PENDING",
         metadataContentStatus: "EMPTY",
         transcriptConfirmedAt: "2026-07-24T12:00:00.000Z",
+        transcriptConfirmationId: "confirmation-1",
       }),
-    );
-    regenerateMetadataMock.mockResolvedValue(
-      makeLetter({
-        primarySourceRevision: 7,
-        workflowState: "METADATA_DRAFTED",
-        metadataContentStatus: "AI_DRAFT",
-        transcriptConfirmedAt: "2026-07-24T12:00:00.000Z",
-      }),
-    );
+    });
 
     render(
       <MemoryRouter>
@@ -590,35 +659,27 @@ describe("AdminDashboard processing", () => {
       name: "Generate Metadata",
     }));
 
+    const transcriptDigest = await sha256Utf8("hello");
     await waitFor(() => {
       expect(confirmTranscriptMock).toHaveBeenCalledWith(
         "letter-1",
         0,
-        {
-          confirmedRecipient: "Bob",
-          confirmedSender: "Alice",
-        },
-      );
-      expect(regenerateMetadataMock).toHaveBeenCalledWith(
-        "letter-1",
-        7,
+        transcriptDigest,
         {
           confirmedRecipient: "Bob",
           confirmedSender: "Alice",
         },
       );
       expect(showToastMock).toHaveBeenCalledWith(
-        "Metadata regenerated",
+        "Transcript confirmed; metadata extraction queued.",
         "success",
       );
       expect(getAdminLettersMock).toHaveBeenCalledTimes(2);
     });
-    expect(confirmTranscriptMock.mock.invocationCallOrder[0]).toBeLessThan(
-      regenerateMetadataMock.mock.invocationCallOrder[0],
-    );
+    expect(regenerateMetadataMock).not.toHaveBeenCalled();
   });
 
-  it("reports an ambiguous committed timeout without reconciling Dashboard state", async () => {
+  it("reconciles an ambiguous committed timeout before reporting outcome", async () => {
     const user = userEvent.setup();
     let authoritativeLetter = makeLetter({
       metadataContentStatus: "EMPTY",
@@ -633,11 +694,9 @@ describe("AdminDashboard processing", () => {
         metadataContentStatus: "EMPTY",
         transcriptConfirmedAt: "2026-07-25T12:00:00.000Z",
       });
-      throw Object.assign(
-        new Error("The operation was aborted."),
-        { name: "ApiError", status: 0 },
-      );
+      throw new ApiError(0, "The operation was aborted.");
     });
+    getAdminLetterByIdMock.mockImplementation(async () => authoritativeLetter);
 
     render(
       <MemoryRouter>
@@ -657,23 +716,23 @@ describe("AdminDashboard processing", () => {
 
     await waitFor(() => {
       expect(showToastMock).toHaveBeenCalledWith(
-        "The operation was aborted.",
-        "error",
+        "Transcript is confirmed; current metadata state refreshed.",
+        "info",
       );
     });
+    const transcriptDigest = await sha256Utf8("hello");
     expect(confirmTranscriptMock).toHaveBeenCalledWith(
       "letter-1",
       0,
+      transcriptDigest,
       {
         confirmedRecipient: "Bob",
         confirmedSender: "Alice",
       },
     );
     expect(regenerateMetadataMock).not.toHaveBeenCalled();
-    expect(getAdminLettersMock).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("button", {
-      name: /Extract Metadata \(1\)/,
-    })).toBeVisible();
+    expect(getAdminLetterByIdMock).toHaveBeenCalledWith("letter-1");
+    expect(getAdminLettersMock).toHaveBeenCalledTimes(2);
   });
 
   it("shows generate copy after metadata has been cleared even when the transcript is confirmed", async () => {

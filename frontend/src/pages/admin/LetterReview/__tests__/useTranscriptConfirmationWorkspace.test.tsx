@@ -6,21 +6,30 @@ import {
   it,
   vi,
 } from 'vitest';
+import type { TranscriptConfirmationReceipt } from '../../../../api/admin/letters';
+import { ApiError } from '../../../../api/client';
 import type { Letter } from '../../../../types/Letter';
+import { sha256Utf8 } from '../../../../utils/sha256';
 import type { ExecuteLetterReviewMutation } from '../useLetterReviewMutationExecutor';
 import type { LetterReviewVisit } from '../useLetterReviewVisit';
 import { useTranscriptConfirmationWorkspace } from '../useTranscriptConfirmationWorkspace';
 
 const {
   confirmTranscriptMock,
+  getAdminLetterByIdMock,
   showToastMock,
 } = vi.hoisted(() => ({
   confirmTranscriptMock: vi.fn(),
+  getAdminLetterByIdMock: vi.fn(),
   showToastMock: vi.fn(),
 }));
 
 vi.mock('../../../../api/admin/letters', () => ({
   confirmTranscript: confirmTranscriptMock,
+}));
+
+vi.mock('../../../../api/letters', () => ({
+  getAdminLetterById: getAdminLetterByIdMock,
 }));
 
 vi.mock('../../../../contexts/ToastContext', () => ({
@@ -67,6 +76,24 @@ function visit(
   };
 }
 
+function makeReceipt(
+  metadataDisposition: TranscriptConfirmationReceipt['metadataDisposition'] =
+    'queued',
+): TranscriptConfirmationReceipt {
+  return {
+    confirmationId: 'confirmation-a',
+    confirmedAt: '2026-07-24T13:00:00.000Z',
+    confirmedBy: 'admin-1',
+    transcriptSource: {
+      primarySourceRevision: 3,
+      transcriptDigest: 'test-digest',
+    },
+    metadataInputIdentity: 'metadata-input-a',
+    intentIdentity: 'intent-a',
+    metadataDisposition,
+  };
+}
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((next) => {
@@ -85,9 +112,14 @@ function adoptingExecutor(): ExecuteLetterReviewMutation {
 describe('useTranscriptConfirmationWorkspace', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    confirmTranscriptMock.mockResolvedValue(makeLetter({
-      transcriptConfirmedAt: '2026-07-24T13:00:00.000Z',
-    }));
+    confirmTranscriptMock.mockResolvedValue({
+      receipt: makeReceipt(),
+      letter: makeLetter({
+        workflowState: 'METADATA_EXTRACTING',
+        transcriptConfirmedAt: '2026-07-24T13:00:00.000Z',
+        transcriptConfirmationId: 'confirmation-a',
+      }),
+    });
   });
 
   it('seeds and controls a fresh draft from the live editor on every open', () => {
@@ -97,6 +129,7 @@ describe('useTranscriptConfirmationWorkspace', () => {
       ({ sender, recipient }) => useTranscriptConfirmationWorkspace({
         visit: currentVisit,
         letter: makeLetter(),
+        transcriptText: 'Persisted transcript',
         sender,
         recipient,
         executeLetterMutation,
@@ -150,13 +183,17 @@ describe('useTranscriptConfirmationWorkspace', () => {
     const executorGate = deferred<void>();
     const updated = makeLetter({
       transcriptConfirmedAt: '2026-07-24T13:00:00.000Z',
+      transcriptConfirmationId: 'confirmation-a',
       metadata: {
         sender: 'Returned Sender',
         recipient: 'Returned Recipient',
         verified: false,
       },
     });
-    confirmTranscriptMock.mockResolvedValue(updated);
+    confirmTranscriptMock.mockResolvedValue({
+      receipt: makeReceipt(),
+      letter: updated,
+    });
     const executeLetterMutation: ExecuteLetterReviewMutation =
       vi.fn(async (mutation) => {
         await executorGate.promise;
@@ -165,10 +202,11 @@ describe('useTranscriptConfirmationWorkspace', () => {
       });
     const currentVisit = visit('letter-a', { current: true });
     const { result, rerender } = renderHook(
-      ({ letter, sender, recipient }) => (
+      ({ letter, transcriptText, sender, recipient }) => (
         useTranscriptConfirmationWorkspace({
           visit: currentVisit,
           letter,
+          transcriptText,
           sender,
           recipient,
           executeLetterMutation,
@@ -177,6 +215,7 @@ describe('useTranscriptConfirmationWorkspace', () => {
       {
         initialProps: {
           letter: makeLetter(),
+          transcriptText: 'Live transcript draft',
           sender: 'Visible Sender',
           recipient: 'Visible Recipient',
         },
@@ -202,6 +241,7 @@ describe('useTranscriptConfirmationWorkspace', () => {
 
     rerender({
       letter: makeLetter({ primarySourceRevision: 99 }),
+      transcriptText: 'Later transcript draft',
       sender: 'Later Sender',
       recipient: 'Later Recipient',
     });
@@ -216,13 +256,14 @@ describe('useTranscriptConfirmationWorkspace', () => {
     expect(confirmTranscriptMock).toHaveBeenCalledWith(
       'letter-a',
       3,
+      await sha256Utf8('Live transcript draft'),
       {
         confirmedSender: '  Raw Sender  ',
         confirmedRecipient: undefined,
       },
     );
     expect(showToastMock).toHaveBeenCalledWith(
-      'Transcript confirmed — metadata extracted',
+      'Transcript confirmed; metadata extraction queued.',
       'success',
     );
   });
@@ -237,6 +278,7 @@ describe('useTranscriptConfirmationWorkspace', () => {
       useTranscriptConfirmationWorkspace({
         visit: currentVisit,
         letter: makeLetter(),
+        transcriptText: 'Persisted transcript',
         sender: '',
         recipient: '',
         executeLetterMutation,
@@ -255,6 +297,7 @@ describe('useTranscriptConfirmationWorkspace', () => {
     expect(confirmTranscriptMock).toHaveBeenCalledWith(
       'letter-a',
       3,
+      await sha256Utf8('Persisted transcript'),
       {
         confirmedSender: undefined,
         confirmedRecipient: undefined,
@@ -263,8 +306,104 @@ describe('useTranscriptConfirmationWorkspace', () => {
     expect(showToastMock).not.toHaveBeenCalled();
   });
 
+  it('reconciles a receipt-only response before publishing success', async () => {
+    const receipt = makeReceipt('already_running');
+    const reconciled = makeLetter({
+      workflowState: 'METADATA_EXTRACTING',
+      transcriptConfirmedAt: receipt.confirmedAt,
+      transcriptConfirmationId: receipt.confirmationId,
+    });
+    confirmTranscriptMock.mockResolvedValue({ receipt });
+    getAdminLetterByIdMock.mockResolvedValue(reconciled);
+    const executeLetterMutation = adoptingExecutor();
+    const currentVisit = visit('letter-a', { current: true });
+    const { result } = renderHook(() => (
+      useTranscriptConfirmationWorkspace({
+        visit: currentVisit,
+        letter: makeLetter(),
+        transcriptText: 'Persisted transcript',
+        sender: '',
+        recipient: '',
+        executeLetterMutation,
+      })
+    ));
+
+    act(() => {
+      result.current.openDialog();
+    });
+    await act(async () => {
+      await result.current.confirm();
+    });
+
+    expect(getAdminLetterByIdMock).toHaveBeenCalledWith('letter-a');
+    expect(showToastMock).toHaveBeenCalledWith(
+      'Transcript confirmed; metadata extraction is already in progress.',
+      'info',
+    );
+    expect(result.current.replayBlocked).toBe(false);
+  });
+
+  it.each([
+    ['accepted', false],
+    ['unknown', true],
+  ] as const)(
+    'blocks replay after an unreconciled %s outcome',
+    async (_outcome, ambiguous) => {
+      if (ambiguous) {
+        confirmTranscriptMock.mockRejectedValue(
+          new ApiError(500, 'Response lost'),
+        );
+      } else {
+        confirmTranscriptMock.mockResolvedValue({
+          receipt: makeReceipt(),
+        });
+      }
+      getAdminLetterByIdMock.mockRejectedValue(new Error('GET failed'));
+      const executeLetterMutation: ExecuteLetterReviewMutation =
+        vi.fn(async (mutation) => {
+          try {
+            await mutation.request();
+          } catch {
+            // Mirrors the canonical executor's request-error boundary.
+          }
+        });
+      const currentVisit = visit('letter-a', { current: true });
+      const { result } = renderHook(() => (
+        useTranscriptConfirmationWorkspace({
+          visit: currentVisit,
+          letter: makeLetter(),
+          transcriptText: 'Persisted transcript',
+          sender: '',
+          recipient: '',
+          executeLetterMutation,
+        })
+      ));
+
+      act(() => {
+        result.current.openDialog();
+      });
+      await act(async () => {
+        await result.current.confirm();
+      });
+
+      expect(result.current.replayBlocked).toBe(true);
+      act(() => {
+        result.current.openDialog();
+      });
+      expect(result.current.dialogProps.isOpen).toBe(false);
+      await act(async () => {
+        await result.current.confirm();
+      });
+      expect(confirmTranscriptMock).toHaveBeenCalledOnce();
+      expect(showToastMock).not.toHaveBeenCalled();
+    },
+  );
+
   it('isolates first-A state, controls, and late completion from B and fresh A', async () => {
-    const pending = deferred<Letter>();
+    const pending = deferred<{
+      receipt: TranscriptConfirmationReceipt;
+      letter?: Letter;
+    }>();
     confirmTranscriptMock.mockReturnValue(pending.promise);
     const firstAActive = { current: true };
     const bActive = { current: false };
@@ -280,6 +419,7 @@ describe('useTranscriptConfirmationWorkspace', () => {
         useTranscriptConfirmationWorkspace({
           visit: currentVisit,
           letter,
+          transcriptText: letter.transcript.fullText,
           sender,
           recipient,
           executeLetterMutation,
@@ -348,9 +488,14 @@ describe('useTranscriptConfirmationWorkspace', () => {
 
     let firstAccepted = true;
     await act(async () => {
-      pending.resolve(makeLetter({
-        transcriptConfirmedAt: '2026-07-24T13:00:00.000Z',
-      }));
+      pending.resolve({
+        receipt: makeReceipt(),
+        letter: makeLetter({
+          workflowState: 'METADATA_EXTRACTING',
+          transcriptConfirmedAt: '2026-07-24T13:00:00.000Z',
+          transcriptConfirmationId: 'confirmation-a',
+        }),
+      });
       firstAccepted = await firstConfirmation;
     });
     expect(firstAccepted).toBe(false);

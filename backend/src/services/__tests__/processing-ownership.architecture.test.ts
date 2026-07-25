@@ -71,6 +71,7 @@ const allowedEntityExtractionStatusWriters = new Set([
   'services/entities/extraction.ts',
   'services/letter/bulk-operations.ts',
   'services/letter/metadata-job.ts',
+  'services/letter/transcript-confirmation.ts',
   'services/letters.ts',
   'services/processing-queue.ts',
 ]);

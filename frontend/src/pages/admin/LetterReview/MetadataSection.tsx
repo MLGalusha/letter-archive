@@ -51,6 +51,7 @@ interface MetadataSectionProps {
   onVerifyMetadata: () => void;
   onConfirmTranscript: () => void;
   onRegenerateMetadata: () => void;
+  confirmationReplayBlocked: boolean;
   // Metadata field click/double-click handlers
   onMetadataFieldClick: (e: React.MouseEvent) => void;
   onMetadataFieldDoubleClick: (e: React.MouseEvent) => void;
@@ -95,6 +96,7 @@ const MetadataSection = memo(function MetadataSection({
   onVerifyMetadata,
   onConfirmTranscript,
   onRegenerateMetadata,
+  confirmationReplayBlocked,
   onMetadataFieldClick,
   onMetadataFieldDoubleClick,
   showMetadataTooltip,
@@ -104,6 +106,34 @@ const MetadataSection = memo(function MetadataSection({
 }: MetadataSectionProps) {
   const metadataLocked = saving || letter.metadataContentStatus === "VERIFIED";
   const identityLocked = metadataLocked || identityUpdateState === "saving";
+  const metadataQueued =
+    letter.metadataJobStatus === "PENDING"
+    && Boolean(letter.transcriptConfirmedAt);
+  const metadataExtracting =
+    letter.metadataJobStatus === "RUNNING"
+    || (
+      letter.metadataJobStatus === undefined
+      && letter.workflowState === "METADATA_EXTRACTING"
+    );
+  const metadataEmpty = letter.metadataContentStatus === "EMPTY";
+  const needsTranscriptConfirmation =
+    metadataEmpty && !letter.transcriptConfirmedAt;
+  const metadataActionLabel =
+    regenerateState === "regenerating"
+      ? metadataEmpty
+        ? "Generating..."
+        : "Regenerating..."
+      : metadataQueued
+        ? "Queued"
+        : metadataExtracting
+          ? "Extracting..."
+          : needsTranscriptConfirmation
+            ? "Generate"
+            : metadataEmpty
+              ? "Retry"
+              : "Regenerate";
+  const metadataActionWorking =
+    regenerateState === "regenerating" || metadataExtracting;
   const updatePrimaryTopics = (nextTopics: string[]) => {
     onPrimaryTopicsChange(nextTopics);
     onTriggerAutoSave({
@@ -122,21 +152,32 @@ const MetadataSection = memo(function MetadataSection({
               <button
                 className={`action-btn generate-btn ${regenerateState !== "idle" ? regenerateState : ""}`}
                 onClick={
-                  letter.metadataContentStatus === "EMPTY"
+                  needsTranscriptConfirmation
                     ? onConfirmTranscript
                     : onRegenerateMetadata
                 }
-                disabled={saving || regenerateState === "regenerating"}
+                disabled={
+                  saving
+                  || metadataQueued
+                  || metadataActionWorking
+                  || confirmationReplayBlocked
+                }
                 title={
-                  letter.metadataContentStatus === "EMPTY"
-                    ? "Generate metadata from transcript"
-                    : "Regenerate metadata from transcript"
+                  metadataQueued
+                    ? "Metadata extraction is queued"
+                    : metadataExtracting
+                      ? "Metadata extraction is already in progress"
+                      : needsTranscriptConfirmation
+                        ? "Generate metadata from transcript"
+                        : metadataEmpty
+                          ? "Retry metadata extraction"
+                          : "Regenerate metadata from transcript"
                 }
               >
-                {regenerateState === "regenerating" ? (
+                {metadataActionWorking ? (
                   <>
                     <Icon name="process" size={14} className="spinning" />
-                    <span>{letter.metadataContentStatus === "EMPTY" ? "Generating..." : "Regenerating..."}</span>
+                    <span>{metadataActionLabel}</span>
                   </>
                 ) : regenerateState === "done" ? (
                   <>
@@ -146,11 +187,7 @@ const MetadataSection = memo(function MetadataSection({
                 ) : (
                   <>
                     <Icon name="process" size={14} />
-                    <span>
-                      {letter.metadataContentStatus === "EMPTY"
-                        ? "Generate"
-                        : "Regenerate"}
-                    </span>
+                    <span>{metadataActionLabel}</span>
                   </>
                 )}
               </button>

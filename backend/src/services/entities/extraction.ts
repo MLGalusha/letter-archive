@@ -185,6 +185,8 @@ export async function processEntityExtraction(
         entityExtractionRevision: claim.revision,
         ...clearedEntityExtractionOwnership(),
         entityExtractionError: null,
+        metadataConfirmationGuidance: null,
+        metadataGuidanceRunId: null,
         updatedAt: new Date(),
       })
       .where(and(...ownedEntityExtractionAttemptConditions(letterId, claim)))

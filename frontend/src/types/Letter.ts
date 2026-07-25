@@ -23,6 +23,8 @@ export type VisibilityState = 'PUBLISHED' | 'HIDDEN';
 // Two-track content status system
 export type ContentStatus = 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
 
+export type JobStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';
+
 export type DateConfidence = 'exact' | 'unknown' | 'inferred';
 
 export type NoteCategory =
@@ -440,6 +442,13 @@ export interface Letter {
   // Two-track content status system
   transcriptStatus: ContentStatus;
   metadataContentStatus: ContentStatus;
+  /** Opaque identity for the currently accepted transcript confirmation. */
+  transcriptConfirmationId?: string;
+  /**
+   * Durable metadata job state exposed by the admin-detail/list read model.
+   * Optional during the additive backend/frontend rollout.
+   */
+  metadataJobStatus?: JobStatus;
   transcriptVerifiedAt?: string;
   transcriptVerifiedBy?: string;
   metadataVerifiedAt?: string;

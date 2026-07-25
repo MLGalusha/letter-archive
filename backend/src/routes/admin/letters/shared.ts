@@ -121,9 +121,13 @@ export const addLinkedPlaceSchema = z.object({
   role: z.enum(['written_from', 'mentioned', 'destination']),
 });
 
-export const confirmTranscriptSchema = z.object({
+export const extractionGuidanceSchema = z.object({
   confirmedSender: z.string().optional(),
   confirmedRecipient: z.string().optional(),
+});
+
+export const confirmTranscriptSchema = extractionGuidanceSchema.extend({
+  transcriptDigest: z.string().regex(/^[0-9a-f]{64}$/),
 });
 
 export const reExtractSchema = z.object({

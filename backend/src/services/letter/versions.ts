@@ -6,6 +6,7 @@ import { log, type VersionResult } from './shared.js';
 import {
   buildHumanMetadataJobPatch,
   buildMetadataSourceInvalidationPatch,
+  clearedTranscriptConfirmationIntent,
   observedMetadataRevisionConditions,
 } from './metadata-job.js';
 import { buildMetadataDocumentProjectionPatch } from './metadata-projection.js';
@@ -253,6 +254,7 @@ export async function restoreVersion(
           transcriptVerifiedBy: null,
           transcriptConfirmedAt: null,
           transcriptConfirmedBy: null,
+          ...clearedTranscriptConfirmationIntent(),
           ...buildMetadataSourceInvalidationPatch(),
           workflow: hasTranscription ? 'TRANSCRIBED' : 'UPLOADED',
           updatedAt: new Date(),

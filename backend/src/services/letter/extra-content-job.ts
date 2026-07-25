@@ -281,6 +281,7 @@ export async function runExtraContentJob<T>({
       eq(letters.id, letterId),
       eq(letters.primarySourceRevision, expectedPrimarySourceRevision),
       eq(letters.extraContentJobStatus, expectedStatus),
+      ne(letters.metadataStatus, 'RUNNING'),
       ne(letters.entityExtractionStatus, 'RUNNING'),
       observedTimestampMatches(letters.updatedAt, expectedUpdatedAt),
       ...(workerExecutionToken

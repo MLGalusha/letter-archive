@@ -43,8 +43,23 @@ vi.mock('../../db/index.js', () => {
       transcriptStatus: 'letters.transcriptStatus',
       metadataStatus: 'letters.metadataStatus',
       metadataRevision: 'letters.metadataRevision',
+      metadataRunId: 'letters.metadataRunId',
+      metadataRunRevision: 'letters.metadataRunRevision',
+      metadataLeaseExpiresAt: 'letters.metadataLeaseExpiresAt',
+      metadataLeaseRunId: 'letters.metadataLeaseRunId',
+      metadataClaimKind: 'letters.metadataClaimKind',
+      metadataConfirmationGuidance: 'letters.metadataConfirmationGuidance',
+      metadataGuidanceRunId: 'letters.metadataGuidanceRunId',
       metadataContentStatus: 'letters.metadataContentStatus',
       primarySourceRevision: 'letters.primarySourceRevision',
+      workflow: 'letters.workflow',
+      entityExtractionStatus: 'letters.entityExtractionStatus',
+      entityExtractionError: 'letters.entityExtractionError',
+      entityExtractionRunId: 'letters.entityExtractionRunId',
+      entityExtractionRunRevision: 'letters.entityExtractionRunRevision',
+      entityExtractionLeaseExpiresAt: 'letters.entityExtractionLeaseExpiresAt',
+      entityExtractionLeaseRunId: 'letters.entityExtractionLeaseRunId',
+      entityExtractionClaimKind: 'letters.entityExtractionClaimKind',
       extraContentStatus: 'letters.extraContentStatus',
       photoDescription: 'letters.photoDescription',
       photoDescriptionStatus: 'letters.photoDescriptionStatus',
@@ -456,6 +471,9 @@ describe('extra-content verification ownership', () => {
       extraContentJobStatus: 'RUNNING',
       extraContentJobRunId: 'old-run',
       extraContentJobDirty: true,
+      metadataStatus: 'RUNNING',
+      metadataRunId: 'active-metadata-run',
+      metadataRevision: 11,
       primarySourceRevision: 7,
       updatedAt: new Date('2026-07-17T12:00:00.000Z'),
     });
@@ -465,7 +483,7 @@ describe('extra-content verification ownership', () => {
     });
 
     expect(updateSetMock).toHaveBeenCalledTimes(1);
-    expect(updateSetMock).toHaveBeenCalledWith({
+    expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
       extraContentStatus: 'VERIFIED',
       extraContentVerifiedAt: expect.any(Date),
       extraContentVerifiedBy: 'reviewer-1',
@@ -476,8 +494,25 @@ describe('extra-content verification ownership', () => {
       extraContentJobLeaseRunId: null,
       extraContentJobClaimKind: null,
       extraContentJobDirty: false,
+      metadataConfirmationGuidance: null,
+      metadataGuidanceRunId: null,
+      metadataRunId: null,
+      metadataRunRevision: null,
+      metadataLeaseExpiresAt: null,
+      metadataLeaseRunId: null,
+      metadataClaimKind: null,
+      metadataAttemptCount: 0,
+      metadataStatus: expect.objectContaining({
+        kind: 'sql',
+        values: expect.arrayContaining(['letters.metadataStatus']),
+      }),
+      metadataRevision: {
+        kind: 'sql',
+        strings: ['', ' + 1'],
+        values: ['letters.metadataRevision'],
+      },
       updatedAt: expect.any(Date),
-    });
+    }));
     expect(updateWhereMock).toHaveBeenCalledWith(expect.objectContaining({
       kind: 'and',
       clauses: expect.arrayContaining([
@@ -486,6 +521,10 @@ describe('extra-content verification ownership', () => {
           field: 'letters.primarySourceRevision',
           value: 7,
         },
+        expect.objectContaining({
+          kind: 'sql',
+          values: expect.arrayContaining(['letters.updatedAt']),
+        }),
       ]),
     }));
   });
@@ -497,6 +536,9 @@ describe('extra-content verification ownership', () => {
       extraContentJobStatus: 'RUNNING',
       extraContentJobRunId: 'old-run',
       extraContentJobDirty: false,
+      metadataStatus: 'RUNNING',
+      metadataRunId: 'active-metadata-run',
+      metadataRevision: 12,
       primarySourceRevision: 7,
       updatedAt: new Date('2026-07-17T12:00:00.000Z'),
     });
@@ -504,7 +546,7 @@ describe('extra-content verification ownership', () => {
     await expect(unverifyExtraContent('letter-2', 7)).resolves.toBe(true);
 
     expect(updateSetMock).toHaveBeenCalledTimes(1);
-    expect(updateSetMock).toHaveBeenCalledWith({
+    expect(updateSetMock).toHaveBeenCalledWith(expect.objectContaining({
       extraContentStatus: 'EDITED',
       extraContentVerifiedAt: null,
       extraContentVerifiedBy: null,
@@ -515,8 +557,25 @@ describe('extra-content verification ownership', () => {
       extraContentJobLeaseRunId: null,
       extraContentJobClaimKind: null,
       extraContentJobDirty: false,
+      metadataConfirmationGuidance: null,
+      metadataGuidanceRunId: null,
+      metadataRunId: null,
+      metadataRunRevision: null,
+      metadataLeaseExpiresAt: null,
+      metadataLeaseRunId: null,
+      metadataClaimKind: null,
+      metadataAttemptCount: 0,
+      metadataStatus: expect.objectContaining({
+        kind: 'sql',
+        values: expect.arrayContaining(['letters.metadataStatus']),
+      }),
+      metadataRevision: {
+        kind: 'sql',
+        strings: ['', ' + 1'],
+        values: ['letters.metadataRevision'],
+      },
       updatedAt: expect.any(Date),
-    });
+    }));
     expect(updateWhereMock).toHaveBeenCalledWith(expect.objectContaining({
       kind: 'and',
       clauses: expect.arrayContaining([
@@ -525,6 +584,10 @@ describe('extra-content verification ownership', () => {
           field: 'letters.primarySourceRevision',
           value: 7,
         },
+        expect.objectContaining({
+          kind: 'sql',
+          values: expect.arrayContaining(['letters.updatedAt']),
+        }),
       ]),
     }));
   });

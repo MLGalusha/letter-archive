@@ -2,9 +2,16 @@ import {
   useCallback,
   useState,
 } from 'react';
-import { confirmTranscript } from '../../../api/admin/letters';
 import { useToast } from '../../../contexts/ToastContext';
 import type { Letter } from '../../../types/Letter';
+import { sha256Utf8 } from '../../../utils/sha256';
+import {
+  getTranscriptConfirmationFeedback,
+  resolveTranscriptConfirmationOutcome,
+  TranscriptConfirmationAcceptedError,
+  TranscriptConfirmationOutcomeUnknownError,
+  type ResolvedTranscriptConfirmation,
+} from '../transcriptConfirmationOutcome';
 import type { ExecuteLetterReviewMutation } from './useLetterReviewMutationExecutor';
 import type { LetterReviewVisit } from './useLetterReviewVisit';
 
@@ -16,11 +23,13 @@ interface ConfirmationDraft {
 interface TranscriptConfirmationSession {
   owner: LetterReviewVisit;
   dialog: ConfirmationDraft | null;
+  replayBlocked: boolean;
 }
 
 interface UseTranscriptConfirmationWorkspaceOptions {
   visit: LetterReviewVisit;
   letter: Letter | null;
+  transcriptText: string;
   sender: string;
   recipient: string;
   executeLetterMutation: ExecuteLetterReviewMutation;
@@ -31,6 +40,7 @@ const sessionFrom = (
 ): TranscriptConfirmationSession => ({
   owner,
   dialog: null,
+  replayBlocked: false,
 });
 
 /**
@@ -43,6 +53,7 @@ const sessionFrom = (
 export function useTranscriptConfirmationWorkspace({
   visit,
   letter,
+  transcriptText,
   sender,
   recipient,
   executeLetterMutation,
@@ -68,7 +79,7 @@ export function useTranscriptConfirmationWorkspace({
   }, [visit]);
 
   const openDialog = useCallback(() => {
-    if (!visit.isActive() || !letter) return;
+    if (!visit.isActive() || !letter || session.replayBlocked) return;
     updateSession((current) => ({
       ...current,
       dialog: {
@@ -80,6 +91,7 @@ export function useTranscriptConfirmationWorkspace({
     letter,
     recipient,
     sender,
+    session.replayBlocked,
     updateSession,
     visit,
   ]);
@@ -111,13 +123,19 @@ export function useTranscriptConfirmationWorkspace({
   }, [updateSession, visit]);
 
   const confirm = useCallback(async (): Promise<boolean> => {
-    if (!visit.isActive() || !letter || !session.dialog) {
+    if (
+      !visit.isActive()
+      || !letter
+      || !session.dialog
+      || session.replayBlocked
+    ) {
       return false;
     }
 
     const target = {
       id: letter.id,
       primarySourceRevision: letter.primarySourceRevision,
+      transcriptText,
       confirmedSender: session.dialog.sender || undefined,
       confirmedRecipient: session.dialog.recipient || undefined,
     };
@@ -127,23 +145,40 @@ export function useTranscriptConfirmationWorkspace({
     }));
 
     let accepted = false;
+    let outcome: ResolvedTranscriptConfirmation | undefined;
     await executeLetterMutation({
-      request: () => confirmTranscript(
-        target.id,
-        target.primarySourceRevision,
-        {
-          confirmedSender: target.confirmedSender,
-          confirmedRecipient: target.confirmedRecipient,
-        },
-      ),
+      request: async () => {
+        try {
+          outcome = await resolveTranscriptConfirmationOutcome({
+            letterId: target.id,
+            primarySourceRevision: target.primarySourceRevision,
+            transcriptDigest: await sha256Utf8(target.transcriptText),
+            confirmedSender: target.confirmedSender,
+            confirmedRecipient: target.confirmedRecipient,
+          });
+          return outcome.letter;
+        } catch (error) {
+          if (
+            visit.isActive()
+            && (
+              error instanceof TranscriptConfirmationAcceptedError
+              || error instanceof TranscriptConfirmationOutcomeUnknownError
+            )
+          ) {
+            updateSession((current) => ({
+              ...current,
+              replayBlocked: true,
+            }));
+          }
+          throw error;
+        }
+      },
       failureMessage: 'Failed to confirm transcript',
       afterAdopt: () => {
-        if (!visit.isActive()) return;
+        if (!visit.isActive() || !outcome) return;
         accepted = true;
-        showToast(
-          'Transcript confirmed — metadata extracted',
-          'success',
-        );
+        const feedback = getTranscriptConfirmationFeedback(outcome);
+        showToast(feedback.message, feedback.type);
       },
     });
     return accepted;
@@ -151,7 +186,9 @@ export function useTranscriptConfirmationWorkspace({
     executeLetterMutation,
     letter,
     session.dialog,
+    session.replayBlocked,
     showToast,
+    transcriptText,
     updateSession,
     visit,
   ]);
@@ -159,6 +196,7 @@ export function useTranscriptConfirmationWorkspace({
   return {
     openDialog,
     confirm,
+    replayBlocked: session.replayBlocked,
     dialogProps: {
       isOpen: session.dialog !== null,
       sender: session.dialog?.sender ?? '',

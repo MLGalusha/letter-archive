@@ -57,6 +57,7 @@ function makeLetter(overrides: Partial<FrontendLetter> = {}): FrontendLetter {
     },
     status: 'published',
     workflowState: 'REVIEWED',
+    metadataJobStatus: 'SUCCESS',
     visibility: 'PUBLISHED',
     transcriptPublished: false,
     metadataPublished: false,
@@ -84,6 +85,7 @@ function makeLetter(overrides: Partial<FrontendLetter> = {}): FrontendLetter {
     aiNotes: [{ content: 'private AI note' }],
     readingText: 'private reading view',
     transcriptConfirmedAt: '2026-01-01T00:00:00.000Z',
+    transcriptConfirmationId: '38000000-0000-4000-8000-000000000001',
     flagged: true,
     flaggedAt: '2026-01-01T00:00:00.000Z',
     flaggedBy: 'flag-admin',
@@ -178,6 +180,8 @@ describe('public letter read model', () => {
       'photoDescriptionContext',
       'transcriptVerifiedBy',
       'metadataVerifiedBy',
+      'metadataJobStatus',
+      'transcriptConfirmationId',
       'workflowState',
     ]) {
       expect(result).not.toHaveProperty(privateField);

@@ -130,6 +130,7 @@ export function entityExtractionPrerequisiteConditions(): SQL[] {
 export function extraContentPrerequisiteConditions(): SQL[] {
   return [
     eq(letters.type, 'L'),
+    ne(letters.metadataStatus, 'RUNNING'),
     sql`EXISTS (
       SELECT 1 FROM letters AS rel
       WHERE rel.collection_id = ${letters.collectionId}

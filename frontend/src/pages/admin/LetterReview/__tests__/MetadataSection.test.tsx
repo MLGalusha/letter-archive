@@ -61,6 +61,7 @@ const buildProps = (overrides: Partial<ComponentProps<typeof MetadataSection>> =
     onVerifyMetadata: vi.fn(),
     onConfirmTranscript: vi.fn(),
     onRegenerateMetadata: vi.fn(),
+    confirmationReplayBlocked: false,
     onMetadataFieldClick: vi.fn(),
     onMetadataFieldDoubleClick: vi.fn(),
     showMetadataTooltip: false,
@@ -77,7 +78,11 @@ describe("MetadataSection", () => {
     const user = userEvent.setup();
     const onConfirmTranscript = vi.fn();
     const props = buildProps({
-      letter: buildLetter({ metadataContentStatus: "EMPTY" }),
+      letter: buildLetter({
+        metadataJobStatus: "PENDING",
+        metadataContentStatus: "EMPTY",
+        transcriptConfirmedAt: undefined,
+      }),
       onConfirmTranscript,
     });
 
@@ -102,24 +107,109 @@ describe("MetadataSection", () => {
     expect(onRegenerateMetadata).toHaveBeenCalledTimes(1);
   });
 
-  it("still offers duplicate generation while empty metadata is extracting", async () => {
-    const user = userEvent.setup();
-    const onConfirmTranscript = vi.fn();
+  it("reports explicit regeneration progress ahead of durable job state", () => {
     const props = buildProps({
       letter: buildLetter({
-        workflowState: "METADATA_EXTRACTING",
+        metadataJobStatus: "PENDING",
+        metadataContentStatus: "EDITED",
+        transcriptConfirmedAt: "2026-07-24T12:00:00.000Z",
+      }),
+      regenerateState: "regenerating",
+    });
+
+    render(<MetadataSection {...props} />);
+
+    expect(screen.getByRole("button", {
+      name: "Regenerating...",
+    })).toBeDisabled();
+  });
+
+  it("disables generation while empty metadata is extracting", async () => {
+    const user = userEvent.setup();
+    const onConfirmTranscript = vi.fn();
+    const onRegenerateMetadata = vi.fn();
+    const props = buildProps({
+      letter: buildLetter({
+        workflowState: "TRANSCRIBED",
+        metadataJobStatus: "RUNNING",
         metadataContentStatus: "EMPTY",
         transcriptConfirmedAt: "2026-07-24T12:00:00.000Z",
       }),
+      onConfirmTranscript,
+      onRegenerateMetadata,
+    });
+
+    render(<MetadataSection {...props} />);
+
+    const extracting = screen.getByRole("button", {
+      name: "Extracting...",
+    });
+    expect(extracting).toBeDisabled();
+    await user.click(extracting);
+    expect(onConfirmTranscript).not.toHaveBeenCalled();
+    expect(onRegenerateMetadata).not.toHaveBeenCalled();
+  });
+
+  it("disables queued metadata even before workflow advances", async () => {
+    const user = userEvent.setup();
+    const onConfirmTranscript = vi.fn();
+    const onRegenerateMetadata = vi.fn();
+    const props = buildProps({
+      letter: buildLetter({
+        workflowState: "TRANSCRIBED",
+        metadataJobStatus: "PENDING",
+        metadataContentStatus: "EMPTY",
+        transcriptConfirmedAt: "2026-07-24T12:00:00.000Z",
+      }),
+      onConfirmTranscript,
+      onRegenerateMetadata,
+    });
+
+    render(<MetadataSection {...props} />);
+
+    const queued = screen.getByRole("button", { name: "Queued" });
+    expect(queued).toBeDisabled();
+    await user.click(queued);
+    expect(onConfirmTranscript).not.toHaveBeenCalled();
+    expect(onRegenerateMetadata).not.toHaveBeenCalled();
+  });
+
+  it("retries metadata instead of replaying confirmation when empty is confirmed", async () => {
+    const user = userEvent.setup();
+    const onConfirmTranscript = vi.fn();
+    const onRegenerateMetadata = vi.fn();
+    const props = buildProps({
+      letter: buildLetter({
+        workflowState: "TRANSCRIBED",
+        metadataJobStatus: "FAILED",
+        metadataContentStatus: "EMPTY",
+        transcriptConfirmedAt: "2026-07-24T12:00:00.000Z",
+      }),
+      onConfirmTranscript,
+      onRegenerateMetadata,
+    });
+
+    render(<MetadataSection {...props} />);
+
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+    expect(onConfirmTranscript).not.toHaveBeenCalled();
+    expect(onRegenerateMetadata).toHaveBeenCalledOnce();
+  });
+
+  it("blocks an unresolved confirmation outcome until reload", async () => {
+    const user = userEvent.setup();
+    const onConfirmTranscript = vi.fn();
+    const props = buildProps({
+      confirmationReplayBlocked: true,
       onConfirmTranscript,
     });
 
     render(<MetadataSection {...props} />);
 
     const generate = screen.getByRole("button", { name: "Generate" });
-    expect(generate).toBeEnabled();
+    expect(generate).toBeDisabled();
     await user.click(generate);
-    expect(onConfirmTranscript).toHaveBeenCalledTimes(1);
+    expect(onConfirmTranscript).not.toHaveBeenCalled();
   });
 
   it("triggers autosave on sender change", async () => {

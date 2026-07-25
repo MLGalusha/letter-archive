@@ -6,6 +6,7 @@ import type {
   VisibilityState,
   LetterType,
   ContentStatus,
+  JobStatus,
   LetterPerson,
   LetterPlace,
   CanonicalPerson,
@@ -176,6 +177,7 @@ export interface FrontendLetter {
   metadata: FrontendLetterMetadata;
   status: FrontendLetterStatus;
   workflowState: WorkflowState;
+  metadataJobStatus: JobStatus;
   visibility: VisibilityState;
   transcriptPublished: boolean;
   metadataPublished: boolean;
@@ -183,6 +185,7 @@ export interface FrontendLetter {
   // Two-track content status system
   transcriptStatus: ContentStatus;
   metadataContentStatus: ContentStatus;
+  transcriptConfirmationId?: string;
   transcriptVerifiedAt?: string;
   transcriptVerifiedBy?: string;
   metadataVerifiedAt?: string;
@@ -529,6 +532,7 @@ export function transformLetterToDTO(letter: LetterWithRelations): FrontendLette
     },
     status: mapWorkflowVisibilityToStatus(letter.workflow, letter.visibility),
     workflowState: letter.workflow,
+    metadataJobStatus: letter.metadataStatus,
     visibility: letter.visibility,
     transcriptPublished: letter.transcriptPublished,
     metadataPublished: letter.metadataPublished,
@@ -536,6 +540,8 @@ export function transformLetterToDTO(letter: LetterWithRelations): FrontendLette
     // Two-track content status
     transcriptStatus: letter.transcriptStatus,
     metadataContentStatus: letter.metadataContentStatus,
+    transcriptConfirmationId:
+      letter.transcriptConfirmationId ?? undefined,
     transcriptVerifiedAt: letter.transcriptVerifiedAt?.toISOString(),
     transcriptVerifiedBy: letter.transcriptVerifiedBy || undefined,
     metadataVerifiedAt: letter.metadataVerifiedAt?.toISOString(),

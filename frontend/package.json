@@ -19,6 +19,7 @@
   "dependencies": {
     "@chenglou/pretext": "^0.0.4",
     "@mdxeditor/editor": "^3.52.5",
+    "@noble/hashes": "^2.2.0",
     "@tiptap/extension-document": "^3.21.0",
     "@tiptap/extension-paragraph": "^3.21.0",
     "@tiptap/extension-text": "^3.21.0",

@@ -182,6 +182,7 @@ describe('durable processing eligibility', () => {
 
     expect(prerequisites).toEqual([
       { kind: 'eq', field: 'letters.type', value: 'L' },
+      { kind: 'ne', field: 'letters.metadataStatus', value: 'RUNNING' },
       expect.objectContaining({
         kind: 'sql',
         strings: expect.arrayContaining([

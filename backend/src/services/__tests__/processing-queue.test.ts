@@ -1595,6 +1595,11 @@ describe('processing queue service', () => {
         kind: 'and',
         clauses: [
           { kind: 'eq', field: 'letters.type', value: 'L' },
+          {
+            kind: 'ne',
+            field: 'letters.metadataStatus',
+            value: 'RUNNING',
+          },
           expect.objectContaining({
             kind: 'sql',
             strings: expect.arrayContaining([

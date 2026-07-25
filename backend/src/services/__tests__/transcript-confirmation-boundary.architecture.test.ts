@@ -9,14 +9,13 @@ const paths = {
     repoRoot,
     'backend/src/routes/admin/letters/content.ts',
   ),
-  api: path.join(repoRoot, 'frontend/src/api/admin/letters.ts'),
-  dashboard: path.join(
+  service: path.join(
     repoRoot,
-    'frontend/src/pages/admin/AdminDashboard/useDashboardProcessingActions.ts',
+    'backend/src/services/letter/transcript-confirmation.ts',
   ),
-  outcomeMap: path.join(
+  migration: path.join(
     repoRoot,
-    'docs/architecture-cleanup/transcript-confirmation-outcomes.md',
+    'backend/src/db/migrations/0055_add_transcript_confirmation_intent.sql',
   ),
 };
 
@@ -29,39 +28,39 @@ function between(source: string, start: string, end: string): string {
 }
 
 describe('transcript confirmation execution boundary', () => {
-  it('keeps the current unsafe boundary visible until behavior tests replace it', async () => {
-    const [
-      route,
-      api,
-      dashboard,
-      outcomeMap,
-    ] = await Promise.all(Object.values(paths).map(file => readFile(file, 'utf8')));
+  it('keeps confirmation transactional and worker-owned across rollout', async () => {
+    const [route, service, migration] = await Promise.all(
+      Object.values(paths).map(file => readFile(file, 'utf8')),
+    );
     const confirmationRoute = between(
       route,
       "router.post('/:letterId/confirm-transcript'",
       "router.post('/:letterId/regenerate-metadata'",
     );
-    const confirmationApi = between(
-      api,
-      'export async function confirmTranscript',
-      'export async function regenerateMetadata',
-    );
-    const runsMetadataSynchronously = confirmationRoute.includes(
-      'runMetadataExtractionV2(',
-    );
 
-    // This is deliberately a temporary characterization tripwire, not proof
-    // of the future async architecture. The behavior-changing slice must
-    // replace it with executable service/route/worker/frontend contracts.
-    expect(runsMetadataSynchronously).toBe(true);
+    expect(route).toMatch(
+      /import \{ confirmTranscriptIntent \} from ['"].*transcript-confirmation\.js['"]/,
+    );
+    expect(confirmationRoute).toContain('confirmTranscriptIntent({');
     expect(confirmationRoute).toContain(
-      'claimMetadataAfterTranscriptConfirmation(',
+      "requestBackgroundWorkerRun('transcript-confirmation')",
     );
-    expect(confirmationApi).toContain('return apiPost<Letter>');
-    expect(confirmationApi).not.toContain('timeoutMs');
-    expect(dashboard).toContain(
-      'updatedLetter.metadataContentStatus === "EMPTY"',
+    expect(confirmationRoute).not.toContain('runMetadataExtractionV2(');
+    expect(confirmationRoute).not.toContain(
+      'claimMetadataAfterTranscriptConfirmation',
     );
-    expect(outcomeMap).toMatch(/The HTTP request performs no AI\b/);
+    expect(route).not.toContain('claimMetadataAfterTranscriptConfirmation');
+
+    expect(service).toContain('return database.transaction(async (tx) =>');
+    expect(service).toContain(".for('update')");
+    expect(service).not.toContain('runMetadataExtractionV2(');
+
+    const workerGate = migration.match(
+      /ADD CONSTRAINT "metadata_guidance_running_bound_to_run"([\s\S]*?)NOT VALID;/,
+    )?.[1];
+    expect(workerGate).toBeDefined();
+    expect(workerGate).toMatch(
+      /"metadata_confirmation_guidance" IS NULL[\s\S]*"metadata_status" <> 'RUNNING'[\s\S]*"metadata_guidance_run_id" IS NOT NULL[\s\S]*"metadata_run_id" IS NOT NULL[\s\S]*"metadata_guidance_run_id" = "metadata_run_id"/,
+    );
   });
 });

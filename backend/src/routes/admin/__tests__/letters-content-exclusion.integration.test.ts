@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { invokeRouter } from '../../../test/express-test-utils.js';
+import { AppError } from '../../../utils/response-helpers.js';
 
 const {
   getLetterByIdMock,
@@ -12,7 +13,8 @@ const {
   runEntityExtractionOnlyMock,
   observeMetadataStateMock,
   claimRequestedMetadataMock,
-  claimMetadataAfterTranscriptConfirmationMock,
+  confirmTranscriptIntentMock,
+  requestBackgroundWorkerRunMock,
   generateAndSaveReadingViewMock,
   dbTransactionMock,
   syncLetterParticipantsFromMetadataMock,
@@ -31,7 +33,8 @@ const {
   runEntityExtractionOnlyMock: vi.fn(),
   observeMetadataStateMock: vi.fn(),
   claimRequestedMetadataMock: vi.fn(),
-  claimMetadataAfterTranscriptConfirmationMock: vi.fn(),
+  confirmTranscriptIntentMock: vi.fn(),
+  requestBackgroundWorkerRunMock: vi.fn(),
   generateAndSaveReadingViewMock: vi.fn(),
   dbTransactionMock: vi.fn(),
   syncLetterParticipantsFromMetadataMock: vi.fn(),
@@ -109,11 +112,12 @@ vi.mock('../../../services/letter/metadata-job.js', () => ({
   })),
   observeMetadataState: observeMetadataStateMock,
   claimRequestedMetadata: claimRequestedMetadataMock,
-  claimMetadataAfterTranscriptConfirmation:
-    claimMetadataAfterTranscriptConfirmationMock,
   observedMetadataRevisionConditions: vi.fn(() => [
     { kind: 'observedMetadataRevision' },
   ]),
+}));
+vi.mock('../../../services/letter/transcript-confirmation.js', () => ({
+  confirmTranscriptIntent: confirmTranscriptIntentMock,
 }));
 
 vi.mock('../../../services/letter-operations.js', () => ({
@@ -145,7 +149,7 @@ vi.mock('../../../services/metadata-update.js', () => ({
   executeRetagForLetter: vi.fn(),
 }));
 vi.mock('../../../services/processing-queue.js', () => ({
-  requestBackgroundWorkerRun: vi.fn(),
+  requestBackgroundWorkerRun: requestBackgroundWorkerRunMock,
 }));
 vi.mock('../../../services/entities/persons.js', () => ({
   addAliasToCanonicalPerson: vi.fn(),
@@ -165,6 +169,20 @@ vi.mock('../../../services/letter/readingView.js', () => ({
 
 import contentRouter from '../letters/content.js';
 
+const observedTranscriptDigest = 'a'.repeat(64);
+const queuedConfirmationReceipt = {
+  confirmationId: '38000000-0000-4000-8000-000000000001',
+  confirmedAt: '2026-07-25T12:00:00.000Z',
+  confirmedBy: 'admin',
+  transcriptSource: {
+    primarySourceRevision: 7,
+    transcriptDigest: observedTranscriptDigest,
+  },
+  metadataInputIdentity: `v1.${'b'.repeat(64)}`,
+  intentIdentity: `v1.${'c'.repeat(64)}`,
+  metadataDisposition: 'queued',
+};
+
 describe('admin downstream extraction exclusion', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -174,7 +192,11 @@ describe('admin downstream extraction exclusion', () => {
     runEntityExtractionOnlyMock.mockResolvedValue({ kind: 'completed' });
     observeMetadataStateMock.mockImplementation(letter => ({ letter }));
     claimRequestedMetadataMock.mockResolvedValue(null);
-    claimMetadataAfterTranscriptConfirmationMock.mockResolvedValue(null);
+    confirmTranscriptIntentMock.mockResolvedValue({
+      receipt: queuedConfirmationReceipt,
+      newlyQueued: true,
+    });
+    requestBackgroundWorkerRunMock.mockResolvedValue(true);
     generateAndSaveReadingViewMock.mockResolvedValue('Reading view');
     addAiNoteMock.mockResolvedValue(true);
     resolveAiNotesForChangedFieldsMock.mockReturnValue(null);
@@ -849,401 +871,270 @@ describe('admin downstream extraction exclusion', () => {
     );
   });
 
-  it('rejects transcript confirmation while retranscription is already running', async () => {
-    getLetterByIdMock.mockResolvedValue({
-      workflow: 'TRANSCRIBED',
-      transcriptionStatus: 'RUNNING',
-      transcriptionText: 'transcript',
-      metadataStatus: 'PENDING',
-      entityExtractionStatus: 'PENDING',
-      primarySourceRevision: 7,
-    });
-
-    const response = await invokeRouter(contentRouter, {
-      method: 'POST',
-      url: '/letter-1/confirm-transcript',
-      path: '/letter-1/confirm-transcript',
+  it.each([
+    {
+      description: 'source revision',
+      body: { transcriptDigest: observedTranscriptDigest },
+      statusCode: 409,
+      error: 'source version is missing',
+      code: 'SOURCE_REVISION_CHANGED',
+    },
+    {
+      description: 'transcript digest',
       body: { primarySourceRevision: 7 },
-      headers: { accept: 'application/json' },
-    });
-
-    expect(response.statusCode).toBe(400);
-    expect(dbUpdateMock).not.toHaveBeenCalled();
-    expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
-  });
-
-  it('requires a page-source revision before confirming a transcript', async () => {
+      statusCode: 400,
+      error: 'Invalid transcript confirmation',
+      code: undefined,
+    },
+  ])('requires the observed $description before confirmation', async ({
+    body,
+    statusCode,
+    error,
+    code,
+  }) => {
     const response = await invokeRouter(contentRouter, {
       method: 'POST',
       url: '/letter-1/confirm-transcript',
       path: '/letter-1/confirm-transcript',
-      body: {},
+      body,
       headers: { 'content-type': 'application/json' },
     });
 
-    expect(response.statusCode).toBe(409);
+    expect(response.statusCode).toBe(statusCode);
     expect(response.body).toMatchObject({
-      error: expect.stringContaining('source version is missing'),
-      code: 'SOURCE_REVISION_CHANGED',
+      error: expect.stringContaining(error),
+      ...(code ? { code } : {}),
     });
-    expect(getLetterByIdMock).not.toHaveBeenCalled();
+    expect(confirmTranscriptIntentMock).not.toHaveBeenCalled();
+    expect(requestBackgroundWorkerRunMock).not.toHaveBeenCalled();
   });
 
-  it('binds the validated transcript snapshot when confirmation claims metadata', async () => {
-    getLetterByIdMock.mockResolvedValue({
-      type: 'L',
-      workflow: 'TRANSCRIBED',
-      transcriptionStatus: 'SUCCESS',
-      transcriptionText: 'transcript',
-      metadataStatus: 'PENDING',
-      entityExtractionStatus: 'PENDING',
+  it('returns an accepted queued receipt with the optional current Letter', async () => {
+    const hydratedLetter = {
+      id: 'letter-1',
       primarySourceRevision: 7,
-    });
-    claimMetadataAfterTranscriptConfirmationMock.mockResolvedValueOnce({
-      runId: 'run-a',
-      revision: 0,
-    });
-
-    const response = await invokeRouter(contentRouter, {
-      method: 'POST',
-      url: '/letter-1/confirm-transcript',
-      path: '/letter-1/confirm-transcript',
-      body: { primarySourceRevision: 7 },
-      headers: { accept: 'application/json' },
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(claimMetadataAfterTranscriptConfirmationMock).toHaveBeenCalledWith(
-      'letter-1',
-      { letter: expect.objectContaining({ transcriptionText: 'transcript' }) },
-      7,
-      'admin',
-    );
-    expect(runMetadataExtractionV2Mock).toHaveBeenCalledWith(
-      'letter-1',
-      undefined,
-      { runId: 'run-a', revision: 0 },
-    );
-  });
-
-  it('reports failure after the confirmation claim has already committed', async () => {
-    getLetterByIdMock.mockResolvedValue({
-      type: 'L',
-      workflow: 'TRANSCRIBED',
-      transcriptionStatus: 'SUCCESS',
-      transcriptionText: 'transcript',
+      transcriptConfirmedAt: queuedConfirmationReceipt.confirmedAt,
+      transcriptConfirmationId: queuedConfirmationReceipt.confirmationId,
       metadataStatus: 'PENDING',
-      entityExtractionStatus: 'PENDING',
-      primarySourceRevision: 7,
-    });
-    claimMetadataAfterTranscriptConfirmationMock.mockResolvedValueOnce({
-      runId: 'run-a',
-      revision: 0,
-    });
-    runMetadataExtractionV2Mock.mockRejectedValueOnce(
-      new Error('provider failed after claim'),
+    };
+    fetchLetterWithRelatedAndTransformMock.mockResolvedValueOnce(
+      hydratedLetter,
     );
 
     const response = await invokeRouter(contentRouter, {
       method: 'POST',
       url: '/letter-1/confirm-transcript',
       path: '/letter-1/confirm-transcript',
-      body: { primarySourceRevision: 7 },
+      body: {
+        primarySourceRevision: 7,
+        transcriptDigest: observedTranscriptDigest,
+        confirmedSender: 'Mabel',
+        confirmedRecipient: 'Theo',
+      },
       headers: { accept: 'application/json' },
     });
 
-    expect(response.statusCode).toBe(500);
-    expect(response.body).toMatchObject({
-      error: 'Internal server error',
+    expect(response.statusCode).toBe(202);
+    expect(response.body).toEqual({
+      receipt: queuedConfirmationReceipt,
+      letter: hydratedLetter,
     });
-    expect(claimMetadataAfterTranscriptConfirmationMock).toHaveBeenCalledTimes(
-      1,
+    expect(confirmTranscriptIntentMock).toHaveBeenCalledWith({
+      letterId: 'letter-1',
+      expectedPrimarySourceRevision: 7,
+      expectedTranscriptDigest: observedTranscriptDigest,
+      confirmedBy: 'admin',
+      guidance: {
+        confirmedSender: 'Mabel',
+        confirmedRecipient: 'Theo',
+      },
+    });
+    expect(requestBackgroundWorkerRunMock).toHaveBeenCalledOnce();
+    expect(requestBackgroundWorkerRunMock).toHaveBeenCalledWith(
+      'transcript-confirmation',
     );
-    expect(runMetadataExtractionV2Mock).toHaveBeenCalledWith(
-      'letter-1',
-      undefined,
-      { runId: 'run-a', revision: 0 },
-    );
-    expect(fetchLetterWithRelatedAndTransformMock).not.toHaveBeenCalled();
+    expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
   });
 
-  it('reports failure when the final DTO read loses an already-completed result', async () => {
-    getLetterByIdMock.mockResolvedValue({
-      type: 'L',
-      workflow: 'TRANSCRIBED',
-      transcriptionStatus: 'SUCCESS',
-      transcriptionText: 'transcript',
-      metadataStatus: 'PENDING',
-      entityExtractionStatus: 'PENDING',
+  it('omits a hydrated Letter that belongs to a different confirmation receipt', async () => {
+    fetchLetterWithRelatedAndTransformMock.mockResolvedValueOnce({
+      id: 'letter-1',
       primarySourceRevision: 7,
+      transcriptConfirmedAt: queuedConfirmationReceipt.confirmedAt,
+      transcriptConfirmationId: '38000000-0000-4000-8000-000000000099',
+      metadataJobStatus: 'PENDING',
     });
-    claimMetadataAfterTranscriptConfirmationMock.mockResolvedValueOnce({
-      runId: 'run-a',
-      revision: 0,
-    });
-    fetchLetterWithRelatedAndTransformMock.mockRejectedValueOnce(
-      new Error('DTO read failed after publication'),
-    );
 
     const response = await invokeRouter(contentRouter, {
       method: 'POST',
       url: '/letter-1/confirm-transcript',
       path: '/letter-1/confirm-transcript',
-      body: { primarySourceRevision: 7 },
+      body: {
+        primarySourceRevision: 7,
+        transcriptDigest: observedTranscriptDigest,
+      },
       headers: { accept: 'application/json' },
     });
 
-    expect(response.statusCode).toBe(500);
-    expect(response.body).toMatchObject({
-      error: 'Internal server error',
+    expect(response.statusCode).toBe(202);
+    expect(response.body).toEqual({
+      receipt: queuedConfirmationReceipt,
     });
-    expect(runMetadataExtractionV2Mock).toHaveBeenCalledWith(
-      'letter-1',
-      undefined,
-      { runId: 'run-a', revision: 0 },
-    );
     expect(fetchLetterWithRelatedAndTransformMock).toHaveBeenCalledWith(
       'letter-1',
     );
+    expect(requestBackgroundWorkerRunMock).toHaveBeenCalledOnce();
   });
 
-  it('returns an uncoded conflict after confirmation when metadata is superseded', async () => {
-    getLetterByIdMock.mockResolvedValue({
-      type: 'L',
-      workflow: 'TRANSCRIBED',
-      transcriptionStatus: 'SUCCESS',
-      transcriptionText: 'transcript',
-      metadataStatus: 'PENDING',
-      entityExtractionStatus: 'PENDING',
-      primarySourceRevision: 7,
-    });
-    claimMetadataAfterTranscriptConfirmationMock.mockResolvedValueOnce({
-      runId: 'run-a',
-      revision: 0,
-    });
-    runMetadataExtractionV2Mock.mockResolvedValueOnce({
-      kind: 'superseded',
-    });
+  it('keeps an accepted queued receipt when the advisory worker wake fails', async () => {
+    requestBackgroundWorkerRunMock.mockRejectedValueOnce(
+      new Error('worker wake unavailable'),
+    );
 
     const response = await invokeRouter(contentRouter, {
       method: 'POST',
       url: '/letter-1/confirm-transcript',
       path: '/letter-1/confirm-transcript',
-      body: { primarySourceRevision: 7 },
+      body: {
+        primarySourceRevision: 7,
+        transcriptDigest: observedTranscriptDigest,
+      },
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(response.body).toEqual({
+      receipt: queuedConfirmationReceipt,
+    });
+    expect(confirmTranscriptIntentMock).toHaveBeenCalledOnce();
+    expect(requestBackgroundWorkerRunMock).toHaveBeenCalledOnce();
+    expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
+  });
+
+  it('returns the accepted receipt when post-commit Letter hydration fails', async () => {
+    fetchLetterWithRelatedAndTransformMock.mockRejectedValueOnce(
+      new Error('DTO read failed after confirmation'),
+    );
+
+    const response = await invokeRouter(contentRouter, {
+      method: 'POST',
+      url: '/letter-1/confirm-transcript',
+      path: '/letter-1/confirm-transcript',
+      body: {
+        primarySourceRevision: 7,
+        transcriptDigest: observedTranscriptDigest,
+      },
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(response.body).toEqual({
+      receipt: queuedConfirmationReceipt,
+    });
+    expect(fetchLetterWithRelatedAndTransformMock).toHaveBeenCalledWith(
+      'letter-1',
+    );
+    expect(requestBackgroundWorkerRunMock).toHaveBeenCalledOnce();
+    expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
+  });
+
+  it('forwards a coded confirmation-service conflict without waking work', async () => {
+    confirmTranscriptIntentMock.mockRejectedValueOnce(
+      new AppError(
+        409,
+        'This transcript was already confirmed with different reviewer guidance',
+        undefined,
+        'TRANSCRIPT_CONFIRMATION_INTENT_CHANGED',
+      ),
+    );
+
+    const response = await invokeRouter(contentRouter, {
+      method: 'POST',
+      url: '/letter-1/confirm-transcript',
+      path: '/letter-1/confirm-transcript',
+      body: {
+        primarySourceRevision: 7,
+        transcriptDigest: observedTranscriptDigest,
+      },
       headers: { accept: 'application/json' },
     });
 
     expect(response.statusCode).toBe(409);
     expect(response.body).toMatchObject({
-      error: expect.stringContaining('superseded'),
+      error: expect.stringContaining('different reviewer guidance'),
+      code: 'TRANSCRIPT_CONFIRMATION_INTENT_CHANGED',
     });
-    expect(response.body).not.toHaveProperty('code');
+    expect(requestBackgroundWorkerRunMock).not.toHaveBeenCalled();
     expect(fetchLetterWithRelatedAndTransformMock).not.toHaveBeenCalled();
+    expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
   });
 
-  it('returns a successful partial DTO when entity extraction failed non-fatally', async () => {
-    getLetterByIdMock.mockResolvedValue({
-      type: 'L',
-      workflow: 'TRANSCRIBED',
-      transcriptionStatus: 'SUCCESS',
-      transcriptionText: 'transcript',
-      metadataStatus: 'PENDING',
-      entityExtractionStatus: 'PENDING',
-      primarySourceRevision: 7,
-    });
-    claimMetadataAfterTranscriptConfirmationMock.mockResolvedValueOnce({
-      runId: 'run-a',
-      revision: 0,
-    });
-    fetchLetterWithRelatedAndTransformMock.mockResolvedValueOnce({
+  it('returns a same-intent replay as 200 without waking the worker', async () => {
+    const replayReceipt = {
+      ...queuedConfirmationReceipt,
+      metadataDisposition: 'already_running',
+    };
+    const hydratedLetter = {
       id: 'letter-1',
-      transcriptConfirmedAt: '2026-07-24T12:00:00.000Z',
-      workflowState: 'METADATA_DRAFTED',
-      metadataContentStatus: 'AI_DRAFT',
-      entityExtractionStatus: 'FAILED',
-      entityExtractionError: 'entity provider failed',
+      primarySourceRevision: 7,
+      transcriptConfirmedAt: queuedConfirmationReceipt.confirmedAt,
+      transcriptConfirmationId: queuedConfirmationReceipt.confirmationId,
+      workflowState: 'METADATA_EXTRACTING',
+    };
+    confirmTranscriptIntentMock.mockResolvedValueOnce({
+      receipt: replayReceipt,
+      newlyQueued: false,
     });
+    fetchLetterWithRelatedAndTransformMock.mockResolvedValueOnce(hydratedLetter);
 
     const response = await invokeRouter(contentRouter, {
       method: 'POST',
       url: '/letter-1/confirm-transcript',
       path: '/letter-1/confirm-transcript',
-      body: { primarySourceRevision: 7 },
+      body: {
+        primarySourceRevision: 7,
+        transcriptDigest: observedTranscriptDigest,
+      },
       headers: { accept: 'application/json' },
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.body).toMatchObject({
-      transcriptConfirmedAt: '2026-07-24T12:00:00.000Z',
-      workflowState: 'METADATA_DRAFTED',
-      metadataContentStatus: 'AI_DRAFT',
-      entityExtractionStatus: 'FAILED',
-      entityExtractionError: 'entity provider failed',
+    expect(response.body).toEqual({
+      receipt: replayReceipt,
+      letter: hydratedLetter,
     });
+    expect(requestBackgroundWorkerRunMock).not.toHaveBeenCalled();
+    expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
   });
 
   it('confirms non-letter content without creating ineligible metadata work', async () => {
-    getLetterByIdMock.mockResolvedValue({
-      type: 'T',
-      workflow: 'TRANSCRIBED',
-      transcriptionStatus: 'SUCCESS',
-      transcriptionText: 'transcript',
-      metadataStatus: 'PENDING',
-      entityExtractionStatus: 'PENDING',
-      primarySourceRevision: 7,
+    const notApplicableReceipt = {
+      ...queuedConfirmationReceipt,
+      metadataInputIdentity: null,
+      metadataDisposition: 'not_applicable',
+    };
+    confirmTranscriptIntentMock.mockResolvedValueOnce({
+      receipt: notApplicableReceipt,
+      newlyQueued: false,
     });
-    updateReturningMock.mockResolvedValueOnce([{ id: 'letter-1' }]);
 
     const response = await invokeRouter(contentRouter, {
       method: 'POST',
       url: '/letter-1/confirm-transcript',
       path: '/letter-1/confirm-transcript',
-      body: { primarySourceRevision: 7 },
+      body: {
+        primarySourceRevision: 7,
+        transcriptDigest: observedTranscriptDigest,
+      },
       headers: { accept: 'application/json' },
     });
 
     expect(response.statusCode).toBe(200);
-    expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
-    expect(claimMetadataAfterTranscriptConfirmationMock).not.toHaveBeenCalled();
-    expect(updateReturningMock).toHaveBeenCalledTimes(1);
-  });
-
-  it('rejects canonical already-running metadata before confirmation', async () => {
-    getLetterByIdMock.mockResolvedValue({
-      type: 'L',
-      workflow: 'METADATA_EXTRACTING',
-      transcriptionStatus: 'SUCCESS',
-      transcriptionText: 'transcript',
-      metadataStatus: 'RUNNING',
-      entityExtractionStatus: 'PENDING',
-      primarySourceRevision: 7,
+    expect(response.body).toEqual({
+      receipt: notApplicableReceipt,
     });
-
-    const response = await invokeRouter(contentRouter, {
-      method: 'POST',
-      url: '/letter-1/confirm-transcript',
-      path: '/letter-1/confirm-transcript',
-      body: { primarySourceRevision: 7 },
-      headers: { accept: 'application/json' },
-    });
-
-    expect(response.statusCode).toBe(400);
-    expect(response.body).toMatchObject({
-      error: 'Letter must be in TRANSCRIBED state',
-    });
-    expect(updateReturningMock).not.toHaveBeenCalled();
-    expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
-  });
-
-  it('can commit confirmation after losing the metadata claim race', async () => {
-    getLetterByIdMock.mockResolvedValue({
-      type: 'L',
-      workflow: 'TRANSCRIBED',
-      transcriptionStatus: 'SUCCESS',
-      transcriptionText: 'transcript',
-      metadataStatus: 'PENDING',
-      metadataRevision: 0,
-      entityExtractionStatus: 'PENDING',
-      primarySourceRevision: 7,
-    });
-    claimMetadataAfterTranscriptConfirmationMock.mockResolvedValueOnce(null);
-    updateReturningMock.mockResolvedValueOnce([{ id: 'letter-1' }]);
-    fetchLetterWithRelatedAndTransformMock.mockResolvedValueOnce({
-      id: 'letter-1',
-      transcriptConfirmedAt: '2026-07-25T12:00:00.000Z',
-      workflowState: 'METADATA_EXTRACTING',
-      metadataContentStatus: 'EMPTY',
-      entityExtractionStatus: 'PENDING',
-    });
-
-    const response = await invokeRouter(contentRouter, {
-      method: 'POST',
-      url: '/letter-1/confirm-transcript',
-      path: '/letter-1/confirm-transcript',
-      body: { primarySourceRevision: 7 },
-      headers: { accept: 'application/json' },
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.body).toMatchObject({
-      transcriptConfirmedAt: '2026-07-25T12:00:00.000Z',
-      workflowState: 'METADATA_EXTRACTING',
-      metadataContentStatus: 'EMPTY',
-      entityExtractionStatus: 'PENDING',
-    });
-    expect(updateReturningMock).toHaveBeenCalledTimes(1);
-    expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
-  });
-
-  it('returns newer authoritative state after post-publication source invalidation', async () => {
-    getLetterByIdMock.mockResolvedValue({
-      type: 'L',
-      workflow: 'TRANSCRIBED',
-      transcriptionStatus: 'SUCCESS',
-      transcriptionText: 'transcript',
-      metadataStatus: 'PENDING',
-      entityExtractionStatus: 'PENDING',
-      primarySourceRevision: 7,
-    });
-    claimMetadataAfterTranscriptConfirmationMock.mockResolvedValueOnce({
-      runId: 'run-a',
-      revision: 0,
-    });
-    fetchLetterWithRelatedAndTransformMock.mockResolvedValueOnce({
-      id: 'letter-1',
-      primarySourceRevision: 8,
-      workflowState: 'TRANSCRIBED',
-      metadataContentStatus: 'EMPTY',
-      entityExtractionStatus: 'PENDING',
-    });
-
-    const response = await invokeRouter(contentRouter, {
-      method: 'POST',
-      url: '/letter-1/confirm-transcript',
-      path: '/letter-1/confirm-transcript',
-      body: { primarySourceRevision: 7 },
-      headers: { accept: 'application/json' },
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.body).toMatchObject({
-      primarySourceRevision: 8,
-      workflowState: 'TRANSCRIBED',
-      metadataContentStatus: 'EMPTY',
-    });
-    expect(response.body).not.toHaveProperty('transcriptConfirmedAt');
-    expect(runMetadataExtractionV2Mock).toHaveBeenCalledWith(
-      'letter-1',
-      undefined,
-      { runId: 'run-a', revision: 0 },
-    );
-  });
-
-  it('rejects a repeat after successful metadata changes the workflow', async () => {
-    getLetterByIdMock.mockResolvedValue({
-      type: 'L',
-      workflow: 'METADATA_DRAFTED',
-      transcriptionStatus: 'SUCCESS',
-      transcriptionText: 'transcript',
-      transcriptConfirmedAt: new Date('2026-07-24T12:00:00.000Z'),
-      metadataStatus: 'SUCCESS',
-      entityExtractionStatus: 'SUCCESS',
-      primarySourceRevision: 7,
-    });
-
-    const response = await invokeRouter(contentRouter, {
-      method: 'POST',
-      url: '/letter-1/confirm-transcript',
-      path: '/letter-1/confirm-transcript',
-      body: { primarySourceRevision: 7 },
-      headers: { accept: 'application/json' },
-    });
-
-    expect(response.statusCode).toBe(400);
-    expect(response.body).toMatchObject({
-      error: 'Letter must be in TRANSCRIBED state',
-    });
-    expect(claimMetadataAfterTranscriptConfirmationMock).not.toHaveBeenCalled();
+    expect(confirmTranscriptIntentMock).toHaveBeenCalledOnce();
+    expect(requestBackgroundWorkerRunMock).not.toHaveBeenCalled();
     expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
   });
 
@@ -1277,101 +1168,6 @@ describe('admin downstream extraction exclusion', () => {
     expect(response.body).toMatchObject({
       error: expect.stringContaining('superseded'),
     });
-  });
-
-  it('binds the validated transcript snapshot when a worker wins the metadata claim', async () => {
-    getLetterByIdMock.mockResolvedValue({
-      type: 'L',
-      workflow: 'TRANSCRIBED',
-      transcriptionStatus: 'SUCCESS',
-      transcriptionText: 'transcript',
-      metadataStatus: 'PENDING',
-      entityExtractionStatus: 'PENDING',
-      primarySourceRevision: 7,
-    });
-    updateReturningMock.mockResolvedValueOnce([{ id: 'letter-1' }]);
-
-    const response = await invokeRouter(contentRouter, {
-      method: 'POST',
-      url: '/letter-1/confirm-transcript',
-      path: '/letter-1/confirm-transcript',
-      body: { primarySourceRevision: 7 },
-      headers: { accept: 'application/json' },
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(updateWhereMock).toHaveBeenCalledWith({
-      kind: 'and',
-      clauses: [
-        { kind: 'eq', field: 'letters.id', value: 'letter-1' },
-        { kind: 'eq', field: 'letters.workflow', value: 'TRANSCRIBED' },
-        { kind: 'eq', field: 'letters.transcriptionStatus', value: 'SUCCESS' },
-        { kind: 'eq', field: 'letters.transcriptionText', value: 'transcript' },
-        { kind: 'eq', field: 'letters.primarySourceRevision', value: 7 },
-      ],
-    });
-    expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
-  });
-
-  it('returns a conflict when transcription wins the confirmation race', async () => {
-    getLetterByIdMock.mockResolvedValue({
-      type: 'L',
-      workflow: 'TRANSCRIBED',
-      transcriptionStatus: 'SUCCESS',
-      transcriptionText: 'transcript',
-      metadataStatus: 'PENDING',
-      entityExtractionStatus: 'PENDING',
-      primarySourceRevision: 7,
-    });
-    updateReturningMock.mockResolvedValueOnce([]);
-
-    const response = await invokeRouter(contentRouter, {
-      method: 'POST',
-      url: '/letter-1/confirm-transcript',
-      path: '/letter-1/confirm-transcript',
-      body: { primarySourceRevision: 7 },
-      headers: { accept: 'application/json' },
-    });
-
-    expect(response.statusCode).toBe(409);
-    expect(updateWhereMock).toHaveBeenLastCalledWith({
-      kind: 'and',
-      clauses: [
-        { kind: 'eq', field: 'letters.id', value: 'letter-1' },
-        { kind: 'eq', field: 'letters.workflow', value: 'TRANSCRIBED' },
-        { kind: 'eq', field: 'letters.transcriptionStatus', value: 'SUCCESS' },
-        { kind: 'eq', field: 'letters.transcriptionText', value: 'transcript' },
-        { kind: 'eq', field: 'letters.primarySourceRevision', value: 7 },
-      ],
-    });
-    expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
-  });
-
-  it('rejects transcript confirmation from a stale page-source epoch', async () => {
-    getLetterByIdMock.mockResolvedValue({
-      type: 'L',
-      workflow: 'TRANSCRIBED',
-      transcriptionStatus: 'SUCCESS',
-      transcriptionText: 'newer source transcript',
-      metadataStatus: 'PENDING',
-      entityExtractionStatus: 'PENDING',
-      primarySourceRevision: 8,
-    });
-
-    const response = await invokeRouter(contentRouter, {
-      method: 'POST',
-      url: '/letter-1/confirm-transcript',
-      path: '/letter-1/confirm-transcript',
-      body: { primarySourceRevision: 7 },
-      headers: { accept: 'application/json' },
-    });
-
-    expect(response.statusCode).toBe(409);
-    expect(response.body).toMatchObject({
-      error: expect.stringContaining('source changed'),
-    });
-    expect(dbUpdateMock).not.toHaveBeenCalled();
-    expect(claimMetadataAfterTranscriptConfirmationMock).not.toHaveBeenCalled();
   });
 
   it('rejects a delayed identity edit that was based on an older same-source name', async () => {

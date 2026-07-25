@@ -42,6 +42,31 @@ export interface PageSourceExpectation {
   sourceChecksum: string | null;
 }
 
+export type MetadataDisposition =
+  | 'queued'
+  | 'already_running'
+  | 'already_available'
+  | 'failed'
+  | 'not_applicable';
+
+export interface TranscriptConfirmationReceipt {
+  confirmationId: string;
+  confirmedAt: string;
+  confirmedBy: string | null;
+  transcriptSource: {
+    primarySourceRevision: number;
+    transcriptDigest: string;
+  };
+  metadataInputIdentity: string | null;
+  intentIdentity: string;
+  metadataDisposition: MetadataDisposition;
+}
+
+export interface TranscriptConfirmationResponse {
+  receipt: TranscriptConfirmationReceipt;
+  letter?: Letter;
+}
+
 export async function updateLetter(letterId: string, data: UpdateLetterData): Promise<Letter> {
   return apiPut<Letter>(`/admin/letters/${letterId}`, data);
 }
@@ -79,12 +104,17 @@ export async function processLetter(
 export async function confirmTranscript(
   letterId: string,
   primarySourceRevision: number,
+  transcriptDigest: string,
   options?: { confirmedSender?: string; confirmedRecipient?: string },
-): Promise<Letter> {
-  return apiPost<Letter>(`/admin/letters/${letterId}/confirm-transcript`, {
-    ...options,
-    primarySourceRevision,
-  });
+): Promise<TranscriptConfirmationResponse> {
+  return apiPost<TranscriptConfirmationResponse>(
+    `/admin/letters/${letterId}/confirm-transcript`,
+    {
+      ...options,
+      primarySourceRevision,
+      transcriptDigest,
+    },
+  );
 }
 
 export async function regenerateMetadata(

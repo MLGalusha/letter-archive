@@ -3,7 +3,10 @@ import { db, letters } from '../../db/index.js';
 import { getLetterById } from '../letters.js';
 import { buildHumanExtraContentJobPatch } from './extra-content-job.js';
 import { generateAndSaveReadingView } from './readingView.js';
-import { observedMetadataRevisionConditions } from './metadata-job.js';
+import {
+  buildMetadataSourceInvalidationPatch,
+  observedMetadataRevisionConditions,
+} from './metadata-job.js';
 import { log, observedTimestampMatches } from './shared.js';
 import {
   assertCurrentPrimarySourceRevision,
@@ -310,6 +313,7 @@ export async function verifyExtraContent(
       extraContentVerifiedAt: new Date(),
       extraContentVerifiedBy: userId,
       ...buildHumanExtraContentJobPatch(),
+      ...buildMetadataSourceInvalidationPatch(),
       updatedAt: new Date(),
     })
     .where(and(
@@ -363,6 +367,7 @@ export async function unverifyExtraContent(
       extraContentVerifiedAt: null,
       extraContentVerifiedBy: null,
       ...buildHumanExtraContentJobPatch(),
+      ...buildMetadataSourceInvalidationPatch(),
       updatedAt: new Date(),
     })
     .where(and(

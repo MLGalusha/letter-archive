@@ -10,9 +10,13 @@ const transcriptEditingPath = path.resolve(
   process.cwd(),
   'src/pages/admin/LetterReview/useTranscriptEditing.ts',
 );
-const metadataEditingPath = path.resolve(
+const metadataFormStatePath = path.resolve(
   process.cwd(),
-  'src/pages/admin/LetterReview/useMetadataEditing.ts',
+  'src/pages/admin/LetterReview/useMetadataFormState.ts',
+);
+const metadataVerificationActionsPath = path.resolve(
+  process.cwd(),
+  'src/pages/admin/LetterReview/useMetadataVerificationActions.ts',
 );
 const autoSavePath = path.resolve(
   process.cwd(),
@@ -372,7 +376,7 @@ describe('Letter Review source-conflict ownership', () => {
       page,
       autoSave,
       transcriptEditing,
-      metadataEditing,
+      metadataVerificationActions,
       photoDescriptionWorkspace,
       extraContentWorkspace,
       readingViewWorkspace,
@@ -386,7 +390,7 @@ describe('Letter Review source-conflict ownership', () => {
       readFile(pagePath, 'utf8'),
       readFile(autoSavePath, 'utf8'),
       readFile(transcriptEditingPath, 'utf8'),
-      readFile(metadataEditingPath, 'utf8'),
+      readFile(metadataVerificationActionsPath, 'utf8'),
       readFile(photoDescriptionWorkspacePath, 'utf8'),
       readFile(extraContentWorkspacePath, 'utf8'),
       readFile(readingViewWorkspacePath, 'utf8'),
@@ -445,6 +449,15 @@ describe('Letter Review source-conflict ownership', () => {
     expect(structuredNoteActions).toContain(
       'executeLetterMutation({',
     );
+    for (const callback of [
+      'handleVerifyMetadata',
+      'handleMetadataFieldDoubleClick',
+    ]) {
+      const block = callbackBlock(metadataVerificationActions, callback);
+      expect(block).toContain('executeLetterMutation({');
+      expect(block).not.toContain('await flushPendingSaves()');
+      expect(block).not.toContain('applyLetterMetadata(');
+    }
     for (const callback of ['transcribe', 'toggleVerification']) {
       const block = callbackBlock(extraContentWorkspace, callback);
       expect(block).toContain('executeLetterMutation({');
@@ -461,8 +474,6 @@ describe('Letter Review source-conflict ownership', () => {
     for (const [source, callback] of [
       [transcriptEditing, 'handleVerifyTranscript'],
       [transcriptEditing, 'handleTranscriptDoubleClick'],
-      [metadataEditing, 'handleVerifyMetadata'],
-      [metadataEditing, 'handleMetadataFieldDoubleClick'],
       [photoDescriptionWorkspace, 'describe'],
       [photoDescriptionWorkspace, 'toggleVerification'],
     ] as const) {
@@ -479,9 +490,6 @@ describe('Letter Review source-conflict ownership', () => {
     expect(callbackBlock(transcriptEditing, 'handleVerifyTranscript')).toContain(
       'setTranscript(updated.transcript.fullText)',
     );
-    expect(callbackBlock(metadataEditing, 'handleVerifyMetadata')).toContain(
-      'applyLetterMetadata(updated)',
-    );
     expect(callbackBlock(photoDescriptionWorkspace, 'toggleVerification')).toContain(
       'hydratePersistedLetter(updated)',
     );
@@ -493,21 +501,64 @@ describe('Letter Review source-conflict ownership', () => {
   });
 
   it('routes transcript and metadata verification removal through that owner', async () => {
-    const [transcriptEditing, metadataEditing] = await Promise.all([
+    const [transcriptEditing, metadataVerificationActions] = await Promise.all([
       readFile(transcriptEditingPath, 'utf8'),
-      readFile(metadataEditingPath, 'utf8'),
+      readFile(metadataVerificationActionsPath, 'utf8'),
     ]);
 
-    for (const [source, mutation] of [
-      [transcriptEditing, 'unverifyTranscript'],
-      [metadataEditing, 'unverifyMetadata'],
-    ] as const) {
-      const start = source.indexOf(`const updated = await ${mutation}(`);
-      expect(start).toBeGreaterThan(-1);
-      const block = source.slice(start, source.indexOf('} finally {', start));
-      expect(block).toContain('letter.primarySourceRevision');
-      expect(block).toContain('handleMutationError(');
+    const transcriptStart = transcriptEditing.indexOf(
+      'const updated = await unverifyTranscript(',
+    );
+    expect(transcriptStart).toBeGreaterThan(-1);
+    const transcriptBlock = transcriptEditing.slice(
+      transcriptStart,
+      transcriptEditing.indexOf('} finally {', transcriptStart),
+    );
+    expect(transcriptBlock).toContain('letter.primarySourceRevision');
+    expect(transcriptBlock).toContain('handleMutationError(');
+
+    const metadataBlock = callbackBlock(
+      metadataVerificationActions,
+      'handleMetadataFieldDoubleClick',
+    );
+    expect(metadataBlock).toContain('unverifyMetadata(');
+    expect(metadataBlock).toContain('target.primarySourceRevision');
+    expect(metadataBlock).toContain('executeLetterMutation({');
+    expect(metadataBlock).not.toContain('handleMutationError(');
+  });
+
+  it('keeps metadata form state request-free and removes the hook-order bridge', async () => {
+    const [page, metadataFormState, metadataVerificationActions] =
+      await Promise.all([
+        readFile(pagePath, 'utf8'),
+        readFile(metadataFormStatePath, 'utf8'),
+        readFile(metadataVerificationActionsPath, 'utf8'),
+      ]);
+
+    expect(metadataFormState).not.toContain('/api/');
+    for (const dependency of [
+      'LetterReviewVisit',
+      'BeginLetterSaving',
+      'ExecuteLetterReviewMutation',
+      'handleMutationError',
+      'showToast',
+    ]) {
+      expect(metadataFormState).not.toContain(dependency);
     }
+    expect(metadataVerificationActions).toContain(
+      'executeLetterMutation({',
+    );
+    expect(metadataVerificationActions).not.toContain(
+      'applyLetterMetadata(',
+    );
+    expect(page).not.toContain('identityMetadataSyncRef');
+    expect(page).not.toContain('syncIdentityMetadataForAutoSave');
+    expect(page.indexOf('useMetadataFormState()')).toBeLessThan(
+      page.indexOf('useAutoSave({'),
+    );
+    expect(page.indexOf('useLetterReviewMutationExecutor({')).toBeLessThan(
+      page.indexOf('useMetadataVerificationActions({'),
+    );
   });
 
   it('routes every line-review source write through that owner', async () => {

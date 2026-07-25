@@ -2,7 +2,6 @@ import {
   startTransition,
   useState,
   useEffect,
-  useLayoutEffect,
   useRef,
   useCallback,
 } from "react";
@@ -39,7 +38,8 @@ import {
   type AutoSaveData,
   useAutoSave,
 } from "./LetterReview/useAutoSave";
-import { useMetadataEditing } from "./LetterReview/useMetadataEditing";
+import { useMetadataFormState } from "./LetterReview/useMetadataFormState";
+import { useMetadataVerificationActions } from "./LetterReview/useMetadataVerificationActions";
 import { useTranscriptEditing } from "./LetterReview/useTranscriptEditing";
 import { useLetterSourceConflict } from "./LetterReview/useLetterSourceConflict";
 import { useGuardedLetterState } from "./LetterReview/useGuardedLetterState";
@@ -97,44 +97,13 @@ export default function LetterReviewPage() {
     { fontFamily: "Georgia, 'Times New Roman', serif" },
   );
   const notesRef = useRef<HTMLTextAreaElement>(null);
-  const identityMetadataSyncRef = useRef<(updatedLetter: Letter) => void>(
-    () => {},
-  );
-  const syncIdentityMetadataForAutoSave = useCallback(
-    (updatedLetter: Letter) => {
-      identityMetadataSyncRef.current(updatedLetter);
-    },
-    [],
-  );
-  const {
-    autoSaveStatus,
-    flushPendingSaves,
-    identityUpdateSecondsRemaining,
-    identityUpdateState,
-    retagState,
-    scheduleDebouncedSave,
-    triggerAutoSave,
-  } = useAutoSave({
-    visit,
-    letter,
-    tryAdoptLetter,
-    handleMutationError,
-    isMutationBlocked,
-    mutationsBlocked,
-    syncIdentityMetadata: syncIdentityMetadataForAutoSave,
-  });
   const {
     applyLetterMetadata,
     date,
     description,
     emotionalTone,
-    handleMetadataFieldClick,
-    handleMetadataFieldDoubleClick,
-    handleVerifyMetadata,
     hook,
     location,
-    metadataTooltipPosition,
-    metadataTooltipRef,
     notes,
     primaryTopics,
     recipient,
@@ -151,27 +120,26 @@ export default function LetterReviewPage() {
     setRelationship,
     setSender,
     setTopicsDropdownOpen,
-    showMetadataTooltip,
     syncIdentityMetadata,
     topicsDropdownOpen,
-  } = useMetadataEditing({
+  } = useMetadataFormState();
+  const {
+    autoSaveStatus,
+    flushPendingSaves,
+    identityUpdateSecondsRemaining,
+    identityUpdateState,
+    retagState,
+    scheduleDebouncedSave,
+    triggerAutoSave,
+  } = useAutoSave({
     visit,
-    letterId,
     letter,
     tryAdoptLetter,
-    beginSaving,
-    flushPendingSaves,
     handleMutationError,
-    showToast,
+    isMutationBlocked,
+    mutationsBlocked,
+    syncIdentityMetadata,
   });
-  useLayoutEffect(() => {
-    identityMetadataSyncRef.current = syncIdentityMetadata;
-    return () => {
-      if (identityMetadataSyncRef.current === syncIdentityMetadata) {
-        identityMetadataSyncRef.current = () => {};
-      }
-    };
-  }, [syncIdentityMetadata]);
   const scheduleStatusReset = useLetterReviewStatusResets(visit);
   const photoDescriptionWorkspace = usePhotoDescriptionWorkspace({
     visit,
@@ -224,6 +192,19 @@ export default function LetterReviewPage() {
     tryAdoptLetter,
     hydrateAdoptedLetter,
     handleMutationError,
+  });
+  const {
+    handleMetadataFieldClick,
+    handleMetadataFieldDoubleClick,
+    handleVerifyMetadata,
+    metadataTooltipPosition,
+    metadataTooltipRef,
+    showMetadataTooltip,
+  } = useMetadataVerificationActions({
+    visit,
+    letter,
+    executeLetterMutation,
+    showToast,
   });
   const letterTranscriptionWorkspace = useLetterTranscriptionWorkspace({
     visit,

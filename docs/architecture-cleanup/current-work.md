@@ -143,9 +143,8 @@ before success feedback.
 
 Scope:
 
-- Extract field values, setters, topic-dropdown state, metadata mapping/hydration,
-  personal-note preservation, and identity-only synchronization into a request-free
-  form-state hook.
+- Extract field values, setters, topic-dropdown state, metadata mapping/hydration, and
+  identity-only synchronization into a request-free form-state hook.
 - Extract verified-field tooltip interaction and verify/unverify request selection,
   revision payloads, failure copy, and success feedback into an action hook that uses
   `executeLetterMutation()`.
@@ -169,8 +168,7 @@ Acceptance:
 
 - The form-state hook imports no request API and accepts no visit, saving, adoption,
   error, toast, or executor dependency.
-- Initial and accepted-DTO hydration retain tagged hook/description fallbacks;
-  `includeNotes: false` preserves the current personal-note draft.
+- Initial and accepted-DTO hydration retain tagged hook/description fallbacks.
 - Identity synchronization updates only sender, recipient, hook, and description,
   preserving every unrelated local metadata draft.
 - Verify and unverify use the current letter id and primary-source revision, retain

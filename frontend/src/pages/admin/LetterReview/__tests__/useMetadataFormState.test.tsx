@@ -53,32 +53,6 @@ describe('useMetadataFormState', () => {
     });
   });
 
-  it('preserves the current personal-note draft when hydration excludes notes', () => {
-    const { result } = renderHook(() => useMetadataFormState());
-
-    act(() => {
-      result.current.applyLetterMetadata(letterMetadata({
-        sender: 'Alice',
-        notes: 'Persisted note',
-      }));
-    });
-    act(() => {
-      result.current.setNotes('Unsaved personal note');
-    });
-    act(() => {
-      result.current.applyLetterMetadata(
-        letterMetadata({
-          sender: 'Alice Updated',
-          notes: 'New persisted note',
-        }),
-        { includeNotes: false },
-      );
-    });
-
-    expect(result.current.sender).toBe('Alice Updated');
-    expect(result.current.notes).toBe('Unsaved personal note');
-  });
-
   it('synchronizes identity fields without replacing unrelated local drafts', () => {
     const { result } = renderHook(() => useMetadataFormState());
 

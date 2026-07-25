@@ -1,7 +1,5 @@
 import {
   useCallback,
-  useEffect,
-  useRef,
   useState,
 } from 'react';
 import type {
@@ -24,13 +22,8 @@ interface MetadataFormValues {
   primaryTopics: string[];
 }
 
-interface ApplyLetterMetadataOptions {
-  includeNotes?: boolean;
-}
-
 function buildMetadataValues(
   metadata: LetterMetadata,
-  notesFallback = metadata.notes || '',
 ): MetadataFormValues {
   return {
     sender: metadata.sender || '',
@@ -39,7 +32,7 @@ function buildMetadataValues(
     location: metadata.location || '',
     hook: metadata.taggedHook || metadata.hook || '',
     description: metadata.taggedDescription || metadata.description || '',
-    notes: notesFallback,
+    notes: metadata.notes || '',
     emotionalTone: metadata.emotionalTone || '',
     relationship: metadata.senderRecipientRelationship || '',
     primaryTopics: metadata.primaryTopics || [],
@@ -61,21 +54,16 @@ export function useMetadataFormState() {
   const [relationship, setRelationship] = useState<RelationshipType | ''>('');
   const [primaryTopics, setPrimaryTopics] = useState<string[]>([]);
   const [topicsDropdownOpen, setTopicsDropdownOpen] = useState(false);
-  const notesRef = useRef(notes);
 
   const setMetadataFields = useCallback(
-    (values: MetadataFormValues, options: ApplyLetterMetadataOptions = {}) => {
+    (values: MetadataFormValues) => {
       setSender(values.sender);
       setRecipient(values.recipient);
       setDate(values.date);
       setLocation(values.location);
       setHook(values.hook);
       setDescription(values.description);
-
-      if (options.includeNotes ?? true) {
-        setNotes(values.notes);
-      }
-
+      setNotes(values.notes);
       setEmotionalTone(values.emotionalTone);
       setRelationship(values.relationship);
       setPrimaryTopics(values.primaryTopics);
@@ -83,30 +71,16 @@ export function useMetadataFormState() {
     [],
   );
 
-  useEffect(() => {
-    notesRef.current = notes;
-  }, [notes]);
-
   const applyLetterMetadata = useCallback(
-    (
-      updatedLetter: Pick<Letter, 'metadata'>,
-      options: ApplyLetterMetadataOptions = {},
-    ) => {
-      const nextValues = buildMetadataValues(
-        updatedLetter.metadata,
-        options.includeNotes ?? true ? undefined : notesRef.current,
-      );
-      setMetadataFields(nextValues, options);
+    (updatedLetter: Pick<Letter, 'metadata'>) => {
+      setMetadataFields(buildMetadataValues(updatedLetter.metadata));
     },
     [setMetadataFields],
   );
 
   const syncIdentityMetadata = useCallback(
     (updatedLetter: Pick<Letter, 'metadata'>) => {
-      const nextValues = buildMetadataValues(
-        updatedLetter.metadata,
-        notesRef.current,
-      );
+      const nextValues = buildMetadataValues(updatedLetter.metadata);
 
       setSender(nextValues.sender);
       setRecipient(nextValues.recipient);

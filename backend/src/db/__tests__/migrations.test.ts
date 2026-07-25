@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 const MIGRATIONS_DIR = join(__dirname, "..", "migrations");
 const JOURNAL_PATH = join(MIGRATIONS_DIR, "meta", "_journal.json");
+const BACKEND_ROOT = join(__dirname, "..", "..", "..");
 
 interface JournalEntry {
   idx: number;
@@ -34,6 +35,32 @@ function readMigrationSql(tag: string): string {
 }
 
 describe("migration validation", () => {
+  it("guards generation while the snapshot lineage trails the SQL journal", () => {
+    const journal = readJournal();
+    const snapshotIndexes = readdirSync(join(MIGRATIONS_DIR, "meta"))
+      .map((file) => file.match(/^(\d+)_snapshot\.json$/)?.[1])
+      .filter((index): index is string => index !== undefined)
+      .map(Number);
+    const latestSnapshotIndex = Math.max(...snapshotIndexes);
+    const latestJournalIndex = journal.entries.at(-1)?.idx ?? -1;
+    const packageJson = JSON.parse(
+      readFileSync(join(BACKEND_ROOT, "package.json"), "utf-8"),
+    ) as {
+      scripts?: Record<string, string>;
+    };
+    const guard = readFileSync(
+      join(BACKEND_ROOT, "scripts", "generate-migration.mjs"),
+      "utf-8",
+    );
+
+    expect(latestSnapshotIndex).toBeLessThan(latestJournalIndex);
+    expect(packageJson.scripts?.["drizzle:generate"]).toBe(
+      "node scripts/generate-migration.mjs",
+    );
+    expect(guard).toContain("Migration generation is temporarily disabled.");
+    expect(guard).toContain("process.exitCode = 1");
+  });
+
   it("every SQL file is registered in the journal", () => {
     const journal = readJournal();
     const journalTags = new Set(journal.entries.map((e) => e.tag));

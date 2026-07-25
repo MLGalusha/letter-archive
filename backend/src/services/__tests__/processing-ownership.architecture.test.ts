@@ -147,52 +147,122 @@ describe('processing execution ownership', () => {
     expect(workerJob).toMatch(/name:\s*CLOUD_RUN_WORKER_JOB_NAME/);
   });
 
+  it('keeps push validation separate from the write-quiesced deployment graph', async () => {
+    const cloudBuildFiles = (await readdir(repositoryRoot))
+      .filter((file) => (
+        file.startsWith('cloudbuild')
+        && file.endsWith('.yaml')
+      ));
+    const pushValidationFiles = cloudBuildFiles.filter(
+      (file) => file !== 'cloudbuild.deploy.yaml',
+    );
+    const [pushValidations, controlledDeploy] = await Promise.all([
+      Promise.all(pushValidationFiles.map(async (file) => ({
+        file,
+        source: await readFile(path.join(repositoryRoot, file), 'utf8'),
+      }))),
+      readFile(
+        path.join(repositoryRoot, 'cloudbuild.deploy.yaml'),
+        'utf8',
+      ),
+    ]);
+
+    expect(pushValidationFiles.sort()).toEqual([
+      'cloudbuild-frontend.yaml',
+      'cloudbuild.yaml',
+    ]);
+    for (const { file, source } of pushValidations) {
+      expect(source, file).toContain('-validation:${BUILD_ID}');
+      expect(source, file).not.toMatch(
+        /\b(?:docker\s+push|gcloud\s+run|run-migrations|deploy-backend|deploy-worker)\b/,
+      );
+      expect(source, file).not.toContain(
+        'gcr.io/google.com/cloudsdktool/cloud-sdk',
+      );
+      expect(source, file).not.toMatch(/^\s+id: push-/m);
+      expect(source, file).not.toMatch(/^\s+- push$/m);
+      expect(source, file).not.toMatch(/^images:/m);
+    }
+
+    expect(controlledDeploy).toContain(
+      "_CONFIRM_WRITE_QUIESCENCE: 'false'",
+    );
+    expect(controlledDeploy).toContain(
+      'if [[ "${_CONFIRM_WRITE_QUIESCENCE}" != "true" ]]',
+    );
+    expect(controlledDeploy).toContain(
+      'if [[ ! "${_TAG}" =~ ^[0-9a-f]{40}$ ]]',
+    );
+    expect(controlledDeploy.match(/waitFor: \['-'\]/g)).toHaveLength(1);
+    expect(controlledDeploy).toMatch(
+      /id: confirm-write-quiescence[\s\S]*?waitFor: \['-'\]/,
+    );
+    expect(controlledDeploy).toMatch(
+      /id: deploy-frontend[\s\S]*?waitFor: \[[^\]]*'deploy-backend'[^\]]*\]/,
+    );
+    expect(controlledDeploy).toMatch(
+      /id: deploy-backend[\s\S]*?waitFor:[\s\S]*?- grant-backend-worker-job-invoke/,
+    );
+
+    const workerDeploy = controlledDeploy.indexOf('id: deploy-worker');
+    const backendWorkerGrant = controlledDeploy.indexOf(
+      'id: grant-backend-worker-job-invoke',
+    );
+    const backendDeploy = controlledDeploy.indexOf('id: deploy-backend');
+
+    expect(workerDeploy).toBeGreaterThan(-1);
+    expect(backendWorkerGrant).toBeGreaterThan(workerDeploy);
+    expect(backendDeploy).toBeGreaterThan(backendWorkerGrant);
+  });
+
   it('keeps scheduled worker reconciliation authenticated and ordered after invoker grants', async () => {
-    const cloudBuild = await readFile(
-      path.join(repositoryRoot, 'cloudbuild.yaml'),
+    const controlledDeploy = await readFile(
+      path.join(repositoryRoot, 'cloudbuild.deploy.yaml'),
       'utf8',
     );
-    const backendGrant = cloudBuild.indexOf('id: grant-backend-worker-job-invoke');
-    const schedulerGrant = cloudBuild.indexOf(
+    const backendGrant = controlledDeploy.indexOf(
+      'id: grant-backend-worker-job-invoke',
+    );
+    const schedulerGrant = controlledDeploy.indexOf(
       'id: grant-scheduler-worker-job-invoke',
     );
-    const scheduleStep = cloudBuild.indexOf(
+    const scheduleStep = controlledDeploy.indexOf(
       'id: configure-worker-reconciliation-schedule',
     );
 
-    expect(cloudBuild).toContain(
+    expect(controlledDeploy).toContain(
       "_SCHEDULER_SERVICE_ACCOUNT: 'letter-archive-scheduler@${PROJECT_ID}.iam.gserviceaccount.com'",
     );
-    expect(cloudBuild).toContain(
+    expect(controlledDeploy).toContain(
       "_WORKER_RECONCILIATION_SCHEDULE: '*/5 * * * *'",
     );
-    expect(cloudBuild).toContain(
+    expect(controlledDeploy).toContain(
       "_ENABLE_WORKER_RECONCILIATION_SCHEDULE: 'false'",
     );
     expect(backendGrant).toBeGreaterThan(-1);
     expect(schedulerGrant).toBeGreaterThan(backendGrant);
     expect(scheduleStep).toBeGreaterThan(schedulerGrant);
 
-    expect(cloudBuild.slice(backendGrant, schedulerGrant)).toContain(
+    expect(controlledDeploy.slice(backendGrant, schedulerGrant)).toContain(
       '--member=serviceAccount:${_SERVICE_ACCOUNT}',
     );
-    expect(cloudBuild.slice(backendGrant, schedulerGrant)).toContain(
+    expect(controlledDeploy.slice(backendGrant, schedulerGrant)).toContain(
       '--role=roles/run.invoker',
     );
-    expect(cloudBuild.slice(schedulerGrant, scheduleStep)).toContain(
+    expect(controlledDeploy.slice(schedulerGrant, scheduleStep)).toContain(
       '--member="serviceAccount:${_SCHEDULER_SERVICE_ACCOUNT}"',
     );
-    expect(cloudBuild.slice(schedulerGrant, scheduleStep)).toContain(
+    expect(controlledDeploy.slice(schedulerGrant, scheduleStep)).toContain(
       '--role=roles/run.invoker',
     );
-    expect(cloudBuild.slice(schedulerGrant, scheduleStep)).toContain(
+    expect(controlledDeploy.slice(schedulerGrant, scheduleStep)).toContain(
       'if [[ "${_ENABLE_WORKER_RECONCILIATION_SCHEDULE}" != "true" ]]',
     );
-    expect(cloudBuild.slice(schedulerGrant, scheduleStep)).toContain(
+    expect(controlledDeploy.slice(schedulerGrant, scheduleStep)).toContain(
       "waitFor: ['grant-backend-worker-job-invoke']",
     );
 
-    const scheduleContract = cloudBuild.slice(scheduleStep);
+    const scheduleContract = controlledDeploy.slice(scheduleStep);
     expect(scheduleContract).toContain(
       "waitFor: ['grant-scheduler-worker-job-invoke']",
     );

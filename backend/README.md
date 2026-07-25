@@ -46,7 +46,7 @@ A dev admin account (`dev@localhost.test` / `dev`) is auto-seeded when `NODE_ENV
 | `npm test` | Run tests (Vitest) |
 | `npm run test:watch` | Tests in watch mode |
 | `npm run db:up` / `db:down` | Start/stop PostgreSQL container |
-| `npm run drizzle:generate` | Generate migration from schema changes |
+| `npm run drizzle:generate` | Guarded while snapshot lineage is stale; see repository-root `docs/migrations.md` |
 | `npm run drizzle:migrate` | Apply pending migrations |
 | `npm run logs:query -- --hours 24` | Query recent logs |
 | `npm run logs:errors` | Errors from last 24 hours |

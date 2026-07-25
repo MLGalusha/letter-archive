@@ -1,11 +1,20 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { Link, MemoryRouter, Route, Routes } from "react-router-dom";
 import LetterDetailPage from "../LetterDetailPage";
 import { HeaderDockProvider } from "../../contexts/HeaderDockContext";
 import type { Letter } from "../../types/Letter";
 
+const { latestSwipeOptions } = vi.hoisted(() => ({
+  latestSwipeOptions: {
+    current: null as null | {
+      onSwipeLeft?: () => void;
+      onSwipeRight?: () => void;
+      enabled?: boolean;
+    },
+  },
+}));
 const mockNavigate = vi.fn();
 const getLetterByIdMock = vi.fn();
 const getAdjacentLettersMock = vi.fn();
@@ -21,11 +30,37 @@ vi.mock("../../components/LetterViewer/LetterViewer", () => ({
   default: () => <div>LetterViewer</div>,
 }));
 
+vi.mock("../../hooks/useIsTouchDevice", () => ({
+  default: () => true,
+}));
+
+vi.mock("../../hooks/useSwipeNavigation", () => ({
+  default: (options: {
+    onSwipeLeft?: () => void;
+    onSwipeRight?: () => void;
+    enabled?: boolean;
+  }) => {
+    latestSwipeOptions.current = options;
+    return {
+      ref: { current: null },
+      offset: 0,
+      isSwiping: false,
+      isAnimating: false,
+    };
+  },
+}));
+
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
   return {
     ...actual,
-    useNavigate: () => mockNavigate,
+    useNavigate: () => {
+      const navigate = actual.useNavigate();
+      return (to: string) => {
+        mockNavigate(to);
+        navigate(to);
+      };
+    },
   };
 });
 
@@ -94,12 +129,23 @@ function renderLetterDetailPage() {
   return render(
     <MemoryRouter initialEntries={["/letter/letter-1"]}>
       <HeaderDockProvider>
+        <Link to="/letter/letter-2">Go to letter 2</Link>
         <Routes>
           <Route path="/letter/:letterId" element={<LetterDetailPage />} />
         </Routes>
       </HeaderDockProvider>
     </MemoryRouter>,
   );
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, reject, resolve };
 }
 
 let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
@@ -240,6 +286,93 @@ describe("LetterDetailPage", () => {
         expect.stringContaining("noindex"),
       );
     });
+  });
+
+  it("keeps the previous letter visible but disables stale navigation until the new route owns both responses", async () => {
+    const letter2 = deferred<Letter>();
+    const adjacent2 = deferred<{
+      prev: { id: string };
+      next: { id: string };
+      prevWraps: boolean;
+      nextWraps: boolean;
+      position: number;
+      total: number;
+      collectionCode: string;
+      collectionTitle: string;
+    }>();
+    getLetterByIdMock.mockImplementation((id: string) => (
+      id === "letter-2" ? letter2.promise : Promise.resolve(createLetter())
+    ));
+    getAdjacentLettersMock.mockImplementation((id: string) => (
+      id === "letter-2"
+        ? adjacent2.promise
+        : Promise.resolve({
+            prev: { id: "letter-0" },
+            next: { id: "letter-2" },
+            prevWraps: false,
+            nextWraps: false,
+            position: 2,
+            total: 3,
+            collectionCode: "009",
+            collectionTitle: "The Smith Letters",
+          })
+    ));
+
+    const user = userEvent.setup();
+    renderLetterDetailPage();
+    expect(await screen.findByText(/A bright dispatch from Vienna/)).toBeInTheDocument();
+    expect(latestSwipeOptions.current?.enabled).toBe(true);
+    mockNavigate.mockClear();
+
+    await user.click(screen.getByRole("link", { name: "Go to letter 2" }));
+    await waitFor(() => {
+      expect(getLetterByIdMock).toHaveBeenCalledWith(
+        "letter-2",
+        expect.any(AbortSignal),
+      );
+    });
+
+    expect(screen.getByText(/A bright dispatch from Vienna/)).toBeInTheDocument();
+    expect(document.querySelector(".letter-nav-section")).toBeNull();
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(latestSwipeOptions.current).toMatchObject({
+      enabled: false,
+      onSwipeLeft: undefined,
+      onSwipeRight: undefined,
+    });
+
+    await act(async () => {
+      letter2.resolve(createLetter({
+        id: "letter-2",
+        title: "letter-2",
+        metadata: {
+          ...createLetter().metadata,
+          hook: "A second dispatch",
+        },
+      }));
+      adjacent2.resolve({
+        prev: { id: "letter-1" },
+        next: { id: "letter-3" },
+        prevWraps: false,
+        nextWraps: false,
+        position: 1,
+        total: 2,
+        collectionCode: "010",
+        collectionTitle: "The Second Collection",
+      });
+      await Promise.all([letter2.promise, adjacent2.promise]);
+    });
+
+    expect(await screen.findByText("A second dispatch")).toBeInTheDocument();
+    expect(document.querySelector(".letter-nav-section")).not.toBeNull();
+    expect(latestSwipeOptions.current?.enabled).toBe(true);
+    expect(latestSwipeOptions.current?.onSwipeLeft).toEqual(
+      expect.any(Function),
+    );
+    expect(latestSwipeOptions.current?.onSwipeRight).toEqual(
+      expect.any(Function),
+    );
   });
 
 });

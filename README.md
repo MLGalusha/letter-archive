@@ -369,7 +369,7 @@ For local AI-pipeline work, the worker runs in its own terminal: `cd backend && 
 | Run frontend tests | `cd frontend && npm test`                |
 | Run E2E tests      | `cd e2e && npx playwright test`          |
 | Typecheck backend  | `cd backend && npm run typecheck`        |
-| Generate migration | `cd backend && npm run drizzle:generate` |
+| Review migration workflow | See `docs/migrations.md` (`drizzle:generate` is guarded while snapshots are stale) |
 | Apply migration    | `cd backend && npm run drizzle:migrate`  |
 | Verify unit tests, typecheck/build, and mocked E2E | `./scripts/verify-all.sh` |
 | Audit frontend lint debt | `cd frontend && npm run lint`       |

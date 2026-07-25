@@ -44,21 +44,66 @@ gcloud secrets create openai-api-key --replication-policy="automatic"
 echo -n "sk-..." | gcloud secrets versions add openai-api-key --data-file=-
 ```
 
-## Automated deployment
+## Push-time build validation
 
-Use the `cloudbuild.yaml` in the repository root for fully automated builds:
+The two checked-in configurations that may be selected by main-watching triggers are
+build-only: `cloudbuild.yaml` validates both production Docker contexts and
+`cloudbuild-frontend.yaml` validates the frontend context. Neither pushes image tags,
+runs migrations, or replaces Cloud Run services/jobs.
 
-```bash
-gcloud builds submit --config=cloudbuild.yaml \
-  --substitutions=_REGION=us-central1,_DOMAIN=letterarchive.org
-```
+Cloud Build trigger configuration is external to this repository. Before pushing a
+release to `main`, enumerate every main-watching trigger and verify that each is
+file-backed to one of those two validation configs, with no inline or alternate
+deployment config. This separation is intentional: migrations 0054/0055 and the
+atomic first-page writer cannot be introduced safely while an older API or worker can
+still write.
+
+## Controlled deployment
+
+Use `cloudbuild.deploy.yaml` only after an operator has established write quiescence:
+
+1. Pause administrative writes and uploads.
+2. Pause `letter-archive-worker-reconcile` if that Scheduler job exists.
+3. Stop new worker wakes and drain or terminate every old worker execution.
+4. Drain every old API revision that can write with the pre-0054 contract.
+5. Confirm no old API or worker writer remains.
+6. Fetch `origin/main`, confirm the reviewed commit is the clean local and remote
+   `main`, then submit the remote repository pinned to that full commit SHA. This
+   prevents a dirty local directory from being uploaded and merely labelled as the
+   reviewed commit:
+
+   ```bash
+   git fetch origin main
+   test -z "$(git status --porcelain --untracked-files=all)"
+   DEPLOY_SHA="$(git rev-parse --verify HEAD)"
+   test "$(git rev-parse --verify main)" = "$DEPLOY_SHA"
+   test "$(git rev-parse --verify origin/main)" = "$DEPLOY_SHA"
+   DEPLOY_SOURCE="$(git remote get-url origin)"
+   gcloud builds submit "$DEPLOY_SOURCE" \
+     --git-source-revision="$DEPLOY_SHA" \
+     --config=cloudbuild.deploy.yaml \
+     --substitutions=_TAG="$DEPLOY_SHA",_CONFIRM_WRITE_QUIESCENCE=true
+   ```
+
+7. Route 100% of API traffic to the new revision, confirm old revisions are gone,
+   perform the migration 0054/upload/manual-worker-wake smoke checks recorded in
+   `docs/architecture-cleanup/current-work.md`, and only then reopen administrative
+   writes. Keep `letter-archive-worker-reconcile` paused or absent and keep
+   `_ENABLE_WORKER_RECONCILIATION_SCHEDULE=false`; Scheduler enablement is the
+   separate, later proof sequence below.
+
+The deployment graph rejects an omitted confirmation and any `_TAG` that is not a
+full lowercase Git SHA. The acknowledgement is an operator assertion, not an
+automatic drain mechanism.
 
 The checked-in build keeps scheduled reconciliation disabled by default. This is a
 rollout gate: replacing a Cloud Run Job does not stop an older execution that began
 without the database lease. After the lease-aware worker is deployed, all pre-lease
-executions are drained or terminated, and the overlap proof below passes, set
+executions are drained or terminated, and competing manual wakes prove that exactly
+one execution owns the lease, set
 `_ENABLE_WORKER_RECONCILIATION_SCHEDULE=true` on a later build to grant the Scheduler
-identity and create or update `letter-archive-worker-reconcile`.
+identity and create or update `letter-archive-worker-reconcile`. Then perform the
+post-enable scheduled-tick proof below before relying on Scheduler for reconciliation.
 
 The flag is a create/update gate, not a runtime kill switch. Setting it back to
 `false` skips Scheduler IAM and configuration steps but does not pause or delete an
@@ -124,8 +169,9 @@ Monitor the two layers separately:
 1. Apply the execution-lease migration.
 2. Deploy the lease-aware API and worker while API lease reconciliation remains active.
 3. Drain or terminate worker executions started from the pre-lease job definition.
-4. Manually wake the new worker and verify lease acquisition, independent renewal,
-   token-fenced release, and an idle exit.
+4. Issue competing manual wakes against the new worker and verify one lease owner,
+   contender exit without processing, independent renewal, token-fenced release, and
+   an idle exit.
 5. Run a later build with
    `_ENABLE_WORKER_RECONCILIATION_SCHEDULE=true`; this grants the dedicated Scheduler
    identity and creates or updates the OAuth-authenticated UTC five-minute target.

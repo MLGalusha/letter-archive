@@ -135,6 +135,12 @@ db.execute(sql`
 ## Commands
 
 ```bash
-npm run drizzle:generate # Generate migration
-npm run drizzle:migrate  # Run migrations
+npm run drizzle:generate       # Guarded while snapshot lineage is stale
+npm run db:validate-migrations # Validate reviewed SQL + journal
+npm run db:test-migrations     # Prove the full chain on disposable Postgres
+npm run drizzle:migrate        # Run migrations
 ```
+
+See [migrations.md](migrations.md) for the temporary protected workflow. Do not invoke
+`drizzle-kit generate` directly until the post-0013 snapshot lineage has been rebuilt
+and verified.

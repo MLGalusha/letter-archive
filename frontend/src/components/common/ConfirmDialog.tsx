@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react';
+import { useCallback, useId, type ReactNode } from 'react';
 import { Button } from './Button';
+import { useAccessibleDialog } from './useAccessibleDialog';
 import './Modal.css';
 
 export interface ConfirmDialogProps {
@@ -34,13 +35,32 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const titleId = useId();
+  const descriptionId = useId();
+  const requestCancel = useCallback(() => {
+    if (!loading) onCancel();
+  }, [loading, onCancel]);
+  const { dialogRef } = useAccessibleDialog({
+    isOpen,
+    onClose: requestCancel,
+  });
+
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay" onClick={onCancel}>
-      <div className="modal-content modal-sm confirm-dialog" onClick={e => e.stopPropagation()}>
-        <h2 className="confirm-dialog-title">{title}</h2>
-        <div className="confirm-dialog-message">
+    <div className="modal-overlay" onClick={requestCancel}>
+      <div
+        ref={dialogRef}
+        className="modal-content modal-sm confirm-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
+        tabIndex={-1}
+        onClick={e => e.stopPropagation()}
+      >
+        <h2 id={titleId} className="confirm-dialog-title">{title}</h2>
+        <div id={descriptionId} className="confirm-dialog-message">
           {typeof message === 'string' ? <p>{message}</p> : message}
         </div>
         <div className="confirm-dialog-actions">

@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { randomUUIDMock } = vi.hoisted(() => ({
+const {
+  lockCorrespondenceGroupByLetterIdMock,
+  randomUUIDMock,
+} = vi.hoisted(() => ({
+  lockCorrespondenceGroupByLetterIdMock: vi.fn(),
   randomUUIDMock: vi.fn(),
 }));
 
@@ -20,6 +24,10 @@ vi.mock('drizzle-orm', () => ({
     strings: Array.from(strings),
     values,
   })),
+}));
+
+vi.mock('../letter/correspondence-group.js', () => ({
+  lockCorrespondenceGroupByLetterId: lockCorrespondenceGroupByLetterIdMock,
 }));
 
 vi.mock('../../db/index.js', () => {
@@ -63,6 +71,7 @@ import {
 import {
   confirmTranscriptIntent,
   LEGACY_TRANSCRIPT_CONFIRMATION_ERROR_CODE,
+  TRANSCRIPT_CONFIRMATION_EXTRA_CONTENT_PENDING_ERROR_CODE,
   TRANSCRIPT_CONFIRMATION_INTENT_CHANGED_ERROR_CODE,
   TRANSCRIPT_DIGEST_CHANGED_ERROR_CODE,
 } from '../letter/transcript-confirmation.js';
@@ -146,6 +155,10 @@ describe('transcript confirmation persistence boundary', () => {
   beforeEach(() => {
     randomUUIDMock.mockReset();
     randomUUIDMock.mockReturnValue(confirmationId);
+    lockCorrespondenceGroupByLetterIdMock.mockReset();
+    lockCorrespondenceGroupByLetterIdMock.mockImplementation(async () => ({
+      members: [{ id: row.id, type: row.type }],
+    }));
     updatePatches = [];
     transactionCount = 0;
     row = {
@@ -183,6 +196,10 @@ describe('transcript confirmation persistence boundary', () => {
     );
 
     expect(transactionCount).toBe(1);
+    expect(lockCorrespondenceGroupByLetterIdMock).toHaveBeenCalledWith(
+      row.id,
+      expect.any(Object),
+    );
     expect(updatePatches).toHaveLength(1);
     expect(updatePatches[0]).toMatchObject({
       transcriptConfirmedAt: expect.any(Date),
@@ -249,6 +266,41 @@ describe('transcript confirmation persistence boundary', () => {
 
     await expect(promise).rejects.toMatchObject({ statusCode: 409, code });
     expect(updatePatches).toHaveLength(0);
+  });
+
+  it.each(['PENDING', 'RUNNING'] as const)(
+    'rejects confirmation while eligible supplementary content is %s',
+    async (extraContentJobStatus) => {
+      row.extraContentJobStatus = extraContentJobStatus;
+      lockCorrespondenceGroupByLetterIdMock.mockResolvedValueOnce({
+        members: [
+          { id: row.id, type: 'L' },
+          { id: 'cover-1', type: 'C' },
+        ],
+      });
+
+      await expect(confirmTranscriptIntent(
+        confirmationInput({ confirmedSender: 'Alice' }),
+        fakeDatabase() as never,
+      )).rejects.toMatchObject({
+        statusCode: 409,
+        code: TRANSCRIPT_CONFIRMATION_EXTRA_CONTENT_PENDING_ERROR_CODE,
+        details: { extraContentJobStatus },
+      });
+      expect(updatePatches).toHaveLength(0);
+    },
+  );
+
+  it('does not block a default pending extra-content status without a related source', async () => {
+    row.extraContentJobStatus = 'PENDING';
+
+    const result = await confirmTranscriptIntent(
+      confirmationInput({ confirmedSender: 'Alice' }),
+      fakeDatabase() as never,
+    );
+
+    expect(result.newlyQueued).toBe(true);
+    expect(updatePatches).toHaveLength(1);
   });
 
   it.each([

@@ -1,7 +1,12 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import {
+  MemoryRouter,
+  Route,
+  Routes,
+  useNavigate,
+} from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   AdminCollectionWithLetters,
@@ -144,9 +149,31 @@ function makeCollection(
   };
 }
 
-function renderPage() {
+function RouteControls() {
+  const navigate = useNavigate();
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => navigate('/admin/collections/009')}
+      >
+        Go to collection A
+      </button>
+      <button
+        type="button"
+        onClick={() => navigate('/admin/collections/010')}
+      >
+        Go to collection B
+      </button>
+    </div>
+  );
+}
+
+function renderPage(initialCode = '009') {
   return render(
-    <MemoryRouter initialEntries={['/admin/collections/009']}>
+    <MemoryRouter initialEntries={[`/admin/collections/${initialCode}`]}>
+      <RouteControls />
       <Routes>
         <Route path="/admin/collections/:code" element={<AdminCollectionPage />} />
       </Routes>
@@ -502,5 +529,173 @@ describe('AdminCollectionPage profile mutations', () => {
     await waitFor(() => {
       expect(getAdminCollectionByCodeMock).toHaveBeenCalledTimes(2);
     });
+  });
+
+  it('keeps a stale A load from replacing or settling a pending B visit', async () => {
+    const loadA = deferred<AdminCollectionWithLetters>();
+    const loadB = deferred<AdminCollectionWithLetters>();
+    getAdminCollectionByCodeMock.mockImplementation((code: string) => (
+      code === '009' ? loadA.promise : loadB.promise
+    ));
+
+    const user = userEvent.setup();
+    renderPage();
+    await waitFor(() => {
+      expect(getAdminCollectionByCodeMock).toHaveBeenCalledWith('009');
+    });
+
+    await user.click(screen.getByRole('button', {
+      name: 'Go to collection B',
+    }));
+    await waitFor(() => {
+      expect(getAdminCollectionByCodeMock).toHaveBeenCalledWith('010');
+    });
+
+    await act(async () => {
+      loadA.resolve(makeCollection());
+      await loadA.promise;
+    });
+    expect(screen.getByText('Loading collection...')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', {
+      name: 'Test Collection',
+    })).not.toBeInTheDocument();
+
+    await act(async () => {
+      loadB.resolve(makeCollection({
+        collectionCode: '010',
+        title: 'Collection B',
+      }));
+      await loadB.promise;
+    });
+    expect(await screen.findByRole('heading', {
+      name: 'Collection B',
+    })).toBeInTheDocument();
+    expect(showToastMock).not.toHaveBeenCalled();
+  });
+
+  it('does not publish or refresh a save after its A visit moves to B', async () => {
+    const saveA = deferred<{
+      profileRevision: number;
+      identityFingerprint: string;
+      updatedLetterCount: number;
+      changed: boolean;
+    }>();
+    updateCollectionEditorMock.mockReturnValueOnce(saveA.promise);
+    getAdminCollectionByCodeMock.mockImplementation(async (code: string) => (
+      code === '009'
+        ? makeCollection()
+        : makeCollection({
+            collectionCode: '010',
+            title: 'Collection B',
+          })
+    ));
+
+    const user = userEvent.setup();
+    renderPage();
+    await waitForCollection();
+    const collectionHook = screen.getByPlaceholderText(
+      'Write or generate a collection hook...',
+    );
+    await user.clear(collectionHook);
+    await user.type(collectionHook, 'Saved after navigation');
+    await user.click(screen.getByRole('button', { name: 'Update' }));
+    await waitFor(() => {
+      expect(updateCollectionEditorMock).toHaveBeenCalledOnce();
+    });
+
+    await user.click(screen.getByRole('button', {
+      name: 'Go to collection B',
+    }));
+    expect(await screen.findByRole('heading', {
+      name: 'Collection B',
+    })).toBeInTheDocument();
+
+    await act(async () => {
+      saveA.resolve({
+        profileRevision: 6,
+        identityFingerprint: 'c'.repeat(64),
+        updatedLetterCount: 1,
+        changed: true,
+      });
+      await saveA.promise;
+    });
+
+    expect(screen.getByRole('heading', {
+      name: 'Collection B',
+    })).toBeInTheDocument();
+    expect(getAdminCollectionByCodeMock).toHaveBeenCalledTimes(2);
+    expect(showToastMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a first-A generation completion after A to B to A navigation', async () => {
+    const firstGeneration = deferred<{
+      hook: string;
+      narrative: string;
+      correspondents: CollectionProfileCorrespondent[];
+      profileStatus: 'AI_DRAFT';
+      profileRevision: number;
+      isStub: boolean;
+    }>();
+    generateCollectionProfileMock.mockReturnValueOnce(firstGeneration.promise);
+    let aLoadCount = 0;
+    getAdminCollectionByCodeMock.mockImplementation(async (code: string) => {
+      if (code === '010') {
+        return makeCollection({
+          collectionCode: '010',
+          title: 'Collection B',
+        });
+      }
+      aLoadCount += 1;
+      return makeCollection({
+        title: aLoadCount === 1 ? 'Test Collection' : 'Fresh Collection A',
+        hook: aLoadCount === 1 ? 'Collection hook' : 'Fresh A hook',
+        profileRevision: aLoadCount === 1 ? 5 : 9,
+      });
+    });
+
+    const user = userEvent.setup();
+    renderPage();
+    await waitForCollection();
+    await user.click(screen.getByRole('button', {
+      name: 'Regenerate profile',
+    }));
+    await user.click(screen.getByRole('button', { name: 'Regenerate' }));
+    await waitFor(() => {
+      expect(generateCollectionProfileMock).toHaveBeenCalledOnce();
+    });
+
+    await user.click(screen.getByRole('button', {
+      name: 'Go to collection B',
+    }));
+    expect(await screen.findByRole('heading', {
+      name: 'Collection B',
+    })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', {
+      name: 'Go to collection A',
+    }));
+    expect(await screen.findByRole('heading', {
+      name: 'Fresh Collection A',
+    })).toBeInTheDocument();
+
+    await act(async () => {
+      firstGeneration.resolve({
+        hook: 'Stale generated hook',
+        narrative: 'Stale generated narrative',
+        correspondents: PROFILE_CORRESPONDENTS,
+        profileStatus: 'AI_DRAFT',
+        profileRevision: 6,
+        isStub: false,
+      });
+      await firstGeneration.promise;
+    });
+
+    expect(screen.getByRole('heading', {
+      name: 'Fresh Collection A',
+    })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(
+      'Write or generate a collection hook...',
+    )).toHaveValue('Fresh A hook');
+    expect(getAdminCollectionByCodeMock).toHaveBeenCalledTimes(3);
+    expect(showToastMock).not.toHaveBeenCalled();
   });
 });

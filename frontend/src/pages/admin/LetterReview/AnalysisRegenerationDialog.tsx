@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useId } from 'react';
 import { Icon } from '../../../components/common';
+import { useAccessibleDialog } from '../../../components/common/useAccessibleDialog';
 import type {
   AnalysisRegenerationChoice,
   AnalysisRegenerationChoiceResult,
@@ -18,22 +19,6 @@ interface AnalysisRegenerationDialogProps {
   onClose: () => void;
 }
 
-const TITLE_ID = 'analysis-regeneration-title';
-const DESCRIPTION_ID = 'analysis-regeneration-description';
-const FOCUSABLE_SELECTOR = [
-  'button:not([disabled])',
-  'input:not([disabled])',
-  'select:not([disabled])',
-  'textarea:not([disabled])',
-  '[tabindex]:not([tabindex="-1"])',
-].join(',');
-
-const restoreFocus = (element: HTMLElement | null) => {
-  if (element?.isConnected && !element.matches(':disabled')) {
-    element.focus();
-  }
-};
-
 export default function AnalysisRegenerationDialog({
   isOpen,
   sender,
@@ -43,77 +28,24 @@ export default function AnalysisRegenerationDialog({
   onChoose,
   onClose,
 }: AnalysisRegenerationDialogProps) {
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const openerRef = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const opener = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
-    openerRef.current = opener;
-    const dialog = dialogRef.current;
-    const focusable = () => Array.from(
-      dialog?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? [],
-    );
-    (focusable()[0] ?? dialog)?.focus();
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        onClose();
-        return;
-      }
-      if (event.key !== 'Tab') return;
-
-      const controls = focusable();
-      if (controls.length === 0) {
-        event.preventDefault();
-        dialog?.focus();
-        return;
-      }
-      const first = controls[0];
-      const last = controls[controls.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      restoreFocus(opener);
-    };
-  }, [isOpen, onClose]);
+  const titleId = useId();
+  const descriptionId = useId();
+  const {
+    dialogRef,
+    restoreFocusAfterUpdate,
+    deferFocusRestore,
+  } = useAccessibleDialog({ isOpen, onClose });
 
   if (!isOpen) return null;
 
   const chooseAndRestore = async (
     choice: AnalysisRegenerationChoice,
   ) => {
-    const opener = openerRef.current;
+    deferFocusRestore();
     const result = await onChoose(choice);
     if (!result.shouldRestoreFocus) return;
 
-    requestAnimationFrame(() => {
-      const activeElement = document.activeElement;
-      const documentOwnsFocus = (
-        !activeElement
-        || activeElement === document.body
-        || activeElement === document.documentElement
-      );
-      const anotherModalOwnsFocus = document.querySelector(
-        '[aria-modal="true"]',
-      );
-      if (documentOwnsFocus && !anotherModalOwnsFocus) {
-        restoreFocus(opener);
-      }
-    });
+    restoreFocusAfterUpdate();
   };
 
   return (
@@ -126,13 +58,13 @@ export default function AnalysisRegenerationDialog({
         className="confirm-dialog regenerate-popup analysis-regeneration-dialog"
         role="dialog"
         aria-modal="true"
-        aria-labelledby={TITLE_ID}
-        aria-describedby={DESCRIPTION_ID}
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
         tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
       >
-        <h3 id={TITLE_ID}>Regenerate Analysis</h3>
-        <p id={DESCRIPTION_ID}>
+        <h3 id={titleId}>Regenerate Analysis</h3>
+        <p id={descriptionId}>
           Choose what to regenerate. This will overwrite the existing data.
         </p>
         <div className="analysis-regeneration-fields">

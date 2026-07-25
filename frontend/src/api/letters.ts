@@ -261,7 +261,7 @@ export async function getFilteredLetterSources(
 ): Promise<BulkSource[]> {
   const sources: BulkSource[] = [];
   let page = 1;
-  let totalPages = 1;
+  let totalPages: number;
   do {
     const response = await apiGet<AdminLettersResponse>('/admin/letters', {
       ...params,

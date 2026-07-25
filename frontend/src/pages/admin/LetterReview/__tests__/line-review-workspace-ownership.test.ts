@@ -19,17 +19,17 @@ describe('Line Review workspace ownership', () => {
     ]);
 
     expect(page).toContain('useLineReviewWorkspace({');
-    expect(page).toContain('lineReviewWorkspace.active');
-    expect(page).toContain('lineReviewWorkspace.modeProps');
-    expect(page).toContain('lineReviewWorkspace.viewerProps');
+    expect(page).toContain('active: lineReviewActive');
+    expect(page).toContain('modeProps: lineReviewModeProps');
+    expect(page).toContain('viewerProps: lineReviewViewerProps');
     expect(page).toContain(
-      'onClick={lineReviewWorkspace.headerControls.toggleDebugMode}',
+      'onClick={lineReviewHeaderControls.toggleDebugMode}',
     );
     expect(page).toContain(
-      'onClick={lineReviewWorkspace.headerControls.reloadSegments}',
+      'onClick={lineReviewHeaderControls.reloadSegments}',
     );
     expect(page).toContain(
-      'disabled={lineReviewWorkspace.headerControls.reloadDisabled}',
+      'disabled={lineReviewHeaderControls.reloadDisabled}',
     );
 
     for (const stateName of [

@@ -19,7 +19,7 @@ function fetchCollection(collectionCode: string): Promise<ArchiveShelfItem[]> {
   const promise = (async () => {
     const items: ArchiveShelfItem[] = [];
     let page = 1;
-    let totalPages = 1;
+    let totalPages: number;
     do {
       const res: ArchiveShelfResponse = await getArchiveShelfItems({
         collection: collectionCode,
@@ -50,23 +50,30 @@ function fetchCollection(collectionCode: string): Promise<ArchiveShelfItem[]> {
  * Returns `null` while loading.
  */
 export default function useCollectionLetters(collectionCode: string): ArchiveShelfItem[] | null {
-  const [letters, setLetters] = useState<ArchiveShelfItem[] | null>(
-    cache.get(collectionCode) ?? null,
+  const [loaded, setLoaded] = useState<{
+    collectionCode: string;
+    letters: ArchiveShelfItem[];
+  } | null>(null);
+  const letters = (
+    cache.get(collectionCode)
+    ?? (
+      loaded?.collectionCode === collectionCode
+        ? loaded.letters
+        : null
+    )
   );
 
   useEffect(() => {
     if (!collectionCode) return;
-
-    if (cache.has(collectionCode)) {
-      setLetters(cache.get(collectionCode)!);
-      return;
-    }
+    if (cache.has(collectionCode)) return;
 
     let cancelled = false;
 
     fetchCollection(collectionCode)
       .then((items) => {
-        if (!cancelled) setLetters(items);
+        if (!cancelled) {
+          setLoaded({ collectionCode, letters: items });
+        }
       })
       .catch(() => {});
 

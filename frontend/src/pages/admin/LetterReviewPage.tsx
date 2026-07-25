@@ -238,7 +238,16 @@ export default function LetterReviewPage() {
     tryAdoptLetter,
     executeLetterMutation,
   });
-  const lineReviewWorkspace = useLineReviewWorkspace({
+  const {
+    active: lineReviewActive,
+    currentFilename: lineReviewCurrentFilename,
+    headerControls: lineReviewHeaderControls,
+    mappingControls: lineReviewMappingControls,
+    modeProps: lineReviewModeProps,
+    modeRef: lineReviewModeRef,
+    selectedText: lineReviewSelectedText,
+    viewerProps: lineReviewViewerProps,
+  } = useLineReviewWorkspace({
     visit,
     letter,
     editorRef,
@@ -252,7 +261,7 @@ export default function LetterReviewPage() {
     visit,
     letter,
     transcriptText: transcript,
-    surfaceActive: !lineReviewWorkspace.active,
+    surfaceActive: !lineReviewActive,
     executeLetterMutation,
   });
   const {
@@ -502,14 +511,14 @@ export default function LetterReviewPage() {
           </button>
         )}
 
-        {lineReviewWorkspace.active && (
+        {lineReviewActive && (
           <button
             className={`header-action debug ${
-              lineReviewWorkspace.headerControls.debugMode ? "active" : ""
+              lineReviewHeaderControls.debugMode ? "active" : ""
             }`}
-            onClick={lineReviewWorkspace.headerControls.toggleDebugMode}
+            onClick={lineReviewHeaderControls.toggleDebugMode}
             data-tooltip={
-              lineReviewWorkspace.headerControls.debugMode
+              lineReviewHeaderControls.debugMode
                 ? "Hide Debug Overlay"
                 : "Show Debug Overlay"
             }
@@ -518,11 +527,11 @@ export default function LetterReviewPage() {
           </button>
         )}
 
-        {lineReviewWorkspace.active && (
+        {lineReviewActive && (
           <button
             className="header-action redetect"
-            onClick={lineReviewWorkspace.headerControls.reloadSegments}
-            disabled={lineReviewWorkspace.headerControls.reloadDisabled}
+            onClick={lineReviewHeaderControls.reloadSegments}
+            disabled={lineReviewHeaderControls.reloadDisabled}
             data-tooltip="Reload Segments"
           >
             <Icon name="refresh" size={18} />
@@ -540,14 +549,14 @@ export default function LetterReviewPage() {
     >
     <div className="letter-review-page">
       <div className="review-body">
-        {lineReviewWorkspace.active ? (
+        {lineReviewActive ? (
           <LineReviewMode
-            ref={lineReviewWorkspace.modeRef}
+            ref={lineReviewModeRef}
             letter={letter}
             transcript={transcript}
             handleMutationError={handleMutationError}
             mutationsBlocked={mutationsBlocked}
-            {...lineReviewWorkspace.modeProps}
+            {...lineReviewModeProps}
           />
         ) : (
         <ResizableSplitPane
@@ -563,7 +572,7 @@ export default function LetterReviewPage() {
               images={letter.images}
               letterId={letterId}
               showOnlyLetterPages={false}
-              {...lineReviewWorkspace.viewerProps}
+              {...lineReviewViewerProps}
             />
           </div>
 
@@ -572,12 +581,12 @@ export default function LetterReviewPage() {
             {/* Status Panel */}
             <div className="status-panel">
               {/* Filename Display - shows current page's filename */}
-              {lineReviewWorkspace.currentFilename && (
+              {lineReviewCurrentFilename && (
                 <div className="filename-row">
                   <div className="filename-display">
                     <span className="filename-label">File</span>
                     <code className="filename-value">
-                      {lineReviewWorkspace.currentFilename}
+                      {lineReviewCurrentFilename}
                     </code>
                   </div>
                   <Dropdown
@@ -689,11 +698,11 @@ export default function LetterReviewPage() {
                 <div className="unmapped-segment-warning">
                   <span className="unmapped-segment-icon">⚠</span>
                   <span>{unmappedCount} unmapped special segment{unmappedCount !== 1 ? 's' : ''}</span>
-                  {lineReviewWorkspace.selectedText.length > 0 && (
+                  {lineReviewSelectedText.length > 0 && (
                     <button
                       className="unmapped-segment-map-btn"
                       onClick={
-                        lineReviewWorkspace.mappingControls.mapSelectedText
+                        lineReviewMappingControls.mapSelectedText
                       }
                     >
                       Map to Segment
@@ -702,7 +711,7 @@ export default function LetterReviewPage() {
                   <button
                     className="unmapped-segment-review-btn"
                     onClick={
-                      lineReviewWorkspace.mappingControls.reviewSegments
+                      lineReviewMappingControls.reviewSegments
                     }
                   >
                     Review
@@ -853,29 +862,27 @@ export default function LetterReviewPage() {
       <TranscriptionRegenerationDialog
         isOpen={letterTranscriptionWorkspace.regenerationDialogOpen}
         onClose={letterTranscriptionWorkspace.closeRegenerationDialog}
-        onLetter={() => {
+        onLetter={async () => {
           letterTranscriptionWorkspace.closeRegenerationDialog();
-          void letterTranscriptionWorkspace.transcribe();
+          await letterTranscriptionWorkspace.transcribe();
         }}
-        onExtras={hasExtras ? () => {
+        onExtras={hasExtras ? async () => {
           letterTranscriptionWorkspace.closeRegenerationDialog();
-          void extraContentWorkspace.transcribe({
+          await extraContentWorkspace.transcribe({
             confirmReplacement: false,
           });
         } : undefined}
-        onBoth={hasExtras ? () => {
+        onBoth={hasExtras ? async () => {
           letterTranscriptionWorkspace.closeRegenerationDialog();
-          void (async () => {
-            if (
-              !await letterTranscriptionWorkspace.transcribe()
-              || !visit.isActive()
-            ) {
-              return;
-            }
-            await extraContentWorkspace.transcribe({
-              confirmReplacement: false,
-            });
-          })();
+          if (
+            !await letterTranscriptionWorkspace.transcribe()
+            || !visit.isActive()
+          ) {
+            return;
+          }
+          await extraContentWorkspace.transcribe({
+            confirmReplacement: false,
+          });
         } : undefined}
       />
 

@@ -1,0 +1,313 @@
+# Controlled Cloud Build deployment pipeline for Letter Archive.
+# Builds and pushes images, runs migrations, then deploys to Cloud Run.
+#
+# Manual only. Migration 0054 and the atomic first-page writer are not safe
+# across mixed old/new writers. Follow deploy/cloudrun/README.md, establish
+# write quiescence, and pass the explicit confirmation below.
+#
+# Usage:
+#   See deploy/cloudrun/README.md. Submit the remote repository at one exact
+#   full commit SHA; do not upload an arbitrary local working directory.
+
+substitutions:
+  _TAG: unset
+  _CONFIRM_WRITE_QUIESCENCE: 'false'
+  _REGION: us-east1
+  _CLOUD_SQL_INSTANCE: letter-archive-db
+  _ARCHIVE_BUCKET: letter-archive-485110-archive
+  _DOMAIN: voicesthatremain.com
+  _SERVICE_ACCOUNT: 'letter-archive-runner@${PROJECT_ID}.iam.gserviceaccount.com'
+  _SCHEDULER_SERVICE_ACCOUNT: 'letter-archive-scheduler@${PROJECT_ID}.iam.gserviceaccount.com'
+  _WORKER_RECONCILIATION_SCHEDULE: '*/5 * * * *'
+  # Initial lease rollout must drain pre-lease executions before this is enabled.
+  _ENABLE_WORKER_RECONCILIATION_SCHEDULE: 'false'
+  _BACKEND_IMAGE: '${_REGION}-docker.pkg.dev/${PROJECT_ID}/letter-archive/backend'
+  _FRONTEND_IMAGE: '${_REGION}-docker.pkg.dev/${PROJECT_ID}/letter-archive/frontend'
+
+options:
+  dynamic_substitutions: true
+  logging: CLOUD_LOGGING_ONLY
+
+steps:
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: confirm-write-quiescence
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        if [[ "${_CONFIRM_WRITE_QUIESCENCE}" != "true" ]]; then
+          echo "Refusing deployment: pause workers, Scheduler, and administrative writes; drain all old API/worker processes; then pass _CONFIRM_WRITE_QUIESCENCE=true."
+          exit 1
+        fi
+        if [[ ! "${_TAG}" =~ ^[0-9a-f]{40}$ ]]; then
+          echo "Refusing deployment: _TAG must be the full lowercase Git commit SHA selected as the build source."
+          exit 1
+        fi
+        echo "Write quiescence acknowledged for source commit ${_TAG}."
+    waitFor: ['-']
+
+  # ── Pull cached images for layer reuse ───────────────────────
+  - name: gcr.io/cloud-builders/docker
+    id: pull-backend-cache
+    entrypoint: bash
+    args: ['-c', 'docker pull ${_BACKEND_IMAGE}:latest || true']
+    waitFor: ['confirm-write-quiescence']
+
+  - name: gcr.io/cloud-builders/docker
+    id: pull-frontend-cache
+    entrypoint: bash
+    args: ['-c', 'docker pull ${_FRONTEND_IMAGE}:latest || true']
+    waitFor: ['confirm-write-quiescence']
+
+  # ── Build images (parallel) ────────────────────────────────
+  - name: gcr.io/cloud-builders/docker
+    id: build-backend
+    args:
+      - build
+      - --cache-from
+      - '${_BACKEND_IMAGE}:latest'
+      - -t
+      - '${_BACKEND_IMAGE}:${_TAG}'
+      - -t
+      - '${_BACKEND_IMAGE}:latest'
+      - -f
+      - backend/Dockerfile
+      - backend
+    waitFor: ['pull-backend-cache']
+
+  - name: gcr.io/cloud-builders/docker
+    id: build-frontend
+    args:
+      - build
+      - --cache-from
+      - '${_FRONTEND_IMAGE}:latest'
+      - -t
+      - '${_FRONTEND_IMAGE}:${_TAG}'
+      - -t
+      - '${_FRONTEND_IMAGE}:latest'
+      - --build-arg
+      - 'VITE_API_URL=https://api.${_DOMAIN}'
+      - --build-arg
+      - 'VITE_SITE_URL=https://${_DOMAIN}'
+      - -f
+      - frontend/Dockerfile
+      - frontend
+    waitFor: ['pull-frontend-cache']
+
+  # ── Push images (parallel after builds) ─────────────────────
+  - name: gcr.io/cloud-builders/docker
+    id: push-backend
+    args: ['push', '--all-tags', '${_BACKEND_IMAGE}']
+    waitFor: ['build-backend']
+
+  - name: gcr.io/cloud-builders/docker
+    id: push-frontend
+    args: ['push', '--all-tags', '${_FRONTEND_IMAGE}']
+    waitFor: ['build-frontend']
+
+  # ── Prepare deploy manifests (substitute placeholders) ──────
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: prepare-manifests
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        for f in deploy/cloudrun/*.yaml; do
+          sed -i \
+            -e "s|SERVICE_ACCOUNT_EMAIL|${_SERVICE_ACCOUNT}|g" \
+            -e "s|CLOUD_SQL_INSTANCE|${_CLOUD_SQL_INSTANCE}|g" \
+            -e "s|ARCHIVE_BUCKET|${_ARCHIVE_BUCKET}|g" \
+            -e "s|BACKEND_IMAGE|${_BACKEND_IMAGE}:${_TAG}|g" \
+            -e "s|FRONTEND_IMAGE|${_FRONTEND_IMAGE}:${_TAG}|g" \
+            -e "s|PROJECT_NUMBER|${PROJECT_ID}|g" \
+            -e "s|PROJECT_ID|${PROJECT_ID}|g" \
+            -e "s|YOUR_DOMAIN|${_DOMAIN}|g" \
+            -e "s|REGION|${_REGION}|g" \
+            "$$f"
+        done
+    waitFor: ['confirm-write-quiescence']
+
+  # ── Deploy + run migrations ─────────────────────────────────
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy-migrate-job
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - replace
+      - deploy/cloudrun/backend-migrate-job.yaml
+      - --region=${_REGION}
+    waitFor: ['push-backend', 'prepare-manifests']
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: run-migrations
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - execute
+      - letter-archive-migrate
+      - --region=${_REGION}
+      - --wait
+    waitFor: ['deploy-migrate-job']
+
+  # ── Deploy backfill job (run manually via gcloud) ───────────
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy-backfill-job
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - replace
+      - deploy/cloudrun/backend-backfill-dimensions-job.yaml
+      - --region=${_REGION}
+    waitFor: ['push-backend', 'prepare-manifests']
+
+  # ── Deploy worker job ───────────────────────────────────────
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: delete-legacy-worker-pool
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        gcloud beta run worker-pools delete letter-archive-worker \
+          --region=${_REGION} --quiet || true
+    waitFor: ['run-migrations']
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy-worker
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - replace
+      - deploy/cloudrun/backend-worker-job.yaml
+      - --region=${_REGION}
+    waitFor: ['delete-legacy-worker-pool', 'prepare-manifests']
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: grant-backend-worker-job-invoke
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - add-iam-policy-binding
+      - letter-archive-worker
+      - --region=${_REGION}
+      - --member=serviceAccount:${_SERVICE_ACCOUNT}
+      - --role=roles/run.invoker
+    waitFor: ['deploy-worker']
+
+  # The backend's startup reconciler can invoke the worker job. Declare and
+  # authorize that job before starting the new backend revision.
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy-backend
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        gcloud run services replace deploy/cloudrun/backend-service.yaml \
+          --region=${_REGION}
+        binding_applied=false
+        for i in 1 2 3; do
+          if gcloud run services add-iam-policy-binding letter-archive-backend \
+            --region=${_REGION} --member=allUsers --role=roles/run.invoker --quiet; then
+            binding_applied=true
+            break
+          fi
+          echo "IAM binding retry $$i/3 (backend)..."
+          sleep $$((i * 2))
+        done
+        if [[ "$${binding_applied}" != "true" ]]; then
+          echo "Failed to apply the public backend invoker binding."
+          exit 1
+        fi
+    waitFor:
+      - run-migrations
+      - prepare-manifests
+      - grant-backend-worker-job-invoke
+
+  # ── Deploy frontend service ─────────────────────────────────
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy-frontend
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        gcloud run services replace deploy/cloudrun/frontend-service.yaml \
+          --region=${_REGION}
+        binding_applied=false
+        for i in 1 2 3; do
+          if gcloud run services add-iam-policy-binding letter-archive-frontend \
+            --region=${_REGION} --member=allUsers --role=roles/run.invoker --quiet; then
+            binding_applied=true
+            break
+          fi
+          echo "IAM binding retry $$i/3 (frontend)..."
+          sleep $$((i * 2))
+        done
+        if [[ "$${binding_applied}" != "true" ]]; then
+          echo "Failed to apply the public frontend invoker binding."
+          exit 1
+        fi
+    waitFor: ['push-frontend', 'prepare-manifests', 'deploy-backend']
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: grant-scheduler-worker-job-invoke
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        if [[ "${_ENABLE_WORKER_RECONCILIATION_SCHEDULE}" != "true" ]]; then
+          echo "Scheduled worker reconciliation remains disabled for this deployment."
+          exit 0
+        fi
+        gcloud run jobs add-iam-policy-binding letter-archive-worker \
+          --region="${_REGION}" \
+          --member="serviceAccount:${_SCHEDULER_SERVICE_ACCOUNT}" \
+          --role=roles/run.invoker
+    waitFor: ['grant-backend-worker-job-invoke']
+
+  # Cloud Scheduler calls the asynchronous Cloud Run jobs.run API. The worker's
+  # database execution lease, not Scheduler delivery, serializes executions.
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: configure-worker-reconciliation-schedule
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        if [[ "${_ENABLE_WORKER_RECONCILIATION_SCHEDULE}" != "true" ]]; then
+          echo "Skipping Scheduler configuration until the lease rollout is proven."
+          exit 0
+        fi
+        if gcloud scheduler jobs describe letter-archive-worker-reconcile \
+          --project="${PROJECT_ID}" \
+          --location="${_REGION}" >/dev/null 2>&1; then
+          scheduler_action=update
+        else
+          scheduler_action=create
+        fi
+
+        gcloud scheduler jobs "$${scheduler_action}" http \
+          letter-archive-worker-reconcile \
+          --project="${PROJECT_ID}" \
+          --location="${_REGION}" \
+          --schedule="${_WORKER_RECONCILIATION_SCHEDULE}" \
+          --time-zone=Etc/UTC \
+          --uri="https://run.googleapis.com/v2/projects/${PROJECT_ID}/locations/${_REGION}/jobs/letter-archive-worker:run" \
+          --http-method=POST \
+          --oauth-service-account-email="${_SCHEDULER_SERVICE_ACCOUNT}" \
+          --oauth-token-scope=https://www.googleapis.com/auth/cloud-platform \
+          --attempt-deadline=30s \
+          --max-retry-attempts=0 \
+          --max-retry-duration=0s \
+          --description="Periodic durable processing reconciliation" \
+          --quiet
+    waitFor: ['grant-scheduler-worker-job-invoke']
+
+timeout: 2400s

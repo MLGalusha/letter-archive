@@ -1,11 +1,13 @@
+import { useId } from 'react';
 import { Icon } from '../../../components/common';
+import { useAccessibleDialog } from '../../../components/common/useAccessibleDialog';
 
 interface TranscriptionRegenerationDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onLetter: () => void;
-  onExtras?: () => void;
-  onBoth?: () => void;
+  onLetter: () => void | Promise<unknown>;
+  onExtras?: () => void | Promise<unknown>;
+  onBoth?: () => void | Promise<unknown>;
 }
 
 export default function TranscriptionRegenerationDialog({
@@ -15,7 +17,26 @@ export default function TranscriptionRegenerationDialog({
   onExtras,
   onBoth,
 }: TranscriptionRegenerationDialogProps) {
+  const titleId = useId();
+  const descriptionId = useId();
+  const {
+    dialogRef,
+    deferFocusRestore,
+    restoreFocusAfterUpdate,
+  } = useAccessibleDialog({ isOpen, onClose });
+
   if (!isOpen) return null;
+
+  const chooseAndRestore = async (
+    choose: () => void | Promise<unknown>,
+  ) => {
+    deferFocusRestore();
+    try {
+      await choose();
+    } finally {
+      restoreFocusAfterUpdate();
+    }
+  };
 
   return (
     <div
@@ -23,16 +44,19 @@ export default function TranscriptionRegenerationDialog({
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
         className="confirm-dialog regenerate-popup"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="transcription-regeneration-title"
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
+        tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
       >
-        <h3 id="transcription-regeneration-title">
+        <h3 id={titleId}>
           Regenerate Transcription
         </h3>
-        <p>
+        <p id={descriptionId}>
           Choose what to regenerate. This will overwrite the existing
           content.
         </p>
@@ -40,7 +64,7 @@ export default function TranscriptionRegenerationDialog({
           <button
             type="button"
             className="btn-option"
-            onClick={onLetter}
+            onClick={() => void chooseAndRestore(onLetter)}
           >
             <Icon name="file" size={16} />
             <span>Letter Transcript</span>
@@ -49,7 +73,7 @@ export default function TranscriptionRegenerationDialog({
             <button
               type="button"
               className="btn-option"
-              onClick={onExtras}
+              onClick={() => void chooseAndRestore(onExtras)}
             >
               <Icon name="plus" size={16} />
               <span>Extra Content</span>
@@ -59,7 +83,7 @@ export default function TranscriptionRegenerationDialog({
             <button
               type="button"
               className="btn-option"
-              onClick={onBoth}
+              onClick={() => void chooseAndRestore(onBoth)}
             >
               <Icon name="process" size={16} />
               <span>Both</span>

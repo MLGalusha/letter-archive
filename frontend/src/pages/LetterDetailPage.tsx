@@ -86,10 +86,27 @@ export default function LetterDetailPage() {
   const { letterId } = useParams<{ letterId: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [letter, setLetter] = useState<PublicLetter | null>(null);
-  const [adjacent, setAdjacent] = useState<AdjacentLettersResponse | null>(null);
+  const [loadedLetter, setLoadedLetter] = useState<{
+    ownerLetterId: string;
+    value: PublicLetter;
+  } | null>(null);
+  const [loadedAdjacent, setLoadedAdjacent] = useState<{
+    ownerLetterId: string;
+    value: AdjacentLettersResponse | null;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const letter = loadedLetter?.value ?? null;
+  const displayedLetterIsCurrent = (
+    !!letterId
+    && loadedLetter?.ownerLetterId === letterId
+  );
+  const adjacent = (
+    displayedLetterIsCurrent
+    && loadedAdjacent?.ownerLetterId === letterId
+  )
+    ? loadedAdjacent.value
+    : null;
 
   // Image viewer modal
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -121,7 +138,7 @@ export default function LetterDetailPage() {
     if (carouselRef.current) carouselRef.current.scrollLeft = 0;
     // Scroll to top on letter change (unless coming from a highlight)
     if (!fromHighlightRef.current) appScrollTo(0);
-  }, [letterId]);
+  }, [carouselRef, letterId]);
 
   // Auto-scroll to a specific image when navigated with ?image= param
   useEffect(() => {
@@ -181,9 +198,10 @@ export default function LetterDetailPage() {
   }, [letter]);
 
   useEffect(() => {
-    if (!letterId) { setLoading(false); return; }
+    if (!letterId) return;
     const controller = new AbortController();
-    const isFirstLoad = !letter;
+    const isFirstLoad = !loadedLetter;
+    const requestedLetterId = letterId;
     async function fetchLetter() {
       // Only show loading state on first load — keep previous letter visible during navigation
       if (isFirstLoad) setLoading(true);
@@ -194,8 +212,14 @@ export default function LetterDetailPage() {
           getAdjacentLetters(letterId!, controller.signal).catch(() => null),
         ]);
         if (!controller.signal.aborted) {
-          setLetter(data);
-          setAdjacent(adj);
+          setLoadedLetter({
+            ownerLetterId: requestedLetterId,
+            value: data,
+          });
+          setLoadedAdjacent({
+            ownerLetterId: requestedLetterId,
+            value: adj,
+          });
         }
       } catch (err) {
         if (controller.signal.aborted) return;
@@ -218,23 +242,35 @@ export default function LetterDetailPage() {
   // Keyboard nav
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!adjacent) return;
+      if (e.key === "Escape" && viewerOpen) {
+        setViewerOpen(false);
+        return;
+      }
+      if (!displayedLetterIsCurrent || !adjacent) return;
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       if (e.key === "ArrowLeft" && adjacent.prev) navigate(`/letter/${adjacent.prev.id}`);
       if (e.key === "ArrowRight" && adjacent.next) navigate(`/letter/${adjacent.next.id}`);
-      if (e.key === "Escape" && viewerOpen) setViewerOpen(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [adjacent, navigate, viewerOpen]);
+  }, [adjacent, displayedLetterIsCurrent, navigate, viewerOpen]);
 
   // Touch swipe nav between letters (mobile only, disabled when lightbox open)
   const isTouchDevice = useIsTouchDevice();
   const { ref: swipeRef, offset: swipeOffset, isSwiping, isAnimating } = useSwipeNavigation({
-    onSwipeLeft: adjacent?.next ? () => navigate(`/letter/${adjacent.next!.id}`) : undefined,
-    onSwipeRight: adjacent?.prev ? () => navigate(`/letter/${adjacent.prev!.id}`) : undefined,
-    enabled: isTouchDevice && !viewerOpen && !!adjacent,
+    onSwipeLeft: displayedLetterIsCurrent && adjacent?.next
+      ? () => navigate(`/letter/${adjacent.next!.id}`)
+      : undefined,
+    onSwipeRight: displayedLetterIsCurrent && adjacent?.prev
+      ? () => navigate(`/letter/${adjacent.prev!.id}`)
+      : undefined,
+    enabled: (
+      displayedLetterIsCurrent
+      && isTouchDevice
+      && !viewerOpen
+      && !!adjacent
+    ),
   });
 
   // Build scrubber props from adjacent data (hook must be at top level)

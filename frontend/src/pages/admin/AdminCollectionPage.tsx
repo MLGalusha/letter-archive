@@ -1,4 +1,11 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+} from 'react';
 import { useParams, Link } from 'react-router-dom';
 import AdminLayout from '../../components/AdminLayout';
 import { Button } from '../../components/common';
@@ -54,6 +61,36 @@ interface CorrespondentRename {
   oldName: string;
   newName: string;
   roles: Array<'sender' | 'recipient'>;
+}
+
+interface AdminCollectionVisit {
+  readonly code: string | undefined;
+  isActive: () => boolean;
+}
+
+function useAdminCollectionVisit(
+  code: string | undefined,
+): AdminCollectionVisit {
+  const activeVisitRef = useRef<AdminCollectionVisit | null>(null);
+  const visit = useMemo<AdminCollectionVisit>(() => {
+    const nextVisit: AdminCollectionVisit = {
+      code,
+      isActive: () => activeVisitRef.current === nextVisit,
+    };
+    return nextVisit;
+  }, [code]);
+
+  useLayoutEffect(() => {
+    activeVisitRef.current = visit;
+
+    return () => {
+      if (activeVisitRef.current === visit) {
+        activeVisitRef.current = null;
+      }
+    };
+  }, [visit]);
+
+  return visit;
 }
 
 const GENERIC_CORRESPONDENT_NAMES = new Set([
@@ -261,16 +298,20 @@ function buildCollectionCorrespondents(
   });
 }
 
-export default function AdminCollectionPage() {
-  const { code } = useParams<{ code: string }>();
+function AdminCollectionRoute({
+  code,
+}: {
+  code: string | undefined;
+}) {
   const { showToast } = useToast();
+  const visit = useAdminCollectionVisit(code);
 
   const [collection, setCollection] = useState<AdminCollectionWithLetters | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(code));
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showWarningDialog, setShowWarningDialog] = useState(false);
-  const profileMutationInFlightRef = useRef(false);
+  const profileMutationInFlightRef = useRef<AdminCollectionVisit | null>(null);
 
   // Featured letter
   const [featuredLetterId, setFeaturedLetterId] = useState<string | null>(null);
@@ -434,10 +475,10 @@ export default function AdminCollectionPage() {
   }, [closeLetterPicker, showLetterPicker, showPickerFilters, showPickerSort]);
 
   const fetchData = useCallback(async () => {
-    if (!code) return;
-    setLoading(true);
+    if (!code || !visit.isActive()) return;
     try {
       const coll = await getAdminCollectionByCode(code);
+      if (!visit.isActive()) return;
       setCollection(coll);
 
       const c = coll as unknown as Record<string, unknown>;
@@ -462,13 +503,18 @@ export default function AdminCollectionPage() {
       }
       setCorrespondentEdits(nextCorrespondentEdits);
     } catch (err) {
+      if (!visit.isActive()) return;
       showToast(getErrorMessage(err, 'An error occurred'), 'error');
     } finally {
-      setLoading(false);
+      if (visit.isActive()) {
+        setLoading(false);
+      }
     }
-  }, [code, showToast]);
+  }, [code, showToast, visit]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    queueMicrotask(() => void fetchData());
+  }, [fetchData]);
 
   const handleGenerate = async () => {
     if (
@@ -477,11 +523,11 @@ export default function AdminCollectionPage() {
       || dirty
       || saving
       || generating
-      || profileMutationInFlightRef.current
+      || profileMutationInFlightRef.current === visit
     ) {
       return;
     }
-    profileMutationInFlightRef.current = true;
+    profileMutationInFlightRef.current = visit;
     setShowWarningDialog(false);
     setGenerating(true);
     const force = profileStatus !== 'EMPTY';
@@ -491,6 +537,7 @@ export default function AdminCollectionPage() {
         collection.profileRevision,
         force,
       );
+      if (!visit.isActive()) return;
       setHook(result.hook || '');
       setNarrative(result.narrative || '');
       setProfileStatus(result.profileStatus);
@@ -503,11 +550,16 @@ export default function AdminCollectionPage() {
       showToast(result.isStub ? 'Stub profile generated (no API key)' : 'Profile generated', 'success');
       await fetchData();
     } catch (err) {
+      if (!visit.isActive()) return;
       showToast(getErrorMessage(err, 'An error occurred'), 'error');
       await fetchData();
     } finally {
-      setGenerating(false);
-      profileMutationInFlightRef.current = false;
+      if (visit.isActive()) {
+        setGenerating(false);
+      }
+      if (profileMutationInFlightRef.current === visit) {
+        profileMutationInFlightRef.current = null;
+      }
     }
   };
 
@@ -518,11 +570,11 @@ export default function AdminCollectionPage() {
       || saving
       || generating
       || showWarningDialog
-      || profileMutationInFlightRef.current
+      || profileMutationInFlightRef.current === visit
     ) {
       return;
     }
-    profileMutationInFlightRef.current = true;
+    profileMutationInFlightRef.current = visit;
     setSaving(true);
     try {
       const correspondentChanges = prepareCorrespondentChanges(
@@ -546,6 +598,7 @@ export default function AdminCollectionPage() {
         correspondentRenames: correspondentChanges.renames,
       });
 
+      if (!visit.isActive()) return;
       setCollection((current) => (
         current
           ? {
@@ -558,10 +611,15 @@ export default function AdminCollectionPage() {
       showToast('Updated', 'success');
       await fetchData();
     } catch (err) {
+      if (!visit.isActive()) return;
       showToast(getErrorMessage(err, 'An error occurred'), 'error');
     } finally {
-      setSaving(false);
-      profileMutationInFlightRef.current = false;
+      if (visit.isActive()) {
+        setSaving(false);
+      }
+      if (profileMutationInFlightRef.current === visit) {
+        profileMutationInFlightRef.current = null;
+      }
     }
   };
 
@@ -1076,4 +1134,10 @@ export default function AdminCollectionPage() {
       </div>
     </AdminLayout>
   );
+}
+
+export default function AdminCollectionPage() {
+  const { code } = useParams<{ code: string }>();
+
+  return <AdminCollectionRoute key={code ?? 'missing'} code={code} />;
 }

@@ -15,10 +15,8 @@ test.describe('Navigation', () => {
     });
 
     test('shows header on homepage', async ({ page }) => {
-      const header = page.locator('header, .header, [class*="header"]');
-      const hasHeader = await header.first().isVisible().catch(() => false);
-
-      expect(hasHeader || true).toBe(true);
+      await expect(page.locator(SELECTORS.public.header)).toBeVisible();
+      await expect(page.getByRole('navigation')).toBeVisible();
     });
 
     test('shows footer on homepage', async ({ page }) => {
@@ -27,36 +25,29 @@ test.describe('Navigation', () => {
     });
 
     test('can navigate to collections from homepage', async ({ page }) => {
-      const collectionsLink = page.locator('a[href="/collections"], a:has-text("Collections")');
-
-      if (await collectionsLink.first().isVisible()) {
-        await collectionsLink.first().click();
-        await page.waitForURL(/\/collections/);
-        expect(page.url()).toContain('/collections');
-      }
+      const collectionsLink = page.getByRole('navigation')
+        .getByRole('link', { name: 'Collections' });
+      await expect(collectionsLink).toBeVisible();
+      await collectionsLink.click();
+      await expect(page).toHaveURL(/\/collections$/);
     });
 
     test('can navigate to about page', async ({ page }) => {
-      const aboutLink = page.locator('a[href="/about"], a:has-text("About")');
-
-      if (await aboutLink.first().isVisible()) {
-        await aboutLink.first().click();
-        await page.waitForURL(/\/about/);
-        expect(page.url()).toContain('/about');
-      }
+      const aboutLink = page.getByRole('navigation')
+        .getByRole('link', { name: 'About' });
+      await expect(aboutLink).toBeVisible();
+      await aboutLink.click();
+      await expect(page).toHaveURL(/\/about$/);
     });
 
     test('logo links to homepage', async ({ page }) => {
       await page.goto('/collections');
       await page.waitForLoadState('domcontentloaded');
 
-      const logo = page.locator('a[href="/"] img, .logo a, header a[href="/"]');
-
-      if (await logo.first().isVisible()) {
-        await logo.first().click();
-        await page.waitForURL('/');
-        expect(page.url()).toMatch(/\/$/);
-      }
+      const logo = page.locator('header a[href="/"]').first();
+      await expect(logo).toBeVisible();
+      await logo.click();
+      await expect(page).toHaveURL(/\/$/);
     });
 
     test('footer shows on collections page', async ({ page }) => {
@@ -72,9 +63,7 @@ test.describe('Navigation', () => {
       await page.waitForLoadState('domcontentloaded');
 
       const footer = page.locator(SELECTORS.public.footer);
-      const hasFooter = await footer.isVisible().catch(() => false);
-
-      expect(hasFooter || true).toBe(true);
+      await expect(footer).toBeVisible();
     });
   });
 
@@ -245,9 +234,12 @@ test.describe('Navigation', () => {
       await page.goto('/invalid-route-xyz-123');
       await page.waitForLoadState('domcontentloaded');
 
-      // Should show some error or redirect to home
-      const pageContent = await page.content();
-      expect(pageContent.length).toBeGreaterThan(0);
+      await expect(page.getByRole('heading', {
+        name: 'Page not found',
+      })).toBeVisible();
+      await expect(page.getByRole('link', {
+        name: 'Back to Home',
+      })).toBeVisible();
     });
 
     test('shows error for invalid admin route', async ({ page }) => {
@@ -255,9 +247,9 @@ test.describe('Navigation', () => {
       await page.goto('/admin/invalid-route-xyz');
       await page.waitForLoadState('domcontentloaded');
 
-      // Should show some content (error or redirect)
-      const pageContent = await page.content();
-      expect(pageContent.length).toBeGreaterThan(0);
+      await expect(page.getByRole('heading', {
+        name: 'Page not found',
+      })).toBeVisible();
     });
   });
 });

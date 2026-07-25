@@ -21,6 +21,7 @@ import {
   sourceRevisionChanged,
 } from './source-revision.js';
 import { clearedEntityExtractionOwnership } from './entity-extraction-job.js';
+import { lockCorrespondenceGroupByLetterId } from './correspondence-group.js';
 import {
   AppError,
   BadRequestError,
@@ -33,6 +34,8 @@ export const TRANSCRIPT_CONFIRMATION_INTENT_CHANGED_ERROR_CODE =
   'TRANSCRIPT_CONFIRMATION_INTENT_CHANGED';
 export const LEGACY_TRANSCRIPT_CONFIRMATION_ERROR_CODE =
   'LEGACY_TRANSCRIPT_CONFIRMATION';
+export const TRANSCRIPT_CONFIRMATION_EXTRA_CONTENT_PENDING_ERROR_CODE =
+  'TRANSCRIPT_CONFIRMATION_EXTRA_CONTENT_PENDING';
 
 export type MetadataDisposition =
   | 'queued'
@@ -89,9 +92,10 @@ function dispositionFor(
 /**
  * Commits one exact transcript-confirmation intent without invoking a provider.
  *
- * The row lock makes same/different-intent concurrency explicit. Everything
- * after this function—including the worker wake and optional DTO hydration—is
- * advisory and cannot retroactively turn the receipt into a failed write.
+ * The correspondence lock makes same/different-intent concurrency and related
+ * supplementary membership explicit. Everything after this function—including
+ * the worker wake and optional DTO hydration—is advisory and cannot
+ * retroactively turn the receipt into a failed write.
  */
 export async function confirmTranscriptIntent(
   input: ConfirmTranscriptIntentInput,
@@ -111,6 +115,11 @@ export async function confirmTranscriptIntent(
   }
 
   return database.transaction(async (tx) => {
+    const group = await lockCorrespondenceGroupByLetterId(input.letterId, tx);
+    if (!group) {
+      throw new NotFoundError('Letter not found');
+    }
+
     const rows = await tx
       .select({
         id: letters.id,
@@ -259,15 +268,29 @@ export async function confirmTranscriptIntent(
         letter.metadataStatus === 'PENDING'
         || letter.metadataStatus === 'FAILED'
       );
-    if (
-      newlyQueued
+    const hasRelatedExtraContent = group.members.some(member =>
+      member.id !== letter.id
       && (
-        letter.extraContentJobStatus === 'RUNNING'
-        || letter.entityExtractionStatus === 'RUNNING'
-      )
-    ) {
+        member.type === 'T'
+        || member.type === 'C'
+        || member.type === 'E'
+      ));
+    const extraContentBlocksConfirmation = hasRelatedExtraContent
+      && (
+        letter.extraContentJobStatus === 'PENDING'
+        || letter.extraContentJobStatus === 'RUNNING'
+      );
+    if (newlyQueued && letter.entityExtractionStatus === 'RUNNING') {
       throw new BadRequestError(
         'Related processing must finish before confirming this transcript',
+      );
+    }
+    if (newlyQueued && extraContentBlocksConfirmation) {
+      throw new AppError(
+        409,
+        'Supplementary-content transcription must finish before confirming this transcript',
+        { extraContentJobStatus: letter.extraContentJobStatus },
+        TRANSCRIPT_CONFIRMATION_EXTRA_CONTENT_PENDING_ERROR_CODE,
       );
     }
 

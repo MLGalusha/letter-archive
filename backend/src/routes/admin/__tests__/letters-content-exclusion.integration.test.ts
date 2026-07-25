@@ -1069,6 +1069,40 @@ describe('admin downstream extraction exclusion', () => {
     expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
   });
 
+  it('does not report acceptance or wake work while supplementary transcription is pending', async () => {
+    confirmTranscriptIntentMock.mockRejectedValueOnce(
+      new AppError(
+        409,
+        'Supplementary-content transcription must finish before confirming this transcript',
+        { extraContentJobStatus: 'PENDING' },
+        'TRANSCRIPT_CONFIRMATION_EXTRA_CONTENT_PENDING',
+      ),
+    );
+
+    const response = await invokeRouter(contentRouter, {
+      method: 'POST',
+      url: '/letter-1/confirm-transcript',
+      path: '/letter-1/confirm-transcript',
+      body: {
+        primarySourceRevision: 7,
+        transcriptDigest: observedTranscriptDigest,
+      },
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({
+      error: expect.stringContaining(
+        'Supplementary-content transcription must finish',
+      ),
+      code: 'TRANSCRIPT_CONFIRMATION_EXTRA_CONTENT_PENDING',
+      details: { extraContentJobStatus: 'PENDING' },
+    });
+    expect(requestBackgroundWorkerRunMock).not.toHaveBeenCalled();
+    expect(fetchLetterWithRelatedAndTransformMock).not.toHaveBeenCalled();
+    expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
+  });
+
   it('returns a same-intent replay as 200 without waking the worker', async () => {
     const replayReceipt = {
       ...queuedConfirmationReceipt,

@@ -7,13 +7,13 @@ Last updated: July 24, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 034 — executable Letter Review analysis-regeneration contract
-- Last sealed cleanup implementation: characterized Letter Review analysis
-  regeneration at `575d2b58`
+- Current checkpoint: 035 — visit-owned Letter Review analysis regeneration
+- Last sealed cleanup implementation: extracted Letter Review analysis
+  regeneration at `e41bd982`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Current slice: 035 — visit-owned Letter Review analysis regeneration, framed and
-  in progress.
+- Next candidate slice: 036 — characterize and extract transcript-confirmation
+  ownership from the Letter Review route.
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -3040,7 +3040,7 @@ Residual decisions and next seam:
 
 ## Slice 035 — Visit-Owned Letter Review Analysis Regeneration
 
-Status: framed and in progress
+Status: complete at `e41bd982`
 
 Problem:
 
@@ -3092,6 +3092,29 @@ Scope:
 - Keep all four Slice 034 browser contracts as cross-owner ground truth and add one
   390x844 semantic/geometry case.
 
+Delivered:
+
+- Added `useAnalysisRegenerationWorkspace` as the route-visit owner for correction
+  drafts, exact operation mapping, request envelopes, visible progress attempts,
+  accepted-result feedback, status resets, and recent-edit publication.
+- Routed every analysis request through `executeLetterMutation`, leaving autosave
+  flushing, saving leases, guarded adoption, hydration, and error handling with the
+  canonical mutation executor. The route no longer imports either analysis API.
+- Preserved all three existing choices and payload contracts, including the deliberate
+  blank-value asymmetry and standalone entity confirmation. Removed the unread
+  full-mode progress state and dead `metadata-reextract` reset lane.
+- Extracted a controlled `AnalysisRegenerationDialog` with labelled modal semantics,
+  local responsive overflow, initial focus, Tab and Shift+Tab containment, Escape
+  dismissal, and opener restoration that is explicitly visit/outcome owned. Ordinary
+  same-visit failures restore focus; stale results cannot steal focus; source conflicts
+  transfer focus to their Reload action; user-moved focus is not overwritten.
+- Kept transcript-confirmation draft state separately named in the route so it cannot
+  accidentally become a second analysis-regeneration owner.
+- Reduced `LetterReviewPage.tsx` from 1,243 to 1,004 lines while making the route a
+  composition boundary for this domain.
+- Added focused workspace, dialog, ownership, attempt-race, source-conflict, responsive,
+  short-viewport, stale-visit, and focus-ownership coverage.
+
 Non-goals:
 
 - No backend route, schema, pipeline, prompt, eligibility, or persistence change.
@@ -3101,10 +3124,9 @@ Non-goals:
   Entities Only/Both blanks still fall back to the live editor identity.
 - Do not refactor transcript confirmation, Dashboard regeneration, entity retry
   availability, the unused `/regenerate-entities` adapter, or recent-edit policy.
-- Do not introduce a generic modal framework or add focus trapping, Escape handling,
-  focus restoration, or body-scroll locking in this ownership slice. Those behaviors
-  are not supplied consistently by the existing dialog family and require a separately
-  characterized shared accessibility decision.
+- Do not introduce a generic modal framework or body-scroll locking. This slice owns
+  only the local keyboard behavior required by its newly declared modal boundary;
+  convergence across the older dialog family remains separately characterizable work.
 - Do not change unrelated Letter Review styling.
 
 Acceptance:
@@ -3122,7 +3144,9 @@ Acceptance:
   browser contracts remain green without weakening.
 - At 390x844 the labelled modal dialog satisfies the recorded containment, overflow,
   visibility, and reachability invariants; desktop geometry remains intentionally
-  bounded and all browser checks have zero console errors.
+  bounded. Keyboard focus remains inside the open dialog, Escape/Cancel restore the
+  opener, accepted and ordinary failed operations restore only current neutral focus,
+  and stale/conflicted operations cannot focus behind the active surface.
 - Focused frontend tests, production build, aggregate verifier, and
   `git diff --check` pass. Independent frontend-ownership, browser-contract, and
   skeptical-simplicity reviews report no remaining P0-P2 finding.
@@ -3138,6 +3162,47 @@ Baseline:
   with no dialog role or `aria-modal`.
 
 Rollback base: `8d1bd594`.
+
+Evidence:
+
+- Focused frontend ownership/status/dialog/workspace suite: 5 files / 22 tests passed.
+- Dedicated mocked analysis browser contract: 6/6 passed. It now covers the four
+  characterized request/adoption cases plus responsive keyboard/geometry behavior and
+  ordinary-failure, source-conflict, and stale-visit focus ownership within those
+  flows.
+- Aggregate `CI=1 ./scripts/verify-all.sh`: backend 105 files / 1,073 tests, backend
+  typecheck, frontend 144 files / 985 tests, production build, and mocked browser
+  67/67 passed.
+- Production build passed with the existing large-chunk class of warning;
+  `LetterReviewPage` is 531.06 kB and `UpdateEditorPage` is 1,182.96 kB after
+  minification.
+- Rendered desktop ground truth at 1440x900: the dialog remains 464x581.97 px,
+  x=488..952 and y=159.02..740.98, with no document horizontal overflow.
+- Rendered phone ground truth at 390x844: the dialog is 358x581.97 px,
+  x=16..374 and y=131.02..712.98; the document is exactly 390 px wide, and every
+  field/action is fully visible and interactable.
+- At 390x500 the document still has no horizontal overflow and the dialog scrolls
+  locally so Cancel remains keyboard/pointer reachable.
+- A clean browser session reported zero console errors. `git diff --check` passed.
+- Three independent reviewers repeatedly audited frontend ownership, cross-boundary
+  contracts, and skeptical test design. Their findings drove the local keyboard modal
+  contract, active-progress visit test, short-viewport reachability proof, robust
+  ownership tripwire, and outcome/visit-aware focus restoration. All three reported
+  no remaining P0-P2 finding after repair.
+
+Residual decisions:
+
+- Metadata Only and Both retain their existing endpoint/mode semantics and copy even
+  where the product distinction is not obvious. Endpoint consolidation remains a
+  product decision, not an architectural assumption.
+- The post-success progress copy, unused `/regenerate-entities` adapter, correction
+  normalization, retry availability, and backend whitespace/eligibility cleanup remain
+  outside this slice.
+- The next smallest Letter Review seam is transcript confirmation. The route still
+  owns its identity draft and a direct `confirmTranscript` call while manually
+  repeating saving-lease, autosave-flush, adoption, hydration, and error behavior that
+  now belongs to `executeLetterMutation`. Slice 036 should characterize that contract
+  before moving it into a visit-owned workspace.
 
 ## Slice 027 — Validated, Replay-Safe Dashboard Stored State
 

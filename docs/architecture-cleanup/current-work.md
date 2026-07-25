@@ -7,13 +7,13 @@ Last updated: July 24, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 035 — visit-owned Letter Review analysis regeneration
-- Last sealed cleanup implementation: extracted Letter Review analysis
-  regeneration at `e41bd982`
+- Current checkpoint: 036 — visit-owned Letter Review transcript confirmation
+- Last sealed cleanup implementation: extracted Letter Review transcript
+  confirmation at `05ad2bff`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Current slice: 036 — visit-owned Letter Review transcript confirmation, framed and
-  in progress.
+- Next slice: 037 — characterize truthful transcript-confirmation completion before
+  changing its synchronous backend behavior or user-visible outcome.
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -3206,7 +3206,7 @@ Residual decisions:
 
 ## Slice 036 — Visit-Owned Letter Review Transcript Confirmation
 
-Status: framed and in progress
+Status: complete at `05ad2bff`
 
 Problem:
 
@@ -3297,6 +3297,87 @@ Baseline:
 - `LetterReviewPage.tsx`: 1,004 lines.
 
 Rollback base: `62d9a361`.
+
+Delivered:
+
+- Added `useTranscriptConfirmationWorkspace` as the single route-visit owner for the
+  fresh sender/recipient correction draft, exact confirmation request envelope,
+  immediate submit-close intent, and accepted-result success feedback.
+- Routed confirmation through `executeLetterMutation`, leaving saving leases,
+  per-visit serialization, pending-autosave completion, request failure reporting,
+  guarded DTO adoption, and complete hydration with the canonical mutation executor.
+  The route no longer imports `confirmTranscript` or owns confirmation state,
+  visit-reset effects, or a manual lifecycle callback.
+- Both the header action and Metadata section now open the same fresh live-editor
+  draft. The workspace snapshots letter ID, primary-source revision, and raw
+  corrections before the executor can wait; empty strings remain omitted while
+  whitespace remains unchanged.
+- Made visit ownership synchronous without an effect-driven reset: prior-visit state
+  is rejected at render time, current controls rebase on a fresh visit session, and
+  every captured old control fails closed through its opaque visit.
+- Added controlled-presentation coverage for the existing shared
+  `IdentityExtractionModal` without changing its markup, styling, or behavior.
+- Extended the deterministic Letter Review API mock with a confirmation request
+  journal, configurable failures, revision validation, and an extraction-success DTO
+  that includes authoritative metadata, entities, verification state, and the
+  `METADATA_DRAFTED` workflow transition.
+- Added a dedicated browser contract proving autosave response completion before the
+  POST begins, exact request mapping, immediate close, returned-DTO hydration,
+  ordinary failure, coded source conflict, both triggers, fresh drafts, and delayed
+  first-A response isolation from B.
+- Extracted the duplicated Playwright route-deferral helper used by confirmation and
+  analysis regeneration into one test utility.
+- Reduced `LetterReviewPage.tsx` from 1,004 to 946 lines. The explicit 178-line
+  workspace replaces a route-owned cross-domain lifecycle rather than optimizing only
+  for total source lines.
+
+Evidence:
+
+- Focused modal, workspace, API-adapter, ownership, and source-conflict coverage:
+  6 files / 26 tests passed.
+- Dedicated mocked confirmation browser contract: 4/4 passed. The complete Letter
+  Review neighborhood—base review, analysis regeneration, and transcript
+  confirmation—passed 39/39.
+- Aggregate `CI=1 ./scripts/verify-all.sh`: backend 105 files / 1,073 tests, backend
+  typecheck, frontend 147 files / 992 tests, production build, and the complete mocked
+  browser suite 71/71 passed.
+- Touched frontend ESLint and `git diff --check` passed. The production build retains
+  the existing large-chunk warning class; `LetterReviewPage` is 531.81 kB and
+  `UpdateEditorPage` is 1,182.96 kB after minification.
+- Three independent frontend-architecture, backend-contract, and skeptical-test
+  reviews found no remaining P0-P2 issue. Review repairs made the confirmation mock
+  publish and visibly prove the backend's `METADATA_DRAFTED` transition, and removed
+  an unnecessary effect-driven visit reset caught by touched-file lint. Both repairs
+  were re-reviewed and the focused browser contract remained green.
+- No rendered geometry pass was required because production markup, CSS, layout, and
+  modal behavior did not change.
+
+Residual decisions and next seam:
+
+- Confirmation still uses the default frontend request timeout even though the
+  endpoint can run synchronous metadata and entity extraction. A client timeout can
+  therefore report failure while the server continues or has already committed work.
+- Transcript confirmation, metadata claiming/publication, entity extraction, and the
+  final DTO read are not one atomic outcome. Confirmation or derived work can commit
+  before a later AI or read failure reaches the client, making blind retry unsafe and
+  the visible error ambiguous.
+- A source change during synchronous extraction does not always surface the canonical
+  coded source-conflict error; some paths retain a generic uncoded conflict.
+- Success copy always says `metadata extracted`, although the backend can legitimately
+  confirm without extraction when metadata is already running or complete.
+- Correction normalization remains intentionally inconsistent: Letter Review forwards
+  whitespace unchanged while Dashboard confirmation trims it.
+- The endpoint remains repeatable rather than idempotent. The older shared modal also
+  lacks a labelled dialog/focus-management contract, but changing all seven consumers
+  is a separate shared-UI seam rather than part of this ownership extraction.
+- Slice 037 should characterize the observable committed-versus-reported outcomes,
+  timeout ownership, retry safety, and truthful copy before changing the endpoint or
+  UI. Do not hide ambiguity with a longer timeout alone or silently make a product
+  decision about skipped extraction.
+
+No new product feature, production layout, CSS, backend route, AI prompt, pipeline,
+database schema, correction semantics, timeout, deployment, or external state changed
+in this slice.
 
 ## Slice 027 — Validated, Replay-Safe Dashboard Stored State
 

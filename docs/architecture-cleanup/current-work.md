@@ -7,14 +7,13 @@ Last updated: July 25, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 042 — admin letter summaries are explicit and truthful,
+- Current checkpoint: 043 — correspondence storage deletion is reference-safe,
   complete
-- Last sealed cleanup implementation: explicit admin letter summaries at
-  `66fad30b`
+- Last sealed cleanup implementation: reference-safe correspondence storage
+  deletion at `276c87c1`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Active slice: 043 — make correspondence deletion storage-reference safe, framed
-  below.
+- Active slice: reassessment pending.
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -55,7 +54,7 @@ tree:
 
 ## Slice 043 — Reference-Safe Correspondence Storage Deletion
 
-Status: framed; implementation pending.
+Status: complete at `276c87c1`.
 
 Problem:
 
@@ -149,6 +148,63 @@ Baseline:
 - Current production code has one page-source pointer writer (`letter-pages.ts`) and
   one caller of that owner (`upload.ts`). New candidates use UUID-backed immutable
   paths; legacy deterministic paths remain readable.
+
+Delivered:
+
+- Added one 74-line storage-reference cleanup owner. It retains deterministic legacy
+  and ambiguous paths before any database or filesystem work, checks an exact
+  `letter_pages.storage_path` reference for recognized immutable objects, and unlinks
+  only when no committed page still owns the path.
+- Strengthened `isImmutableStoragePath()` from a directory-name heuristic to the
+  complete object identity emitted by `storeImmutableFile()`: the `objects/<page>/`
+  position plus a lowercase SHA-256, RFC 4122 v4/variant UUID, and extension.
+- Routed every distinct correspondence path through that owner only after the group
+  deletion transaction commits. A transaction rollback, missing target, or stale
+  source confirmation performs no cleanup.
+- Kept a successful database deletion authoritative when the reference lookup or
+  unlink fails. `ENOENT` is benign, while all outcomes are partitioned truthfully into
+  actual removals, already-missing paths, deliberately retained paths, and cleanup
+  failures.
+- Kept the admin deletion response unchanged while making its operational log report
+  removed, already-missing, retained, and failed cleanup counts separately.
+- Added ownership tripwires that page pointer writes remain in `letter-pages.ts`,
+  `findOrCreatePage()` remains behind `upload.ts`, immutable candidates retain their
+  checksum-and-UUID identity, and correspondence cleanup cannot bypass the
+  reference-checking owner.
+
+Evidence:
+
+- Focused cleanup, correspondence deletion, deletion route, storage, and architecture
+  coverage passed 6 files / 38 tests; backend typecheck passed.
+- The final backend package suite passed 110 files / 1,143 tests.
+- Final aggregate verification passed: backend tests and typecheck, frontend 152 files
+  / 1,063 tests, production build with only the existing large-chunk warnings, and
+  mocked browser suite 78/78.
+- Three independent reviews found the boundary coherent. Two reviewers identified
+  the same unsafe directory-only immutable predicate; that gate was strengthened and
+  negative ambiguous-path tests were added. One reviewer also identified ambiguous
+  cleanup accounting; the four outcomes now partition every snapshotted path. Both
+  reviewers confirmed the fixes, with no remaining P0-P3 finding.
+- `git diff --check` passed before the implementation commit.
+
+Residual risk:
+
+- The database reference check and filesystem unlink cannot be one atomic operation.
+  Safety relies on the enforced current ownership model: supported uploads attach only
+  an already-current path or a never-before-used checksum-and-UUID object and never
+  reattach a superseded immutable path. Arbitrary SQL or an untracked legacy writer
+  remains outside that guarantee.
+- Legacy and ambiguous paths are deliberately retained, including when they appear
+  unreferenced. Safely collecting them requires a separately framed age, mixed-writer,
+  and recovery policy.
+- Successful page-pointer replacement still ignores its committed
+  `previousStoragePath`, so routine immutable-to-immutable replacement can leak a
+  known unreferenced object. Reusing this proven helper after the upload commit is the
+  smallest ready follow-up; historical or ambiguous database failures still need a
+  later collector or durable cleanup ledger.
+- Exact storage-path reference lookup has no dedicated index. Correspondence deletion
+  is infrequent and page-bounded; add a schema index only if measured production
+  latency justifies its migration cost.
 
 Rollback base: `5cdfe8a1`.
 

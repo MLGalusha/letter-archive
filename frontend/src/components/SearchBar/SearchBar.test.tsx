@@ -1,5 +1,5 @@
 import { render, screen, within } from "@testing-library/react";
-import { useState } from "react";
+import { startTransition, Suspense, useState } from "react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ArchiveSearchFacets } from "../../types/Letter";
@@ -389,5 +389,172 @@ describe("SearchBar", () => {
     expect(dateOption).toHaveAttribute("aria-selected", "true");
     // handleFiltersChange should not have been called from the query change.
     expect(handleFiltersChange).not.toHaveBeenCalled();
+  });
+
+  it("retains committed facet choices while later search responses narrow and expand", async () => {
+    const user = userEvent.setup();
+    const narrowedFacets: ArchiveSearchFacets = {
+      ...baseFacets,
+      years: [],
+      topics: [],
+      tones: [],
+      relationships: [],
+    };
+    const expandedFacets: ArchiveSearchFacets = {
+      ...narrowedFacets,
+      years: [{ value: 2000, count: 1 }],
+      topics: [{ value: "work/career", count: 1 }],
+      tones: [{ value: "joyful", count: 1 }],
+      relationships: [{ value: "sibling", count: 1 }],
+    };
+    const renderSearchBar = (facets: ArchiveSearchFacets) => (
+      <SearchBar
+        query=""
+        filters={{}}
+        facets={facets}
+        total={12}
+        loading={false}
+        refineOpen
+        onQueryChange={vi.fn()}
+        onFiltersChange={vi.fn()}
+      />
+    );
+    const { rerender } = render(renderSearchBar(baseFacets));
+
+    async function expectChoice(label: string, option: string) {
+      const trigger = screen.getByRole("button", { name: label });
+      if (trigger.getAttribute("aria-expanded") !== "true") {
+        await user.click(trigger);
+      }
+      expect(
+        within(screen.getByRole("listbox", { name: label }))
+          .getByRole("button", { name: option }),
+      ).toBeInTheDocument();
+    }
+
+    await expectChoice("Tone", "Hopeful");
+    await expectChoice("Relationship", "Romantic Partner");
+    await expectChoice("Topic", "Family");
+    await expectChoice("From year", "1947");
+
+    rerender(renderSearchBar(narrowedFacets));
+
+    await expectChoice("Tone", "Hopeful");
+    await expectChoice("Relationship", "Romantic Partner");
+    await expectChoice("Topic", "Family");
+    await expectChoice("From year", "1947");
+
+    rerender(renderSearchBar(expandedFacets));
+
+    await expectChoice("Tone", "Joyful");
+    await expectChoice("Relationship", "Sibling");
+    await expectChoice("Topic", "Work");
+    await expectChoice("From year", "2000");
+
+    rerender(renderSearchBar(narrowedFacets));
+
+    await expectChoice("Tone", "Hopeful");
+    await expectChoice("Tone", "Joyful");
+    await expectChoice("Relationship", "Romantic Partner");
+    await expectChoice("Relationship", "Sibling");
+    await expectChoice("Topic", "Family");
+    await expectChoice("Topic", "Work");
+    await expectChoice("From year", "1947");
+    await expectChoice("From year", "2000");
+  });
+
+  it("does not remember facet choices from an abandoned render", async () => {
+    const user = userEvent.setup();
+    const renderReachedSuspension = vi.fn();
+    const neverResolves = new Promise<void>(() => {});
+    const narrowedFacets: ArchiveSearchFacets = {
+      ...baseFacets,
+      years: [],
+      topics: [],
+      tones: [],
+      relationships: [],
+    };
+    const transientFacets: ArchiveSearchFacets = {
+      ...narrowedFacets,
+      years: [{ value: 2000, count: 1 }],
+      topics: [{ value: "work/career", count: 1 }],
+    };
+
+    function SuspendAfterSearchBar({ active }: { active: boolean }) {
+      if (active) {
+        renderReachedSuspension();
+        throw neverResolves;
+      }
+      return null;
+    }
+
+    function SearchBarHarness() {
+      const [view, setView] = useState({
+        facets: baseFacets,
+        suspendAfterSearchBar: false,
+      });
+
+      return (
+        <>
+          <SearchBar
+            query=""
+            filters={{}}
+            facets={view.facets}
+            total={12}
+            loading={false}
+            refineOpen
+            onQueryChange={vi.fn()}
+            onFiltersChange={vi.fn()}
+          />
+          <SuspendAfterSearchBar active={view.suspendAfterSearchBar} />
+          <button
+            type="button"
+            onClick={() => {
+              startTransition(() => {
+                setView({
+                  facets: transientFacets,
+                  suspendAfterSearchBar: true,
+                });
+              });
+            }}
+          >
+            Render transient facets
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setView({
+                facets: narrowedFacets,
+                suspendAfterSearchBar: false,
+              });
+            }}
+          >
+            Commit narrowed facets
+          </button>
+        </>
+      );
+    }
+
+    render(
+      <Suspense fallback={<p>Suspended render</p>}>
+        <SearchBarHarness />
+      </Suspense>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Render transient facets" }));
+    expect(renderReachedSuspension).toHaveBeenCalled();
+    expect(screen.queryByText("Suspended render")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Commit narrowed facets" }));
+
+    await user.click(screen.getByRole("button", { name: "Topic" }));
+    const topicChoices = within(screen.getByRole("listbox", { name: "Topic" }));
+    expect(topicChoices.getByRole("button", { name: "Family" })).toBeInTheDocument();
+    expect(topicChoices.queryByRole("button", { name: "Work" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "From year" }));
+    const yearChoices = within(screen.getByRole("listbox", { name: "From year" }));
+    expect(yearChoices.getByRole("button", { name: "1947" })).toBeInTheDocument();
+    expect(yearChoices.queryByRole("button", { name: "2000" })).not.toBeInTheDocument();
   });
 });

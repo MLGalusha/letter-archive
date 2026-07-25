@@ -13,6 +13,7 @@ import type { FilterChoiceOption } from "./searchBarUtils";
 import FilterChoiceField from "./FilterChoiceField";
 import FacetRow from "./FacetRow";
 import SuggestionHint from "./SuggestionHint";
+import { useRememberedSearchFacets } from "./rememberedSearchFacets";
 
 interface SearchBarProps {
   query: string;
@@ -106,6 +107,9 @@ export default function SearchBar({
   const searchRootRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const showFilters = refineOpen ?? internalShowFilters;
+  if (!showFilters && openChoiceField !== null) {
+    setOpenChoiceField(null);
+  }
 
   const focusSearchInputFromWrapper = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
@@ -124,7 +128,7 @@ export default function SearchBar({
     searchInputRef.current?.focus();
   }, []);
 
-  const setRefineOpen = (next: boolean) => {
+  const setRefineOpen = useCallback((next: boolean) => {
     if (refineOpen === undefined) {
       setInternalShowFilters(next);
     }
@@ -132,7 +136,7 @@ export default function SearchBar({
       setOpenChoiceField(null);
     }
     onRefineOpenChange?.(next);
-  };
+  }, [onRefineOpenChange, refineOpen]);
 
   const toggleRefine = () => {
     const next = !showFilters;
@@ -152,13 +156,7 @@ export default function SearchBar({
 
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
-  }, [isCompact, showFilters]);
-
-  useEffect(() => {
-    if (!showFilters) {
-      setOpenChoiceField(null);
-    }
-  }, [showFilters]);
+  }, [setRefineOpen, showFilters]);
 
   const hasActiveFilters = Boolean(
     query.trim()
@@ -219,7 +217,7 @@ export default function SearchBar({
     if (filters.hasTranscript !== undefined && filters.hasTranscript !== null) count++;
     if (filters.verified !== undefined && filters.verified !== null) count++;
     return count;
-  }, [filters, selectedFormats, isCompact, hideCollectionFilter]);
+  }, [filters, selectedFormats, hideCollectionFilter]);
   // Resolve the effective sort: user's explicit choice wins, otherwise the
   // page default. This never depends on query presence — the sort the user
   // sees should not silently flip when they start or stop typing.
@@ -232,10 +230,13 @@ export default function SearchBar({
   const [internalSortOpen, setInternalSortOpen] = useState(false);
   const sortDropdownRef = useRef<HTMLDivElement>(null);
   const sortDropdownOpen = sortOpenProp ?? internalSortOpen;
-  const setSortDropdownOpen = (next: boolean) => {
+  if (sortOpenProp === false && internalSortOpen) {
+    setInternalSortOpen(false);
+  }
+  const setSortDropdownOpen = useCallback((next: boolean) => {
     setInternalSortOpen(next);
     onSortOpenChange?.(next);
-  };
+  }, [onSortOpenChange, setInternalSortOpen]);
   const visibleSortOptions = useMemo(() => {
     let options = COMBINED_SORT_OPTIONS;
     if (hideCollectionFilter) options = options.filter((o) => o.sort !== "collection");
@@ -260,52 +261,26 @@ export default function SearchBar({
     };
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
-  }, [sortDropdownOpen]);
+  }, [setSortDropdownOpen, sortDropdownOpen]);
 
-  useEffect(() => {
-    if (sortOpenProp === false) {
-      setInternalSortOpen(false);
-    }
-  }, [sortOpenProp]);
-  // Accumulate all facet values ever seen so options never disappear when filtering
-  const seenTonesRef = useRef(new Map<string, number>());
-  const seenRelationshipsRef = useRef(new Map<string, number>());
-  const seenTopicsRef = useRef(new Map<string, number>());
-  const seenYearsRef = useRef(new Set<number>());
-
-  // Update seen maps when facets change
-  useEffect(() => {
-    for (const f of facets.tones) seenTonesRef.current.set(f.value, f.count);
-    for (const f of facets.relationships) seenRelationshipsRef.current.set(f.value, f.count);
-    for (const f of facets.years) seenYearsRef.current.add(f.value);
-    for (const f of facets.topics) {
-      const cat = f.value.split("/")[0].trim();
-      if (cat) seenTopicsRef.current.set(cat, (seenTopicsRef.current.get(cat) || 0));
-    }
-  }, [facets.tones, facets.relationships, facets.topics]);
+  const rememberedFacets = useRememberedSearchFacets(facets);
 
   const toneChoiceOptions = useMemo<FilterChoiceOption[]>(() => {
-    const currentMap = new Map(facets.tones.map((f) => [f.value, f.count]));
-    const allValues = new Map(seenTonesRef.current);
-    for (const [k, v] of currentMap) allValues.set(k, v);
-    return Array.from(allValues.keys())
+    return Array.from(rememberedFacets.tones)
       .map((value) => ({
         value,
         label: formatFacetLabel(value),
       }))
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [facets.tones]);
+  }, [rememberedFacets.tones]);
   const relationshipChoiceOptions = useMemo<FilterChoiceOption[]>(() => {
-    const currentMap = new Map(facets.relationships.map((f) => [f.value, f.count]));
-    const allValues = new Map(seenRelationshipsRef.current);
-    for (const [k, v] of currentMap) allValues.set(k, v);
-    return Array.from(allValues.keys())
+    return Array.from(rememberedFacets.relationships)
       .map((value) => ({
         value,
         label: formatFacetLabel(value),
       }))
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [facets.relationships]);
+  }, [rememberedFacets.relationships]);
   const verificationChoiceOptions = useMemo<FilterChoiceOption[]>(
     () => [
       { value: "all", label: "All" },
@@ -315,9 +290,7 @@ export default function SearchBar({
     [],
   );
   const yearChoiceOptions = useMemo<FilterChoiceOption[]>(() => {
-    const currentMap = new Map(facets.years.map((f) => [f.value, f.count]));
-    for (const y of currentMap.keys()) seenYearsRef.current.add(y);
-    const dataYears = [...seenYearsRef.current, ...currentMap.keys()];
+    const dataYears = [...rememberedFacets.years];
     if (dataYears.length === 0) return [];
     const dataMin = Math.min(...dataYears);
     const dataMax = Math.max(...dataYears);
@@ -329,7 +302,7 @@ export default function SearchBar({
       opts.push({ value: String(y), label: String(y) });
     }
     return opts;
-  }, [facets.years]);
+  }, [rememberedFacets.years]);
 
   const collectionSuggestion = useMemo(
     () => hideCollectionFilter ? null : getBestSuggestion(
@@ -385,24 +358,13 @@ export default function SearchBar({
     [facets.places, filters.place],
   );
   const topicChoiceOptions = useMemo(() => {
-    // Build current category counts from facets
-    const currentCategoryMap = new Map<string, number>();
-    for (const facet of facets.topics) {
-      const category = facet.value.split("/")[0].trim();
-      if (!category) continue;
-      currentCategoryMap.set(category, (currentCategoryMap.get(category) || 0) + facet.count);
-    }
-    // Update seen topics
-    for (const [k] of currentCategoryMap) seenTopicsRef.current.set(k, 0);
-    // Merge with all seen categories
-    const allCategories = new Set([...seenTopicsRef.current.keys(), ...currentCategoryMap.keys()]);
-    return Array.from(allCategories)
+    return Array.from(rememberedFacets.topics)
       .map((category) => ({
         value: category,
         label: formatFacetLabel(category),
       }))
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [facets.topics]);
+  }, [rememberedFacets.topics]);
 
   const toggleFormatFilter = useCallback((format: LetterImageType) => {
     const nextFormats = selectedFormats?.includes(format)
@@ -420,7 +382,7 @@ export default function SearchBar({
     if (isCompact) {
       setRefineOpen(false);
     }
-  }, [onQueryChange, onFiltersChange, isCompact]);
+  }, [isCompact, onFiltersChange, onQueryChange, setRefineOpen]);
 
   const collectionFilterId = `${searchIdBase}-collection`;
   const senderFilterId = `${searchIdBase}-sender`;
@@ -440,7 +402,7 @@ export default function SearchBar({
       active: selectedFormats?.includes(format) || false,
       onClick: () => toggleFormatFilter(format),
     }));
-  }, [facets.formats, filters, selectedFormats]);
+  }, [facets.formats, selectedFormats, toggleFormatFilter]);
 
   const formatFacetRow = formatFacetItems.length > 0 ? (
     <FacetRow

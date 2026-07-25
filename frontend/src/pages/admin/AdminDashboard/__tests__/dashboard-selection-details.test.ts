@@ -1,41 +1,23 @@
 import { renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import type { Letter } from "../../../../types/Letter";
+import type { AdminLetterSummary } from "../../../../types/Letter";
+import { makeAdminLetterSummary } from "../../../../test/adminLetterSummary";
 import { useDashboardSelectionDetails } from "../useDashboardSelectionDetails";
 
-function makeLetter(overrides: Partial<Letter> & Pick<Letter, "id">): Letter {
-  return {
-    id: overrides.id,
+function makeSummary(
+  overrides: Partial<AdminLetterSummary> & Pick<AdminLetterSummary, "id">,
+): AdminLetterSummary {
+  return makeAdminLetterSummary({
     title: overrides.title ?? overrides.id,
-    collectionCode: overrides.collectionCode ?? "001",
-    primarySourceRevision: overrides.primarySourceRevision ?? 0,
-    images: overrides.images ?? [],
-    transcript: overrides.transcript ?? { pages: [], fullText: "", verified: false },
-    metadata: overrides.metadata ?? { sender: undefined, recipient: undefined, dateRaw: undefined, verified: false },
-    status: overrides.status ?? "uploaded",
-    workflowState: overrides.workflowState ?? "UPLOADED",
-    visibility: overrides.visibility ?? "HIDDEN",
-    transcriptPublished: overrides.transcriptPublished ?? false,
-    metadataPublished: overrides.metadataPublished ?? false,
-    transcriptStatus: overrides.transcriptStatus ?? "EMPTY",
-    metadataContentStatus: overrides.metadataContentStatus ?? "EMPTY",
-    extraContentStatus: overrides.extraContentStatus ?? "EMPTY",
-    flagged: overrides.flagged ?? false,
-    createdAt: overrides.createdAt ?? "2026-01-01T00:00:00.000Z",
-    updatedAt: overrides.updatedAt,
-    lastOpenedAt: overrides.lastOpenedAt,
-    lettersCount: overrides.lettersCount,
-    extrasCount: overrides.extrasCount,
-    photosCount: overrides.photosCount,
-    photoDescriptionStatus: overrides.photoDescriptionStatus,
-  };
+    ...overrides,
+  });
 }
 
 describe("useDashboardSelectionDetails", () => {
   it("returns the selected letter when exactly one id is selected", () => {
     const letters = [
-      makeLetter({ id: "letter-1", title: "First" }),
-      makeLetter({ id: "letter-2", title: "Second" }),
+      makeSummary({ id: "letter-1", title: "First" }),
+      makeSummary({ id: "letter-2", title: "Second" }),
     ];
 
     const { result } = renderHook(() => useDashboardSelectionDetails({
@@ -49,19 +31,19 @@ describe("useDashboardSelectionDetails", () => {
 
   it("counts publishing state for selected loaded rows", () => {
     const filteredLetters = [
-      makeLetter({
+      makeSummary({
         id: "letter-1",
         visibility: "PUBLISHED",
         transcriptPublished: true,
         metadataPublished: false,
       }),
-      makeLetter({
+      makeSummary({
         id: "letter-2",
         visibility: "HIDDEN",
         transcriptPublished: false,
         metadataPublished: false,
       }),
-      makeLetter({
+      makeSummary({
         id: "letter-3",
         visibility: "PUBLISHED",
         transcriptPublished: true,
@@ -87,7 +69,7 @@ describe("useDashboardSelectionDetails", () => {
 
   it("does not count selected ids that are not loaded in filtered letters", () => {
     const filteredLetters = [
-      makeLetter({ id: "letter-1", visibility: "PUBLISHED" }),
+      makeSummary({ id: "letter-1", visibility: "PUBLISHED" }),
     ];
 
     const { result } = renderHook(() => useDashboardSelectionDetails({

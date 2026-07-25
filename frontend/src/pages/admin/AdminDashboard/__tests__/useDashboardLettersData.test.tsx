@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AdminLettersResponse } from "../../../../api/letters";
-import type { Letter } from "../../../../types/Letter";
+import { makeAdminLetterSummary } from "../../../../test/adminLetterSummary";
 import type { DashboardCommittedQuery } from "../dashboardQueryModel";
 import { useDashboardLettersData } from "../useDashboardLettersData";
 
@@ -119,7 +119,16 @@ function makeResponse(
   seed: number,
 ): AdminLettersResponse {
   return {
-    letters: [{ id: `${label}-letter` } as Letter],
+    letters: [makeAdminLetterSummary({
+      id: `${label}-letter`,
+      title: `${label} letter`,
+      collectionCode: "001",
+      metadata: { dateRaw: "20260101" },
+      transcriptStatus: "EMPTY",
+      metadataContentStatus: "EMPTY",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    })],
     pagination: {
       page,
       limit: 50,

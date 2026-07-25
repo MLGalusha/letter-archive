@@ -23,18 +23,33 @@ export function getPrimaryImageType(letter: LetterWithImages): LetterImageType |
   return letter.images[0]?.type;
 }
 
+export function isPrimaryPhotoType(
+  primaryType: LetterImageType | undefined,
+): boolean {
+  return primaryType === "photo";
+}
+
+export function hasPrimaryTranscriptType(
+  primaryType: LetterImageType | undefined,
+): boolean {
+  return primaryType ? PRIMARY_TRANSCRIPT_TYPES.has(primaryType) : false;
+}
+
+export function isRelatedExtraType(type: LetterImageType): boolean {
+  return RELATED_EXTRA_TYPES.has(type);
+}
+
 export function isStandalonePhotoRecord(letter: LetterWithImages): boolean {
   const primaryType = getPrimaryImageType(letter);
   return primaryType === "photo" && letter.images.every((image) => image.type === "photo");
 }
 
 export function isPrimaryPhotoRecord(letter: LetterWithImages): boolean {
-  return getPrimaryImageType(letter) === "photo";
+  return isPrimaryPhotoType(getPrimaryImageType(letter));
 }
 
 export function hasPrimaryTranscriptContent(letter: LetterWithImages): boolean {
-  const primaryType = getPrimaryImageType(letter);
-  return primaryType ? PRIMARY_TRANSCRIPT_TYPES.has(primaryType) : false;
+  return hasPrimaryTranscriptType(getPrimaryImageType(letter));
 }
 
 export function hasRelatedExtraContent(letter: LetterWithImages): boolean {
@@ -42,7 +57,7 @@ export function hasRelatedExtraContent(letter: LetterWithImages): boolean {
     return false;
   }
 
-  return letter.images.some((image) => RELATED_EXTRA_TYPES.has(image.type));
+  return letter.images.some((image) => isRelatedExtraType(image.type));
 }
 
 export function shouldShowPublicTranscript(letter: LetterWithTranscript): boolean {

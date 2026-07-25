@@ -1,9 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { executeMock, findCollectionsMock, findLettersMock } = vi.hoisted(() => ({
+const {
+  executeMock,
+  findCollectionsMock,
+  findLettersMock,
+  pageCountsGroupByMock,
+  selectMock,
+} = vi.hoisted(() => ({
   executeMock: vi.fn(),
   findCollectionsMock: vi.fn(),
   findLettersMock: vi.fn(),
+  pageCountsGroupByMock: vi.fn(),
+  selectMock: vi.fn(),
 }));
 
 function renderSql(value: unknown): string {
@@ -37,6 +45,7 @@ vi.mock('drizzle-orm', () => {
 vi.mock('../../db/index.js', () => ({
   db: {
     execute: executeMock,
+    select: selectMock,
     query: {
       collections: { findMany: findCollectionsMock },
       letters: { findMany: findLettersMock },
@@ -57,16 +66,22 @@ vi.mock('../../db/index.js', () => ({
   },
 }));
 
-vi.mock('../../dto/index.js', () => ({
-  transformLetterToDTO: vi.fn((letter: { id: string }) => ({ id: letter.id })),
-  transformLetterWithRelatedToDTO: vi.fn(),
-}));
-
 import { adminLettersQuerySchema, queryAdminLetters } from '../letter-queries.js';
 
 describe('queryAdminLetters extra-content filtering', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    findLettersMock.mockResolvedValue([]);
+    pageCountsGroupByMock.mockResolvedValue([]);
+    selectMock.mockReturnValue({
+      from: () => ({
+        innerJoin: () => ({
+          where: () => ({
+            groupBy: pageCountsGroupByMock,
+          }),
+        }),
+      }),
+    });
     executeMock
       .mockResolvedValueOnce([{
         total: 3,
@@ -256,5 +271,157 @@ describe('queryAdminLetters extra-content filtering', () => {
     });
 
     expect(query.collection).toEqual(['003', '009']);
+  });
+
+  it('projects an exact summary with authoritative counts for all page types', async () => {
+    executeMock.mockReset();
+    executeMock
+      .mockResolvedValueOnce([{ total: 1 }])
+      .mockResolvedValueOnce([{ count: 1 }])
+      .mockResolvedValueOnce([{ id: 'letter-1' }])
+      .mockResolvedValueOnce([{
+        letter_id: 'letter-1',
+        last_opened_at: new Date('2026-07-25T14:00:00.000Z'),
+      }]);
+    findLettersMock.mockResolvedValueOnce([{
+      id: 'letter-1',
+      collectionId: 'collection-1',
+      dateRaw: '19470810',
+      extractedDate: null,
+      type: 'L',
+      typeSequence: 1,
+      sender: 'Alice',
+      recipient: 'Bob',
+      primarySourceRevision: 4,
+      visibility: 'HIDDEN',
+      transcriptPublished: false,
+      metadataPublished: false,
+      transcriptStatus: 'AI_DRAFT',
+      metadataContentStatus: 'EDITED',
+      extraContentStatus: 'VERIFIED',
+      photoDescriptionStatus: 'EMPTY',
+      metadataStatus: 'PENDING',
+      transcriptionText: 'current raw transcript',
+      transcriptConfirmedAt: null,
+      flagged: true,
+      createdAt: new Date('2026-07-24T12:00:00.000Z'),
+      updatedAt: new Date('2026-07-25T12:00:00.000Z'),
+      collection: {
+        collectionCode: '009',
+        title: 'Family Letters',
+      },
+      // These emulate private database fields that the projection must not return.
+      transcriptionJson: { private: true },
+      metadataV2Json: { private: true },
+      aiNotes: [{ private: true }],
+      readingText: 'private reading text',
+      entityExtractionJson: { private: true },
+    }]);
+    pageCountsGroupByMock.mockResolvedValueOnce([
+      { collectionId: 'collection-1', dateRaw: '19470810', typeSequence: 1, type: 'L', pageCount: 1 },
+      { collectionId: 'collection-1', dateRaw: '19470810', typeSequence: 1, type: 'P', pageCount: 2 },
+      { collectionId: 'collection-1', dateRaw: '19470810', typeSequence: 1, type: 'C', pageCount: 3 },
+      { collectionId: 'collection-1', dateRaw: '19470810', typeSequence: 1, type: 'T', pageCount: 4 },
+      { collectionId: 'collection-1', dateRaw: '19470810', typeSequence: 1, type: 'N', pageCount: 5 },
+      { collectionId: 'collection-1', dateRaw: '19470810', typeSequence: 1, type: 'E', pageCount: 6 },
+      { collectionId: 'collection-1', dateRaw: '19470810', typeSequence: 1, type: 'A', pageCount: 7 },
+      { collectionId: 'collection-1', dateRaw: '19470810', typeSequence: 1, type: 'D', pageCount: 8 },
+      { collectionId: 'collection-1', dateRaw: '19470810', typeSequence: 1, type: 'V', pageCount: 9 },
+    ]);
+
+    const result = await queryAdminLetters({
+      page: 1,
+      limit: 50,
+      sort: 'createdAt',
+      sortOrder: 'desc',
+    });
+
+    expect(findLettersMock).toHaveBeenCalledWith({
+      where: {
+        field: 'letters.id',
+        values: ['letter-1'],
+      },
+      columns: {
+        id: true,
+        collectionId: true,
+        dateRaw: true,
+        extractedDate: true,
+        type: true,
+        typeSequence: true,
+        sender: true,
+        recipient: true,
+        primarySourceRevision: true,
+        visibility: true,
+        transcriptPublished: true,
+        metadataPublished: true,
+        transcriptStatus: true,
+        metadataContentStatus: true,
+        extraContentStatus: true,
+        photoDescriptionStatus: true,
+        metadataStatus: true,
+        transcriptionText: true,
+        transcriptConfirmedAt: true,
+        flagged: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      with: {
+        collection: {
+          columns: {
+            collectionCode: true,
+            title: true,
+          },
+        },
+      },
+    });
+    expect(findLettersMock.mock.calls[0]?.[0].with).not.toHaveProperty('pages');
+
+    const summary = result.letters[0]!;
+    expect(summary.pageCountsByType).toEqual({
+      letter: 1,
+      photo: 2,
+      cover: 3,
+      telegram: 4,
+      card: 5,
+      ephemera: 6,
+      article: 7,
+      diary: 8,
+      voice: 9,
+    });
+    expect(Object.keys(summary).sort()).toEqual([
+      'collectionCode',
+      'createdAt',
+      'extraContentStatus',
+      'flagged',
+      'id',
+      'lastOpenedAt',
+      'metadata',
+      'metadataContentStatus',
+      'metadataJobStatus',
+      'metadataPublished',
+      'pageCountsByType',
+      'photoDescriptionStatus',
+      'primaryImageType',
+      'primarySourceRevision',
+      'title',
+      'transcriptConfirmed',
+      'transcriptDigest',
+      'transcriptPublished',
+      'transcriptStatus',
+      'updatedAt',
+      'visibility',
+    ].sort());
+    expect(summary.primaryImageType).toBe('letter');
+    expect(summary.transcriptConfirmed).toBe(false);
+    expect(summary.transcriptDigest).toMatch(/^[0-9a-f]{64}$/);
+    expect(summary.lastOpenedAt).toBe('2026-07-25T14:00:00.000Z');
+    expect(summary).not.toHaveProperty('images');
+    expect(summary).not.toHaveProperty('transcript');
+    expect(summary).not.toHaveProperty('transcriptionText');
+    expect(summary).not.toHaveProperty('transcriptionJson');
+    expect(summary).not.toHaveProperty('metadataV2Json');
+    expect(summary).not.toHaveProperty('aiNotes');
+    expect(summary).not.toHaveProperty('readingText');
+    expect(summary).not.toHaveProperty('entityExtractionJson');
   });
 });

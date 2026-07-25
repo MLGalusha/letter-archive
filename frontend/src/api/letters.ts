@@ -4,6 +4,7 @@
 
 import { apiGet, apiDelete } from './client';
 import type {
+  AdminLetterSummary,
   ArchiveSearchFacets,
   ArchiveShelfItem,
   Letter,
@@ -52,7 +53,7 @@ export interface ArchiveSearchParams {
 }
 
 export interface AdminLettersResponse {
-  letters: Letter[];
+  letters: AdminLetterSummary[];
   pagination: {
     page: number;
     limit: number;

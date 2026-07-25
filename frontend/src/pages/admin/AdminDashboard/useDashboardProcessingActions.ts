@@ -7,8 +7,7 @@ import {
   type BulkSource,
 } from "../../../api/admin";
 import { useToast } from "../../../contexts/ToastContext";
-import type { Letter } from "../../../types/Letter";
-import { sha256Utf8 } from "../../../utils/sha256";
+import type { AdminLetterSummary } from "../../../types/Letter";
 import {
   getTranscriptConfirmationFeedback,
   resolveTranscriptConfirmationOutcome,
@@ -26,7 +25,7 @@ type SingleMetadataMode = "extract" | "regenerate";
 interface UseDashboardProcessingActionsOptions {
   selectedIds: Set<string>;
   selectedSources: BulkSource[];
-  singleSelectedLetter: Letter | null;
+  singleSelectedLetter: AdminLetterSummary | null;
   makeSelectionExplicit: () => DashboardSelectionIntent;
   exitEditMode: (expectedIntent?: DashboardSelectionIntent) => void;
   fetchLetters: () => Promise<void>;
@@ -160,17 +159,13 @@ export function useDashboardProcessingActions({
     if (selectedIds.size === 1 && singleSelectedLetter) {
       if (
         singleSelectedLetter.metadataJobStatus === "PENDING"
-        && Boolean(singleSelectedLetter.transcriptConfirmedAt)
+        && singleSelectedLetter.transcriptConfirmed
       ) {
         showToast("Metadata extraction is queued.", "info");
         return;
       }
       if (
         singleSelectedLetter.metadataJobStatus === "RUNNING"
-        || (
-          singleSelectedLetter.metadataJobStatus === undefined
-          && singleSelectedLetter.workflowState === "METADATA_EXTRACTING"
-        )
       ) {
         showToast("Metadata extraction is already in progress.", "info");
         return;
@@ -195,8 +190,8 @@ export function useDashboardProcessingActions({
     const target = {
       id: singleSelectedLetter.id,
       primarySourceRevision: singleSelectedLetter.primarySourceRevision,
-      transcriptText: singleSelectedLetter.transcript.fullText,
-      transcriptConfirmed: Boolean(singleSelectedLetter.transcriptConfirmedAt),
+      transcriptDigest: singleSelectedLetter.transcriptDigest,
+      transcriptConfirmed: singleSelectedLetter.transcriptConfirmed,
       hadExistingMetadata:
         singleSelectedLetter.metadataContentStatus !== "EMPTY",
     };
@@ -209,7 +204,7 @@ export function useDashboardProcessingActions({
         const outcome = await resolveTranscriptConfirmationOutcome({
           letterId: target.id,
           primarySourceRevision: target.primarySourceRevision,
-          transcriptDigest: await sha256Utf8(target.transcriptText),
+          transcriptDigest: target.transcriptDigest,
           ...extractionOptions,
         });
 

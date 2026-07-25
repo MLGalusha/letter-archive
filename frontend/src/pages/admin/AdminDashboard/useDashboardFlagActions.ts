@@ -2,10 +2,10 @@ import type { Dispatch, SetStateAction } from "react";
 import { getErrorMessage } from "../../../api/client";
 import { toggleLetterFlag } from "../../../api/admin/letters";
 import { useToast } from "../../../contexts/ToastContext";
-import type { Letter } from "../../../types/Letter";
+import type { AdminLetterSummary } from "../../../types/Letter";
 
 interface UseDashboardFlagActionsOptions {
-  setLetters: Dispatch<SetStateAction<Letter[]>>;
+  setLetters: Dispatch<SetStateAction<AdminLetterSummary[]>>;
   makeSelectionExplicit: () => void;
 }
 
@@ -20,8 +20,6 @@ export function useDashboardFlagActions({
     setLetters(prev => prev.map(l => l.id === letterId ? {
       ...l,
       flagged,
-      flaggedAt: flagged ? new Date().toISOString() : undefined,
-      flaggedBy: flagged ? "admin" : undefined,
     } : l));
 
     try {
@@ -30,8 +28,6 @@ export function useDashboardFlagActions({
       setLetters(prev => prev.map(l => l.id === letterId ? {
         ...l,
         flagged: !flagged,
-        flaggedAt: !flagged ? new Date().toISOString() : undefined,
-        flaggedBy: !flagged ? "admin" : undefined,
       } : l));
       showToast(
         getErrorMessage(err, `Failed to ${flagged ? "flag" : "unflag"} letter`),

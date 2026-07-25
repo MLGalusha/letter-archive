@@ -12,6 +12,7 @@
 import 'dotenv/config';
 import { execFileSync } from 'child_process';
 import readline from 'readline';
+import type { AdminLetterSummary } from '../src/dto/admin-letter-summary.dto.js';
 
 // ---------------------------------------------------------------------------
 // Config
@@ -401,15 +402,7 @@ async function handleListLetters() {
   startSpinner('Fetching letters...');
   try {
     const result = await api<{
-      letters: {
-        id: string;
-        dateRaw: string;
-        sender: string;
-        recipient: string;
-        collectionCode: string;
-        workflowState: string;
-        visibility: string;
-      }[];
+      letters: AdminLetterSummary[];
       pagination: { page: number; limit: number; total: number; totalPages: number };
     }>('GET', `/admin/letters?${params}`);
     stopSpinner();
@@ -418,14 +411,23 @@ async function handleListLetters() {
 
     if (result.letters.length > 0) {
       const rows = result.letters.map(l => [
-        l.dateRaw || '—',
-        (l.sender || '—').slice(0, 20),
-        (l.recipient || '—').slice(0, 20),
+        l.metadata.dateRaw || '—',
+        (l.metadata.sender || '—').slice(0, 20),
+        (l.metadata.recipient || '—').slice(0, 20),
         l.collectionCode || '—',
-        colorStatus(l.workflowState),
+        colorStatus(l.transcriptStatus),
+        colorStatus(l.metadataContentStatus),
         colorStatus(l.visibility),
       ]);
-      table(['Date', 'Sender', 'Recipient', 'Collection', 'Workflow', 'Visibility'], rows);
+      table([
+        'Date',
+        'Sender',
+        'Recipient',
+        'Collection',
+        'Transcript',
+        'Metadata',
+        'Visibility',
+      ], rows);
     }
   } catch (err) {
     stopSpinner();

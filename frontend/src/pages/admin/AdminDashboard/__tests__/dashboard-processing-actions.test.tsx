@@ -1,14 +1,22 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { AdminLetterSummary } from "../../../../types/Letter";
+import { makeAdminLetterSummary } from "../../../../test/adminLetterSummary";
 import { useDashboardProcessingActions } from "../useDashboardProcessingActions";
 
 const {
   bulkExtractMetadataMock,
   bulkTranscribeMock,
+  getTranscriptConfirmationFeedbackMock,
+  regenerateMetadataMock,
+  resolveTranscriptConfirmationOutcomeMock,
   showToastMock,
 } = vi.hoisted(() => ({
   bulkExtractMetadataMock: vi.fn(),
   bulkTranscribeMock: vi.fn(),
+  getTranscriptConfirmationFeedbackMock: vi.fn(),
+  regenerateMetadataMock: vi.fn(),
+  resolveTranscriptConfirmationOutcomeMock: vi.fn(),
   showToastMock: vi.fn(),
 }));
 
@@ -16,12 +24,33 @@ vi.mock("../../../../api/admin", () => ({
   bulkExtractMetadata: bulkExtractMetadataMock,
   bulkTranscribe: bulkTranscribeMock,
   confirmTranscript: vi.fn(),
-  regenerateMetadata: vi.fn(),
+  regenerateMetadata: regenerateMetadataMock,
 }));
 
 vi.mock("../../../../contexts/ToastContext", () => ({
   useToast: () => ({ showToast: showToastMock }),
 }));
+
+vi.mock("../../transcriptConfirmationOutcome", () => ({
+  getTranscriptConfirmationFeedback: getTranscriptConfirmationFeedbackMock,
+  resolveTranscriptConfirmationOutcome: resolveTranscriptConfirmationOutcomeMock,
+  TranscriptConfirmationAcceptedError: class extends Error {},
+  TranscriptConfirmationOutcomeUnknownError: class extends Error {},
+}));
+
+function makeSummary(
+  overrides: Partial<AdminLetterSummary> = {},
+): AdminLetterSummary {
+  return makeAdminLetterSummary({
+    primarySourceRevision: 7,
+    metadataContentStatus: "EMPTY",
+    metadataJobStatus: "SUCCESS",
+    transcriptDigest: "d".repeat(64),
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    ...overrides,
+  });
+}
 
 function renderProcessingActions(
   selectedIds = new Set<string>(),
@@ -29,6 +58,7 @@ function renderProcessingActions(
     letterId,
     primarySourceRevision: 4 + (index * 5),
   })),
+  singleSelectedLetter: AdminLetterSummary | null = null,
 ) {
   const mutationIntent = { id: Symbol("mutation-intent") };
   const makeSelectionExplicit = vi.fn().mockReturnValue(mutationIntent);
@@ -38,7 +68,7 @@ function renderProcessingActions(
     useDashboardProcessingActions({
       selectedIds,
       selectedSources,
-      singleSelectedLetter: null,
+      singleSelectedLetter,
       makeSelectionExplicit,
       exitEditMode,
       fetchLetters,
@@ -69,6 +99,18 @@ describe("useDashboardProcessingActions", () => {
       skipped: 0,
       skipReasons: [],
     });
+    getTranscriptConfirmationFeedbackMock.mockReturnValue({
+      message: "Transcript confirmed; metadata extraction queued.",
+      type: "success",
+    });
+    resolveTranscriptConfirmationOutcomeMock.mockResolvedValue({
+      letter: {
+        primarySourceRevision: 7,
+        transcriptConfirmedAt: "2026-01-01T00:00:00.000Z",
+      },
+      origin: "response",
+    });
+    regenerateMetadataMock.mockResolvedValue({});
   });
 
   it("does nothing without an explicit selection", async () => {
@@ -215,5 +257,58 @@ describe("useDashboardProcessingActions", () => {
     );
     expect(exitEditMode).not.toHaveBeenCalled();
     expect(makeSelectionExplicit).toHaveBeenCalledOnce();
+  });
+
+  it("submits the canonical summary digest when confirmation is required", async () => {
+    const summary = makeSummary({
+      transcriptDigest: "f".repeat(64),
+      transcriptConfirmed: false,
+    });
+    const { result, mutationIntent, exitEditMode } = renderProcessingActions(
+      new Set([summary.id]),
+      [{ letterId: summary.id, primarySourceRevision: summary.primarySourceRevision }],
+      summary,
+    );
+
+    await act(async () => {
+      await result.current.handleSingleMetadataExtraction();
+    });
+
+    expect(resolveTranscriptConfirmationOutcomeMock).toHaveBeenCalledWith({
+      letterId: "letter-1",
+      primarySourceRevision: 7,
+      transcriptDigest: "f".repeat(64),
+      confirmedSender: undefined,
+      confirmedRecipient: undefined,
+    });
+    expect(regenerateMetadataMock).not.toHaveBeenCalled();
+    expect(exitEditMode).toHaveBeenCalledWith(mutationIntent);
+  });
+
+  it("uses the required confirmation fact to regenerate without reconfirming", async () => {
+    const summary = makeSummary({
+      metadataContentStatus: "AI_DRAFT",
+      transcriptConfirmed: true,
+    });
+    const { result } = renderProcessingActions(
+      new Set([summary.id]),
+      [{ letterId: summary.id, primarySourceRevision: summary.primarySourceRevision }],
+      summary,
+    );
+
+    await act(async () => {
+      await result.current.handleSingleMetadataExtraction();
+    });
+
+    expect(regenerateMetadataMock).toHaveBeenCalledWith(
+      "letter-1",
+      7,
+      {
+        confirmedSender: undefined,
+        confirmedRecipient: undefined,
+      },
+    );
+    expect(resolveTranscriptConfirmationOutcomeMock).not.toHaveBeenCalled();
+    expect(showToastMock).toHaveBeenCalledWith("Metadata regenerated", "success");
   });
 });

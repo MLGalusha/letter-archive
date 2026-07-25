@@ -2,7 +2,16 @@ import { eq, and, inArray, sql, or, ilike, count } from 'drizzle-orm';
 import { z } from 'zod';
 import { PAGINATION } from '../constants/pagination.js';
 import { db, letters, letterPages, collections } from '../db/index.js';
-import { transformLetterToDTO, transformLetterWithRelatedToDTO, type LetterWithRelations } from '../dto/index.js';
+import {
+  emptyAdminLetterPageCounts,
+  mapTypeToImageType,
+  transformAdminLetterSummary,
+  transformLetterWithRelatedToDTO,
+  type AdminLetterPageCounts,
+  type AdminLetterSummary,
+  type AdminLetterSummarySource,
+  type LetterWithRelations,
+} from '../dto/index.js';
 
 // ============================================================================
 // HELPERS
@@ -231,12 +240,7 @@ export const adminLettersQuerySchema = z.object({
 // ============================================================================
 
 export interface AdminLettersResponse {
-  letters: Array<ReturnType<typeof transformLetterToDTO> & {
-    lettersCount: number;
-    extrasCount: number;
-    photosCount: number;
-    lastOpenedAt?: string;
-  }>;
+  letters: AdminLetterSummary[];
   pagination: {
     page: number;
     limit: number;
@@ -694,15 +698,42 @@ export async function queryAdminLetters(
   const representativeRows = getRows<{ id: string }>(representativeIdsResult);
   const representativeIds = representativeRows.map(r => r.id);
 
-  // Fetch full letter data with relations using the representative IDs
-  let results: Awaited<ReturnType<typeof db.query.letters.findMany>> = [];
+  // Fetch only the representative fields owned by the Dashboard summary.
+  // Raw transcript text is selected solely to derive its canonical digest.
+  let results: AdminLetterSummarySource[] = [];
   if (representativeIds.length > 0) {
     results = await db.query.letters.findMany({
       where: inArray(letters.id, representativeIds),
+      columns: {
+        id: true,
+        collectionId: true,
+        dateRaw: true,
+        extractedDate: true,
+        type: true,
+        typeSequence: true,
+        sender: true,
+        recipient: true,
+        primarySourceRevision: true,
+        visibility: true,
+        transcriptPublished: true,
+        metadataPublished: true,
+        transcriptStatus: true,
+        metadataContentStatus: true,
+        extraContentStatus: true,
+        photoDescriptionStatus: true,
+        metadataStatus: true,
+        transcriptionText: true,
+        transcriptConfirmedAt: true,
+        flagged: true,
+        createdAt: true,
+        updatedAt: true,
+      },
       with: {
-        collection: true,
-        pages: {
-          orderBy: (p, { asc: pageAsc }) => [pageAsc(p.pageNumber)],
+        collection: {
+          columns: {
+            collectionCode: true,
+            title: true,
+          },
         },
       },
     });
@@ -726,12 +757,15 @@ export async function queryAdminLetters(
     }
   }
 
-  // Count pages for each letter group, keeping photos available as a subset of extras.
-  // All items in a group share collectionId, dateRaw, typeSequence
-  const lettersCountMap = new Map<string, number>();
-  const extrasCountMap = new Map<string, number>();
-  const photosCountMap = new Map<string, number>();
+  // Count pages for each letter group and type. This zero-filled map is the
+  // sole count owner for all Dashboard total and per-type columns.
+  const pageCountsByGroup = new Map<string, AdminLetterPageCounts>();
   if (results.length > 0) {
+    for (const letter of results) {
+      const key = `${letter.collectionId}:${letter.dateRaw}:${letter.typeSequence}`;
+      pageCountsByGroup.set(key, emptyAdminLetterPageCounts());
+    }
+
     // Build conditions for all items in each group (any type)
     const groupConditions = results.map(letter =>
       and(
@@ -760,31 +794,22 @@ export async function queryAdminLetters(
         letters.type
       );
 
-    // Build lookup maps: key = "collectionId:dateRaw:typeSequence" -> count
+    // Build lookup map: key = "collectionId:dateRaw:typeSequence" -> counts
     for (const row of pageCounts) {
       const key = `${row.collectionId}:${row.dateRaw}:${row.typeSequence}`;
-      if (row.type === 'L') {
-        lettersCountMap.set(key, row.pageCount);
-      } else {
-        extrasCountMap.set(key, (extrasCountMap.get(key) || 0) + row.pageCount);
-        if (row.type === 'P') {
-          photosCountMap.set(key, (photosCountMap.get(key) || 0) + row.pageCount);
-        }
-      }
+      const counts = pageCountsByGroup.get(key) ?? emptyAdminLetterPageCounts();
+      counts[mapTypeToImageType(row.type)] = Number(row.pageCount);
+      pageCountsByGroup.set(key, counts);
     }
   }
 
-  // Transform to DTOs with letters count, extras count, and photo count
-  const transformedLetters = (results as LetterWithRelations[]).map(letter => {
-    const dto = transformLetterToDTO(letter);
+  const transformedLetters = results.map(letter => {
     const key = `${letter.collectionId}:${letter.dateRaw}:${letter.typeSequence}`;
-    return {
-      ...dto,
-      lettersCount: lettersCountMap.get(key) || 0,
-      extrasCount: extrasCountMap.get(key) || 0,
-      photosCount: photosCountMap.get(key) || 0,
-      lastOpenedAt: viewMap.get(letter.id),
-    };
+    return transformAdminLetterSummary(
+      letter,
+      pageCountsByGroup.get(key) ?? emptyAdminLetterPageCounts(),
+      viewMap.get(letter.id),
+    );
   });
 
   return {

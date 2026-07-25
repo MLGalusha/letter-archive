@@ -7,7 +7,7 @@ import {
 } from "react";
 import { isAuthenticated } from "../../../api/auth";
 import { getAdminLetters } from "../../../api/letters";
-import type { Letter } from "../../../types/Letter";
+import type { AdminLetterSummary } from "../../../types/Letter";
 import {
   buildDashboardLetterQuery,
   type DashboardCommittedQuery,
@@ -64,7 +64,7 @@ interface UseDashboardLettersDataOptions {
 export function useDashboardLettersData({
   query,
 }: UseDashboardLettersDataOptions) {
-  const [letters, setLetters] = useState<Letter[]>([]);
+  const [letters, setLetters] = useState<AdminLetterSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [error, setError] = useState<string | null>(null);

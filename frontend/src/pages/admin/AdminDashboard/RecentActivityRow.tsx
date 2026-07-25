@@ -1,10 +1,13 @@
 import { VisibilityBadge } from "../../../components/common";
 import { Icon } from "../../../components/common/Icon";
-import type { Letter } from "../../../types/Letter";
+import type {
+  AdminLetterSummary,
+  LetterImageType,
+} from "../../../types/Letter";
 import {
-  hasPrimaryTranscriptContent,
-  hasRelatedExtraContent,
-  shouldShowPhotoDescriptionWorkflow,
+  hasPrimaryTranscriptType,
+  isPrimaryPhotoType,
+  isRelatedExtraType,
 } from "../../../utils/letterContent";
 import type {
   TableColumnModel,
@@ -17,7 +20,7 @@ import RowSelectionCheckboxCell from "./RowSelectionCheckboxCell";
 import type { PendingChange } from "./types";
 
 interface RecentActivityRowProps {
-  letter: Letter;
+  letter: AdminLetterSummary;
   index: number;
   columns: TableColumnModel;
   selection: TableSelectionModel;
@@ -36,7 +39,7 @@ function CopyableTextCell({
   pendingChanges,
   onCellClick,
 }: {
-  letter: Letter;
+  letter: AdminLetterSummary;
   column: "sender" | "recipient";
   value: string | null | undefined;
   visible: boolean;
@@ -86,24 +89,26 @@ export default function RecentActivityRow({
 }: RecentActivityRowProps) {
   const { visibleColumns } = columns;
   const { selectedIds } = selection;
-  const pageCount =
-    letter.lettersCount ??
-    letter.images.filter((image) => image.type === "letter").length;
-  const extrasCount =
-    letter.extrasCount ??
-    letter.images.filter((image) => image.type !== "letter").length;
-  const photosCount =
-    letter.photosCount ??
-    letter.images.filter((image) => image.type === "photo").length;
+  const pageCount = letter.pageCountsByType.letter;
+  const extrasCount = Object.entries(letter.pageCountsByType)
+    .reduce((total, [type, count]) => (
+      type === "letter" ? total : total + count
+    ), 0);
+  const photosCount = letter.pageCountsByType.photo;
   const formattedDate = formatting.formatDateRaw(letter.metadata.dateRaw);
   const isSelected = selectedIds.has(letter.id);
-  const contentStatus = shouldShowPhotoDescriptionWorkflow(letter)
-    ? (letter.photoDescriptionStatus ?? "EMPTY")
+  const contentStatus = isPrimaryPhotoType(letter.primaryImageType)
+    ? letter.photoDescriptionStatus
     : formatting.getCombinedTranscriptStatus(
         letter.transcriptStatus,
         letter.extraContentStatus,
-        hasPrimaryTranscriptContent(letter),
-        hasRelatedExtraContent(letter),
+        hasPrimaryTranscriptType(letter.primaryImageType),
+        letter.primaryImageType === "letter"
+          && Object.entries(letter.pageCountsByType).some(
+            ([type, count]) => (
+              count > 0 && isRelatedExtraType(type as LetterImageType)
+            ),
+          ),
       );
   const renderColumnCell = (columnId: string) => {
     switch (columnId) {
@@ -187,8 +192,8 @@ export default function RecentActivityRow({
         );
       default: {
         if (!columnId.startsWith("type_")) return null;
-        const typeKey = columnId.replace("type_", "");
-        const count = letter.images.filter((image) => image.type === typeKey).length;
+        const typeKey = columnId.replace("type_", "") as LetterImageType;
+        const count = letter.pageCountsByType[typeKey];
         return <td key={columnId} data-column={columnId} className="count-cell">{count || "—"}</td>;
       }
     }

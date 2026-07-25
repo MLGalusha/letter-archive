@@ -5,8 +5,14 @@ import { MemoryRouter } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
 import type { TranscriptConfirmationReceipt } from "../../../api/admin/letters";
 import { ApiError } from "../../../api/client";
-import type { Letter } from "../../../types/Letter";
-import { sha256Utf8 } from "../../../utils/sha256";
+import type {
+  AdminLetterSummary,
+  Letter,
+} from "../../../types/Letter";
+import { makeAdminLetterSummary } from "../../../test/adminLetterSummary";
+
+const HELLO_TRANSCRIPT_DIGEST =
+  "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824";
 
 const {
   confirmTranscriptMock,
@@ -138,7 +144,7 @@ vi.mock("../AdminDashboard/RecentActivityTable", () => ({
     columns,
     selection,
   }: {
-    filteredLetters: Letter[];
+    filteredLetters: AdminLetterSummary[];
     columns: {
       showColumnMenu: boolean;
       onToggleColumnMenu: () => void;
@@ -189,7 +195,7 @@ vi.mock("../../../utils/recentEdits", () => ({
 
 import AdminDashboard from "../AdminDashboard";
 
-function makeLetter(overrides: Partial<Letter> = {}): Letter {
+function makeDetailLetter(overrides: Partial<Letter> = {}): Letter {
   const baseLetter: Letter = {
     id: "letter-1",
     title: "Test Letter",
@@ -208,8 +214,6 @@ function makeLetter(overrides: Partial<Letter> = {}): Letter {
     extraContentStatus: "EMPTY",
     flagged: false,
     createdAt: "2026-03-09T12:00:00.000Z",
-    lettersCount: 1,
-    extrasCount: 0,
   };
 
   return {
@@ -227,7 +231,18 @@ function makeLetter(overrides: Partial<Letter> = {}): Letter {
   };
 }
 
-function createLettersResponse(letters: Letter[] = [makeLetter()]) {
+function makeSummary(
+  overrides: Partial<AdminLetterSummary> = {},
+): AdminLetterSummary {
+  return makeAdminLetterSummary({
+    transcriptDigest: HELLO_TRANSCRIPT_DIGEST,
+    ...overrides,
+  });
+}
+
+function createLettersResponse(
+  letters: AdminLetterSummary[] = [makeSummary()],
+) {
   return {
     letters,
     pagination: {
@@ -297,7 +312,7 @@ describe("AdminDashboard processing", () => {
     consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     getAdminLettersMock.mockResolvedValue(createLettersResponse());
-    getAdminLetterByIdMock.mockResolvedValue(makeLetter());
+    getAdminLetterByIdMock.mockResolvedValue(makeDetailLetter());
   });
 
   afterEach(() => {
@@ -451,15 +466,14 @@ describe("AdminDashboard processing", () => {
 
     getAdminLettersMock.mockResolvedValue(
       createLettersResponse([
-        makeLetter({
+        makeSummary({
           metadataJobStatus: "PENDING",
           metadataContentStatus: "EMPTY",
-          transcriptConfirmedAt: undefined,
+          transcriptConfirmed: false,
           metadata: {
             sender: "",
             recipient: "",
             dateRaw: "19470810",
-            verified: false,
           },
         }),
       ]),
@@ -495,11 +509,10 @@ describe("AdminDashboard processing", () => {
       const user = userEvent.setup();
       getAdminLettersMock.mockResolvedValue(
         createLettersResponse([
-          makeLetter({
-            workflowState: "TRANSCRIBED",
+          makeSummary({
             metadataJobStatus,
             metadataContentStatus: "EMPTY",
-            transcriptConfirmedAt: "2026-07-25T12:00:00.000Z",
+            transcriptConfirmed: true,
           }),
         ]),
       );
@@ -531,12 +544,12 @@ describe("AdminDashboard processing", () => {
 
     getAdminLettersMock.mockResolvedValue(
       createLettersResponse([
-        makeLetter({
+        makeSummary({
           id: "letter-1",
           title: "Letter One",
           metadataContentStatus: "EMPTY",
         }),
-        makeLetter({
+        makeSummary({
           id: "letter-2",
           title: "Letter Two",
           metadataContentStatus: "EMPTY",
@@ -567,20 +580,19 @@ describe("AdminDashboard processing", () => {
 
     getAdminLettersMock.mockResolvedValue(
       createLettersResponse([
-        makeLetter({
+        makeSummary({
           metadataContentStatus: "EMPTY",
           metadata: {
             sender: "",
             recipient: "",
             dateRaw: "19470810",
-            verified: false,
           },
         }),
       ]),
     );
     confirmTranscriptMock.mockResolvedValue({
       receipt: makeConfirmationReceipt(),
-      letter: makeLetter({
+      letter: makeDetailLetter({
         workflowState: "METADATA_EXTRACTING",
         metadataContentStatus: "AI_DRAFT",
         transcriptConfirmedAt: "2026-03-30T12:00:00.000Z",
@@ -606,12 +618,11 @@ describe("AdminDashboard processing", () => {
       screen.queryByRole("heading", { name: "Generate Metadata" }),
     ).not.toBeInTheDocument();
 
-    const transcriptDigest = await sha256Utf8("hello");
     await waitFor(() => {
       expect(confirmTranscriptMock).toHaveBeenCalledWith(
         "letter-1",
         0,
-        transcriptDigest,
+        HELLO_TRANSCRIPT_DIGEST,
         {
           confirmedSender: "Mabel",
           confirmedRecipient: "Theo",
@@ -626,15 +637,15 @@ describe("AdminDashboard processing", () => {
 
     getAdminLettersMock.mockResolvedValue(
       createLettersResponse([
-        makeLetter({
+        makeSummary({
           metadataContentStatus: "EMPTY",
-          transcriptConfirmedAt: undefined,
+          transcriptConfirmed: false,
         }),
       ]),
     );
     confirmTranscriptMock.mockResolvedValue({
       receipt: makeConfirmationReceipt("queued"),
-      letter: makeLetter({
+      letter: makeDetailLetter({
         workflowState: "METADATA_EXTRACTING",
         metadataJobStatus: "PENDING",
         metadataContentStatus: "EMPTY",
@@ -659,12 +670,11 @@ describe("AdminDashboard processing", () => {
       name: "Generate Metadata",
     }));
 
-    const transcriptDigest = await sha256Utf8("hello");
     await waitFor(() => {
       expect(confirmTranscriptMock).toHaveBeenCalledWith(
         "letter-1",
         0,
-        transcriptDigest,
+        HELLO_TRANSCRIPT_DIGEST,
         {
           confirmedRecipient: "Bob",
           confirmedSender: "Alice",
@@ -681,22 +691,26 @@ describe("AdminDashboard processing", () => {
 
   it("reconciles an ambiguous committed timeout before reporting outcome", async () => {
     const user = userEvent.setup();
-    let authoritativeLetter = makeLetter({
+    let authoritativeSummary = makeSummary({
       metadataContentStatus: "EMPTY",
-      transcriptConfirmedAt: undefined,
+      transcriptConfirmed: false,
     });
     getAdminLettersMock.mockImplementation(async () => (
-      createLettersResponse([authoritativeLetter])
+      createLettersResponse([authoritativeSummary])
     ));
     confirmTranscriptMock.mockImplementationOnce(async () => {
-      authoritativeLetter = makeLetter({
-        workflowState: "METADATA_EXTRACTING",
+      authoritativeSummary = makeSummary({
         metadataContentStatus: "EMPTY",
-        transcriptConfirmedAt: "2026-07-25T12:00:00.000Z",
+        transcriptConfirmed: true,
       });
       throw new ApiError(0, "The operation was aborted.");
     });
-    getAdminLetterByIdMock.mockImplementation(async () => authoritativeLetter);
+    getAdminLetterByIdMock.mockImplementation(async () => makeDetailLetter({
+      metadataContentStatus: authoritativeSummary.metadataContentStatus,
+      transcriptConfirmedAt: authoritativeSummary.transcriptConfirmed
+        ? "2026-07-25T12:00:00.000Z"
+        : undefined,
+    }));
 
     render(
       <MemoryRouter>
@@ -720,11 +734,10 @@ describe("AdminDashboard processing", () => {
         "info",
       );
     });
-    const transcriptDigest = await sha256Utf8("hello");
     expect(confirmTranscriptMock).toHaveBeenCalledWith(
       "letter-1",
       0,
-      transcriptDigest,
+      HELLO_TRANSCRIPT_DIGEST,
       {
         confirmedRecipient: "Bob",
         confirmedSender: "Alice",
@@ -740,20 +753,20 @@ describe("AdminDashboard processing", () => {
 
     getAdminLettersMock.mockResolvedValue(
       createLettersResponse([
-        makeLetter({
+        makeSummary({
           metadataContentStatus: "EMPTY",
-          transcriptConfirmedAt: "2026-03-30T12:00:00.000Z",
+          metadataJobStatus: "SUCCESS",
+          transcriptConfirmed: true,
           metadata: {
             sender: "",
             recipient: "",
             dateRaw: "19470810",
-            verified: false,
           },
         }),
       ]),
     );
     regenerateMetadataMock.mockResolvedValue(
-      makeLetter({
+      makeDetailLetter({
         metadataContentStatus: "AI_DRAFT",
         transcriptConfirmedAt: "2026-03-30T12:00:00.000Z",
       }),

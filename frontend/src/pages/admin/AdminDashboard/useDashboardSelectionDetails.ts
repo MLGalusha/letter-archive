@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { Letter } from "../../../types/Letter";
+import type { AdminLetterSummary } from "../../../types/Letter";
 
 export interface PublishCounts {
   lettersPublished: number;
@@ -15,8 +15,8 @@ export function useDashboardSelectionDetails({
   filteredLetters,
   selectedIds,
 }: {
-  letters: Letter[];
-  filteredLetters: Letter[];
+  letters: AdminLetterSummary[];
+  filteredLetters: AdminLetterSummary[];
   selectedIds: Set<string>;
 }) {
   const singleSelectedLetter = useMemo(() => {

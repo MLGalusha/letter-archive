@@ -41,26 +41,33 @@ async function findTranscribedLetter(page: Page): Promise<boolean> {
 
 // Helper to find a letter with entity extraction completed via API, then navigate to it
 async function findLetterWithEntities(page: Page): Promise<boolean> {
-  // Use API to find a letter with SUCCESS entity extraction
+  // The list endpoint is intentionally summary-only; inspect detail on demand.
   const response = await page.request.get(`${API_BASE_URL}/admin/letters?limit=100`);
   const body = await response.json();
-  const letters = body.letters || body;
+  const summaries = body.letters || body;
 
-  const withEntities = Array.isArray(letters)
-    ? letters.find(
-        (l: { entityExtractionStatus?: string }) =>
-          l.entityExtractionStatus === 'SUCCESS'
-      )
-    : null;
-
-  if (!withEntities) {
+  if (!Array.isArray(summaries)) {
     return false;
   }
 
-  // Navigate directly to the letter
-  await page.goto(`/admin/letters/${(withEntities as { id: string }).id}`);
-  await page.waitForLoadState('networkidle');
-  return true;
+  for (const summary of summaries as Array<{ id: string }>) {
+    const detailResponse = await page.request.get(
+      `${API_BASE_URL}/admin/letters/${summary.id}`,
+    );
+    if (!detailResponse.ok()) continue;
+
+    const detail = await detailResponse.json() as {
+      id: string;
+      entityExtractionStatus?: string;
+    };
+    if (detail.entityExtractionStatus !== 'SUCCESS') continue;
+
+    await page.goto(`/admin/letters/${detail.id}`);
+    await page.waitForLoadState('networkidle');
+    return true;
+  }
+
+  return false;
 }
 
 test.describe('Entity Extraction UI', () => {

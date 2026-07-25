@@ -426,6 +426,44 @@ export interface PublicLetter {
   updatedAt?: string;
 }
 
+export type AdminLetterPageCountsByType = Readonly<
+  Record<LetterImageType, number>
+>;
+
+/**
+ * Positive read model owned by the paginated admin Dashboard list.
+ *
+ * Detail content and provenance deliberately remain on `Letter`; the list exposes
+ * only the facts needed to render rows and issue source-bound Dashboard actions.
+ */
+export interface AdminLetterSummary {
+  id: string;
+  title: string;
+  collectionCode: string;
+  primarySourceRevision: number;
+  primaryImageType: LetterImageType;
+  pageCountsByType: AdminLetterPageCountsByType;
+  metadata: {
+    sender?: string;
+    recipient?: string;
+    dateRaw: string;
+  };
+  visibility: VisibilityState;
+  transcriptPublished: boolean;
+  metadataPublished: boolean;
+  transcriptStatus: ContentStatus;
+  metadataContentStatus: ContentStatus;
+  extraContentStatus: ContentStatus;
+  photoDescriptionStatus: ContentStatus;
+  metadataJobStatus: JobStatus;
+  transcriptDigest: string;
+  transcriptConfirmed: boolean;
+  flagged: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastOpenedAt?: string;
+}
+
 export interface Letter {
   id: string;
   title: string;
@@ -483,11 +521,4 @@ export interface Letter {
   // Linked entities (populated when fetching letter detail)
   linkedPersons?: LinkedPerson[];
   linkedPlaces?: LinkedPlace[];
-  // Count of L-type pages across the letter group - only in list responses
-  lettersCount?: number;
-  // Count of related items (envelopes, photos, etc.) - only in list responses
-  extrasCount?: number;
-  // Count of photo pages across the letter group - only in list responses
-  photosCount?: number;
-  lastOpenedAt?: string;
 }

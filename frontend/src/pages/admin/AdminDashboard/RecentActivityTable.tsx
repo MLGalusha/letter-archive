@@ -1,5 +1,8 @@
 import type React from "react";
-import type { Letter, ContentStatus } from "../../../types/Letter";
+import type {
+  AdminLetterSummary,
+  ContentStatus,
+} from "../../../types/Letter";
 import DashboardPagination from "./DashboardPagination";
 import RecentActivityRow from "./RecentActivityRow";
 import RecentActivityTableHeader from "./RecentActivityTableHeader";
@@ -68,7 +71,7 @@ export interface TableRowActions {
 }
 
 interface RecentActivityTableProps {
-  filteredLetters: Letter[];
+  filteredLetters: AdminLetterSummary[];
   columns: TableColumnModel;
   selection: TableSelectionModel;
   copyEdit: TableCopyEditModel;

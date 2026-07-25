@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type APIRequestContext } from '@playwright/test';
 import { API_BASE_URL } from './utils/test-helpers';
 
 /**
@@ -12,8 +12,8 @@ import { API_BASE_URL } from './utils/test-helpers';
  * Run with: npx playwright test entity-extraction-api
  */
 
-// Letter shape from the admin API list endpoint
-interface AdminLetterSummary {
+// Full letter shape returned by admin detail and processing endpoints.
+interface AdminLetterDetail {
   id: string;
   title: string;
   collectionCode: string;
@@ -87,6 +87,31 @@ interface LinkedEntity {
   role: string;
 }
 
+async function fetchAdminLetterDetails(
+  request: APIRequestContext,
+): Promise<AdminLetterDetail[]> {
+  const listResponse = await request.get(
+    `${API_BASE_URL}/admin/letters?limit=50`,
+  );
+  const listBody = await listResponse.json();
+  const summaries = (listBody.letters || listBody) as Array<{ id: string }>;
+
+  const details = await Promise.all(
+    summaries.map(async ({ id }) => {
+      const detailResponse = await request.get(
+        `${API_BASE_URL}/admin/letters/${id}`,
+      );
+      return detailResponse.ok()
+        ? await detailResponse.json() as AdminLetterDetail
+        : null;
+    }),
+  );
+
+  return details.filter(
+    (letter): letter is AdminLetterDetail => letter !== null,
+  );
+}
+
 test.describe('Entity Extraction API', () => {
   test.describe('POST /admin/letters/:id/regenerate-entities', () => {
     test('returns 404 for non-existent letter', async ({ request }) => {
@@ -100,9 +125,7 @@ test.describe('Entity Extraction API', () => {
 
     test('returns 400 for letter without transcription', async ({ request }) => {
       // Find a letter without transcription
-      const listRes = await request.get(`${API_BASE_URL}/admin/letters?limit=50`);
-      const listBody = await listRes.json();
-      const letters: AdminLetterSummary[] = listBody.letters || listBody;
+      const letters = await fetchAdminLetterDetails(request);
 
       const noTranscript = letters.find(
         (l) => !l.transcript?.fullText || l.transcript.fullText.trim().length < 10
@@ -129,9 +152,7 @@ test.describe('Entity Extraction API', () => {
 
     test.beforeAll(async ({ request }) => {
       // Find a letter with substantial transcription text
-      const listRes = await request.get(`${API_BASE_URL}/admin/letters?limit=50`);
-      const listBody = await listRes.json();
-      const letters: AdminLetterSummary[] = listBody.letters || listBody;
+      const letters = await fetchAdminLetterDetails(request);
 
       // Find a letter with a good transcription (use transcript.fullText)
       const withTranscript = letters
@@ -167,7 +188,7 @@ test.describe('Entity Extraction API', () => {
       // Should succeed
       expect(res.status()).toBe(200);
 
-      const letter: AdminLetterSummary = await res.json();
+      const letter: AdminLetterDetail = await res.json();
 
       // Entity extraction should have completed
       expect(letter.entityExtractionStatus).toBe('SUCCESS');
@@ -309,7 +330,7 @@ test.describe('Entity Extraction API', () => {
       const res = await request.get(
         `${API_BASE_URL}/admin/letters/${testLetterId}`
       );
-      const letter: AdminLetterSummary = await res.json();
+      const letter: AdminLetterDetail = await res.json();
 
       if (
         letter.entityExtractionStatus !== 'SUCCESS' ||
@@ -377,7 +398,7 @@ test.describe('Entity Extraction API', () => {
       const res = await request.get(
         `${API_BASE_URL}/admin/letters/${testLetterId}`
       );
-      const letter: AdminLetterSummary = await res.json();
+      const letter: AdminLetterDetail = await res.json();
 
       if (
         letter.entityExtractionStatus !== 'SUCCESS' ||
@@ -426,7 +447,7 @@ test.describe('Entity Extraction API', () => {
       const res = await request.get(
         `${API_BASE_URL}/admin/letters/${testLetterId}`
       );
-      const letter: AdminLetterSummary = await res.json();
+      const letter: AdminLetterDetail = await res.json();
 
       if (
         letter.entityExtractionStatus !== 'SUCCESS' ||
@@ -486,7 +507,7 @@ test.describe('Entity Extraction API', () => {
       const res = await request.get(
         `${API_BASE_URL}/admin/letters/${testLetterId}`
       );
-      const letter: AdminLetterSummary = await res.json();
+      const letter: AdminLetterDetail = await res.json();
 
       if (letter.entityExtractionStatus !== 'SUCCESS') {
         test.skip(true, 'Entity extraction not completed');
@@ -528,9 +549,7 @@ test.describe('Entity Extraction API', () => {
 
     test('regenerate-metadata runs both phases', async ({ request }) => {
       // Find a letter with transcription
-      const listRes = await request.get(`${API_BASE_URL}/admin/letters?limit=50`);
-      const listBody = await listRes.json();
-      const letters: AdminLetterSummary[] = listBody.letters || listBody;
+      const letters = await fetchAdminLetterDetails(request);
 
       const withTranscript = letters.find(
         (l) => l.transcript?.fullText && l.transcript.fullText.length > 200
@@ -552,7 +571,7 @@ test.describe('Entity Extraction API', () => {
 
       expect(res.status()).toBe(200);
 
-      const letter: AdminLetterSummary = await res.json();
+      const letter: AdminLetterDetail = await res.json();
 
       // Phase 1 metadata should be extracted
       console.log(`\n=== PHASE 1 RESULTS ===`);

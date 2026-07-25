@@ -1,8 +1,23 @@
+import { createHash } from 'node:crypto';
 import type { Page, Request } from '@playwright/test';
 import {
   API_BASE_URL,
   installMockImageSessionApi,
 } from './test-helpers';
+
+type MockLetterImageType =
+  | 'letter'
+  | 'photo'
+  | 'ephemera'
+  | 'voice'
+  | 'article'
+  | 'diary'
+  | 'cover'
+  | 'card'
+  | 'telegram';
+
+type MockContentStatus = 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
+type MockPageCountsByType = Record<MockLetterImageType, number>;
 
 interface MockLetter {
   id: string;
@@ -11,7 +26,7 @@ interface MockLetter {
   collectionCode?: string;
   images: Array<{
     id: string;
-    type: string;
+    type: MockLetterImageType;
     imageUrl: string;
     pageNumber?: number;
   }>;
@@ -31,14 +46,18 @@ interface MockLetter {
   status: string;
   workflowState: string;
   visibility: 'PUBLISHED' | 'HIDDEN';
-  transcriptStatus: 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
-  metadataContentStatus: 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
-  extraContentStatus: 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
+  transcriptPublished: boolean;
+  metadataPublished: boolean;
+  transcriptStatus: MockContentStatus;
+  metadataContentStatus: MockContentStatus;
+  extraContentStatus: MockContentStatus;
+  photoDescriptionStatus: MockContentStatus;
+  metadataJobStatus: 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';
+  transcriptConfirmedAt?: string;
+  pageCountsByType: MockPageCountsByType;
   createdAt: string;
   updatedAt?: string;
   flagged: boolean;
-  lettersCount?: number;
-  extrasCount?: number;
 }
 
 const baseLetters: MockLetter[] = [
@@ -64,14 +83,27 @@ const baseLetters: MockLetter[] = [
     status: 'needs_review',
     workflowState: 'TRANSCRIBED',
     visibility: 'PUBLISHED',
+    transcriptPublished: true,
+    metadataPublished: true,
     transcriptStatus: 'AI_DRAFT',
     metadataContentStatus: 'EDITED',
     extraContentStatus: 'EMPTY',
+    photoDescriptionStatus: 'EMPTY',
+    metadataJobStatus: 'SUCCESS',
+    pageCountsByType: {
+      letter: 1,
+      photo: 2,
+      cover: 3,
+      telegram: 4,
+      card: 5,
+      ephemera: 6,
+      voice: 7,
+      article: 8,
+      diary: 9,
+    },
     createdAt: '2025-01-01T00:00:00.000Z',
     updatedAt: '2025-01-02T00:00:00.000Z',
     flagged: false,
-    lettersCount: 1,
-    extrasCount: 0,
   },
   {
     id: 'letter-2',
@@ -95,14 +127,28 @@ const baseLetters: MockLetter[] = [
     status: 'published',
     workflowState: 'REVIEWED',
     visibility: 'HIDDEN',
+    transcriptPublished: false,
+    metadataPublished: false,
     transcriptStatus: 'VERIFIED',
     metadataContentStatus: 'VERIFIED',
     extraContentStatus: 'EMPTY',
+    photoDescriptionStatus: 'EMPTY',
+    metadataJobStatus: 'SUCCESS',
+    transcriptConfirmedAt: '2025-02-02T00:00:00.000Z',
+    pageCountsByType: {
+      letter: 1,
+      photo: 0,
+      cover: 0,
+      telegram: 0,
+      card: 0,
+      ephemera: 0,
+      voice: 0,
+      article: 0,
+      diary: 0,
+    },
     createdAt: '2025-02-01T00:00:00.000Z',
     updatedAt: '2025-02-02T00:00:00.000Z',
     flagged: true,
-    lettersCount: 1,
-    extrasCount: 0,
   },
 ];
 
@@ -161,6 +207,37 @@ function buildStats(letters: MockLetter[]) {
   };
 }
 
+function summarizeAdminLetter(letter: MockLetter) {
+  return {
+    id: letter.id,
+    title: letter.title,
+    collectionCode: letter.collectionCode,
+    primarySourceRevision: letter.primarySourceRevision,
+    primaryImageType: letter.images[0]?.type ?? 'letter',
+    pageCountsByType: { ...letter.pageCountsByType },
+    metadata: {
+      sender: letter.metadata.sender,
+      recipient: letter.metadata.recipient,
+      dateRaw: letter.metadata.dateRaw ?? '',
+    },
+    visibility: letter.visibility,
+    transcriptPublished: letter.transcriptPublished,
+    metadataPublished: letter.metadataPublished,
+    transcriptStatus: letter.transcriptStatus,
+    metadataContentStatus: letter.metadataContentStatus,
+    extraContentStatus: letter.extraContentStatus,
+    photoDescriptionStatus: letter.photoDescriptionStatus,
+    metadataJobStatus: letter.metadataJobStatus,
+    transcriptDigest: createHash('sha256')
+      .update(letter.transcript.fullText, 'utf8')
+      .digest('hex'),
+    transcriptConfirmed: Boolean(letter.transcriptConfirmedAt),
+    flagged: letter.flagged,
+    createdAt: letter.createdAt,
+    updatedAt: letter.updatedAt,
+  };
+}
+
 function buildAdminLettersResponse(
   letters: MockLetter[],
   statsSource: MockLetter[] = letters,
@@ -171,7 +248,9 @@ function buildAdminLettersResponse(
   const start = (page - 1) * limit;
 
   return {
-    letters: letters.slice(start, start + limit),
+    letters: letters
+      .slice(start, start + limit)
+      .map(summarizeAdminLetter),
     pagination: {
       page,
       limit,
@@ -237,6 +316,7 @@ export interface MockAdminDashboardContext {
 
 interface MockAdminDashboardOptions {
   letterCount?: number;
+  visibleColumns?: string[];
   persistedDashboardState?: Record<string, unknown>;
   savedDashboardViews?: Array<Record<string, unknown>>;
   lettersError?: {
@@ -269,6 +349,13 @@ export async function installMockAdminDashboardApi(
   const savedDashboardViewsJson = options.savedDashboardViews === undefined
     ? null
     : JSON.stringify(options.savedDashboardViews);
+  const dashboardColumnsJson = options.visibleColumns === undefined
+    ? null
+    : JSON.stringify({
+      visible: options.visibleColumns,
+      known: options.visibleColumns,
+      order: options.visibleColumns,
+    });
 
   await page.addInitScript((storageSeed) => {
     localStorage.setItem('adminToken', 'mock-token');
@@ -288,11 +375,19 @@ export async function installMockAdminDashboardApi(
     } else {
       localStorage.removeItem('adminDashboardSavedViews');
     }
-    localStorage.removeItem('adminDashboardColumns');
+    if (storageSeed.dashboardColumnsJson === null) {
+      localStorage.removeItem('adminDashboardColumns');
+    } else {
+      localStorage.setItem(
+        'adminDashboardColumns',
+        storageSeed.dashboardColumnsJson,
+      );
+    }
     sessionStorage.removeItem('adminDashboardState');
   }, {
     persistedDashboardStateJson,
     savedDashboardViewsJson,
+    dashboardColumnsJson,
   });
 
   await page.route(new RegExp(`${escapeRegex(API_BASE_URL)}/admin/letters(?:\\?.*)?$`), async (route) => {

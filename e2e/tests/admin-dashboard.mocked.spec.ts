@@ -29,6 +29,83 @@ test.describe('@mocked Admin Dashboard', () => {
     await expect(page.locator('.filter-hidden .filter-option-count')).toHaveText('1');
   });
 
+  test('serves the dashboard list as an explicit summary contract', async ({
+    page,
+  }) => {
+    await installMockAdminDashboardApi(page, {
+      visibleColumns: [
+        'type_letter',
+        'type_photo',
+        'type_cover',
+        'type_telegram',
+        'type_card',
+        'type_ephemera',
+        'type_voice',
+        'type_article',
+        'type_diary',
+      ],
+    });
+    const responsePromise = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return url.pathname === '/admin/letters'
+        && url.searchParams.get('limit') === '50';
+    });
+
+    await page.goto('/admin');
+    const response = await responsePromise;
+    const body = await response.json() as {
+      letters: Array<Record<string, unknown>>;
+    };
+    const [summary] = body.letters;
+
+    expect(Object.keys(summary).sort()).toEqual([
+      'collectionCode',
+      'createdAt',
+      'extraContentStatus',
+      'flagged',
+      'id',
+      'metadata',
+      'metadataContentStatus',
+      'metadataJobStatus',
+      'metadataPublished',
+      'pageCountsByType',
+      'photoDescriptionStatus',
+      'primaryImageType',
+      'primarySourceRevision',
+      'title',
+      'transcriptConfirmed',
+      'transcriptDigest',
+      'transcriptPublished',
+      'transcriptStatus',
+      'updatedAt',
+      'visibility',
+    ]);
+    expect(summary.pageCountsByType).toEqual({
+      letter: 1,
+      photo: 2,
+      cover: 3,
+      telegram: 4,
+      card: 5,
+      ephemera: 6,
+      voice: 7,
+      article: 8,
+      diary: 9,
+    });
+    expect(summary).not.toHaveProperty('images');
+    expect(summary).not.toHaveProperty('transcript');
+    expect(summary).not.toHaveProperty('workflowState');
+
+    await waitForAdminDashboardReady(page);
+    const firstRow = page.locator('tbody tr').first();
+    for (const [type, count] of Object.entries(
+      summary.pageCountsByType as Record<string, number>,
+    )) {
+      await expect(firstRow.locator(`[data-column="type_${type}"]`))
+        .toHaveText(String(count));
+    }
+    await expect(firstRow.locator('[data-column="extras"]')).toHaveText('44');
+  });
+
   test('keeps letter dashboard managers exclusive and dismisses them together', async ({
     page,
   }) => {

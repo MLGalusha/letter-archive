@@ -285,7 +285,10 @@ export function mapTypeToImageType(type: LetterType): FrontendLetterImageType {
 /**
  * Generates a title from letter metadata.
  */
-export function generateTitle(letter: Letter, collection: Collection): string {
+export function generateTitle(
+  letter: Pick<Letter, 'sender' | 'recipient' | 'extractedDate' | 'dateRaw'>,
+  collection: Pick<Collection, 'title' | 'collectionCode'>
+): string {
   if (letter.sender && letter.recipient) {
     return `Letter from ${letter.sender} to ${letter.recipient}`;
   }
@@ -396,7 +399,9 @@ export function formatPartialDate(dateRaw: string): string {
  * avoiding timezone shifts for historical dates.
  * (e.g., new Date('1886-03-14') in UTC becomes March 13 in PST)
  */
-export function formatLetterDate(letter: Letter): string | undefined {
+export function formatLetterDate(
+  letter: Pick<Letter, 'extractedDate' | 'dateRaw'>
+): string | undefined {
   if (letter.extractedDate) {
     const isoParts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(letter.extractedDate);
     if (isoParts) {

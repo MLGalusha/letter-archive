@@ -7,13 +7,13 @@ Last updated: July 25, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 043 — correspondence storage deletion is reference-safe,
-  complete
-- Last sealed cleanup implementation: reference-safe correspondence storage
-  deletion at `276c87c1`
+- Current checkpoint: 044 — correspondence membership and its first page commit
+  atomically, complete
+- Last sealed cleanup implementation: atomic correspondence membership and first
+  page at `c183dad6`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Active slice: 044 — commit new correspondence membership with its first page.
+- Active slice: reassessment pending.
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -54,7 +54,7 @@ tree:
 
 ## Slice 044 — Atomic Correspondence Membership and First Page
 
-Status: framed; implementation pending.
+Status: complete at `c183dad6`.
 
 Problem:
 
@@ -176,6 +176,59 @@ Baseline:
 - PostgreSQL foreign-key locking serializes collection-locked source mutations
   against later membership insertion, but it does not make the earlier standalone
   insert and later page transaction atomic.
+
+Delivered:
+
+- Upload preflight is now read-only. The page-source transaction is the sole
+  production owner of both `letters` insertion and `letter_pages` persistence.
+- The transaction locks the collection and all committed members in deterministic
+  UUID order, resolves or inserts the exact requested member, persists the page,
+  invalidates derived state, advances the whole group, and returns the authoritative
+  committed Letter.
+- Every page commit carries an explicit present-or-absent member observation.
+  A previously observed member that was deleted or replaced rejects as stale; a
+  genuinely absent member may linearize after deletion and create a new atomic unit.
+- The first member in an empty group commits with its page at revision one.
+  Same-page concurrent uploads adopt one winner without a second source advance;
+  different-page concurrent uploads serialize into one member, two pages, and two
+  advances.
+- The native PostgreSQL proof now covers atomic visibility, rollback after both
+  inserts, both concurrent-upload shapes, and all three upload/deletion orderings.
+  Its transaction signals are bounded and surface early failures instead of hanging.
+- Architecture coverage fences the only production `letters` insert inside the
+  transactional page-owner function and rejects a future standalone writer.
+
+Evidence:
+
+- Focused coverage passed 7 files / 82 tests; backend typecheck passed.
+- Complete backend coverage passed 110 files / 1,151 tests.
+- The migration harness passed from a fresh database and the historical rollout
+  fixtures. The page-source and correspondence-membership native PostgreSQL proofs
+  passed both fresh and after migration 0054.
+- Aggregate verification passed: backend 110 files / 1,151 tests, frontend 152 files /
+  1,063 tests, backend typecheck, frontend production build, and mocked browser suite
+  78/78.
+- The new native script passed `node --check`; the migration harness passed
+  `bash -n`; `git diff --check` passed.
+- Independent correctness and maintainability reviews found no remaining P0-P3
+  issue after concurrent-upload proof, bounded race coordination, truthful rollback
+  test naming, and the stronger transactional architecture fence were added.
+
+Residuals:
+
+- Deployment must quiesce uploads and drain old API writers before reopening them on
+  this binary. Mixed old/new rolling writers are not supported without a database
+  constraint or migration.
+- Collection creation remains a separate operation, so a failed first upload may
+  leave an empty collection. Historical page-less members are not scanned or
+  repaired.
+- PostgreSQL and filesystem storage are intentionally not one atomic system.
+  Ambiguous database completion conservatively retains the immutable candidate.
+- Replaced `previousStoragePath` objects are still not reclaimed. Slice 043's
+  reference-safe cleanup helper is the intended basis for that later lifecycle work.
+- The member-plus-page rule is enforced by the application owner and architecture
+  tripwire, not by a database constraint. Unsupported external writers could bypass
+  it.
 
 ## Slice 043 — Reference-Safe Correspondence Storage Deletion
 

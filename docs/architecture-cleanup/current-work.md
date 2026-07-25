@@ -7,12 +7,13 @@ Last updated: July 25, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 038 — durable worker-owned transcript confirmation, framed
-- Last sealed cleanup implementation: characterized committed-versus-reported
-  confirmation outcomes at `1d9e18f2`
+- Current checkpoint: 038 — durable worker-owned transcript confirmation, complete
+- Last sealed cleanup implementation: durable worker-owned transcript confirmation
+  at `46418d6f`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Active slice: 038 — durable worker-owned transcript confirmation.
+- Active slice: none; reassess the remaining program and frame the next smallest
+  behavior-preserving or correctness-focused boundary before editing production code.
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -3548,7 +3549,7 @@ Residual decisions and next seam:
 
 ## Slice 038 — Durable Worker-Owned Transcript Confirmation
 
-Status: framed; implementation in progress
+Status: complete at `46418d6f`
 
 Problem:
 
@@ -3647,10 +3648,85 @@ Baseline:
 
 - Slice 037 aggregate checkpoint: backend 106 files / 1,086 tests, frontend 147 files /
   996 tests, production build, and mocked browser 72/72 passed.
-- The synchronous route, default frontend timeout, Dashboard double-mutation, and
-  MetadataSection duplicate action remain characterized at `1d9e18f2`.
+- At framing, the synchronous route, default frontend timeout, Dashboard
+  double-mutation, and MetadataSection duplicate action were characterized at
+  `1d9e18f2`.
 
 Rollback base: `8de8866f`.
+
+Delivered:
+
+- Migration 0055 adds one nullable exact-source confirmation identity, deterministic
+  intent identity, versioned metadata-guidance envelope, and exact guidance/run
+  binding without inventing provenance for older confirmations.
+- A database check prevents a guidance-unaware worker from moving a guided row to
+  `RUNNING`. The invalidation trigger retires identities or guidance on the exact
+  source/input/terminal boundaries and rejects a legacy combined confirmation stamp
+  plus metadata claim before it can erase the new fields.
+- `metadata-input-identity.ts` owns canonical exact-UTF-8 SHA-256 identities for every
+  metadata provider input and owns validation/resolution of durable guidance.
+- `transcript-confirmation.ts` serializes confirmation with a row lock and commits the
+  immutable receipt, exact transcript/source identity, guidance, and eligible
+  `PENDING` metadata work in one transaction. Same-intent replay retains the original
+  confirmation, different guidance conflicts, and current input/disposition is
+  re-read rather than cached.
+- The HTTP route performs no provider work. It returns `202` with a durable receipt,
+  optionally hydrates the current admin Letter only when its confirmation ID matches,
+  and treats the worker wake as advisory after commit.
+- The metadata worker binds guidance to its exact claim. Retry, lease recovery, and
+  deferred entity extraction preserve it; explicit newer work supersedes it; exact
+  terminal entity success clears it atomically.
+- Admin DTOs expose the durable metadata job state and optional confirmation ID;
+  positive public read models expose neither.
+- Letter Review and Dashboard share one outcome coordinator that sends one POST,
+  never retries it, reconciles receipt-only and status-0/5xx ambiguity with one
+  authoritative GET, and retains receipt copy only for the exact source and
+  confirmation ID.
+- Letter Review hashes the live editor snapshot after ordered autosave flushing.
+  Browser-compatible `@noble/hashes` preserves the supported insecure HTTP LAN/phone
+  workflow where Web Crypto is unavailable.
+- Dashboard no longer follows confirmation with synchronous regeneration.
+  `MetadataSection` distinguishes queued, extracting, failed/retry, and local
+  regeneration state, and cannot offer duplicate generation while durable work is
+  queued or running.
+
+Evidence:
+
+- Focused frontend confirmation contracts: 6 files / 71 tests passed.
+- Focused mocked-browser confirmation contract: 10/10 passed, covering live transcript
+  autosave ordering, receipt-only success, accepted receipt plus failed hydration,
+  newer confirmation identity, real transport abort, pre/post-commit 500 outcomes,
+  unknown outcome, coded source conflict, queued-action disabling, and stale-visit
+  rejection.
+- Touched frontend ESLint: passed. `@noble/hashes@2.2.0` resolved exactly and the
+  production build passed under the repository's Node 20.20.1 runtime.
+- Fresh Postgres 16 migrations, migration-era replay suites, and live database
+  interleavings passed. The Slice 038 regression proves that the legacy combined
+  stamp-and-claim rolls back completely, leaves the exact guided row queued, and lets
+  only a correctly bound current worker claim it.
+- Aggregate `CI=1 ./scripts/verify-all.sh`: backend 108 files / 1,118 tests, backend
+  typecheck, frontend 149 files / 1,029 tests, production build, and mocked browser
+  77/77 passed.
+- `git diff --check`: passed.
+
+Independent review:
+
+- Frontend/concurrency review first found that confirmation hashed the older DTO
+  transcript and that Web Crypto was unavailable in the documented HTTP LAN workflow.
+  Both were repaired and the final frontend plus browser re-audits reported no
+  remaining P0-P2 finding.
+- Backend/data-integrity review first found that a legacy API could combine a new
+  stamp with `PENDING -> RUNNING` and clear guidance before the check constraint. The
+  trigger and live regression were repaired; final backend re-review reported no
+  remaining P0-P2 finding.
+
+Residual:
+
+- Explicit admin-requested metadata/entity regeneration remains request-owned by
+  design and supersedes confirmation guidance. Converting that separate seam to
+  durable queued execution is not implied by this checkpoint.
+- The existing production-build large-chunk warnings remain visible and unchanged as
+  program debt; they were not suppressed.
 
 ## Slice 027 — Validated, Replay-Safe Dashboard Stored State
 

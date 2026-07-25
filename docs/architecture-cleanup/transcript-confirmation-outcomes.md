@@ -2,35 +2,38 @@
 
 Last verified: July 25, 2026
 
-This document separates the transcript-confirmation write from the metadata and
-entity work that the current HTTP request also performs. It is the authority for
-Slice 037 characterization and the boundary that replaces the synchronous request
-in the next behavior-changing slice.
+This document separates the transcript-confirmation write from metadata and entity
+processing. It is the authority for Slice 037 characterization and the delivered
+Slice 038 durable boundary.
 
-## Current Operation
+## Delivered Operation
 
-`POST /admin/letters/:letterId/confirm-transcript` currently performs five distinct
-steps:
+`POST /admin/letters/:letterId/confirm-transcript` now performs four bounded steps:
 
-1. Validate the source revision, workflow, transcription state, and correction
-   payload.
-2. Atomically confirm the transcript and claim metadata as `RUNNING`.
-3. Await metadata AI and publish or fail the claimed metadata run.
-4. Attempt entity extraction inline; entity failure is deliberately non-fatal after
-   metadata publication.
-5. Read and return a full admin Letter DTO.
+1. Validate the exact source revision, transcript digest, workflow, content type, and
+   optional reviewer guidance.
+2. Serialize on the Letter row and atomically record or replay the immutable
+   confirmation receipt, versioned guidance, and exact current metadata disposition.
+   Newly eligible work is persisted as `PENDING`.
+3. Request an advisory worker wake after the durable commit.
+4. Optionally hydrate an admin Letter whose confirmation ID still matches the receipt;
+   otherwise return the accepted receipt alone.
 
-Only step 2 is atomic. It commits before provider work starts. The request and both
-frontend consumers nevertheless treat one returned DTO or one thrown error as the
-outcome of the entire operation.
+The request performs no provider work. Wake or post-commit DTO failure cannot turn an
+accepted confirmation into a reported confirmation failure. Only the singleton worker
+claims queued metadata, binds durable guidance to its exact run, and passes the same
+still-current guidance to deferred entity extraction.
 
-The provider timeout is five minutes. The frontend aborts the request after twenty
-seconds, but aborting the browser fetch does not roll back the committed claim or
-stop the API process.
+Both frontend consumers issue the POST once and never retry it automatically.
+Receipt-only results and ambiguous status-0/5xx failures reconcile with one
+authoritative GET.
 
-## Committed-versus-reported Matrix
+## Pre-Slice 038 Committed-versus-Reported Matrix
 
-| Failure or branch | Durable state | Current HTTP result | Retry truth |
+This historical matrix explains why the synchronous operation was replaced. These are
+not claims about the delivered route.
+
+| Failure or branch | Durable state | Pre-038 HTTP result | Retry truth |
 | --- | --- | --- | --- |
 | Initial validation or stale source | No write by this request | 400 or coded 409 | Safe after correcting or reloading |
 | Confirmation/metadata claim loses while the exact transcript remains current | The fallback CAS can still commit confirmation while another metadata mutation owns the newer revision | 200 if the final DTO read succeeds | Returned state is authoritative; blind replay is unsafe |
@@ -48,25 +51,23 @@ stop the API process.
 | Repeat after provider failure | The first failure advances the metadata revision; a second request re-confirms and claims that revision as another queued-kind attempt | Usually another long request | This is the clearest unsafe blind-retry branch |
 | Repeat after metadata success | No write because canonical workflow is no longer `TRANSCRIBED` | 400 | Current endpoint is not idempotent |
 
-The endpoint is therefore repeatable but not idempotent. An error does not establish
-that nothing committed, and a success does not establish that this request extracted
-metadata.
+The old endpoint was therefore repeatable but not idempotent. An error did not
+establish that nothing committed, and a success did not establish that the request
+extracted metadata.
 
-## Current Frontend Mismatch
+## Resolved Frontend Mismatch
 
-Letter Review always says `Transcript confirmed — metadata extracted` after adopting
-the response. Any uncoded failure reports confirmation failure without refreshing
-authoritative state, leaving a stale confirmation action available for an implicit
-retry.
+Letter Review now adopts only through its route-visit guard, reports exact
+disposition-specific copy only when the source and confirmation ID match, and blocks
+blind replay after accepted-but-unavailable or unknown outcomes.
 
-Dashboard combines confirmation and metadata generation. If a future fast
-confirmation response returns confirmed, still-empty metadata, Dashboard immediately
-calls synchronous regeneration. That would race the queued worker job. Dashboard also
-refreshes only after the combined path settles and always reports generated or
-regenerated copy.
+Dashboard confirms once, never follows confirmation with synchronous regeneration,
+refreshes after every outcome, and uses neutral copy for an authoritative state that
+cannot be attributed to the receipt.
 
-`MetadataSection` decides whether to offer Generate from content status alone. It does
-not suppress the action while the workflow is `METADATA_EXTRACTING`.
+`MetadataSection` uses durable metadata job status to show disabled `Queued` or
+`Extracting...` actions and offers `Retry` only after failed/empty work. Local
+regeneration state retains precedence while the request is active.
 
 ## Rejected Partial Fixes
 
@@ -75,15 +76,15 @@ not suppress the action while the workflow is `METADATA_EXTRACTING`.
 - Automatically retrying the POST can duplicate or conflict with committed work.
 - Returning HTTP 202 alone does not describe whether metadata was queued, already
   running, already available, failed, or not applicable.
-- Moving the existing call to the worker without new persistence loses the
-  sender/recipient corrections, which currently exist only in in-memory
+- Moving the old call to the worker without new persistence would lose the
+  sender/recipient corrections, which then existed only in in-memory
   `ExtractionOptions`.
 - Leaving the API-owned claim `RUNNING` for a worker does not work: worker discovery
   selects durable `PENDING` metadata rows.
 - Treating stored sender/recipient scalars as correction truth is unsafe because they
   can be prior AI output. The pipeline deliberately avoids that promotion today.
 
-## Target Invariant
+## Delivered Invariant
 
 Confirming a transcript is a short, exact-source, idempotent database mutation. For an
 eligible letter whose metadata is `PENDING` or `FAILED`, one commit records reviewer
@@ -139,12 +140,12 @@ to the confirmation that created the job. At minimum:
   clear or supersede it;
 - rolling deployment cannot let an older API write make stale guidance look current.
 
-The binding and rollout rule must be proven in migration and lifecycle tests before
-the API stops running metadata inline.
+Migration, live-database, lifecycle, route, worker, frontend, and browser contracts
+now prove the binding and rollout rule after removal of inline metadata execution.
 
 ## Implementation Acceptance
 
-The behavior-changing continuation must prove:
+Slice 038 proves:
 
 1. Confirmation and durable metadata intent commit atomically against the exact
    source and transcript.

@@ -13,7 +13,7 @@ Last updated: July 25, 2026
   deletion at `276c87c1`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Active slice: reassessment pending.
+- Active slice: 044 — commit new correspondence membership with its first page.
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -51,6 +51,118 @@ tree:
   1,871 lines; the largest public backend route is `routes/letters.ts` at about 2,230
   lines, though its search section is comparatively cohesive.
 - Redesign and refactoring docs contained stale active-phase claims.
+
+## Slice 044 — Atomic Correspondence Membership and First Page
+
+Status: framed; implementation pending.
+
+Problem:
+
+`processUploadedFile()` currently calls `findOrCreateLetter()` before it inspects or
+stores the uploaded bytes and before `findOrCreatePage()` opens the page-source
+transaction. A new correspondence member therefore commits independently at the
+schema default `primary_source_revision = 0`, with no page.
+
+Successful first-page persistence later locks the correspondence and advances every
+member to one successor revision, so the split usually repairs itself. The gap is
+nevertheless a real lifecycle state. If file inspection, storage, or page commit
+fails, the page-less member remains. In an established correspondence its revision
+can disagree with every sibling. At revision zero, a deletion confirmed before the
+insert can lock the enlarged all-zero group, accept the stale confirmation, and
+delete the newly inserted member before its first page commits.
+
+Merely seeding a standalone insert with the group's current maximum revision would
+remove the mismatch but preserve the deeper defect: membership would still become
+visible at the same revision as a confirmation that never observed it, and failures
+would still leave page-less members. The ownership boundary must encompass the member
+and its first source.
+
+Target invariant:
+
+A new correspondence member is never committed independently of its first page
+source. Resolving or inserting the exact member, persisting the page pointer,
+invalidating derived state, and advancing the complete correspondence to one
+successor `primarySourceRevision` occur in one transaction under the established
+collection-first, members-in-UUID-order lock. The member and page commit together or
+neither is visible.
+
+Scope:
+
+- Replace upload's mutating letter preflight with an exact, read-only identity lookup.
+  It may support duplicate/file decisions but cannot create membership.
+- Extend the correspondence lock owner with an identity-based entry point that locks
+  the collection first and then every currently committed member in UUID order,
+  including when the requested member does not yet exist.
+- Let the transactional page-source owner resolve the requested type from that locked
+  group or insert it at the locked group's current maximum source revision.
+- Persist the requested page and run the existing type-specific invalidation before
+  committing. A newly inserted member begins at the locked current revision only
+  inside the transaction and is advanced with all siblings before it becomes visible.
+- Fence an upload that observed an exact member by that member ID. If deletion removes
+  or replaces the observed member before page commit, reject as a source conflict
+  instead of recreating it from a stale page/file observation.
+- Preserve the current behavior when no exact member existed at preflight: a fresh
+  upload may linearize after a concurrent correspondence deletion and create a new
+  member plus page from its newly staged immutable candidate.
+- Keep upload response fields and duplicate, repair, reconcile, replacement,
+  candidate-cleanup, and ambiguous-database-failure behavior unchanged.
+- Add architecture coverage that upload preflight is read-only and production letter
+  insertion is owned only by the transactional page-source boundary.
+- Extend the native PostgreSQL page-source proof with the upload/deletion ordering and
+  rollback cases that unit mocks cannot establish.
+
+Non-goals:
+
+- Do not add a correspondence-group table, membership revision, schema constraint, or
+  migration.
+- Do not make filesystem storage atomic with PostgreSQL. A prepared immutable
+  candidate remains conservatively retained after an ambiguous database failure.
+- Do not scan for or delete historical page-less letters created by older code.
+- Do not reclaim `previousStoragePath`; the reference-safe cleanup owner from Slice
+  043 remains the intended basis for that later storage-lifecycle slice.
+- Do not change filename identity, collection creation, upload routes, response JSON,
+  duplicate-confirmation UX, source invalidation semantics, or product behavior.
+
+Acceptance:
+
+- No production path inserts `letters` before an upload has a page source ready to
+  commit; the only production `letters` insert belongs to the transactional
+  page-source owner.
+- A new first page commits its letter and page in one transaction. A forced
+  invalidation failure rolls back both rows.
+- Adding a new companion to a correspondence at revision `N` commits every member,
+  including the new one, at `N + 1`; the new member is never externally visible at
+  `0` or `N`.
+- If upload commits first, a deletion confirmed at revision `N` waits for the shared
+  lock and then rejects the `N + 1` group. If deletion commits first after upload
+  observed an exact member, upload rejects rather than recreating stale ownership.
+- If no exact member existed before a deletion, a fresh upload may commit afterward,
+  but its member and page appear together at one successor revision.
+- Two concurrent first uploads for the same identity produce one member and one page.
+  The loser returns the committed winner under keep policy and its unused immutable
+  candidate remains eligible for the existing cleanup path.
+- Existing exact-member no-op, multi-page, repair, reconcile, force replacement, and
+  source-expectation behavior remain unchanged.
+- Focused upload, letter-page, letter lookup, deletion, architecture, and native
+  PostgreSQL concurrency checks pass, followed by backend typecheck, the backend
+  package suite, aggregate verification, and independent review with no unresolved
+  P0-P2 finding.
+
+Baseline:
+
+- Checkpoint 043 aggregate verification passed: backend 110 files / 1,143 tests,
+  backend typecheck, frontend 152 files / 1,063 tests, production build, and mocked
+  browser suite 78/78.
+- The focused letter, page, upload, page-source architecture, correspondence deletion,
+  and deletion-ownership suites pass 6 files / 70 tests.
+- `findOrCreateLetter()` is the only production `letters` insert and its only
+  production caller is `upload.ts`. It commits before upload file inspection/storage
+  and before the `findOrCreatePage()` transaction.
+- `findOrCreatePage()` is already the sole page-pointer writer and the sole owner of
+  source invalidation. It currently requires a pre-existing `letterId`.
+- PostgreSQL foreign-key locking serializes collection-locked source mutations
+  against later membership insertion, but it does not make the earlier standalone
+  insert and later page transaction atomic.
 
 ## Slice 043 — Reference-Safe Correspondence Storage Deletion
 

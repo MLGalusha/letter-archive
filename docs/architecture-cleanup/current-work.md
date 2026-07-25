@@ -12,8 +12,8 @@ Last updated: July 24, 2026
   confirmation at `05ad2bff`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Next slice: 037 — characterize truthful transcript-confirmation completion before
-  changing its synchronous backend behavior or user-visible outcome.
+- Current slice: 037 — characterize truthful transcript-confirmation completion,
+  framed and in progress.
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -3378,6 +3378,93 @@ Residual decisions and next seam:
 No new product feature, production layout, CSS, backend route, AI prompt, pipeline,
 database schema, correction semantics, timeout, deployment, or external state changed
 in this slice.
+
+## Slice 037 — Truthful Transcript Confirmation Characterization
+
+Status: framed and in progress
+
+Problem:
+
+Transcript confirmation is presented as one request but commits through five separate
+boundaries: confirmation/metadata claim, metadata AI/publication, entity extraction,
+and the final DTO read. The atomic confirmation and `RUNNING` claim commit before AI
+starts. A provider error, API death, twenty-second browser timeout, late source
+change, or final DTO-read failure can therefore report failure after confirmation—or
+all derived work—already committed.
+
+The two frontend consumers erase those distinctions. Letter Review reports every
+accepted response as `metadata extracted` and performs no authoritative read after an
+uncoded failure. Dashboard treats confirmed-but-empty metadata as a reason to call
+synchronous regeneration, refreshes only after the combined path settles, and always
+reports generated/regenerated copy. A fast worker-enqueue change would race itself and
+lose the dialog corrections because those values currently exist only in request
+memory.
+
+Target invariant:
+
+The current committed-versus-reported contract is executable and documented before
+production behavior changes. The agreed replacement is a short, exact-source,
+idempotent confirmation mutation that atomically persists source-bound human guidance
+and durable `PENDING` metadata intent. The request performs no AI. The singleton
+worker owns metadata/entity execution and retry, while both frontends use an explicit
+disposition and authoritative reconciliation instead of inferring completion from
+HTTP success or retry safety from an error.
+
+Scope:
+
+- Record the exact backend phase/failure/retry matrix and both frontend consumer
+  mismatches in
+  [transcript-confirmation-outcomes.md](transcript-confirmation-outcomes.md).
+- Add route characterization for provider failure after atomic claim, final DTO-read
+  failure after completed work, uncoded supersession, entity-failed successful DTO,
+  extraction-skipped branches, and repeat behavior.
+- Make the deterministic Letter Review mock distinguish failure before mutation from
+  committed-then-error. Prove the current browser keeps stale retryable-looking state
+  until an authoritative reload reveals the committed confirmation.
+- Characterize the frontend twenty-second timeout as an ambiguous status-0 failure
+  and prove neither current consumer owns committed-outcome reconciliation.
+- Add one-way architecture checks for the intended next boundary: no worker migration
+  is permitted without durable correction guidance, and Dashboard must not infer that
+  confirmed-plus-empty means synchronous regeneration remains safe.
+- Use the evidence to specify the minimum schema/service/response/frontend migration.
+  Do not implement a partial async path in this characterization slice.
+
+Non-goals:
+
+- No production endpoint, timeout, response, database, worker, copy, retry,
+  correction-normalization, component, or CSS change.
+- Do not lengthen the timeout, add automatic POST retry, swallow committed failures,
+  or call current `RUNNING` state a durable queue.
+- Do not enqueue without persisting and binding sender/recipient guidance.
+- Do not make stored AI identity fields implicitly human-authoritative.
+- Do not add polling or a generic mutation-recovery framework before the two
+  consumers' ownership rules are executable.
+
+Acceptance:
+
+- Tests distinguish every dangerous committed-then-error branch from a clean
+  pre-commit failure and connect the backend state to current frontend behavior.
+- The target document explains why timeout-only, retry-only, status-code-only, and
+  worker-without-guidance approaches are unsound.
+- The next implementation has explicit acceptance for atomic enqueue, idempotency,
+  durable correction flow through metadata and deferred entities, wake failure,
+  disposition, ambiguous reconciliation, and duplicate-action suppression.
+- Focused backend/frontend/browser checks, aggregate verification, touched lint, and
+  `git diff --check` pass. Independent backend, frontend, and skeptical-test reviews
+  report no remaining P0-P2 characterization gap.
+
+Baseline:
+
+- Backend confirmation/metadata lifecycle neighborhood: 3 files / 77 tests passed.
+- Frontend confirmation/Dashboard/MetadataSection neighborhood: 4 files / 34 tests
+  passed.
+- Slice 036 dedicated mocked confirmation browser contract: 4/4 passed, but its
+  forced 500 occurs before mutation and its success mock makes all phases artificially
+  atomic.
+- Slice 036 aggregate checkpoint: backend 105 files / 1,073 tests, frontend 147 files /
+  992 tests, production build, and mocked browser 71/71 passed.
+
+Rollback base: `e5c741af`.
 
 ## Slice 027 — Validated, Replay-Safe Dashboard Stored State
 

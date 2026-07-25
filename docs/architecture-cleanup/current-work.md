@@ -4,17 +4,17 @@ Last updated: July 25, 2026
 
 ## Resume Here
 
-- Working branch: `architecture-cleanup`
+- Reviewed source branch: `architecture-cleanup`
+- Integration target: local `main` by fast-forward; `origin/main` remains held behind
+  the external Cloud Build trigger-verification gate
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 046 — public archive URL, controls, persistence, and requests
-  share one canonical state owner, complete
-- Last sealed cleanup implementation: canonical public archive URL state at
-  `ffea16b0`
+- Current checkpoint: 047 — complete release-candidate audit and hardening
+- Last sealed cleanup implementation: release-candidate hardening at `2724f53c`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Active slice: 047 — audit and harden the complete release candidate, then
-  fast-forward it into `main`.
+- Active slice: none. The cleanup program is intentionally stopped at a reviewed local
+  `main`; remote integration and production deployment remain operator-gated.
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -55,7 +55,7 @@ tree:
 
 ## Slice 047 — Release-Candidate Audit and Main Integration
 
-Status: framed; audit and remediation in progress.
+Status: complete in implementation commit `2724f53c`.
 
 Problem:
 
@@ -133,13 +133,14 @@ Acceptance:
   suite when the local database fixture contract can be exercised safely.
 - `git diff --check` passes, a clean install can reproduce both packages, and the
   final aggregate verifier passes from the exact candidate commit.
-- `main` is fast-forwarded to that commit. Push it without force only after confirming
-  the actual Cloud Build trigger is file-backed to the new non-deploying
-  `cloudbuild.yaml`; otherwise stop at the clean local merge and require an operator
-  to hold the trigger. When pushed, check the post-push GitHub Actions result and
+- `main` is fast-forwarded to that commit. Push it without force only after enumerating
+  every main-watching Cloud Build trigger and confirming each is file-backed to
+  `cloudbuild.yaml` or `cloudbuild-frontend.yaml`, with no inline or alternate
+  deployment config; otherwise stop at the clean local merge and require an operator
+  to hold the triggers. When pushed, check the post-push GitHub Actions result and
   require local and remote `main` to resolve to the same reviewed commit.
 
-Baseline:
+Historical release baseline:
 
 - Recovery point: `ce3247d4` (`Record canonical archive URL checkpoint`).
 - After fetching on July 25, 2026, local and `origin/main` both resolve to
@@ -160,6 +161,141 @@ Baseline:
   drained, the migration to run under write quiescence, and 100% new binaries before
   reopening. Therefore the unmodified automatic pipeline is not safe for this first
   integration push.
+
+Delivered invariant:
+
+The reviewed source candidate has one explicit owner for production deployment, one
+fail-closed migration-generation policy, current runtime dependencies, and deterministic
+route/dialog ownership at the frontend edges found during release review. Push-triggered
+configs can only validate Docker builds. The separate deployment graph cannot begin
+without an operator's write-quiescence acknowledgement and an exact 40-character source
+commit, and it declares every dependency before use. Transcript confirmation cannot
+commit reviewer intent while eligible supplementary transcription is still pending or
+running. No independently confirmed P0–P2 repository finding remains.
+
+What changed:
+
+- Upgraded maintained backend and frontend dependencies instead of accepting stale
+  release risk. The backend now uses Multer 2.2.0, Express 4.22.2, Drizzle ORM 0.45.2,
+  Sharp 0.35.3, express-rate-limit 8.6.0, and Vitest 4.1.10. The frontend now uses
+  React Router DOM 7.18.1, Vite 7.3.6, Vitest 4.1.10, Pretext 0.0.8, and the current
+  ESLint 10 toolchain. The MDX editor's vulnerable transitive `js-yaml` is pinned to
+  4.3.0 without broad dependency overrides.
+- Moved transcript-confirmation serialization to the canonical correspondence-group
+  lock. A real related T/C/E source plus `PENDING` or `RUNNING` supplementary
+  transcription now returns coded 409
+  `TRANSCRIPT_CONFIRMATION_EXTRA_CONTENT_PENDING` before a receipt or guidance can be
+  queued. A default `PENDING` field without any related source does not create a false
+  block.
+- Keyed the admin collection editor to the route and added visit ownership to loads,
+  saves, generation, refreshes, and toasts. A → B and A → B → fresh A completions can
+  no longer repaint the wrong collection.
+- Tagged public Letter Detail data and adjacent-navigation data with their route
+  owner. The prior letter may remain visible while the next route loads, but its
+  header/footer arrows, keyboard navigation, swipe handlers, and collection scrubber
+  are disabled until the new route owns all required data.
+- Consolidated modal focus, Escape, topmost-dialog, Tab containment, accessible
+  naming, and opener restoration in `useAccessibleDialog`. Shared Modal,
+  ConfirmDialog, and regeneration dialogs now use that boundary. Destructive loading
+  confirmations ignore Escape and backdrop dismissal; async regeneration restores
+  focus only after its disabled opener becomes usable again.
+- Replaced tautological and conditional-pass navigation browser assertions with
+  required header, footer, navigation, and not-found contracts.
+- Split Cloud Build into two build-only validation configs and one manually invoked
+  `cloudbuild.deploy.yaml`. The controlled graph requires write quiescence, pins image
+  tags to the exact source SHA, fails on IAM errors, migrates before new writers,
+  replaces and authorizes the worker before the backend, and deploys the frontend
+  after the backend. The runbook submits the remote Git origin at the reviewed SHA,
+  not an arbitrary dirty directory labelled with that SHA.
+- Guarded `npm run drizzle:generate`. The SQL journal reaches migration 0055 while
+  Drizzle snapshots stop at 0013; generation now exits nonzero without writing rather
+  than proposing duplicate historical DDL. The temporary reviewed SQL + journal +
+  disposable-Postgres workflow is documented consistently.
+- Corrected the frontend Node engine promise to match ESLint 10's supported Node 22
+  floor, removed the changed-page React refs lint finding without a rule suppression,
+  and retained the cleanup history rather than squashing away its recovery points.
+
+Evidence:
+
+- Three independent final reviews—backend/data integrity, frontend/user behavior, and
+  release/deployment—reported no remaining repository-side P0–P2 finding after
+  remediation.
+- The aggregate verifier passed: backend 110 files / 1,163 tests plus typecheck;
+  frontend 155 files / 1,098 tests plus TypeScript/production build; mocked Playwright
+  79/79. The backend suite was repeated from implementation commit `2724f53c`; the
+  final frontend closure independently repeated all 1,098 tests and the build.
+- Clean `npm ci` installations succeeded in backend, frontend, and e2e. Backend
+  production audit and the complete e2e audit are zero. Package graphs pass
+  `npm ls --all`.
+- Migration filesystem validation passed 15/15. The disposable-Postgres harness
+  applied the fresh chain and passed worker-lease, entity-liveness,
+  transcript-guidance, page-source, correspondence-membership, recovery/publication
+  race, and historical 0051/0053/0054 rollout proofs.
+- A real-server browser run used disposable PostgreSQL plus live backend/frontend
+  processes: 36 passed and 3 data-dependent cases skipped because the fresh database
+  intentionally contained no letter fixture. Admin login/logout/session/protected
+  routes, public/admin navigation, history, and not-found behavior passed.
+- Every Cloud Build YAML parses. A second parser proved each ID unique and every
+  `waitFor` dependency declared earlier; the manual deploy has 18 steps and exactly
+  one transitively gating root.
+- Changed frontend TypeScript files pass ESLint with zero findings. The full upgraded
+  lint reports 114 errors and 12 warnings across 63 files, down from the historical
+  154/28 baseline but not misrepresented as a green repository gate.
+- `git diff --check`, `git fsck --no-dangling`, migration-generation refusal,
+  staged secret-signature scanning, and tracked-artifact review passed. The guarded
+  generator left all 56 SQL filenames unchanged.
+- A local Docker build was attempted, but Docker Desktop could not complete Docker Hub
+  base-image metadata retrieval because its registry connection was occupied. It was
+  cancelled before any repository Dockerfile step failed; the checked-in Cloud Build
+  validation configs remain the reproducible image-build gate.
+
+Residuals and stopping decision:
+
+- Do not push remote `main` until an operator enumerates every live main-watching
+  Cloud Build trigger and verifies that it is file-backed to `cloudbuild.yaml` or
+  `cloudbuild-frontend.yaml`, with no inline/alternate deployment config. This
+  environment has no authenticated `gcloud`, so local `main` is the safe stopping
+  point.
+- Production is not deployed by this checkpoint. Follow
+  `deploy/cloudrun/README.md`: pause writes/Scheduler, drain all old writers, deploy
+  the exact remote SHA, prove the lease-aware worker manually, reopen administrative
+  writes, and enable scheduled reconciliation only in the later proof sequence.
+- Rebuild Drizzle snapshot lineage in an isolated follow-up before restoring generated
+  migrations. Benefit: ordinary schema diffs become safe again. Cost/risk: snapshot
+  reconstruction can silently bless historical drift, so it needs a zero-diff
+  baseline and fresh-chain proof rather than a quick generated file.
+- Frontend lint debt remains 114 errors and 12 warnings under the stronger ESLint 10
+  rules. Benefit of continuing: it will expose additional render-time ref/effect and
+  compiler-compatibility issues. Cost: a broad last-minute rewrite would mix many UI
+  domains and raise regression risk; repair it in measured ownership slices.
+- The production build still reports large lazy chunks, principally
+  `UpdateEditorPage` (about 1.18 MB) and Letter Review (about 555 kB minified).
+  Narrow editor/route code splitting could improve first-use download cost, but adds
+  loading boundaries and cache/error states; measure real navigation first.
+- `npm audit` retains four moderate development-only records through Drizzle Kit's
+  bundled esbuild. The advisory concerns exposing an old esbuild development server;
+  this project neither ships that dependency nor exposes such a server, and the
+  latest stable Drizzle Kit still carries the chain. Monitor upstream instead of
+  accepting npm's unsafe downgrade suggestion.
+- The frontend audit retains two records for React Router's unstable RSC-only CSRF
+  path. This application uses `BrowserRouter` and no RSC/server action APIs. Continue
+  monitoring for a compatible React Router DOM release; do not migrate frameworks
+  solely to silence an unreachable mode.
+- The data-rich real-server E2E cases should be repeated with an approved disposable
+  fixture before production deployment. The mocked 79/79 suite and 36 real-server
+  smoke cases cover current release behavior, but they do not substitute for a
+  seeded, production-shaped archive.
+- The proposed shared `PublicArchiveSurface` extraction remains deliberately deferred.
+  It could remove Home/Collection duplication, but it is a visual/public interaction
+  refactor with lower leverage and higher release risk than this stopping point.
+- Older `claude/*` branches and detached worktrees were inspected but not merged. They
+  contain separate feature/bug experiments outside the no-feature cleanup scope, and
+  `claude/loving-yonath` contains uncommitted user work. They remain preserved for a
+  later explicit review; none was overwritten or silently folded into this release.
+
+No product feature was added in Slice 047. The intended integration is a fast-forward
+of local `main` to the exact reviewed architecture-cleanup tree; remote push and
+production rollout remain separate external actions.
 
 ## Slice 046 — Canonical Public Archive URL State
 

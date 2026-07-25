@@ -7,12 +7,12 @@ Last updated: July 25, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 037 — truthful transcript-confirmation characterization
+- Current checkpoint: 038 — durable worker-owned transcript confirmation, framed
 - Last sealed cleanup implementation: characterized committed-versus-reported
   confirmation outcomes at `1d9e18f2`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Next slice: 038 — durable worker-owned transcript confirmation, not yet framed.
+- Active slice: 038 — durable worker-owned transcript confirmation.
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -3545,6 +3545,112 @@ Residual decisions and next seam:
   enqueue work, or change frontend copy until durable guidance, current-input
   disposition, receipt fallback, worker consumption, and ambiguous reconciliation are
   executable together.
+
+## Slice 038 — Durable Worker-Owned Transcript Confirmation
+
+Status: framed; implementation in progress
+
+Problem:
+
+The confirmation endpoint still owns an AI producer after its durable confirmation
+write. A browser timeout or final DTO-read failure can therefore report a failed
+confirmation after the confirmation and some or all derived work committed. Moving
+only the producer to the worker would lose the reviewer-supplied sender/recipient
+guidance, and an older worker in a rolling deployment could claim the new queued row
+without understanding that guidance.
+
+Target invariant:
+
+Transcript confirmation is one short, exact-source and exact-transcript transaction.
+It records an immutable confirmation identity, a deterministic same-intent identity,
+and a versioned guidance envelope atomically with newly eligible `PENDING` metadata
+work. The response contains a durable receipt and the exact current disposition;
+Letter hydration is optional. The request never invokes an AI provider. Only a current
+singleton worker can claim the guided row, and it resolves guidance from the
+post-claim durable source for both metadata and deferred entity extraction.
+
+Same-intent replay preserves the original confirmation identity and never resets
+queued, running, available, or failed work. Different guidance conflicts without
+replacement. The receipt's metadata-input identity is recomputed from every actual
+provider input, independently of attempt/lease revisions. Frontends never retry the
+POST automatically: they reconcile receipt-only responses and ambiguous transport or
+5xx outcomes with an authoritative GET.
+
+Scope:
+
+- Add nullable confirmation identity, source/digest identity, a versioned JSON
+  guidance envelope, and a metadata-guidance claim binding to `letters`.
+- Register one expand-only migration. Its database check must reject an older worker
+  that changes a guided metadata row to `RUNNING` without binding the guidance to that
+  exact run. Every new confirmation stores an envelope, including an all-null guidance
+  payload, so the rollout fence covers every newly queued confirmation.
+- Add one pure canonical SHA-256 identity module and one transcript-confirmation
+  service. The client supplies the transcript digest it observed; the service compares
+  it with the current durable transcript and uses a transaction/row lock to serialize
+  same- versus different-intent concurrency.
+- Define metadata-input identity from the actual provider inputs: letter ID,
+  transcription text, extra-content text and readiness state, raw/filename date, and
+  collection code. Do not include job revision, attempt, claim, lease, error, or
+  output-publication state.
+- Replace request-owned metadata/entity execution with atomic queueing plus an
+  advisory post-commit worker wake. Wake and optional DTO-read failure cannot turn an
+  accepted receipt into a confirmation failure.
+- Resolve durable guidance only from the canonical post-claim reload. Metadata
+  failure/retry/recovery and deferred entity failure/retry/recovery preserve it;
+  explicit newer regeneration/source intent supersedes it; exact terminal entity
+  publication clears it atomically.
+- Return `queued`, `already_running`, `already_available`, `failed`, or
+  `not_applicable` explicitly. Preserve coded pre-commit source, transcript, and
+  different-intent conflicts.
+- Add one shared frontend outcome coordinator. It reconciles receipt-only responses
+  and status-0/5xx ambiguity with `GET /admin/letters/:id`, never retries the POST, and
+  distinguishes accepted-but-unavailable from unknown outcome.
+- Make Letter Review report disposition-specific copy only after guarded adoption.
+  Make Dashboard confirm once, never follow it with synchronous regeneration, and
+  refresh after every outcome. Empty confirmed metadata routes to explicit metadata
+  retry; `METADATA_EXTRACTING` cannot offer another generation action.
+- Replace the temporary Slice 037 lexical tripwire with service, route, pipeline,
+  frontend, and browser behavior contracts.
+
+Non-goals:
+
+- Do not convert explicit metadata/entity regeneration to queued execution in this
+  slice; it is a separate request-owned seam and explicitly supersedes old confirmation
+  guidance.
+- Do not add polling, optimistic sender/recipient projection, a generic job framework,
+  a cross-package shared-contract package, or new user-visible controls.
+- Do not use `metadataRevision` as metadata-input identity or stored AI sender/
+  recipient fields as human guidance.
+- Do not depend on a perfectly timed API/worker deployment for correctness.
+- Do not tighten nullable rollout columns or backfill legacy confirmations with
+  identities or guidance that did not exist.
+
+Acceptance:
+
+- All twelve items in
+  [transcript-confirmation-outcomes.md](transcript-confirmation-outcomes.md) are
+  executable, including exact concurrent replay, current-input disposition, wake
+  failure, DTO fallback, durable worker/deferred-entity guidance, terminal clearing,
+  and ambiguous frontend reconciliation.
+- A precondition conflict performs no write or reconciliation. A committed receipt
+  never becomes a reported confirmation failure solely because wake or DTO hydration
+  failed.
+- An old metadata claimant that omits the new guidance/run binding is rejected by the
+  database while the row remains durably queued.
+- Focused migration, service, route, pipeline, frontend, and mocked-browser contracts
+  pass, followed by backend typecheck, touched lint, production build, and aggregate
+  `CI=1 ./scripts/verify-all.sh`.
+- Independent backend/data-integrity and frontend/concurrency review report no
+  unresolved P0-P2 finding.
+
+Baseline:
+
+- Slice 037 aggregate checkpoint: backend 106 files / 1,086 tests, frontend 147 files /
+  996 tests, production build, and mocked browser 72/72 passed.
+- The synchronous route, default frontend timeout, Dashboard double-mutation, and
+  MetadataSection duplicate action remain characterized at `1d9e18f2`.
+
+Rollback base: `8de8866f`.
 
 ## Slice 027 — Validated, Replay-Safe Dashboard Stored State
 

@@ -1,12 +1,18 @@
-import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import type { SearchFilters } from '../components/SearchBar/SearchBar';
 import { searchArchiveShelf, type ArchiveSearchResponse } from '../api/letters';
 import { saveSearchState, loadSearchState } from '../utils/searchPersistence';
 import {
+  decodeArchiveSearchParams,
+  encodeArchiveSearchParams,
   mergeArchiveItems,
   getResolvedArchiveSort,
+  hasArchiveSearchParams,
+  normalizeArchiveSearchState,
+  type ArchiveSearchCodecOptions,
+  type ArchiveSearchState,
   type ArchiveDefaultSort,
+  type SearchFilters,
 } from '../utils/archiveSearch';
 
 const ARCHIVE_PAGE_SIZE = 24;
@@ -21,47 +27,6 @@ const EMPTY_FACETS: ArchiveSearchResponse['facets'] = {
   tones: [],
   relationships: [],
 };
-
-function parseFormatsFromUrl(searchParams: URLSearchParams): SearchFilters['format'] {
-  const repeated = searchParams.getAll('format') as NonNullable<SearchFilters['format']>;
-  if (repeated.length > 0) return repeated;
-  const legacy = searchParams.get('format') as NonNullable<SearchFilters['format']>[number] | null;
-  return legacy ? [legacy] : null;
-}
-
-function parseFiltersFromUrl(
-  searchParams: URLSearchParams,
-  defaultSortOrder?: 'asc' | 'desc',
-): SearchFilters {
-  return {
-    format: parseFormatsFromUrl(searchParams),
-    collection: searchParams.get('collection') || null,
-    sender: searchParams.get('sender') || null,
-    recipient: searchParams.get('recipient') || null,
-    place: searchParams.get('place') || null,
-    topic: searchParams.get('topic') ? searchParams.get('topic')!.split(',') : null,
-    tone: searchParams.get('tone') ? searchParams.get('tone')!.split(',') : null,
-    relationship: searchParams.get('relationship') ? searchParams.get('relationship')!.split(',') : null,
-    year: searchParams.get('year') ? Number(searchParams.get('year')) : null,
-    dateRange: searchParams.get('yearFrom') || searchParams.get('yearTo')
-      ? {
-          start: searchParams.get('yearFrom') ? Number(searchParams.get('yearFrom')) : undefined,
-          end: searchParams.get('yearTo') ? Number(searchParams.get('yearTo')) : undefined,
-        }
-      : undefined,
-    verified: searchParams.get('verified') === null
-      ? null
-      : searchParams.get('verified') === 'true',
-    sort: (searchParams.get('sort') as SearchFilters['sort']) || undefined,
-    sortOrder: (searchParams.get('sortOrder') as SearchFilters['sortOrder']) || defaultSortOrder,
-  };
-}
-
-const FILTER_URL_KEYS = [
-  'q', 'collection', 'sender', 'recipient', 'format', 'sort',
-  'verified', 'hasTranscript', 'place', 'topic', 'tone',
-  'relationship', 'year', 'yearFrom', 'yearTo', 'sortOrder',
-] as const;
 
 export interface UseArchiveSearchConfig {
   /** localStorage key for persisting search state */
@@ -89,56 +54,98 @@ export interface UseArchiveSearchReturn {
   sortCueField: 'createdAt' | 'collection' | null;
 }
 
+function resolveInitialState(
+  searchParams: URLSearchParams,
+  storageKey: string,
+  codecOptions: ArchiveSearchCodecOptions,
+): ArchiveSearchState {
+  if (hasArchiveSearchParams(searchParams)) {
+    return decodeArchiveSearchParams(searchParams, codecOptions);
+  }
+
+  return normalizeArchiveSearchState(loadSearchState(storageKey), codecOptions);
+}
+
 export default function useArchiveSearch(config: UseArchiveSearchConfig): UseArchiveSearchReturn {
-  const { storageKey, defaultSort = 'relevance', defaultSortOrder, fixedFilters } = config;
-  const fixedKeys = useMemo(
-    () => new Set(Object.keys(fixedFilters ?? {})),
-    // fixedFilters identity is stable per call site — intentionally using JSON serialization
+  const {
+    storageKey,
+    defaultSort = 'relevance',
+    defaultSortOrder = 'desc',
+    fixedFilters,
+  } = config;
+  const fixedFiltersKey = JSON.stringify(fixedFilters ?? {});
+  const codecOptions = useMemo<ArchiveSearchCodecOptions>(
+    () => ({ defaultSort, defaultSortOrder, fixedFilters }),
+    // Configuration is compared by value so inline fixed-filter objects do not
+    // rehydrate search state on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [JSON.stringify(fixedFilters)],
+    [defaultSort, defaultSortOrder, fixedFiltersKey],
   );
+  const scopeKey = `${storageKey}\0${defaultSort}\0${defaultSortOrder}\0${fixedFiltersKey}`;
 
   const [searchParams, setSearchParams] = useSearchParams();
-
-  // ── Query state ──
-  const [searchQuery, setSearchQuery] = useState(() => {
-    const urlQ = searchParams.get('q');
-    if (urlQ) return urlQ;
-    const saved = loadSearchState(storageKey);
-    return saved?.query || '';
-  });
-
-  // ── Filter state ──
-  const [filters, setFiltersRaw] = useState<SearchFilters>(() => {
-    const hasUrlFilters = FILTER_URL_KEYS.some((k) => searchParams.get(k) !== null);
-    if (!hasUrlFilters) {
-      const saved = loadSearchState(storageKey);
-      if (saved?.filters) return { ...saved.filters, ...fixedFilters };
-    }
-    return { ...parseFiltersFromUrl(searchParams, defaultSortOrder), ...fixedFilters };
-  });
-
-  // Wrap setFilters to enforce fixedFilters
-  const setFilters = useCallback(
-    (f: SearchFilters) => {
-      setFiltersRaw(fixedFilters ? { ...f, ...fixedFilters } : f);
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [JSON.stringify(fixedFilters)],
+  const locationSearch = searchParams.toString();
+  const [archiveState, setArchiveState] = useState<ArchiveSearchState>(
+    () => resolveInitialState(searchParams, storageKey, codecOptions),
   );
+  const archiveStateRef = useRef(archiveState);
+  const previousLocationSearchRef = useRef(locationSearch);
+  const previousScopeKeyRef = useRef(scopeKey);
+  const selfWrittenSearchRef = useRef<string | null>(null);
+  const locationChanged = previousLocationSearchRef.current !== locationSearch;
+  const scopeChanged = previousScopeKeyRef.current !== scopeKey;
 
-  // ── Reset state when fixedFilters change (e.g. swipe to new collection) ──
-  const prevFixedRef = useRef(fixedFilters);
+  const commitLocalState = useCallback((candidate: ArchiveSearchState) => {
+    const next = normalizeArchiveSearchState(candidate, codecOptions);
+
+    // A canonical clean URL cannot distinguish an explicit local clear from a
+    // first visit that should hydrate persistence. Commit that one boundary
+    // immediately so an unmount before the normal 300 ms debounce cannot
+    // resurrect the previous private search.
+    const nextParams = encodeArchiveSearchParams(next, codecOptions);
+    if (!hasArchiveSearchParams(nextParams)) {
+      saveSearchState(storageKey, '', next.filters);
+    }
+
+    archiveStateRef.current = next;
+    setArchiveState(next);
+  }, [codecOptions, storageKey]);
+
+  // An external URL transition is authoritative, including a POP to an empty
+  // URL. A clean URL may hydrate persistence only when the archive scope itself
+  // changes. Local replaceState writes are acknowledged without rehydrating.
   useEffect(() => {
-    if (prevFixedRef.current === fixedFilters) return;
-    prevFixedRef.current = fixedFilters;
+    if (!locationChanged && !scopeChanged) return;
 
-    // Reload persisted state for the new storageKey, then overlay fixedFilters
-    const saved = loadSearchState(storageKey);
-    setSearchQuery(saved?.query || '');
-    setFiltersRaw({ ...(saved?.filters ?? parseFiltersFromUrl(searchParams, defaultSortOrder)), ...fixedFilters });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fixedFilters, storageKey]);
+    previousLocationSearchRef.current = locationSearch;
+    previousScopeKeyRef.current = scopeKey;
+
+    const acknowledgedLocalWrite = locationChanged
+      && !scopeChanged
+      && selfWrittenSearchRef.current === locationSearch;
+    selfWrittenSearchRef.current = null;
+    if (acknowledgedLocalWrite) return;
+
+    const targetHasArchiveParams = hasArchiveSearchParams(searchParams);
+    const next = scopeChanged && !targetHasArchiveParams
+      ? normalizeArchiveSearchState(loadSearchState(storageKey), codecOptions)
+      : decodeArchiveSearchParams(searchParams, codecOptions);
+
+    if (locationChanged && !scopeChanged && !targetHasArchiveParams) {
+      saveSearchState(storageKey, '', next.filters);
+    }
+
+    archiveStateRef.current = next;
+    setArchiveState(next);
+  }, [
+    codecOptions,
+    locationChanged,
+    locationSearch,
+    scopeChanged,
+    scopeKey,
+    searchParams,
+    storageKey,
+  ]);
 
   // ── Archive results state ──
   const [archiveResults, setArchiveResults] = useState<ArchiveSearchResponse>({
@@ -154,45 +161,46 @@ export default function useArchiveSearch(config: UseArchiveSearchConfig): UseArc
   const [archiveLoadMoreError, setArchiveLoadMoreError] = useState<string | null>(null);
   const requestVersionRef = useRef(0);
 
-  // ── Sync filters → URL params ──
+  const setSearchQuery = useCallback((query: string) => {
+    commitLocalState({
+      ...archiveStateRef.current,
+      query,
+    });
+  }, [commitLocalState]);
+
+  const setFilters = useCallback((filters: SearchFilters) => {
+    commitLocalState({
+      query: archiveStateRef.current.query,
+      filters,
+    });
+  }, [commitLocalState]);
+
+  const { query: searchQuery, filters } = archiveState;
+
+  // Local state is reflected in the current history entry immediately. This
+  // finishes before the debounced request and avoids a POP racing a pending URL
+  // write. The codec preserves every URL key the archive does not own.
   useEffect(() => {
-    const nextParams = new URLSearchParams();
-    if (searchQuery.trim()) nextParams.set('q', searchQuery.trim());
-    if (filters.format?.length) {
-      filters.format.forEach((f) => nextParams.append('format', f));
-    }
-    // Only write non-fixed filter keys to URL
-    if (!fixedKeys.has('collection') && filters.collection) nextParams.set('collection', filters.collection);
-    if (filters.sender) nextParams.set('sender', filters.sender);
-    if (filters.recipient) nextParams.set('recipient', filters.recipient);
-    if (filters.place) nextParams.set('place', filters.place);
-    if (filters.topic?.length) nextParams.set('topic', filters.topic.join(','));
-    if (filters.tone?.length) nextParams.set('tone', filters.tone.join(','));
-    if (filters.relationship?.length) nextParams.set('relationship', filters.relationship.join(','));
-    if (filters.year) nextParams.set('year', String(filters.year));
-    if (filters.dateRange?.start) nextParams.set('yearFrom', String(filters.dateRange.start));
-    if (filters.dateRange?.end) nextParams.set('yearTo', String(filters.dateRange.end));
-    if (filters.verified !== undefined && filters.verified !== null) {
-      nextParams.set('verified', filters.verified ? 'true' : 'false');
-    }
-    // Omit sort from the URL when it matches the page default — keeps
-    // canonical URLs clean (no ?sort=relevance on HomePage, no ?sort=letterDate
-    // on CollectionDetailPage).
-    if (filters.sort && filters.sort !== defaultSort) nextParams.set('sort', filters.sort);
-    if (filters.sortOrder && filters.sortOrder !== 'desc') {
-      nextParams.set('sortOrder', filters.sortOrder);
-    }
+    if (locationChanged || scopeChanged) return;
 
-    if (nextParams.toString() === searchParams.toString()) return;
+    const nextParams = encodeArchiveSearchParams(archiveState, {
+      ...codecOptions,
+      currentParams: searchParams,
+    });
+    const nextSearch = nextParams.toString();
+    if (nextSearch === locationSearch) return;
 
-    const timer = window.setTimeout(() => {
-      startTransition(() => {
-        setSearchParams(nextParams, { replace: true });
-      });
-    }, 250);
-
-    return () => window.clearTimeout(timer);
-  }, [filters, fixedKeys, searchParams, searchQuery, setSearchParams, defaultSort]);
+    selfWrittenSearchRef.current = nextSearch;
+    setSearchParams(nextParams, { replace: true });
+  }, [
+    archiveState,
+    codecOptions,
+    locationChanged,
+    locationSearch,
+    scopeChanged,
+    searchParams,
+    setSearchParams,
+  ]);
 
   // ── Persist to localStorage (debounced) ──
   useEffect(() => {
@@ -285,8 +293,9 @@ export default function useArchiveSearch(config: UseArchiveSearchConfig): UseArc
         err instanceof Error ? err.message : 'Failed to load more archive results',
       );
     } finally {
-      if (requestVersion !== requestVersionRef.current) return;
-      setArchiveLoadingMore(false);
+      if (requestVersion === requestVersionRef.current) {
+        setArchiveLoadingMore(false);
+      }
     }
   }, [archiveLoading, archiveLoadingMore, archiveResults, requestParams]);
 

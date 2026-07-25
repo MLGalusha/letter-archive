@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type Ref } from "react";
 import type { ArchiveSearchFacets, LetterImageType } from "../../types/Letter";
 import useIsMobile from "../../hooks/useIsMobile";
+import type { SearchFilters } from "../../utils/archiveSearch";
 import "./SearchBar.css";
 import {
   ARCHIVE_FORMAT_LABELS,
@@ -43,22 +44,7 @@ interface SearchBarProps {
   onFiltersChange: (filters: SearchFilters) => void;
 }
 
-export interface SearchFilters {
-  format?: LetterImageType[] | null;
-  collection?: string | null;
-  sender?: string | null;
-  recipient?: string | null;
-  place?: string | null;
-  topic?: string[] | null;
-  tone?: string[] | null;
-  relationship?: string[] | null;
-  year?: number | null;
-  dateRange?: { start?: number; end?: number };
-  hasTranscript?: boolean | null;
-  verified?: boolean | null;
-  sort?: "relevance" | "createdAt" | "letterDate" | "sender" | "recipient" | "collection";
-  sortOrder?: "asc" | "desc";
-}
+export type { SearchFilters } from "../../utils/archiveSearch";
 
 export default function SearchBar({
   query,

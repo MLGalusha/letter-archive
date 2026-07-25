@@ -1,5 +1,5 @@
 import type { LetterImageType } from "../../types/Letter";
-import type { SearchFilters } from "./SearchBar";
+import type { SearchFilters } from "../../utils/archiveSearch";
 
 export type SortFieldOption = {
   value: NonNullable<SearchFilters["sort"]>;

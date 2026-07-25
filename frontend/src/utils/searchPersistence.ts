@@ -1,4 +1,4 @@
-import type { SearchFilters } from '../components/SearchBar/SearchBar';
+import type { SearchFilters } from './archiveSearch';
 
 interface SavedSearchState {
   query: string;

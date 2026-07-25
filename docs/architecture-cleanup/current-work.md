@@ -7,12 +7,12 @@ Last updated: July 24, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 032 — remove the retired Dashboard collection-picker style surface
-- Last sealed cleanup implementation: dead Dashboard filter CSS deletion at
-  `6ebe7886`
+- Current checkpoint: 032 — current Dashboard collection-filter and table style owners
+- Last sealed cleanup implementation: retired Dashboard collection-picker CSS deletion
+  at `61ccdbf4`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Current slice: framed; production implementation has not started
+- Current slice: next-slice orientation; no production implementation is open
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -2582,7 +2582,7 @@ Rollback base: `6365ec4f`.
 
 ## Slice 032 — Delete the Retired Dashboard Collection-Picker Style Surface
 
-Status: framed; production implementation has not started
+Status: complete at `61ccdbf4`
 
 Problem:
 
@@ -2650,6 +2650,86 @@ Acceptance:
   pass.
 - Independent selector/cascade, rendered-evidence, and skeptical-simplicity reviews
   find no remaining P0–P2 issue in the bounded deletion.
+
+What changed:
+
+- Removed all 33 rules whose 34 selector branches required one of the six absent
+  collection-picker tokens, together with comments that described only the retired
+  surface. The stylesheet fell from 4,006 to 3,811 lines, a net deletion of 195
+  lines.
+- Renamed the surviving section comment to `Collection code input`, matching the live
+  `.collection-input` owner instead of the deleted suggestion picker.
+- Preserved every `.collection-input` rule, the full `.letters-table` family,
+  `AdminCollectionsListPage.css`, generic filter/search rules, and unscoped
+  `.clear-btn`, column, and selection vocabularies.
+- Kept the source/history/rendered proof temporary rather than adding a negative test
+  coupled to retired class spellings.
+
+Evidence:
+
+- Git history shows `304d2d17` introduced the picker renderer and its styles, then
+  `c3b2aa43` removed its input-suggestion state, sorting, selected header, and table
+  renderer together while leaving the CSS behind. Current source search finds no
+  producer or dynamic synthesis for any target token.
+- PostCSS parsed the framed baseline and final stylesheet. The baseline contained 33
+  target rules, 34 matching branches, and 91 declarations with no mixed live branch.
+  The final stylesheet contains zero target rule and 510 surviving rules; their
+  complete selector, at-rule ancestry, and declaration sequence is identical with
+  SHA-256
+  `5384ea27e6cd3e8173af31c36a85ea97305a88a71deb7a7e2cb85164d005cad8`.
+- The deterministic browser proof exercised the active Collection `009` filter with
+  two Letters rows, then the current Collections view with four rows, one selected
+  row, all four profile states, both cover states, and the edit toolbar. Coverage ran
+  at desktop `1440×900`, tablet `768×1024`, and phone `390×844`; phone Collections
+  also captured exact maximum horizontal scroll (`616px` across a `1006px` table
+  surface).
+- Complete before/after DOM and computed-style fingerprints for all seven states are
+  byte-identical with SHA-256
+  `d87b9be4394fd46fbb4a1db9b1613b0d47ade033363ce83eac6336ec5f0038b5`.
+  Every state reports zero legacy nodes; the live filter states report one
+  `.collection-input`, and the Collections states report one `.letters-table`, four
+  rows, four profile badges, and four cover badges.
+- All seven screenshot pairs are byte- and therefore pixel-identical. Their SHA-256
+  values are
+  `9d8b8a3671441e616b84d2754ed9837fae5a65256208b393bc148b998617595c`
+  (desktop Letters filter),
+  `4ddf417e93550e3c5d0477b26c1fbbe45c1aeab2e1693a4b448d032f923d6d47`
+  (desktop Collections),
+  `817047d4955b7d7325a06c433db7ec1674a57cf67caa82d880cf45435bfee0c7`
+  (tablet Letters filter),
+  `f4c311fb9d42c976b98e473055dd4d0391156abb3dd317c48b49ea7ca1645298`
+  (tablet Collections),
+  `eb693ca570e5354291752d3906583277c95f744279b847367b4e4e3e179abc19`
+  (phone Letters filter),
+  `12c5916bcdba5ce54d523c7e75212f486b8ed9d567d592fc23967256b3844a36`
+  (phone Collections left), and
+  `7b205b8013dc3785a88f1256c29729f4c52ae4bf805d9f8c6708596ff0639071`
+  (phone Collections right).
+- The Dashboard neighborhood passed 31 files / 215 tests, the deterministic Dashboard
+  browser spec passed 11/11, the production build passed, and `git diff --check`
+  passed.
+- Aggregate `CI=1 ./scripts/verify-all.sh` passed: backend 105 files / 1,070 tests,
+  backend typecheck, frontend 141 files / 974 tests, frontend production build, and
+  mocked browser 61/61.
+- Independent selector/cascade, rendered-evidence, and skeptical-simplicity reviews
+  approved the implementation with no P0–P2 production finding.
+
+Residuals:
+
+- The plural `.filter-pills` rule and the stale E2E helper/assertion that still require
+  it remain intentionally. They form a separate small feedback-contract slice rather
+  than part of this retired collection picker.
+- `AdminDashboard.css` remains a 3,811-line global stylesheet. The Collections view
+  still reuses the live `.letters-table` family imported by the Dashboard route;
+  moving that shared owner out of the monolith requires its own cascade/import and
+  rendered proof.
+- The production build retains its existing large-chunk warning:
+  `LetterReviewPage` is 527.84 kB and `UpdateEditorPage` is 1,182.96 kB after
+  minification.
+
+No DOM, filter request, state transition, table interaction, responsive breakpoint,
+layout geometry, computed style, screenshot pixel, product feature, backend behavior,
+deployment, or external state changed.
 
 Rollback base: `0b2d6b52`.
 

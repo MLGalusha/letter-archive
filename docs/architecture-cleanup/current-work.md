@@ -7,14 +7,12 @@ Last updated: July 24, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 033 — truthful Dashboard filter-panel feedback
+- Current checkpoint: 034 — executable Letter Review analysis-regeneration contract
 - Last sealed cleanup implementation: retired Dashboard filter-pills contract
   at `6708ef6c`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Current slice: no implementation is open. Next orientation is deterministic
-  characterization of the Letter Review metadata/entity regeneration boundary before
-  any workspace extraction or product-contract change.
+- Current slice: framed; characterization implementation has not started.
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -2864,6 +2862,96 @@ responsive behavior, screenshot pixel, backend behavior, deployment, or external
 state changed.
 
 Rollback base: `edc78994`.
+
+## Slice 034 — Characterize Letter Review Analysis Regeneration
+
+Status: framed; characterization implementation has not started
+
+Problem:
+
+Letter Review presents `Metadata Only`, `Entities Only`, and `Both`, but no
+deterministic browser test reaches any of those choices. The mocked Letter Review API
+has no `/regenerate-metadata` or `/re-extract` handler, so the aggregate gate cannot
+prove which endpoint, source revision, identity corrections, or mode each visible
+choice sends; it also cannot prove autosave ordering, guarded DTO adoption,
+source-conflict ownership, or stale-visit rejection.
+
+The names do not currently describe three distinct backend operations.
+`/regenerate-metadata`, `/re-extract` `metadata_only`, and `/re-extract` `full` all
+invoke the default two-phase `runMetadataExtractionV2`, which publishes metadata and
+then attempts derived entity extraction. `Metadata Only` and `Both` therefore differ
+at the wire surface while converging on the same producer. Changing that behavior or
+removing/renaming a visible choice is a product-contract decision; moving the route
+state first would hide this ambiguity inside a new abstraction.
+
+Target invariant:
+
+The present contract is executable before ownership moves. Every visible analysis
+choice sends its exact current endpoint, source revision, identity corrections, and
+mode only after pending autosaves flush. A returned Letter becomes visible only
+through guarded adoption for the active route visit. Coded source conflicts remain
+terminal, and a late earlier-visit response cannot repaint a later letter or emit
+success feedback.
+
+Scope:
+
+- Add table-driven backend route characterization for successful
+  `/regenerate-metadata`, `/re-extract` `metadata_only`, and `/re-extract` `full`
+  requests. Prove the exact requested metadata claim, correction/previous-identity
+  options, claim token, source revision, response DTO, and deliberate current
+  equivalence of the two re-extract modes.
+- Extend the deterministic Letter Review mock API with request journals, source
+  revision validation, successful Letter responses, and coded failures for
+  `/regenerate-metadata` and `/re-extract`.
+- Exercise the three visible choices in the mocked browser. Prove one pending
+  metadata autosave completes before regeneration, exact dialog corrections and
+  request bodies, visible returned metadata/entity adoption, current progress and
+  success feedback, coded source-conflict ownership, and delayed A-to-B response
+  rejection.
+- Keep the tests at the observable route/API/DOM boundary. Reuse existing deferred
+  response and visit-transition patterns rather than introducing a test framework.
+
+Non-goals:
+
+- No production handler, state, component, API, backend pipeline, prompt, copy,
+  accessibility, persistence, or styling change.
+- Do not assert that `Metadata Only` leaves entities untouched or that `Both`
+  guarantees entity success; current production behavior contradicts both claims.
+- Do not bless the post-success `Queued` label, exact two-second status reset, unused
+  full-mode progress state, private hook calls, or CSS class spellings as product
+  contracts.
+- Do not repair the old data/OpenAI-dependent entity E2E files in this slice.
+- Do not extract `useAnalysisRegenerationWorkspace`, delete redundant endpoints or
+  modes, or choose between a true metadata-only pipeline and a simpler two-intent UI.
+
+Acceptance:
+
+- Focused backend characterization proves all three metadata-producing routes use
+  the expected requested claim and current two-phase producer contract.
+- `Metadata Only` is observed after a pending metadata save and sends
+  `/regenerate-metadata` with the active source revision and dialog corrections; its
+  returned metadata is adopted before success feedback.
+- `Entities Only` sends `/re-extract` with `mode: "entities_only"` and visibly adopts
+  the returned entity result.
+- `Both` sends `/re-extract` with `mode: "full"`; a coded source conflict produces
+  the terminal reload dialog without success, and a delayed first-letter completion
+  after navigation cannot affect the second letter.
+- Focused backend, frontend, and mocked-browser checks pass, followed by the
+  production build, aggregate verifier, and `git diff --check`.
+- Independent backend-contract, browser-coverage, and skeptical-simplicity reviews
+  find no remaining P0–P2 issue or false-passing assertion.
+
+Baseline:
+
+- Backend extraction route neighborhood: 1 file / 38 tests passed.
+- Frontend API, source-conflict boundary, and status-reset neighborhood: 3 files /
+  22 tests passed.
+- Deterministic Letter Review mocked-browser spec: 29/29 passed, with no analysis
+  regeneration request covered.
+- Aggregate checkpoint 033 remains green at backend 105 files / 1,070 tests,
+  frontend 141 files / 974 tests, production build, and mocked browser 61/61.
+
+Rollback base: `ad39d6e0`.
 
 ## Slice 027 — Validated, Replay-Safe Dashboard Stored State
 

@@ -17,11 +17,9 @@ function metadataSection(page: Page) {
 }
 
 function analysisRegenerationDialog(page: Page) {
-  return page.locator('.regenerate-popup').filter({
-    has: page.getByRole('heading', {
-      name: 'Regenerate Analysis',
-      exact: true,
-    }),
+  return page.getByRole('dialog', {
+    name: 'Regenerate Analysis',
+    exact: true,
   });
 }
 
@@ -107,6 +105,113 @@ async function deferRoute(
 }
 
 test.describe('@mocked Letter Review analysis regeneration', () => {
+  test('keeps the analysis dialog semantic and contained on a phone viewport', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openAnalysisReview(page);
+
+    const regenerateButton = metadataSection(page).getByRole('button', {
+      name: 'Regenerate',
+      exact: true,
+    });
+    await regenerateButton.click();
+    let dialog = analysisRegenerationDialog(page);
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toHaveAttribute('aria-modal', 'true');
+    await expect(dialog.getByLabel('Sender')).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(regenerateButton).toBeFocused();
+
+    await regenerateButton.click();
+    dialog = analysisRegenerationDialog(page);
+    await expect(dialog.getByLabel('Sender')).toBeFocused();
+
+    const geometry = await dialog.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return {
+        left: rect.left,
+        right: rect.right,
+        top: rect.top,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+        documentScrollWidth: document.documentElement.scrollWidth,
+        documentClientWidth: document.documentElement.clientWidth,
+      };
+    });
+    expect(geometry.left).toBeGreaterThanOrEqual(16);
+    expect(geometry.right).toBeLessThanOrEqual(390 - 16);
+    expect(geometry.top).toBeGreaterThanOrEqual(16);
+    expect(geometry.bottom).toBeLessThanOrEqual(844 - 16);
+    expect(geometry.documentScrollWidth).toBeLessThanOrEqual(
+      geometry.documentClientWidth,
+    );
+
+    const controls = [
+      dialog.getByLabel('Sender'),
+      dialog.getByLabel('Recipient'),
+      dialog.getByRole('button', {
+        name: 'Metadata Only',
+        exact: true,
+      }),
+      dialog.getByRole('button', {
+        name: 'Entities Only',
+        exact: true,
+      }),
+      dialog.getByRole('button', {
+        name: 'Both',
+        exact: true,
+      }),
+      dialog.getByRole('button', {
+        name: 'Cancel',
+        exact: true,
+      }),
+    ];
+    for (const control of controls) {
+      await expect(control).toBeInViewport({ ratio: 1 });
+      await control.click({ trial: true });
+    }
+
+    await page.setViewportSize({ width: 390, height: 500 });
+    const shortViewport = await dialog.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return {
+        left: rect.left,
+        right: rect.right,
+        top: rect.top,
+        bottom: rect.bottom,
+        clientHeight: element.clientHeight,
+        scrollHeight: element.scrollHeight,
+        documentScrollWidth: document.documentElement.scrollWidth,
+        documentClientWidth: document.documentElement.clientWidth,
+      };
+    });
+    expect(shortViewport.left).toBeGreaterThanOrEqual(16);
+    expect(shortViewport.right).toBeLessThanOrEqual(390 - 16);
+    expect(shortViewport.top).toBeGreaterThanOrEqual(16);
+    expect(shortViewport.bottom).toBeLessThanOrEqual(500 - 16);
+    expect(shortViewport.scrollHeight).toBeGreaterThan(
+      shortViewport.clientHeight,
+    );
+    expect(shortViewport.documentScrollWidth).toBeLessThanOrEqual(
+      shortViewport.documentClientWidth,
+    );
+
+    await dialog.getByRole('button', {
+      name: 'Cancel',
+      exact: true,
+    }).click({ trial: true });
+    await expect(dialog.getByRole('button', {
+      name: 'Cancel',
+      exact: true,
+    })).toBeInViewport({ ratio: 1 });
+    expect(await dialog.evaluate((element) => element.scrollTop)).toBeGreaterThan(
+      0,
+    );
+  });
+
   test('flushes metadata before Metadata Only and adopts returned analysis', async ({
     page,
   }) => {
@@ -120,12 +225,12 @@ test.describe('@mocked Letter Review analysis regeneration', () => {
       page,
       /\/regenerate-metadata$/,
     );
+    const regenerateButton = metadataSection(page).locator(
+      '.generate-btn',
+    );
 
     await page.locator('#location').fill('Cambridge');
-    await metadataSection(page).getByRole('button', {
-      name: 'Regenerate',
-      exact: true,
-    }).click();
+    await regenerateButton.click();
     const dialog = analysisRegenerationDialog(page);
     await expect(dialog).toBeVisible();
     await dialog.getByLabel('Sender').fill('Mabel Hart');
@@ -177,6 +282,7 @@ test.describe('@mocked Letter Review analysis regeneration', () => {
     await expect(page.locator('.entity-section')).toContainText(
       'Metadata Phase Entity',
     );
+    await expect(regenerateButton).toBeFocused();
     expect(mockedApi.regenerateMetadataRequests).toEqual([{
       url: `${API_BASE_URL}/admin/letters/letter-review-1/regenerate-metadata`,
       body: {
@@ -274,6 +380,9 @@ test.describe('@mocked Letter Review analysis regeneration', () => {
       'Letter source changed during full analysis',
     );
     await expect(conflict).toContainText('req-analysis-source-409');
+    await expect(conflict.getByRole('button', {
+      name: 'Reload latest source',
+    })).toBeFocused();
     await expect(page.locator('.toast', {
       hasText: 'Metadata re-extracted with corrections',
     })).toHaveCount(0);
@@ -286,6 +395,40 @@ test.describe('@mocked Letter Review analysis regeneration', () => {
         mode: 'full',
       },
     }]);
+  });
+
+  test('restores focus after an ordinary current-visit failure', async ({
+    page,
+  }) => {
+    await openAnalysisReview(
+      page,
+      createAnalysisReadyLetter(),
+      {
+        routeFailures: {
+          reExtract: {
+            status: 500,
+            error: 'Temporary analysis failure',
+            requestId: 'req-analysis-500',
+          },
+        },
+      },
+    );
+    const regenerateButton = metadataSection(page).getByRole('button', {
+      name: 'Regenerate',
+      exact: true,
+    });
+
+    await regenerateButton.click();
+    await analysisRegenerationDialog(page).getByRole('button', {
+      name: 'Both',
+      exact: true,
+    }).click();
+
+    await expect(page.locator('.toast')).toContainText(
+      'Temporary analysis failure',
+    );
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    await expect(regenerateButton).toBeFocused();
   });
 
   test('rejects a delayed Both result after the review visit changes', async ({
@@ -350,6 +493,13 @@ test.describe('@mocked Letter Review analysis regeneration', () => {
       name: 'Regenerate',
       exact: true,
     })).toBeEnabled();
+    await metadataSection(page).getByRole('button', {
+      name: 'Regenerate',
+      exact: true,
+    }).click();
+    const secondDialog = analysisRegenerationDialog(page);
+    await expect(secondDialog).toBeVisible();
+    await expect(secondDialog.getByLabel('Sender')).toBeFocused();
 
     const response = page.waitForResponse(
       /\/letter-review-1\/re-extract$/,
@@ -368,6 +518,8 @@ test.describe('@mocked Letter Review analysis regeneration', () => {
     await expect(page.locator('.entity-section')).not.toContainText(
       'Full Analysis Result',
     );
+    await expect(secondDialog).toBeVisible();
+    await expect(secondDialog.getByLabel('Sender')).toBeFocused();
     await expect(page.locator('.toast', {
       hasText: 'Metadata re-extracted with corrections',
     })).toHaveCount(0);

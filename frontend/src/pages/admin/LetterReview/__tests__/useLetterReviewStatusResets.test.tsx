@@ -63,7 +63,7 @@ describe('useLetterReviewStatusResets', () => {
     );
 
     act(() => {
-      result.current('metadata-reextract', staleReset, 1_000);
+      result.current('metadata-regeneration', staleReset, 1_000);
     });
     rerender({ letterId: 'letter-b' });
     act(() => {

@@ -2446,41 +2446,6 @@
   background: #d84315;
 }
 
-/* Extraction popup name fields */
-.extraction-popup-fields .form-group {
-  margin-bottom: var(--spacing-sm);
-}
-
-.extraction-popup-fields .form-group label {
-  display: block;
-  font-size: var(--font-sm);
-  font-weight: 500;
-  color: var(--text-muted);
-  margin-bottom: 4px;
-}
-
-.extraction-popup-fields .form-group input {
-  width: 100%;
-  padding: 0.5rem 0.75rem;
-  font-size: var(--font-sm);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--bg);
-  color: var(--text);
-  box-sizing: border-box;
-}
-
-.extraction-popup-fields .form-group input:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
-.regenerate-name-fields {
-  margin-bottom: var(--spacing-md);
-  padding-bottom: var(--spacing-sm);
-  border-bottom: 1px solid var(--border);
-}
-
 /* Regenerate popup options */
 .regenerate-popup {
   min-width: 340px;

@@ -12,12 +12,8 @@ import { getAdminLetterById, deleteLetter } from "../../api/letters";
 import {
   updateLetter,
   confirmTranscript,
-  regenerateMetadata,
 } from "../../api/admin";
-import {
-  toggleLetterFlag,
-  reExtractLetter,
-} from "../../api/admin/letters";
+import { toggleLetterFlag } from "../../api/admin/letters";
 import LetterViewer from "../../components/LetterViewer/LetterViewer";
 import AdminLayout from "../../components/AdminLayout";
 import { useToast } from "../../contexts/ToastContext";
@@ -28,7 +24,6 @@ import {
   Dropdown,
   DropdownItem,
 } from "../../components/common";
-import { trackEdit } from "../../utils/recentEdits";
 import type { Letter, VisibilityState } from "../../types/Letter";
 import {
   hasPrimaryTranscriptContent,
@@ -61,7 +56,9 @@ import { useExtraContentWorkspace } from "./LetterReview/useExtraContentWorkspac
 import { useReadingViewWorkspace } from "./LetterReview/useReadingViewWorkspace";
 import { useLetterTranscriptionWorkspace } from "./LetterReview/useLetterTranscriptionWorkspace";
 import { useLineReviewWorkspace } from "./LetterReview/useLineReviewWorkspace";
+import { useAnalysisRegenerationWorkspace } from "./LetterReview/useAnalysisRegenerationWorkspace";
 import TranscriptionRegenerationDialog from "./LetterReview/TranscriptionRegenerationDialog";
+import AnalysisRegenerationDialog from "./LetterReview/AnalysisRegenerationDialog";
 import { loadCurrentLetter } from "./LetterReview/loadCurrentLetter";
 import { usePretextFontSize } from "../../hooks/usePretextFontSize";
 import LineReviewMode from "../../components/LineReviewMode/LineReviewMode";
@@ -90,26 +87,12 @@ export default function LetterReviewPage() {
 
   const [transcript, setTranscript] = useState("");
 
-  // Metadata regeneration state
-  const [regenerateState, setRegenerateState] = useState<
-    "idle" | "regenerating" | "done"
-  >("idle");
-
-  // Re-extraction state (for metadata re-extract with corrected identity)
-  const [, setReExtractState] = useState<
-    "idle" | "extracting" | "done"
-  >("idle");
-
-  // Entity re-extraction state (separate from metadata re-extract)
-  const [entityReExtractState, setEntityReExtractState] = useState<
-    "idle" | "extracting" | "done"
-  >("idle");
-
-  // Regenerate popup state
-  const [showMetadataRegeneratePopup, setShowMetadataRegeneratePopup] = useState(false);
-  const [showExtractionPopup, setShowExtractionPopup] = useState(false);
-  const [extractionSender, setExtractionSender] = useState("");
-  const [extractionRecipient, setExtractionRecipient] = useState("");
+  const [
+    showTranscriptConfirmationPopup,
+    setShowTranscriptConfirmationPopup,
+  ] = useState(false);
+  const [confirmationSender, setConfirmationSender] = useState("");
+  const [confirmationRecipient, setConfirmationRecipient] = useState("");
 
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
@@ -118,11 +101,7 @@ export default function LetterReviewPage() {
   const editorRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
-    setRegenerateState("idle");
-    setReExtractState("idle");
-    setEntityReExtractState("idle");
-    setShowMetadataRegeneratePopup(false);
-    setShowExtractionPopup(false);
+    setShowTranscriptConfirmationPopup(false);
   }, [visit]);
 
   const transcriptFontSize = usePretextFontSize(
@@ -263,6 +242,14 @@ export default function LetterReviewPage() {
     visit,
     letter,
     transcriptText: transcript,
+    executeLetterMutation,
+    scheduleStatusReset,
+  });
+  const analysisRegenerationWorkspace = useAnalysisRegenerationWorkspace({
+    visit,
+    letter,
+    sender,
+    recipient,
     executeLetterMutation,
     scheduleStatusReset,
   });
@@ -415,14 +402,14 @@ export default function LetterReviewPage() {
 
   const handleConfirmTranscript = useCallback(() => {
     if (!letterId) return;
-    setExtractionSender(sender || "");
-    setExtractionRecipient(recipient || "");
-    setShowExtractionPopup(true);
+    setConfirmationSender(sender || "");
+    setConfirmationRecipient(recipient || "");
+    setShowTranscriptConfirmationPopup(true);
   }, [letterId, recipient, sender]);
 
   const executeConfirmTranscript = useCallback(async () => {
     if (!letterId || !letter) return;
-    setShowExtractionPopup(false);
+    setShowTranscriptConfirmationPopup(false);
     const releaseSaving = beginSaving();
 
     try {
@@ -432,8 +419,8 @@ export default function LetterReviewPage() {
         letterId,
         letter.primarySourceRevision,
         {
-          confirmedSender: extractionSender || undefined,
-          confirmedRecipient: extractionRecipient || undefined,
+          confirmedSender: confirmationSender || undefined,
+          confirmedRecipient: confirmationRecipient || undefined,
         },
       );
       if (!tryAdoptLetter(updated)) return;
@@ -450,8 +437,8 @@ export default function LetterReviewPage() {
     }
   }, [
     beginSaving,
-    extractionRecipient,
-    extractionSender,
+    confirmationRecipient,
+    confirmationSender,
     flushPendingSaves,
     handleMutationError,
     hydrateAdoptedLetter,
@@ -461,150 +448,6 @@ export default function LetterReviewPage() {
     tryAdoptLetter,
     visit,
   ]);
-
-  // Regenerate metadata handler — shows popup for options
-  const handleRegenerateMetadata = useCallback(() => {
-    if (!letterId) return;
-    setExtractionSender(sender || "");
-    setExtractionRecipient(recipient || "");
-    setShowMetadataRegeneratePopup(true);
-  }, [letterId, recipient, sender]);
-
-  // Execute metadata regeneration (metadata only)
-  const executeMetadataRegenerate = useCallback(async () => {
-    if (!letterId || !letter) return;
-    setShowMetadataRegeneratePopup(false);
-    const releaseSaving = beginSaving();
-    try {
-      if (!visit.isActive() || !await flushPendingSaves()) return;
-
-      setRegenerateState("regenerating");
-      const updated = await regenerateMetadata(
-        letterId,
-        letter.primarySourceRevision,
-        {
-          confirmedSender: extractionSender || undefined,
-          confirmedRecipient: extractionRecipient || undefined,
-        },
-      );
-      if (!tryAdoptLetter(updated)) return;
-      hydrateAdoptedLetter(updated);
-      setRegenerateState("done");
-      showToast("Metadata regenerated", "success");
-
-      scheduleStatusReset("metadata-regeneration", () => {
-        setRegenerateState("idle");
-      }, 2000);
-    } catch (err) {
-      if (visit.isActive()) setRegenerateState("idle");
-      handleMutationError(err, "Failed to regenerate metadata");
-      console.error("Regenerate metadata error:", err);
-    } finally {
-      releaseSaving();
-    }
-  }, [
-    beginSaving,
-    extractionRecipient,
-    extractionSender,
-    flushPendingSaves,
-    handleMutationError,
-    hydrateAdoptedLetter,
-    letter,
-    letterId,
-    scheduleStatusReset,
-    showToast,
-    tryAdoptLetter,
-    visit,
-  ]);
-
-  // Re-extract handler — calls the re-extract API with corrected sender/recipient
-  const handleReExtract = useCallback(
-    async (
-      mode: "full" | "metadata_only" | "entities_only",
-      skipConfirm = false,
-      nameOverrides?: { sender?: string; recipient?: string },
-    ) => {
-      if (!letterId || !letter) return;
-
-      if (!skipConfirm) {
-        const confirmMsg = mode === "entities_only"
-          ? "Re-extract entities from the transcript? This will overwrite current entity data."
-          : "Re-extract all metadata and entities? This will overwrite current data.";
-        if (!window.confirm(confirmMsg)) return;
-      }
-
-      const isEntityOnly = mode === "entities_only";
-      const releaseSaving = beginSaving();
-
-      try {
-        if (!visit.isActive() || !await flushPendingSaves()) return;
-
-        if (isEntityOnly) {
-          setEntityReExtractState("extracting");
-        } else {
-          setReExtractState("extracting");
-        }
-        const updated = await reExtractLetter(letterId, {
-          primarySourceRevision: letter.primarySourceRevision,
-          confirmedSender: nameOverrides?.sender || sender || undefined,
-          confirmedRecipient: nameOverrides?.recipient || recipient || undefined,
-          mode,
-        });
-
-        if (!tryAdoptLetter(updated)) return;
-        hydrateAdoptedLetter(updated);
-
-        if (!isEntityOnly) {
-          setReExtractState("done");
-          showToast("Metadata re-extracted with corrections", "success");
-
-          scheduleStatusReset("metadata-reextract", () => {
-            setReExtractState("idle");
-          }, 2000);
-        } else {
-          setEntityReExtractState("done");
-          showToast("Entities re-extracted", "success");
-
-          scheduleStatusReset("entity-reextract", () => {
-            setEntityReExtractState("idle");
-          }, 2000);
-        }
-
-        // Track this edit
-        trackEdit({
-          id: updated.id,
-          metadata: updated.metadata,
-          collectionCode: updated.collectionCode,
-        });
-      } catch (err) {
-        if (visit.isActive()) {
-          if (isEntityOnly) {
-            setEntityReExtractState("idle");
-          } else {
-            setReExtractState("idle");
-          }
-        }
-        handleMutationError(err, "Re-extraction failed");
-        console.error("Re-extract error:", err);
-      } finally {
-        releaseSaving();
-      }
-    },
-    [
-      beginSaving,
-      flushPendingSaves,
-      handleMutationError,
-      hydrateAdoptedLetter,
-      letterId,
-      letter,
-      recipient,
-      scheduleStatusReset,
-      sender,
-      showToast,
-      tryAdoptLetter,
-      visit,
-    ],
-  );
 
   const handleDelete = useCallback(async () => {
     if (!letterId || !letter) return;
@@ -657,10 +500,6 @@ export default function LetterReviewPage() {
   const handleMetadataAutoSave = useCallback((updates: AutoSaveData) => {
     void triggerAutoSave(updates);
   }, [triggerAutoSave]);
-
-  const handleReExtractEntities = useCallback(() => {
-    void handleReExtract("entities_only");
-  }, [handleReExtract]);
 
   const handlePersonalNotesChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const nextValue = e.target.value;
@@ -998,13 +837,12 @@ export default function LetterReviewPage() {
                 onPrimaryTopicsChange={setPrimaryTopics}
                 onTopicsDropdownOpenChange={setTopicsDropdownOpen}
                 onTriggerAutoSave={handleMetadataAutoSave}
-                regenerateState={regenerateState}
                 identityUpdateState={identityUpdateState}
                 identityUpdateSecondsRemaining={identityUpdateSecondsRemaining}
                 retagState={retagState}
                 onVerifyMetadata={handleVerifyMetadata}
                 onConfirmTranscript={handleConfirmTranscript}
-                onRegenerateMetadata={handleRegenerateMetadata}
+                {...analysisRegenerationWorkspace.metadataSectionProps}
                 onMetadataFieldClick={handleMetadataFieldClick}
                 onMetadataFieldDoubleClick={handleMetadataFieldDoubleClick}
                 showMetadataTooltip={showMetadataTooltip}
@@ -1021,8 +859,7 @@ export default function LetterReviewPage() {
                 entityExtractionJson={letter.entityExtractionJson}
                 senderName={letter.metadata.sender}
                 recipientName={letter.metadata.recipient}
-                reExtractState={entityReExtractState}
-                onReExtractEntities={handleReExtractEntities}
+                {...analysisRegenerationWorkspace.entitySectionProps}
                 disabled={saving}
               />
             ) : null}
@@ -1109,98 +946,21 @@ export default function LetterReviewPage() {
       />
 
       <IdentityExtractionModal
-        isOpen={showExtractionPopup}
-        onClose={() => setShowExtractionPopup(false)}
+        isOpen={showTranscriptConfirmationPopup}
+        onClose={() => setShowTranscriptConfirmationPopup(false)}
         onConfirm={() => void executeConfirmTranscript()}
-        sender={extractionSender}
-        recipient={extractionRecipient}
-        onSenderChange={setExtractionSender}
-        onRecipientChange={setExtractionRecipient}
+        sender={confirmationSender}
+        recipient={confirmationRecipient}
+        onSenderChange={setConfirmationSender}
+        onRecipientChange={setConfirmationRecipient}
         submitting={saving}
         mode="extract"
         letterTitle={letter?.title}
       />
 
-      {/* Regenerate Metadata popup */}
-      {showMetadataRegeneratePopup && (
-        <div
-          className="confirm-dialog-overlay"
-          onClick={() => setShowMetadataRegeneratePopup(false)}
-        >
-          <div className="confirm-dialog regenerate-popup" onClick={(e) => e.stopPropagation()}>
-            <h3>Regenerate Analysis</h3>
-            <p>Choose what to regenerate. This will overwrite the existing data.</p>
-            <div className="extraction-popup-fields regenerate-name-fields">
-              <div className="form-group">
-                <label htmlFor="regen-sender">Sender</label>
-                <input
-                  type="text"
-                  id="regen-sender"
-                  value={extractionSender}
-                  onChange={(e) => setExtractionSender(e.target.value)}
-                  placeholder="Leave blank if unknown"
-                />
-              </div>
-              <div className="form-group">
-                <label htmlFor="regen-recipient">Recipient</label>
-                <input
-                  type="text"
-                  id="regen-recipient"
-                  value={extractionRecipient}
-                  onChange={(e) => setExtractionRecipient(e.target.value)}
-                  placeholder="Leave blank if unknown"
-                />
-              </div>
-            </div>
-            <div className="regenerate-options">
-              <button
-                className="btn-option"
-                onClick={() => {
-                  setShowMetadataRegeneratePopup(false);
-                  executeMetadataRegenerate();
-                }}
-              >
-                <Icon name="edit" size={16} />
-                <span>Metadata Only</span>
-              </button>
-              <button
-                className="btn-option"
-                onClick={() => {
-                  setShowMetadataRegeneratePopup(false);
-                  handleReExtract("entities_only", true, {
-                    sender: extractionSender,
-                    recipient: extractionRecipient,
-                  });
-                }}
-              >
-                <Icon name="person" size={16} />
-                <span>Entities Only</span>
-              </button>
-              <button
-                className="btn-option"
-                onClick={() => {
-                  setShowMetadataRegeneratePopup(false);
-                  handleReExtract("full", true, {
-                    sender: extractionSender,
-                    recipient: extractionRecipient,
-                  });
-                }}
-              >
-                <Icon name="process" size={16} />
-                <span>Both</span>
-              </button>
-            </div>
-            <div className="confirm-dialog-actions">
-              <button
-                className="btn-cancel"
-                onClick={() => setShowMetadataRegeneratePopup(false)}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AnalysisRegenerationDialog
+        {...analysisRegenerationWorkspace.dialogProps}
+      />
 
       <PhotoDescriptionContextModal
         {...photoDescriptionWorkspace.dialogProps}
@@ -1224,6 +984,7 @@ export default function LetterReviewPage() {
             <div className="confirm-dialog-actions">
               <button
                 className="btn-confirm"
+                autoFocus
                 onClick={() => {
                   // A full reload reconstructs every draft from the authoritative
                   // DTO before the terminal mutation owner is reset.

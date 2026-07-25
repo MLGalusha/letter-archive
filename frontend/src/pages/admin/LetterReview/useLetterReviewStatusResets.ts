@@ -4,7 +4,6 @@ import type { LetterReviewVisit } from './useLetterReviewVisit';
 export type LetterReviewStatusResetLane =
   | 'transcription'
   | 'metadata-regeneration'
-  | 'metadata-reextract'
   | 'entity-reextract';
 
 type Timer = ReturnType<typeof setTimeout>;

@@ -1,0 +1,48 @@
+.analysis-regeneration-overlay {
+  box-sizing: border-box;
+  padding: 1rem;
+}
+
+.confirm-dialog.analysis-regeneration-dialog {
+  box-sizing: border-box;
+  width: 464px;
+  min-width: 0;
+  max-width: 100%;
+  max-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.analysis-regeneration-fields {
+  margin-bottom: var(--spacing-md);
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 1px solid var(--border);
+}
+
+.analysis-regeneration-fields .form-group {
+  margin-bottom: var(--spacing-sm);
+}
+
+.analysis-regeneration-fields .form-group label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+  font-weight: 500;
+}
+
+.analysis-regeneration-fields .form-group input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--text);
+  font-size: var(--font-sm);
+}
+
+.analysis-regeneration-fields .form-group input:focus {
+  outline: none;
+  border-color: var(--accent);
+}

@@ -70,6 +70,10 @@ const letterTranscriptionWorkspacePath = path.resolve(
   process.cwd(),
   'src/pages/admin/LetterReview/useLetterTranscriptionWorkspace.ts',
 );
+const analysisRegenerationWorkspacePath = path.resolve(
+  process.cwd(),
+  'src/pages/admin/LetterReview/useAnalysisRegenerationWorkspace.ts',
+);
 const lineReviewWorkspacePath = path.resolve(
   process.cwd(),
   'src/pages/admin/LetterReview/useLineReviewWorkspace.ts',
@@ -103,6 +107,7 @@ describe('Letter Review source-conflict ownership', () => {
       extraContentWorkspace,
       readingViewWorkspace,
       letterTranscriptionWorkspace,
+      analysisRegenerationWorkspace,
       reviewableDynamicEditor,
       mutationExecutor,
       structuredNoteActions,
@@ -115,6 +120,7 @@ describe('Letter Review source-conflict ownership', () => {
       readFile(extraContentWorkspacePath, 'utf8'),
       readFile(readingViewWorkspacePath, 'utf8'),
       readFile(letterTranscriptionWorkspacePath, 'utf8'),
+      readFile(analysisRegenerationWorkspacePath, 'utf8'),
       readFile(reviewableDynamicEditorPath, 'utf8'),
       readFile(mutationExecutorPath, 'utf8'),
       readFile(structuredNoteActionsPath, 'utf8'),
@@ -123,12 +129,14 @@ describe('Letter Review source-conflict ownership', () => {
     expect(page).toContain('useLetterSourceConflict(showToast, visit)');
     for (const callback of [
       'executeConfirmTranscript',
-      'executeMetadataRegenerate',
-      'handleReExtract',
       'handleDelete',
     ]) {
       expect(callbackBlock(page, callback)).toContain('handleMutationError(');
     }
+    expect(callbackBlock(
+      analysisRegenerationWorkspace,
+      'regenerate',
+    )).toContain('executeLetterMutation({');
     for (const callback of [
       'handleVisibilityChange',
       'handleContentPublishToggle',
@@ -360,6 +368,7 @@ describe('Letter Review source-conflict ownership', () => {
       extraContentWorkspace,
       readingViewWorkspace,
       letterTranscriptionWorkspace,
+      analysisRegenerationWorkspace,
       autoSaveCoordinator,
       mutationExecutor,
       structuredNoteActions,
@@ -372,6 +381,7 @@ describe('Letter Review source-conflict ownership', () => {
       readFile(extraContentWorkspacePath, 'utf8'),
       readFile(readingViewWorkspacePath, 'utf8'),
       readFile(letterTranscriptionWorkspacePath, 'utf8'),
+      readFile(analysisRegenerationWorkspacePath, 'utf8'),
       readFile(autoSaveCoordinatorPath, 'utf8'),
       readFile(mutationExecutorPath, 'utf8'),
       readFile(structuredNoteActionsPath, 'utf8'),
@@ -384,18 +394,22 @@ describe('Letter Review source-conflict ownership', () => {
       'if (!visit.isActive() || !target) return false',
     );
     expect(page).toContain('flushPendingSaves,');
-    for (const callback of [
+    const confirmationBlock = callbackBlock(
+      page,
       'executeConfirmTranscript',
-      'executeMetadataRegenerate',
-      'handleReExtract',
-    ]) {
-      const block = callbackBlock(page, callback);
-      expect(block).toContain('await flushPendingSaves()');
-      expect(block).toContain(
-        'if (!visit.isActive() || !await flushPendingSaves())',
-      );
-      expect(block).toContain('hydrateAdoptedLetter(');
-    }
+    );
+    expect(confirmationBlock).toContain('await flushPendingSaves()');
+    expect(confirmationBlock).toContain(
+      'if (!visit.isActive() || !await flushPendingSaves())',
+    );
+    expect(confirmationBlock).toContain('hydrateAdoptedLetter(');
+    const regenerationBlock = callbackBlock(
+      analysisRegenerationWorkspace,
+      'regenerate',
+    );
+    expect(regenerationBlock).toContain('executeLetterMutation({');
+    expect(regenerationBlock).not.toContain('await flushPendingSaves()');
+    expect(regenerationBlock).not.toContain('hydrateAdoptedLetter(');
     expect(callbackBlock(readingViewWorkspace, 'generate')).toContain(
       'executeLetterMutation({',
     );

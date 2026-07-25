@@ -11,8 +11,8 @@ Last updated: July 25, 2026
 - Last sealed cleanup implementation: fenced photo-description writes at `446ebdd9`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Active slice: none; reassess the remaining program and frame the next smallest
-  behavior-preserving or correctness-focused boundary before editing production code.
+- Active slice: 040 — separate metadata form state from verification actions; framed,
+  characterization and implementation pending.
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -113,6 +113,87 @@ tree:
   drift; do not create a generic shared package without a concrete consumer.
 - [ ] Remove proven-unused dependencies, exports, scripts, and obsolete configuration.
 - [ ] Make tracked `docs/` the single documentation source and archive stale plans.
+
+## Slice 040 — Separate Metadata Form State from Verification Actions
+
+Status: framed; characterization and implementation pending
+
+Problem:
+
+`useMetadataEditing()` owns both request-free metadata form/hydration state and the
+verify/unverify request lifecycle. Verification manually duplicates saving-lease,
+autosave-flush, visit-liveness, guarded-adoption, hydration, error, and release
+semantics that now belong to `useLetterReviewMutationExecutor()`. Because autosave
+needs identity metadata synchronization while the executor's hydrator needs metadata
+form hydration, `LetterReviewPage` constructs the combined hook on the wrong side of
+both owners and bridges the cycle through `identityMetadataSyncRef` plus a layout
+effect.
+
+This is more than organization: verification is outside the shared per-visit mutation
+queue, so it can overlap another Letter-returning direct mutation even though each
+path individually flushes pending saves.
+
+Target invariant:
+
+Metadata form state is request-free and constructed before autosave. Metadata
+verification actions are constructed after the shared mutation executor and delegate
+all saving, flush, serialization, visit-liveness, adoption, hydration, request-error,
+and release semantics to it. Every accepted verification DTO is hydrated exactly once
+before success feedback.
+
+Scope:
+
+- Extract field values, setters, topic-dropdown state, metadata mapping/hydration,
+  personal-note preservation, and identity-only synchronization into a request-free
+  form-state hook.
+- Extract verified-field tooltip interaction and verify/unverify request selection,
+  revision payloads, failure copy, and success feedback into an action hook that uses
+  `executeLetterMutation()`.
+- Construct form state before autosave, pass identity synchronization directly, and
+  delete the mutable ref/layout-effect bridge.
+- Delete the unused metadata dirty baseline and comparison path if characterization
+  confirms it has no consumer.
+- Replace source-text assertions over the old combined hook with executable hook
+  behavior and the narrower architecture boundary.
+
+Non-goals:
+
+- Do not change metadata fields, autosave timing, API routes, DTOs, source-conflict
+  policy, tooltip gestures, toast copy, or verified read-only behavior.
+- Do not migrate transcript or photo verification in this slice; their remaining
+  ownership is independently visible and can be ranked after this boundary is green.
+- Do not redesign the shared mutation executor, MetadataSection, or metadata
+  regeneration workflow.
+
+Acceptance:
+
+- The form-state hook imports no request API and accepts no visit, saving, adoption,
+  error, toast, or executor dependency.
+- Initial and accepted-DTO hydration retain tagged hook/description fallbacks;
+  `includeNotes: false` preserves the current personal-note draft.
+- Identity synchronization updates only sender, recipient, hook, and description,
+  preserving every unrelated local metadata draft.
+- Verify and unverify use the current letter id and primary-source revision, retain
+  their existing success/failure copy, and call the shared executor without manually
+  flushing, adopting, hydrating, leasing, or reporting request errors.
+- Rejected/blocked executor work produces no success toast; accepted work is hydrated
+  exactly once by the executor before success feedback.
+- No identity metadata synchronization ref bridge remains in `LetterReviewPage`.
+- Focused hook, autosave, executor, architecture, and mocked metadata-review contracts
+  pass, followed by the frontend suite, production build, aggregate verification, and
+  independent review with no unresolved P0-P2 finding.
+
+Baseline:
+
+- Checkpoint 039: backend 108 files / 1,124 tests, frontend 149 files / 1,029 tests,
+  production build, mocked browser 77/77, and aggregate verification passed.
+- `useMetadataEditing.ts` is 324 lines and combines form state with two direct API
+  actions. `LetterReviewPage.tsx` uses a mutable callback ref and layout effect solely
+  to make the combined hook available to autosave before that hook is constructed.
+- Repository search finds no consumer of `hasMetadataChanges`; the baseline/comparison
+  state exists only to compute and return that unused value.
+
+Rollback base: `c348a3f9`.
 
 ## Slice 039 — Fence Photo-Description Writes
 

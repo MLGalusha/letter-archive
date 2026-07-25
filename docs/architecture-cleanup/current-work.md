@@ -235,10 +235,12 @@ Residual:
   unrelated letter-row update even when the exact photo tuple is unchanged. That is
   a safe retry rather than data loss; a dedicated photo revision would remove the
   false conflict but is not justified by current evidence.
-- The first aggregate run exposed one unrelated `LetterDetailPage` robots-meta test
-  failure. The test immediately passed alone, in a fresh full frontend run, and in
-  the successful aggregate rerun. Treat it as feedback-reliability debt to
-  characterize if it recurs; do not attribute it to this backend-only slice.
+- The first aggregate run exposed an unrelated timing flaw in the
+  `LetterDetailPage` robots-meta test: it awaited the error body, then synchronously
+  inspected metadata written by a separate passive effect. The follow-up assertion
+  clears stale robots state and awaits the metadata itself. Its focused 8 tests and a
+  fresh 149-file / 1,029-test frontend run passed; production SEO behavior was not
+  changed.
 
 ## Slice 001 — Honest Browser Baseline
 

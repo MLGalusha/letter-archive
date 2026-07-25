@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -120,6 +120,7 @@ describe("LetterDetailPage", () => {
       collectionCode: "009",
       collectionTitle: "The Smith Letters",
     });
+    document.querySelector('meta[name="robots"]')?.remove();
   });
 
   afterEach(() => {
@@ -233,9 +234,12 @@ describe("LetterDetailPage", () => {
 
     await screen.findByRole("heading", { name: "Letter is unavailable" });
 
-    const robotsMeta = document.querySelector('meta[name="robots"]');
-    expect(robotsMeta).not.toBeNull();
-    expect(robotsMeta!.getAttribute("content")).toContain("noindex");
+    await waitFor(() => {
+      expect(document.querySelector('meta[name="robots"]')).toHaveAttribute(
+        "content",
+        expect.stringContaining("noindex"),
+      );
+    });
   });
 
 });

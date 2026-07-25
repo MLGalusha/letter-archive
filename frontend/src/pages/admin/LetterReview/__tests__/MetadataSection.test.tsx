@@ -102,6 +102,26 @@ describe("MetadataSection", () => {
     expect(onRegenerateMetadata).toHaveBeenCalledTimes(1);
   });
 
+  it("still offers duplicate generation while empty metadata is extracting", async () => {
+    const user = userEvent.setup();
+    const onConfirmTranscript = vi.fn();
+    const props = buildProps({
+      letter: buildLetter({
+        workflowState: "METADATA_EXTRACTING",
+        metadataContentStatus: "EMPTY",
+        transcriptConfirmedAt: "2026-07-24T12:00:00.000Z",
+      }),
+      onConfirmTranscript,
+    });
+
+    render(<MetadataSection {...props} />);
+
+    const generate = screen.getByRole("button", { name: "Generate" });
+    expect(generate).toBeEnabled();
+    await user.click(generate);
+    expect(onConfirmTranscript).toHaveBeenCalledTimes(1);
+  });
+
   it("triggers autosave on sender change", async () => {
     const onSenderChange = vi.fn();
     const onTriggerAutoSave = vi.fn();

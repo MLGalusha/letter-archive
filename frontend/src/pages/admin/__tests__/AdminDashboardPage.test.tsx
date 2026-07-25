@@ -546,6 +546,136 @@ describe("AdminDashboard processing", () => {
     expect(regenerateMetadataMock).not.toHaveBeenCalled();
   });
 
+  it("races confirmed empty metadata with synchronous regeneration", async () => {
+    const user = userEvent.setup();
+
+    getAdminLettersMock.mockResolvedValue(
+      createLettersResponse([
+        makeLetter({
+          metadataContentStatus: "EMPTY",
+          transcriptConfirmedAt: undefined,
+        }),
+      ]),
+    );
+    confirmTranscriptMock.mockResolvedValue(
+      makeLetter({
+        primarySourceRevision: 7,
+        workflowState: "METADATA_EXTRACTING",
+        metadataContentStatus: "EMPTY",
+        transcriptConfirmedAt: "2026-07-24T12:00:00.000Z",
+      }),
+    );
+    regenerateMetadataMock.mockResolvedValue(
+      makeLetter({
+        primarySourceRevision: 7,
+        workflowState: "METADATA_DRAFTED",
+        metadataContentStatus: "AI_DRAFT",
+        transcriptConfirmedAt: "2026-07-24T12:00:00.000Z",
+      }),
+    );
+
+    render(
+      <MemoryRouter>
+        <AdminDashboard />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole("button", {
+      name: "Select Test Letter",
+    }));
+    await user.click(await screen.findByRole("button", {
+      name: /Extract Metadata \(1\)/,
+    }));
+    await user.click(screen.getByRole("button", {
+      name: "Generate Metadata",
+    }));
+
+    await waitFor(() => {
+      expect(confirmTranscriptMock).toHaveBeenCalledWith(
+        "letter-1",
+        0,
+        {
+          confirmedRecipient: "Bob",
+          confirmedSender: "Alice",
+        },
+      );
+      expect(regenerateMetadataMock).toHaveBeenCalledWith(
+        "letter-1",
+        7,
+        {
+          confirmedRecipient: "Bob",
+          confirmedSender: "Alice",
+        },
+      );
+      expect(showToastMock).toHaveBeenCalledWith(
+        "Metadata regenerated",
+        "success",
+      );
+      expect(getAdminLettersMock).toHaveBeenCalledTimes(2);
+    });
+    expect(confirmTranscriptMock.mock.invocationCallOrder[0]).toBeLessThan(
+      regenerateMetadataMock.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("reports an ambiguous committed timeout without reconciling Dashboard state", async () => {
+    const user = userEvent.setup();
+    let authoritativeLetter = makeLetter({
+      metadataContentStatus: "EMPTY",
+      transcriptConfirmedAt: undefined,
+    });
+    getAdminLettersMock.mockImplementation(async () => (
+      createLettersResponse([authoritativeLetter])
+    ));
+    confirmTranscriptMock.mockImplementationOnce(async () => {
+      authoritativeLetter = makeLetter({
+        workflowState: "METADATA_EXTRACTING",
+        metadataContentStatus: "EMPTY",
+        transcriptConfirmedAt: "2026-07-25T12:00:00.000Z",
+      });
+      throw Object.assign(
+        new Error("The operation was aborted."),
+        { name: "ApiError", status: 0 },
+      );
+    });
+
+    render(
+      <MemoryRouter>
+        <AdminDashboard />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole("button", {
+      name: "Select Test Letter",
+    }));
+    await user.click(await screen.findByRole("button", {
+      name: /Extract Metadata \(1\)/,
+    }));
+    await user.click(screen.getByRole("button", {
+      name: "Generate Metadata",
+    }));
+
+    await waitFor(() => {
+      expect(showToastMock).toHaveBeenCalledWith(
+        "The operation was aborted.",
+        "error",
+      );
+    });
+    expect(confirmTranscriptMock).toHaveBeenCalledWith(
+      "letter-1",
+      0,
+      {
+        confirmedRecipient: "Bob",
+        confirmedSender: "Alice",
+      },
+    );
+    expect(regenerateMetadataMock).not.toHaveBeenCalled();
+    expect(getAdminLettersMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", {
+      name: /Extract Metadata \(1\)/,
+    })).toBeVisible();
+  });
+
   it("shows generate copy after metadata has been cleared even when the transcript is confirmed", async () => {
     const user = userEvent.setup();
 

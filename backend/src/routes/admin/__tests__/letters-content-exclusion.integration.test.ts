@@ -926,6 +926,327 @@ describe('admin downstream extraction exclusion', () => {
     );
   });
 
+  it('reports failure after the confirmation claim has already committed', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      type: 'L',
+      workflow: 'TRANSCRIBED',
+      transcriptionStatus: 'SUCCESS',
+      transcriptionText: 'transcript',
+      metadataStatus: 'PENDING',
+      entityExtractionStatus: 'PENDING',
+      primarySourceRevision: 7,
+    });
+    claimMetadataAfterTranscriptConfirmationMock.mockResolvedValueOnce({
+      runId: 'run-a',
+      revision: 0,
+    });
+    runMetadataExtractionV2Mock.mockRejectedValueOnce(
+      new Error('provider failed after claim'),
+    );
+
+    const response = await invokeRouter(contentRouter, {
+      method: 'POST',
+      url: '/letter-1/confirm-transcript',
+      path: '/letter-1/confirm-transcript',
+      body: { primarySourceRevision: 7 },
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.body).toMatchObject({
+      error: 'Internal server error',
+    });
+    expect(claimMetadataAfterTranscriptConfirmationMock).toHaveBeenCalledTimes(
+      1,
+    );
+    expect(runMetadataExtractionV2Mock).toHaveBeenCalledWith(
+      'letter-1',
+      undefined,
+      { runId: 'run-a', revision: 0 },
+    );
+    expect(fetchLetterWithRelatedAndTransformMock).not.toHaveBeenCalled();
+  });
+
+  it('reports failure when the final DTO read loses an already-completed result', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      type: 'L',
+      workflow: 'TRANSCRIBED',
+      transcriptionStatus: 'SUCCESS',
+      transcriptionText: 'transcript',
+      metadataStatus: 'PENDING',
+      entityExtractionStatus: 'PENDING',
+      primarySourceRevision: 7,
+    });
+    claimMetadataAfterTranscriptConfirmationMock.mockResolvedValueOnce({
+      runId: 'run-a',
+      revision: 0,
+    });
+    fetchLetterWithRelatedAndTransformMock.mockRejectedValueOnce(
+      new Error('DTO read failed after publication'),
+    );
+
+    const response = await invokeRouter(contentRouter, {
+      method: 'POST',
+      url: '/letter-1/confirm-transcript',
+      path: '/letter-1/confirm-transcript',
+      body: { primarySourceRevision: 7 },
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.body).toMatchObject({
+      error: 'Internal server error',
+    });
+    expect(runMetadataExtractionV2Mock).toHaveBeenCalledWith(
+      'letter-1',
+      undefined,
+      { runId: 'run-a', revision: 0 },
+    );
+    expect(fetchLetterWithRelatedAndTransformMock).toHaveBeenCalledWith(
+      'letter-1',
+    );
+  });
+
+  it('returns an uncoded conflict after confirmation when metadata is superseded', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      type: 'L',
+      workflow: 'TRANSCRIBED',
+      transcriptionStatus: 'SUCCESS',
+      transcriptionText: 'transcript',
+      metadataStatus: 'PENDING',
+      entityExtractionStatus: 'PENDING',
+      primarySourceRevision: 7,
+    });
+    claimMetadataAfterTranscriptConfirmationMock.mockResolvedValueOnce({
+      runId: 'run-a',
+      revision: 0,
+    });
+    runMetadataExtractionV2Mock.mockResolvedValueOnce({
+      kind: 'superseded',
+    });
+
+    const response = await invokeRouter(contentRouter, {
+      method: 'POST',
+      url: '/letter-1/confirm-transcript',
+      path: '/letter-1/confirm-transcript',
+      body: { primarySourceRevision: 7 },
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({
+      error: expect.stringContaining('superseded'),
+    });
+    expect(response.body).not.toHaveProperty('code');
+    expect(fetchLetterWithRelatedAndTransformMock).not.toHaveBeenCalled();
+  });
+
+  it('returns a successful partial DTO when entity extraction failed non-fatally', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      type: 'L',
+      workflow: 'TRANSCRIBED',
+      transcriptionStatus: 'SUCCESS',
+      transcriptionText: 'transcript',
+      metadataStatus: 'PENDING',
+      entityExtractionStatus: 'PENDING',
+      primarySourceRevision: 7,
+    });
+    claimMetadataAfterTranscriptConfirmationMock.mockResolvedValueOnce({
+      runId: 'run-a',
+      revision: 0,
+    });
+    fetchLetterWithRelatedAndTransformMock.mockResolvedValueOnce({
+      id: 'letter-1',
+      transcriptConfirmedAt: '2026-07-24T12:00:00.000Z',
+      workflowState: 'METADATA_DRAFTED',
+      metadataContentStatus: 'AI_DRAFT',
+      entityExtractionStatus: 'FAILED',
+      entityExtractionError: 'entity provider failed',
+    });
+
+    const response = await invokeRouter(contentRouter, {
+      method: 'POST',
+      url: '/letter-1/confirm-transcript',
+      path: '/letter-1/confirm-transcript',
+      body: { primarySourceRevision: 7 },
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toMatchObject({
+      transcriptConfirmedAt: '2026-07-24T12:00:00.000Z',
+      workflowState: 'METADATA_DRAFTED',
+      metadataContentStatus: 'AI_DRAFT',
+      entityExtractionStatus: 'FAILED',
+      entityExtractionError: 'entity provider failed',
+    });
+  });
+
+  it('confirms non-letter content without creating ineligible metadata work', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      type: 'T',
+      workflow: 'TRANSCRIBED',
+      transcriptionStatus: 'SUCCESS',
+      transcriptionText: 'transcript',
+      metadataStatus: 'PENDING',
+      entityExtractionStatus: 'PENDING',
+      primarySourceRevision: 7,
+    });
+    updateReturningMock.mockResolvedValueOnce([{ id: 'letter-1' }]);
+
+    const response = await invokeRouter(contentRouter, {
+      method: 'POST',
+      url: '/letter-1/confirm-transcript',
+      path: '/letter-1/confirm-transcript',
+      body: { primarySourceRevision: 7 },
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
+    expect(claimMetadataAfterTranscriptConfirmationMock).not.toHaveBeenCalled();
+    expect(updateReturningMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects canonical already-running metadata before confirmation', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      type: 'L',
+      workflow: 'METADATA_EXTRACTING',
+      transcriptionStatus: 'SUCCESS',
+      transcriptionText: 'transcript',
+      metadataStatus: 'RUNNING',
+      entityExtractionStatus: 'PENDING',
+      primarySourceRevision: 7,
+    });
+
+    const response = await invokeRouter(contentRouter, {
+      method: 'POST',
+      url: '/letter-1/confirm-transcript',
+      path: '/letter-1/confirm-transcript',
+      body: { primarySourceRevision: 7 },
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body).toMatchObject({
+      error: 'Letter must be in TRANSCRIBED state',
+    });
+    expect(updateReturningMock).not.toHaveBeenCalled();
+    expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
+  });
+
+  it('can commit confirmation after losing the metadata claim race', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      type: 'L',
+      workflow: 'TRANSCRIBED',
+      transcriptionStatus: 'SUCCESS',
+      transcriptionText: 'transcript',
+      metadataStatus: 'PENDING',
+      metadataRevision: 0,
+      entityExtractionStatus: 'PENDING',
+      primarySourceRevision: 7,
+    });
+    claimMetadataAfterTranscriptConfirmationMock.mockResolvedValueOnce(null);
+    updateReturningMock.mockResolvedValueOnce([{ id: 'letter-1' }]);
+    fetchLetterWithRelatedAndTransformMock.mockResolvedValueOnce({
+      id: 'letter-1',
+      transcriptConfirmedAt: '2026-07-25T12:00:00.000Z',
+      workflowState: 'METADATA_EXTRACTING',
+      metadataContentStatus: 'EMPTY',
+      entityExtractionStatus: 'PENDING',
+    });
+
+    const response = await invokeRouter(contentRouter, {
+      method: 'POST',
+      url: '/letter-1/confirm-transcript',
+      path: '/letter-1/confirm-transcript',
+      body: { primarySourceRevision: 7 },
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toMatchObject({
+      transcriptConfirmedAt: '2026-07-25T12:00:00.000Z',
+      workflowState: 'METADATA_EXTRACTING',
+      metadataContentStatus: 'EMPTY',
+      entityExtractionStatus: 'PENDING',
+    });
+    expect(updateReturningMock).toHaveBeenCalledTimes(1);
+    expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
+  });
+
+  it('returns newer authoritative state after post-publication source invalidation', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      type: 'L',
+      workflow: 'TRANSCRIBED',
+      transcriptionStatus: 'SUCCESS',
+      transcriptionText: 'transcript',
+      metadataStatus: 'PENDING',
+      entityExtractionStatus: 'PENDING',
+      primarySourceRevision: 7,
+    });
+    claimMetadataAfterTranscriptConfirmationMock.mockResolvedValueOnce({
+      runId: 'run-a',
+      revision: 0,
+    });
+    fetchLetterWithRelatedAndTransformMock.mockResolvedValueOnce({
+      id: 'letter-1',
+      primarySourceRevision: 8,
+      workflowState: 'TRANSCRIBED',
+      metadataContentStatus: 'EMPTY',
+      entityExtractionStatus: 'PENDING',
+    });
+
+    const response = await invokeRouter(contentRouter, {
+      method: 'POST',
+      url: '/letter-1/confirm-transcript',
+      path: '/letter-1/confirm-transcript',
+      body: { primarySourceRevision: 7 },
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toMatchObject({
+      primarySourceRevision: 8,
+      workflowState: 'TRANSCRIBED',
+      metadataContentStatus: 'EMPTY',
+    });
+    expect(response.body).not.toHaveProperty('transcriptConfirmedAt');
+    expect(runMetadataExtractionV2Mock).toHaveBeenCalledWith(
+      'letter-1',
+      undefined,
+      { runId: 'run-a', revision: 0 },
+    );
+  });
+
+  it('rejects a repeat after successful metadata changes the workflow', async () => {
+    getLetterByIdMock.mockResolvedValue({
+      type: 'L',
+      workflow: 'METADATA_DRAFTED',
+      transcriptionStatus: 'SUCCESS',
+      transcriptionText: 'transcript',
+      transcriptConfirmedAt: new Date('2026-07-24T12:00:00.000Z'),
+      metadataStatus: 'SUCCESS',
+      entityExtractionStatus: 'SUCCESS',
+      primarySourceRevision: 7,
+    });
+
+    const response = await invokeRouter(contentRouter, {
+      method: 'POST',
+      url: '/letter-1/confirm-transcript',
+      path: '/letter-1/confirm-transcript',
+      body: { primarySourceRevision: 7 },
+      headers: { accept: 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body).toMatchObject({
+      error: 'Letter must be in TRANSCRIBED state',
+    });
+    expect(claimMetadataAfterTranscriptConfirmationMock).not.toHaveBeenCalled();
+    expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
+  });
+
   it('returns a conflict when a request-owned metadata run is superseded', async () => {
     getLetterByIdMock.mockResolvedValue({
       type: 'L',

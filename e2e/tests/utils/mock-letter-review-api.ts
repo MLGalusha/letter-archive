@@ -477,6 +477,7 @@ export async function installMockLetterReviewApi(
       string,
       { status?: number; error: string; requestId?: string }
     >;
+    confirmTranscriptFailureAfterCommit?: MockApiFailure;
     routeFailures?: Partial<
       Record<
         | 'loadLetter'
@@ -851,6 +852,13 @@ export async function installMockLetterReviewApi(
       relationships: [],
       person_place_connections: [],
     };
+    if (options.confirmTranscriptFailureAfterCommit) {
+      await fulfillFailure(
+        route,
+        options.confirmTranscriptFailureAfterCommit,
+      );
+      return;
+    }
 
     await route.fulfill({
       status: 200,

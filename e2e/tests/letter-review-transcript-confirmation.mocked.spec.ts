@@ -199,6 +199,58 @@ test.describe('@mocked Letter Review transcript confirmation', () => {
     }]);
   });
 
+  test('looks retryable after a committed result is lost until authoritative reload', async ({
+    page,
+  }) => {
+    const mockedApi = await openConfirmationReview(
+      page,
+      createConfirmationReadyLetter(),
+      {
+        confirmTranscriptFailureAfterCommit: {
+          status: 500,
+          error: 'Confirmation response was lost after commit',
+          requestId: 'req-confirm-committed-500',
+        },
+      },
+    );
+
+    await headerConfirm(page).click();
+    const modal = confirmationModal(page);
+    await modal.getByLabel('Sender').fill('Committed Sender');
+    await modal.getByRole('button', {
+      name: 'Generate Metadata',
+      exact: true,
+    }).click();
+
+    await expect(page.locator('.toast')).toContainText(
+      'Confirmation response was lost after commit '
+      + '(Request ID: req-confirm-committed-500)',
+    );
+    await expect(headerConfirm(page)).toBeVisible();
+    await expect(headerConfirm(page)).toBeEnabled();
+    await expect(page.locator('#sender')).toHaveValue('Alice Smith');
+    await expect(page.getByText('Metadata Ready', { exact: true }))
+      .toHaveCount(0);
+
+    await page.reload();
+    await page.locator('.letter-review-page').waitFor({ state: 'visible' });
+    await expect(headerConfirm(page)).toHaveCount(0);
+    await expect(page.locator('#sender')).toHaveValue('Committed Sender');
+    await expect(page.getByText('Metadata Ready', { exact: true }))
+      .toBeVisible();
+    await expect(page.locator('#location')).toHaveValue(
+      'Confirmed Response Location',
+    );
+    expect(mockedApi.confirmTranscriptRequests).toEqual([{
+      url: `${API_BASE_URL}/admin/letters/letter-review-1/confirm-transcript`,
+      body: {
+        confirmedSender: 'Committed Sender',
+        confirmedRecipient: 'Bob Smith',
+        primarySourceRevision: 4,
+      },
+    }]);
+  });
+
   test('routes a coded source conflict to the terminal owner', async ({
     page,
   }) => {

@@ -131,6 +131,38 @@ describe('admin letter verification api', () => {
     );
   });
 
+  it('reports an aborted confirmation as status zero without reconciling state', async () => {
+    const timeoutSignal = new AbortController().signal;
+    const timeoutSpy = vi
+      .spyOn(AbortSignal, 'timeout')
+      .mockReturnValue(timeoutSignal);
+    fetchMock.mockRejectedValueOnce(
+      new DOMException('The operation was aborted.', 'AbortError'),
+    );
+
+    const error = await confirmTranscript(
+      'letter-1',
+      7,
+      { confirmedSender: 'Mabel' },
+    ).catch((caught: unknown) => caught);
+
+    expect(error).toMatchObject({
+      name: 'ApiError',
+      status: 0,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:3002/admin/letters/letter-1/confirm-transcript',
+      expect.objectContaining({
+        method: 'POST',
+        signal: timeoutSignal,
+      }),
+    );
+    expect(timeoutSpy).toHaveBeenCalledOnce();
+    expect(timeoutSpy).toHaveBeenCalledWith(20_000);
+    timeoutSpy.mockRestore();
+  });
+
   it('sends the source revision when adding and updating notes', async () => {
     fetchMock
       .mockResolvedValueOnce(new Response(JSON.stringify({ id: 'letter-1' }), {

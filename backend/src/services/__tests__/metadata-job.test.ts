@@ -427,6 +427,86 @@ describe('metadata job lifecycle', () => {
     });
   });
 
+  it('preserves committed confirmation when its claimed metadata attempt fails', async () => {
+    row.transcriptConfirmedAt = null;
+    row.transcriptConfirmedBy = null;
+    const claim = await claimMetadataAfterTranscriptConfirmation(
+      row.id,
+      observeMetadataState(row),
+      7,
+      'reviewer-1',
+    );
+
+    expect(claim).toEqual({ runId: 'run-a', revision: 0 });
+    await expect(
+      failMetadata(row.id, claim!, 'provider failed after confirmation'),
+    ).resolves.toBe(true);
+
+    expect(row).toMatchObject({
+      transcriptConfirmedAt: expect.any(Date),
+      transcriptConfirmedBy: 'reviewer-1',
+      workflow: 'TRANSCRIBED',
+      metadataStatus: 'FAILED',
+      metadataRunId: null,
+      metadataError: 'provider failed after confirmation',
+    });
+  });
+
+  it('reconfirms and reclaims metadata when a failed request is blindly repeated', async () => {
+    row.transcriptConfirmedAt = null;
+    row.transcriptConfirmedBy = null;
+    const firstClaim = await claimMetadataAfterTranscriptConfirmation(
+      row.id,
+      observeMetadataState(row),
+      7,
+      'reviewer-1',
+    );
+    await failMetadata(
+      row.id,
+      firstClaim!,
+      'provider failed after confirmation',
+    );
+    randomUUIDMock.mockReturnValue('run-b');
+
+    const repeatedClaim = await claimMetadataAfterTranscriptConfirmation(
+      row.id,
+      observeMetadataState(row),
+      7,
+      'reviewer-2',
+    );
+
+    expect(repeatedClaim).toEqual({ runId: 'run-b', revision: 1 });
+    expect(row).toMatchObject({
+      transcriptConfirmedAt: expect.any(Date),
+      transcriptConfirmedBy: 'reviewer-2',
+      workflow: 'METADATA_EXTRACTING',
+      metadataStatus: 'RUNNING',
+      metadataRunId: 'run-b',
+      metadataRunRevision: 1,
+      metadataRevision: 1,
+    });
+  });
+
+  it('allows only one concurrent confirmation claim for the observed transcript', async () => {
+    row.transcriptConfirmedAt = null;
+    row.transcriptConfirmedBy = null;
+    const observed = observeMetadataState(row);
+
+    const claims = await Promise.all([
+      claimMetadataAfterTranscriptConfirmation(row.id, observed, 7, 'reviewer-1'),
+      claimMetadataAfterTranscriptConfirmation(row.id, observed, 7, 'reviewer-2'),
+    ]);
+
+    expect(claims.filter(Boolean)).toHaveLength(1);
+    expect(claims).toContainEqual({ runId: 'run-a', revision: 0 });
+    expect(row).toMatchObject({
+      transcriptConfirmedAt: expect.any(Date),
+      transcriptConfirmedBy: 'reviewer-1',
+      metadataStatus: 'RUNNING',
+      metadataRunId: 'run-a',
+    });
+  });
+
   it('does not confirm or claim metadata from a stale page-source epoch', async () => {
     row.transcriptConfirmedAt = null;
     row.transcriptConfirmedBy = null;

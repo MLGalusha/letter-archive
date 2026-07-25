@@ -52,6 +52,130 @@ tree:
   lines, though its search section is comparatively cohesive.
 - Redesign and refactoring docs contained stale active-phase claims.
 
+## Slice 046 — Canonical Public Archive URL State
+
+Status: framed; implementation pending.
+
+Problem:
+
+`useArchiveSearch()` currently initializes its query and filters independently from
+URL parameters or local persistence, then synchronizes only from React state back to
+the URL. A recognized filter-only deep link can inherit a private saved query.
+Same-route navigation and browser Back/Forward change `searchParams` without changing
+the hook state, so the stale 250 ms writer replaces the selected history entry.
+Because search starts after 180 ms while URL and persistence wait 250/300 ms, a user
+can open a visible result before either durable representation contains the state that
+produced it.
+
+The mapping itself has split ownership. `SearchFilters` belongs to the 797-line
+`SearchBar` component even though the hook, persistence, API adapter, and utilities
+consume it. `hasTranscript` is addressable and sent to the API but is neither parsed
+nor serialized. Fixed filters promise generic URL exclusion but only `collection` is
+excluded. Sort field omission respects the page default while sort-order omission is
+hard-coded to `desc`; after Clear All or legacy persistence, Collection Detail can
+display descending while requesting its configured ascending default. Rebuilding
+`URLSearchParams` from empty also deletes parameters the archive does not own.
+
+Target invariant:
+
+One normalized `{ query, filters }` snapshot owns public archive criteria. One pure,
+UI-independent archive codec owns its type, validation, URL keys, defaults,
+fixed-filter rules, and parse/serialize behavior. On initial or configuration-scope
+hydration, any recognized archive URL parameter owns the complete snapshot and
+persistence is fallback only when the URL has no owned key. After hydration, every
+external location change—including an empty POP—wins over memory and persistence.
+Local edits replace the current URL entry before they can drive a search result, while
+self-authored replacements never decode over the current draft.
+
+Scope:
+
+- Move `SearchFilters` from `SearchBar.tsx` to the existing archive-search domain
+  module and retain a compatibility type export for current component consumers.
+- Add pure archive-state decode, normalize, owned-key detection, and encode functions.
+  Validate recognized enums, booleans, positive integer years, arrays, and stored
+  shapes; a malformed recognized URL still owns the snapshot and never activates
+  personal persistence.
+- Round-trip every addressable field, including repeated `format`,
+  `hasTranscript=true|false`, `verified=true|false`, lists, range endpoints, sort, and
+  order. Keep the existing comma protocol for topic/tone/relationship.
+- Encode by cloning the current search parameters, deleting only archive-owned keys,
+  and writing canonical owned keys. Preserve foreign parameters and repeats.
+- Normalize the configured default sort and order into state so SearchBar, request
+  construction, persistence, URL omission, Clear All, and legacy saved state share
+  one effective pair.
+- Treat `(storageKey, default sort/order, normalized fixed filters)` as one hydration
+  scope. On scope change, a recognized URL wins; otherwise load and normalize only
+  that scope's saved state. Overlay every fixed filter and omit all of their URL keys.
+- Replace the split query/filter state with one hook-owned snapshot and a synchronous
+  ref-backed update boundary so SearchBar's sequential query/filter Clear All calls
+  compose instead of restoring stale state.
+- Remove the 250 ms URL-write delay. Local changes still use `replace`, never `push`,
+  but become durable before the existing 180 ms search starts. Keep search and
+  persistence debounce behavior unchanged.
+- Distinguish a self-authored URL replacement from external PUSH/REPLACE/POP. External
+  navigation cancels stale work, adopts the complete selected URL snapshot, and may
+  perform one canonical replacement without a feedback loop.
+- Add one deterministic mocked browser proof using the real Header Home link and
+  browser Back/Forward on the still-mounted Home route.
+
+Non-goals:
+
+- Do not add search fields, visual changes, backend/API search behavior, a generic
+  query-codec framework, Zod schema, persistence migration system, cross-tab sync, or
+  a new routing/state library.
+- Do not split `useArchiveSearch()` into multiple coordinating hooks. It remains the
+  cohesive owner of URL orchestration, persistence, requests, cancellation,
+  pagination, loading, and errors; only pure state/codec rules move out.
+- Do not extract the duplicated Home/Collection search surface yet. That becomes safer
+  only after both routes consume this stable state contract.
+- Do not change the public comma-delimited facet protocol, result pagination, request
+  debounce, remembered facets, sticky docks, scroll restoration, or route layout.
+- Do not create a browser history entry per keystroke. Every local URL write remains a
+  replacement of the current entry.
+
+Acceptance:
+
+- Query-only and filter-only recognized URLs beat persistence wholesale. `?q=` and
+  malformed recognized values also prevent saved-state fallback.
+- Initial clean URLs may hydrate normalized saved state. Later external navigation to
+  a clean archive URL restores empty/default state instead of reloading persistence.
+- Same-route PUSH and browser Back/Forward update controls, request parameters, and
+  canonical URL without stale snapback, including navigation during a local edit.
+- Local criteria are reflected in the current URL before their debounced search can
+  execute, so opening a result and returning cannot lose the producing state.
+- `hasTranscript` true and false round-trip through URL, state, persistence, and API.
+  All other owned fields have one codec round-trip table.
+- Home's default pair is `relevance/desc`; Collection Detail's is
+  `letterDate/asc`. Both pairs are omitted canonically, while non-default field/order
+  values remain explicit. Clear All and legacy saved data preserve UI/request parity.
+- Fixed filters are enforced in state and requests, excluded generically from URL
+  output, and re-resolved for storage-key-only and collection-scope changes.
+- Archive writes preserve every unowned parameter and repeated value.
+- Invalid sort/order/format/boolean/year/list and hostile saved shapes normalize to
+  safe defaults or empty fields without entering API requests.
+- Focused codec, hook, persistence, Home, and Collection coverage pass; the mocked
+  browser history flow passes; changed frontend TypeScript passes lint and build;
+  then the complete frontend/backend/aggregate gates and independent review pass with
+  no unresolved P0-P2 finding.
+
+Baseline:
+
+- Checkpoint 045 aggregate verification passed: backend 110 files / 1,157 tests,
+  backend typecheck, frontend 152 files / 1,063 tests, production build, and mocked
+  browser suite 78/78.
+- The focused hook, persistence, Home, and Collection suites pass 4 files / 33 tests.
+- `useArchiveSearch()` is 312 lines with separate query/filter owners and only a
+  state-to-URL effect. `archiveSearch.ts` is a 39-line pure domain utility.
+- The current hook suite has 6 tests. It covers only delayed URL writing, default sort
+  resolution, request default forwarding, and partial default omission; it has no
+  external navigation, persistence precedence, fixed-filter, full-codec, or history
+  coverage.
+- The real Header contains a Home link to `/`. From `/?q=mother`, clicking it performs
+  a same-route navigation without unmounting Home, reproducing the stale-state writer
+  defect.
+
+Rollback base: `eaaff1c4`.
+
 ## Slice 045 — Reclaim Superseded Page Objects After Commit
 
 Status: complete at `583fbb0f`.

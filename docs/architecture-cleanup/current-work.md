@@ -13,8 +13,8 @@ Last updated: July 25, 2026
   `c77bc0c0`, with dead hydration-option cleanup at `90cffb15`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Active slice: none; reassess the remaining program and frame the next smallest
-  behavior-preserving or correctness-focused boundary before editing production code.
+- Active slice: 041 — make remembered SearchBar facet options render-pure; framed,
+  characterization and implementation pending.
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -115,6 +115,78 @@ tree:
   drift; do not create a generic shared package without a concrete consumer.
 - [ ] Remove proven-unused dependencies, exports, scripts, and obsolete configuration.
 - [ ] Make tracked `docs/` the single documentation source and archive stale plans.
+
+## Slice 041 — Make Remembered Search Facets Render-Pure
+
+Status: framed; characterization and implementation pending
+
+Problem:
+
+`SearchBar` promises that Tone, Relationship, Topic, and Year choices do not disappear
+as a search response narrows its facets. It implements that session-local memory with
+four refs. Tone and Relationship option builders read those refs during render; Year
+and Topic builders also mutate them inside `useMemo()`. The commit effect omits Years
+from its dependencies.
+
+The rendered output therefore depends on mutable state that React cannot observe, and
+an interrupted or abandoned render can publish phantom Year or Topic memory into a
+later committed UI. Current lint reports 12 `react-hooks/refs` errors around this
+boundary. Six neighboring hook-dependency warnings make the same component's local
+open/close and format-option ownership harder to verify.
+
+Target invariant:
+
+Remembered facet values advance only from committed facet props, never as a render side
+effect. Every render derives options purely from the last committed memory plus its
+current props, so current values appear immediately, previously committed values remain
+available while results narrow, and abandoned renders cannot affect later output.
+
+Scope:
+
+- Characterize retention for tone, relationship, normalized topic category, and the
+  year-range bounds across facet narrowing and later facet expansion.
+- Extract one small committed-memory owner with pure normalization/merge helpers.
+  Store only value identity; current counts are not rendered in these choice lists.
+- Replace all render-time seen-facet ref reads and writes with pure option derivation
+  from current props plus committed state.
+- Stabilize SearchBar's local refine/sort setters and correct the directly exposed hook
+  dependency lists so the touched component reaches zero ESLint errors and warnings.
+
+Non-goals:
+
+- Do not change backend facet semantics, API shapes, available filter types, topic
+  category normalization, year padding/clamping, sorting behavior, copy, layout, or
+  mobile interactions.
+- Do not introduce a cross-page/global facet cache. Memory remains scoped to one
+  mounted SearchBar, as it is today.
+- Do not split the rest of the 835-line render tree or redesign `FilterChoiceField` in
+  this slice.
+
+Acceptance:
+
+- Initial facet choices render immediately without waiting for an effect.
+- Values from a committed response remain available when later facet arrays omit
+  them; newly committed values join the same memory and also survive later narrowing.
+- Topic memory retains the category before `/`, matching current behavior, and Year
+  choices retain the same `dataMin - 50` / `dataMax + 50`, 1700/current-year bounds.
+- No ref is read or mutated to derive remembered facet options during render.
+- The memory owner returns its prior state when a response contributes no new values,
+  avoiding a redundant state/render cycle.
+- Existing SearchBar filter, sort, and accessibility behavior remains green.
+- Focused unit tests and touched ESLint pass, followed by the frontend suite, build,
+  mocked browser suite, aggregate verification, and independent review with no
+  unresolved P0-P2 finding.
+
+Baseline:
+
+- Checkpoint 040: backend 108 files / 1,124 tests, frontend 151 files / 1,039 tests,
+  production build, mocked browser 77/77, and aggregate verification passed.
+- `SearchBar.tsx` is 835 lines. Its existing 13 tests pass but none rerenders with
+  narrowed or expanded tone, relationship, topic, or year facets.
+- Focused ESLint reports 12 errors and 6 warnings. All 12 errors come from remembered
+  facet refs being read, passed, or mutated during render.
+
+Rollback base: `9e334abc`.
 
 ## Slice 040 — Separate Metadata Form State from Verification Actions
 

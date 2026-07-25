@@ -1,11 +1,12 @@
-import { and, eq } from 'drizzle-orm';
-import { db, letters } from '../../db/index.js';
+import { and, eq, isNull } from 'drizzle-orm';
+import { db, letters, type Letter } from '../../db/index.js';
 import { describePhoto as generatePhotoDescription } from '../../ai/openai.js';
 import { runRequestedTranscription } from '../../pipeline/transcription.js';
 import { getAbsoluteStoragePath } from '../storage.js';
 import {
   contentStatusValues,
   log,
+  observedTimestampMatches,
   type DescribePhotoResult,
   type TranscribeLetterOnlyResult,
   type TranscriptionRegenerateResult,
@@ -20,13 +21,60 @@ import {
 import {
   assertCurrentPrimarySourceRevision,
   currentPrimarySourceRevisionCondition,
-  sourceRevisionChanged,
 } from './source-revision.js';
 
 export { transcribeExtras } from './extra-content.js';
 
 function statusError(message: string, status: number): Error & { status: number } {
   return Object.assign(new Error(message), { status });
+}
+
+type PhotoDescriptionSnapshot = Pick<
+  Letter,
+  | 'updatedAt'
+  | 'photoDescription'
+  | 'photoDescriptionStatus'
+  | 'photoDescriptionContext'
+  | 'photoDescriptionVerifiedAt'
+  | 'photoDescriptionVerifiedBy'
+>;
+
+function observedPhotoDescriptionConditions(
+  snapshot: PhotoDescriptionSnapshot,
+) {
+  return [
+    observedTimestampMatches(letters.updatedAt, snapshot.updatedAt),
+    snapshot.photoDescription === null
+      ? isNull(letters.photoDescription)
+      : eq(letters.photoDescription, snapshot.photoDescription),
+    eq(letters.photoDescriptionStatus, snapshot.photoDescriptionStatus),
+    snapshot.photoDescriptionContext === null
+      ? isNull(letters.photoDescriptionContext)
+      : eq(letters.photoDescriptionContext, snapshot.photoDescriptionContext),
+    snapshot.photoDescriptionVerifiedAt === null
+      ? isNull(letters.photoDescriptionVerifiedAt)
+      : eq(letters.photoDescriptionVerifiedAt, snapshot.photoDescriptionVerifiedAt),
+    snapshot.photoDescriptionVerifiedBy === null
+      ? isNull(letters.photoDescriptionVerifiedBy)
+      : eq(letters.photoDescriptionVerifiedBy, snapshot.photoDescriptionVerifiedBy),
+  ];
+}
+
+async function throwPhotoDescriptionWriteConflict(
+  letterId: string,
+  expectedPrimarySourceRevision: number,
+  sourceConflictMessage: string,
+  contentConflictMessage: string,
+): Promise<never> {
+  const latest = await getLetterById(letterId);
+  if (latest) {
+    assertCurrentPrimarySourceRevision(
+      latest.primarySourceRevision,
+      expectedPrimarySourceRevision,
+      sourceConflictMessage,
+    );
+  }
+  throw statusError(contentConflictMessage, 409);
 }
 
 async function runDirectMainTranscription(
@@ -334,11 +382,15 @@ export async function describePhoto(
     .where(and(
       eq(letters.id, letterId),
       currentPrimarySourceRevisionCondition(expectedPrimarySourceRevision),
+      ...observedPhotoDescriptionConditions(letter),
     ))
     .returning({ id: letters.id });
   if (updated.length !== 1) {
-    throw sourceRevisionChanged(
+    await throwPhotoDescriptionWriteConflict(
+      letterId,
+      expectedPrimarySourceRevision,
       'Photo source changed before its generated description could be saved; reload and try again',
+      'Photo description changed before its generated result could be saved; review the latest description and try again',
     );
   }
 
@@ -414,11 +466,15 @@ export async function updatePhotoDescription(
     .where(and(
       eq(letters.id, letterId),
       currentPrimarySourceRevisionCondition(expectedPrimarySourceRevision),
+      ...observedPhotoDescriptionConditions(existingLetter),
     ))
     .returning({ id: letters.id });
   if (updated.length !== 1) {
-    throw sourceRevisionChanged(
+    await throwPhotoDescriptionWriteConflict(
+      letterId,
+      expectedPrimarySourceRevision,
       'Photo source changed before its description could be saved; reload and try again',
+      'Photo description changed before it could be saved; review the latest description and try again',
     );
   }
 

@@ -1024,6 +1024,62 @@ describe('admin letters line review route integration', () => {
     });
   });
 
+  it('keeps a photo-description write race distinct from a page-source conflict', async () => {
+    describePhotoMock.mockRejectedValueOnce(
+      Object.assign(
+        new Error(
+          'Photo description changed before its generated result could be saved; review the latest description and try again',
+        ),
+        { status: 409 },
+      ),
+    );
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'POST',
+      url: `/letters/${LETTER_ID}/describe-photo`,
+      path: `/letters/${LETTER_ID}/describe-photo`,
+      body: {
+        photoDescriptionContext: 'Likely Jimmy and Molly',
+        primarySourceRevision: 4,
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toEqual({
+      error:
+        'Photo description changed before its generated result could be saved; review the latest description and try again',
+      requestId: expect.any(String),
+    });
+  });
+
+  it('preserves the source-conflict code when photo generation loses to replacement', async () => {
+    describePhotoMock.mockRejectedValueOnce(
+      sourceRevisionChanged(
+        'Photo source changed before its generated description could be saved; reload and try again',
+      ),
+    );
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'POST',
+      url: `/letters/${LETTER_ID}/describe-photo`,
+      path: `/letters/${LETTER_ID}/describe-photo`,
+      body: {
+        photoDescriptionContext: 'Likely Jimmy and Molly',
+        primarySourceRevision: 4,
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({
+      error:
+        'Photo source changed before its generated description could be saved; reload and try again',
+      code: 'SOURCE_REVISION_CHANGED',
+      requestId: expect.any(String),
+    });
+  });
+
   it('injects requestId into manual photo-description validation errors', async () => {
     const response = await invokeRouter(lettersRouter, {
       method: 'PUT',

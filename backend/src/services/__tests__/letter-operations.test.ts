@@ -101,6 +101,11 @@ vi.mock('../../db/index.js', () => {
       entityExtractionError: 'letters.entityExtractionError',
       extraContentJobStatus: 'letters.extraContentJobStatus',
       workflow: 'letters.workflow',
+      photoDescription: 'letters.photoDescription',
+      photoDescriptionStatus: 'letters.photoDescriptionStatus',
+      photoDescriptionContext: 'letters.photoDescriptionContext',
+      photoDescriptionVerifiedAt: 'letters.photoDescriptionVerifiedAt',
+      photoDescriptionVerifiedBy: 'letters.photoDescriptionVerifiedBy',
       updatedAt: 'letters.updatedAt',
     },
     letterVersions: {
@@ -195,6 +200,30 @@ function renderedSql(value: unknown): string {
       : ''),
     '',
   );
+}
+
+function createPhotoRecord(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'photo-record',
+    type: 'P',
+    collectionId: 'collection-1',
+    dateRaw: '19470810',
+    typeSequence: 1,
+    primarySourceRevision: 9,
+    updatedAt: new Date('2026-07-25T12:00:00.000Z'),
+    photoDescription: 'The observed description.',
+    photoDescriptionStatus: 'AI_DRAFT',
+    photoDescriptionContext: null,
+    photoDescriptionVerifiedAt: null,
+    photoDescriptionVerifiedBy: null,
+    collection: { collectionCode: '009' },
+    pages: [{
+      id: 'photo-page-1',
+      pageNumber: 1,
+      storagePath: 'collections/009/19470810/P01/photo.jpg',
+    }],
+    ...overrides,
+  };
 }
 
 describe('letter operations service', () => {
@@ -1379,12 +1408,12 @@ describe('letter operations service', () => {
 
   it('marks manual photo-description edits as edited when content is added from an empty state', async () => {
     updateReturningMock.mockResolvedValueOnce([{ id: 'photo-1' }]);
-    getLetterByIdMock.mockResolvedValue({
+    getLetterByIdMock.mockResolvedValue(createPhotoRecord({
       id: 'photo-1',
-      type: 'P',
+      photoDescription: null,
       photoDescriptionStatus: 'EMPTY',
-      primarySourceRevision: 9,
-    });
+      updatedAt: new Date('2026-07-25T11:00:00.000Z'),
+    }));
 
     const result = await updatePhotoDescription('photo-1', {
       photoDescription: 'Two children standing on a porch.',
@@ -1403,6 +1432,25 @@ describe('letter operations service', () => {
         value: 9,
       }]),
     }));
+    const manualWriteWhere = updateWhereMock.mock.calls.at(-1)?.[0] as {
+      clauses: unknown[];
+    };
+    expect(manualWriteWhere.clauses.some((clause) =>
+      renderedSql(clause).includes(
+        "date_trunc('milliseconds', letters.updatedAt) = 2026-07-25T11:00:00.000Z::timestamptz",
+      ),
+    )).toBe(true);
+    expect(manualWriteWhere.clauses).toEqual(expect.arrayContaining([
+      { kind: 'isNull', field: 'letters.photoDescription' },
+      {
+        kind: 'eq',
+        field: 'letters.photoDescriptionStatus',
+        value: 'EMPTY',
+      },
+      { kind: 'isNull', field: 'letters.photoDescriptionContext' },
+      { kind: 'isNull', field: 'letters.photoDescriptionVerifiedAt' },
+      { kind: 'isNull', field: 'letters.photoDescriptionVerifiedBy' },
+    ]));
   });
 
   it('does not restore a photo description loaded before its page source changed', async () => {
@@ -1425,12 +1473,14 @@ describe('letter operations service', () => {
 
   it('resets photo-description verification metadata when content is removed', async () => {
     updateReturningMock.mockResolvedValueOnce([{ id: 'photo-2' }]);
-    getLetterByIdMock.mockResolvedValue({
+    getLetterByIdMock.mockResolvedValue(createPhotoRecord({
       id: 'photo-2',
-      type: 'P',
+      photoDescription: 'Verified description.',
       photoDescriptionStatus: 'VERIFIED',
-      primarySourceRevision: 9,
-    });
+      photoDescriptionVerifiedAt: new Date('2026-07-25T10:00:00.000Z'),
+      photoDescriptionVerifiedBy: 'reviewer-1',
+      updatedAt: new Date('2026-07-25T11:00:00.000Z'),
+    }));
 
     const result = await updatePhotoDescription('photo-2', {
       photoDescription: '   ',
@@ -1446,17 +1496,68 @@ describe('letter operations service', () => {
     });
   });
 
+  it('does not let a stale manual save corrupt newer photo verification state', async () => {
+    getLetterByIdMock
+      .mockResolvedValueOnce(createPhotoRecord({
+        id: 'photo-manual-raced',
+        photoDescription: 'The AI draft the editor loaded.',
+        updatedAt: new Date('2026-07-25T11:00:00.000Z'),
+      }))
+      .mockResolvedValueOnce(createPhotoRecord({
+        id: 'photo-manual-raced',
+        photoDescription: 'The AI draft the editor loaded.',
+        photoDescriptionStatus: 'VERIFIED',
+        photoDescriptionVerifiedAt: new Date('2026-07-25T11:00:01.000Z'),
+        photoDescriptionVerifiedBy: 'reviewer-2',
+        updatedAt: new Date('2026-07-25T11:00:01.000Z'),
+      }));
+    updateReturningMock.mockResolvedValueOnce([]);
+
+    await expect(updatePhotoDescription('photo-manual-raced', {
+      photoDescription: 'A stale manual correction.',
+    }, 9)).rejects.toMatchObject({
+      status: 409,
+      message: expect.stringContaining(
+        'description changed before it could be saved',
+      ),
+    });
+
+    expect(getLetterByIdMock).toHaveBeenCalledTimes(2);
+    expect(dbUpdateMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a page-source replacement that wins after a manual photo save starts', async () => {
+    getLetterByIdMock
+      .mockResolvedValueOnce(createPhotoRecord({
+        id: 'photo-manual-source-raced',
+        photoDescription: 'The description loaded before replacement.',
+        photoDescriptionStatus: 'EDITED',
+        updatedAt: new Date('2026-07-25T11:00:00.000Z'),
+      }))
+      .mockResolvedValueOnce(createPhotoRecord({
+        id: 'photo-manual-source-raced',
+        primarySourceRevision: 10,
+        updatedAt: new Date('2026-07-25T11:00:01.000Z'),
+      }));
+    updateReturningMock.mockResolvedValueOnce([]);
+
+    await expect(updatePhotoDescription('photo-manual-source-raced', {
+      photoDescription: 'A correction derived from the replaced image.',
+    }, 9)).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'SOURCE_REVISION_CHANGED',
+      message: expect.stringContaining('source changed'),
+    });
+
+    expect(getLetterByIdMock).toHaveBeenCalledTimes(2);
+    expect(dbUpdateMock).toHaveBeenCalledTimes(1);
+  });
+
   it('generates photo descriptions with reviewer and linked-letter context', async () => {
     updateReturningMock.mockResolvedValueOnce([{ id: 'photo-3' }]);
     findFirstMock
-      .mockResolvedValueOnce({
+      .mockResolvedValueOnce(createPhotoRecord({
         id: 'photo-3',
-        type: 'P',
-        collectionId: 'collection-1',
-        dateRaw: '19470810',
-        typeSequence: 1,
-        primarySourceRevision: 9,
-        collection: { collectionCode: '009' },
         pages: [
           {
             id: 'photo-page-1',
@@ -1464,7 +1565,7 @@ describe('letter operations service', () => {
             storagePath: 'collections/009/19470810/P01/009-19470810-P01-01.jpg',
           },
         ],
-      })
+      }))
       .mockResolvedValueOnce({
         sender: 'Alice',
         recipient: 'Bob',
@@ -1505,6 +1606,29 @@ describe('letter operations service', () => {
       photoDescriptionContext: 'Likely Jimmy and Molly',
       updatedAt: expect.any(Date),
     });
+    const publicationWhere = updateWhereMock.mock.calls.at(-1)?.[0] as {
+      clauses: unknown[];
+    };
+    expect(publicationWhere.clauses.some((clause) =>
+      renderedSql(clause).includes(
+        "date_trunc('milliseconds', letters.updatedAt) = 2026-07-25T12:00:00.000Z::timestamptz",
+      ),
+    )).toBe(true);
+    expect(publicationWhere.clauses).toEqual(expect.arrayContaining([
+      {
+        kind: 'eq',
+        field: 'letters.photoDescription',
+        value: 'The observed description.',
+      },
+      {
+        kind: 'eq',
+        field: 'letters.photoDescriptionStatus',
+        value: 'AI_DRAFT',
+      },
+      { kind: 'isNull', field: 'letters.photoDescriptionContext' },
+      { kind: 'isNull', field: 'letters.photoDescriptionVerifiedAt' },
+      { kind: 'isNull', field: 'letters.photoDescriptionVerifiedBy' },
+    ]));
     expect(result).toEqual({
       describedCount: 1,
       photoDescriptionStatus: 'AI_DRAFT',
@@ -1513,26 +1637,20 @@ describe('letter operations service', () => {
 
   it('does not commit a generated photo description after its page source changes', async () => {
     findFirstMock
-      .mockResolvedValueOnce({
+      .mockResolvedValueOnce(createPhotoRecord({
         id: 'photo-source-raced',
-        type: 'P',
-        collectionId: 'collection-1',
-        dateRaw: '19470810',
-        typeSequence: 1,
-        primarySourceRevision: 9,
-        collection: { collectionCode: '009' },
-        pages: [{
-          id: 'photo-page-1',
-          pageNumber: 1,
-          storagePath: 'collections/009/19470810/P01/photo.jpg',
-        }],
-      })
+      }))
       .mockResolvedValueOnce(null);
     describePhotoMock.mockResolvedValue({
       text: 'A description generated from the old photo bytes.',
       isStub: false,
     });
     updateReturningMock.mockResolvedValueOnce([]);
+    getLetterByIdMock.mockResolvedValueOnce({
+      id: 'photo-source-raced',
+      primarySourceRevision: 10,
+      updatedAt: new Date('2026-07-25T12:00:01.000Z'),
+    });
 
     await expect(describePhotoWorkflow(
       'photo-source-raced',
@@ -1550,5 +1668,65 @@ describe('letter operations service', () => {
         value: 9,
       }]),
     }));
+  });
+
+  it.each([
+    {
+      changedState: 'a newer human edit',
+      latest: {
+        photoDescription: 'A reviewer corrected the description.',
+        photoDescriptionStatus: 'EDITED',
+        photoDescriptionVerifiedAt: null,
+        photoDescriptionVerifiedBy: null,
+      },
+    },
+    {
+      changedState: 'newer reviewer verification',
+      latest: {
+        photoDescription: 'The reviewed description.',
+        photoDescriptionStatus: 'VERIFIED',
+        photoDescriptionVerifiedAt: new Date('2026-07-25T12:00:01.000Z'),
+        photoDescriptionVerifiedBy: 'reviewer-1',
+      },
+    },
+  ])('does not overwrite $changedState while photo generation is running', async ({
+    latest,
+  }) => {
+    findFirstMock
+      .mockResolvedValueOnce(createPhotoRecord({
+        id: 'photo-content-raced',
+        photoDescription: 'The description generation began with.',
+      }))
+      .mockResolvedValueOnce(null);
+    describePhotoMock.mockResolvedValue({
+      text: 'An older generated description that must not be published.',
+      isStub: false,
+    });
+    updateReturningMock.mockResolvedValueOnce([]);
+    getLetterByIdMock.mockResolvedValueOnce({
+      id: 'photo-content-raced',
+      primarySourceRevision: 9,
+      updatedAt: new Date('2026-07-25T12:00:01.000Z'),
+      ...latest,
+    });
+
+    let caught: unknown;
+    try {
+      await describePhotoWorkflow('photo-content-raced', null, 9);
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toMatchObject({
+      status: 409,
+      message: expect.stringContaining(
+        'description changed before its generated result could be saved',
+      ),
+    });
+    expect(caught).not.toMatchObject({
+      code: 'SOURCE_REVISION_CHANGED',
+    });
+    expect(getLetterByIdMock).toHaveBeenCalledWith('photo-content-raced');
+    expect(dbUpdateMock).toHaveBeenCalledTimes(1);
   });
 });

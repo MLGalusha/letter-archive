@@ -12,7 +12,7 @@ Last updated: July 25, 2026
   at `46418d6f`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Active slice: 039 — fence generated photo-description publication, framed below.
+- Active slice: 039 — fence photo-description writes, framed below.
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -114,7 +114,7 @@ tree:
 - [ ] Remove proven-unused dependencies, exports, scripts, and obsolete configuration.
 - [ ] Make tracked `docs/` the single documentation source and archive stale plans.
 
-## Slice 039 — Fence Generated Photo-Description Publication
+## Slice 039 — Fence Photo-Description Writes
 
 Status: framed
 
@@ -126,38 +126,52 @@ revision. A reviewer can edit, verify, or unverify the photo description while t
 slow work is running without changing the page-source revision. The older AI result
 can then overwrite the newer human-owned text or state and clear its verification.
 
+The manual description writer has the same source-only gap. In particular, a save
+that read `AI_DRAFT` can race with verification, then derive and commit `EDITED`
+without clearing the verification identity that the newer write added. Verify and
+unverify already use observed-state compare-and-swap conditions, but the other two
+writers do not share that ownership rule.
+
 Target invariant:
 
-A generated photo description may publish only when both the page source and the
-observed target row are unchanged since generation began. Source drift retains the
-existing coded `SOURCE_REVISION_CHANGED` conflict. Any other lost publication race
-returns a narrower 409 and preserves the newer durable state.
+Every photo-description writer that derives a patch from an observed snapshot may
+commit only when both the page source and the observed photo-description state are
+unchanged. Source drift retains the existing coded `SOURCE_REVISION_CHANGED`
+conflict. Any other lost write race returns a narrower 409 and preserves the newer
+durable state.
 
 Scope:
 
-- Bind the final generated-description update to the row timestamp observed before
-  provider execution as well as the caller's primary-source revision.
+- Bind generated publication and manual saves to the row timestamp and exact
+  description/status/context/verification tuple they observed, as well as the
+  caller's primary-source revision. The exact tuple closes the millisecond precision
+  gap in the existing timestamp compare-and-swap primitive.
 - On a lost conditional update, reload current state and distinguish page-source
   drift from another row mutation.
 - Characterize successful publication, source replacement during generation, and a
   human edit or verification change during generation.
+- Characterize a manual save that loses to verification so it cannot commit an
+  internally inconsistent status/verification tuple.
 
 Non-goals:
 
 - Do not move photo-description generation to the durable worker, add a job table,
   change the endpoint response shape, or add polling.
-- Do not redesign manual photo-description autosave or solve general multi-reviewer
-  editing in this slice.
+- Do not redesign the frontend autosave coordinator or add merge/conflict-resolution
+  controls. A fresh explicit retry remains the recovery path.
 - Do not change linked-letter context freshness, public publication rules, prompts,
   or user-visible controls.
 
 Acceptance:
 
-- The generated-description update contains both exact-source and observed-row
-  compare-and-swap conditions.
+- Generated publication and manual save use exact-source, observed-timestamp, and
+  observed-photo-state compare-and-swap conditions; verification and unverification
+  retain their existing observed-state fences.
 - A page-source replacement still reports a coded source conflict.
 - A newer human description or verification state causes a non-source 409, and the
   generated result performs no fallback write.
+- A stale manual save cannot land after verification or leave an `EDITED` row carrying
+  verified-at/by fields.
 - Existing describe, edit, verify, and source-conflict contracts remain green,
   followed by the backend suite, typecheck, aggregate verification, and independent
   backend plus frontend-contract review with no unresolved P0-P2 finding.
@@ -166,9 +180,9 @@ Baseline:
 
 - Slice 038 aggregate checkpoint: backend 108 files / 1,118 tests, frontend 149 files /
   1,029 tests, production build, and mocked browser 77/77 passed.
-- Existing coverage proves only that a changed primary-source revision rejects
-  generated publication; it does not fence description-only or verification-only
-  mutations made during provider execution.
+- Existing coverage proves that verify/unverify and changed primary-source revisions
+  reject stale writes. Generated publication and manual saves do not yet fence
+  description-only or verification-only mutations.
 
 Rollback base: `f8cdc68b`.
 

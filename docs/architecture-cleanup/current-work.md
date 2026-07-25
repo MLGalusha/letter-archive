@@ -12,8 +12,8 @@ Last updated: July 24, 2026
   regeneration at `e41bd982`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Next candidate slice: 036 — characterize and extract transcript-confirmation
-  ownership from the Letter Review route.
+- Current slice: 036 — visit-owned Letter Review transcript confirmation, framed and
+  in progress.
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -3203,6 +3203,100 @@ Residual decisions:
   repeating saving-lease, autosave-flush, adoption, hydration, and error behavior that
   now belongs to `executeLetterMutation`. Slice 036 should characterize that contract
   before moving it into a visit-owned workspace.
+
+## Slice 036 — Visit-Owned Letter Review Transcript Confirmation
+
+Status: framed and in progress
+
+Problem:
+
+`LetterReviewPage` still owns the transcript-confirmation modal state, sender/recipient
+correction draft, direct API adapter, immediate-close behavior, saving lease, autosave
+flush, visit guard, guarded adoption, full hydration, success copy, and error routing.
+It is the last Letter-returning confirmation path that manually duplicates the
+cross-domain mutation boundary already owned by `useLetterReviewMutationExecutor`.
+
+The behavior is only indirectly covered by an API-adapter unit test, a MetadataSection
+trigger test, and static source assertions. No executed Letter Review browser contract
+proves that autosaves finish before confirmation, the authoritative response hydrates,
+or stale/conflicted results remain isolated.
+
+Target invariant:
+
+One route-visit-owned transcript-confirmation workspace owns only the fresh correction
+draft, exact target/payload snapshot, immediate modal-close intent, and accepted-result
+success feedback. The canonical mutation executor is the sole owner of saving leases,
+per-visit serialization, autosave completion, request failure reporting, guarded DTO
+adoption, and full hydration. The route composes the two existing triggers and shared
+`IdentityExtractionModal`; it does not own confirmation state or execution.
+
+Scope:
+
+- Add a focused workspace contract before moving behavior. Prove fresh live-editor
+  draft seeding, controlled changes, exact raw/blank request mapping, target snapshot
+  before executor delay, accepted-adoption-only success, and first-A to B to fresh-A
+  isolation for state, captured controls, and late responses.
+- Extend the deterministic Letter Review mock with a confirmation request journal,
+  configurable failure, revision validation, and a complete authoritative response.
+- Add a dedicated mocked-browser contract for autosave-completion-before-confirmation,
+  exact payload, response hydration, ordinary failure, coded source conflict, and
+  delayed stale-result isolation.
+- Extract `useTranscriptConfirmationWorkspace`, accepting only the active visit,
+  current Letter, live editor identity, and `executeLetterMutation`. Return the open
+  intent, a testable confirmation operation, and controlled modal props.
+- Snapshot letter ID, primary-source revision, and corrections before the executor can
+  await queued autosaves. Preserve `""` to `undefined` conversion without trimming;
+  whitespace-only corrections remain raw.
+- Close the modal immediately on submit, preserve the exact failure/success copy, and
+  publish success only from `afterAdopt`.
+- Update static ownership checks to require workspace/executor delegation and reject
+  the retired route API/state/manual lifecycle.
+
+Non-goals:
+
+- No backend route, metadata claim, synchronous extraction, eligibility, persistence,
+  source-revision, or response-shape change.
+- No Dashboard processing or correction-normalization change.
+- No generic `Modal` accessibility refactor, Identity modal redesign, CSS/layout
+  change, copy change, or new confirmation-specific progress state.
+- Do not make the currently unreachable Letter Review submitting spinner visible,
+  keep the modal open during the request, add retries, or make the endpoint idempotent.
+- Do not repair the endpoint's default frontend timeout, committed-mutation failure
+  ambiguity, mid-flight uncoded conflict, or overclaiming success copy in this
+  ownership slice. Record them for a separately characterized correctness decision.
+- No transcript/metadata editor, analysis regeneration, or autosave behavior change.
+
+Acceptance:
+
+- The route no longer imports `confirmTranscript`, owns confirmation popup/correction
+  state, resets that state in an effect, or defines confirmation execution callbacks.
+- The workspace snapshots the active target and draft, delegates through
+  `executeLetterMutation`, and does not receive or invoke `beginSaving`,
+  `flushPendingSaves`, `tryAdoptLetter`, `hydrateAdoptedLetter`, or
+  `handleMutationError`.
+- Both existing triggers open one fresh live-editor draft. Cancel/backdrop make no
+  request, and the modal still closes immediately when confirmation is submitted.
+- Pending autosaves complete before the POST begins. Only accepted adoption can
+  hydrate and show `Transcript confirmed — metadata extracted`; flush failure,
+  ordinary request failure, coded conflict, rejected adoption, or stale visit cannot
+  publish success into the active visit.
+- A delayed first-A response cannot repaint B or a fresh A, close or mutate its dialog
+  draft, steal focus, or publish a success toast.
+- Focused frontend tests, dedicated browser contract, production build, aggregate
+  verifier, and `git diff --check` pass. Independent frontend-ownership,
+  cross-boundary, and skeptical-test reviews report no remaining P0-P2 finding.
+
+Baseline:
+
+- Confirmation neighborhood: API adapter, canonical mutation executor, and static
+  source ownership — 3 files / 26 tests passed.
+- Existing mocked Letter Review browser contract: 29/29 passed, with no confirmation
+  route or executed confirmation flow.
+- Slice 035 aggregate checkpoint: backend 105 files / 1,073 tests, frontend 144 files /
+  985 tests, production build, and mocked browser 67/67 passed.
+- `LetterReviewPage.tsx`: 1,004 lines.
+
+Rollback base: `62d9a361`.
 
 ## Slice 027 — Validated, Replay-Safe Dashboard Stored State
 

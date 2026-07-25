@@ -98,12 +98,16 @@ Scope:
 - Persist the requested page and run the existing type-specific invalidation before
   committing. A newly inserted member begins at the locked current revision only
   inside the transaction and is advanced with all siblings before it becomes visible.
-- Fence an upload that observed an exact member by that member ID. If deletion removes
-  or replaces the observed member before page commit, reject as a source conflict
-  instead of recreating it from a stale page/file observation.
-- Preserve the current behavior when no exact member existed at preflight: a fresh
+- Require every page commit to carry a discriminated member observation: either the
+  exact observed member ID or an explicit statement that no exact member existed.
+  This prevents an omitted preflight value from silently acquiring recreate
+  semantics. If deletion removes or replaces an observed member before page commit,
+  reject as a source conflict instead of recreating it from stale page/file state.
+- Preserve the current behavior for an explicit absent-member observation: a fresh
   upload may linearize after a concurrent correspondence deletion and create a new
   member plus page from its newly staged immutable candidate.
+- Return the committed member from the transactional owner. Upload logging and
+  response assembly must not use a missing or stale preflight row.
 - Keep upload response fields and duplicate, repair, reconcile, replacement,
   candidate-cleanup, and ambiguous-database-failure behavior unchanged.
 - Add architecture coverage that upload preflight is read-only and production letter
@@ -122,6 +126,10 @@ Non-goals:
   043 remains the intended basis for that later storage-lifecycle slice.
 - Do not change filename identity, collection creation, upload routes, response JSON,
   duplicate-confirmation UX, source invalidation semantics, or product behavior.
+- This source-only contraction is not safe while an older API binary can still call
+  the standalone `findOrCreateLetter()` writer. Deployment must quiesce uploads and
+  drain old API writers before reopening uploads on the new binary; no rolling-writer
+  compatibility is claimed without a database constraint or migration.
 
 Acceptance:
 
@@ -138,9 +146,14 @@ Acceptance:
   observed an exact member, upload rejects rather than recreating stale ownership.
 - If no exact member existed before a deletion, a fresh upload may commit afterward,
   but its member and page appear together at one successor revision.
-- Two concurrent first uploads for the same identity produce one member and one page.
-  The loser returns the committed winner under keep policy and its unused immutable
-  candidate remains eligible for the existing cleanup path.
+- Two concurrent first uploads for the same member and page number produce one member
+  and one page. The loser returns the committed winner under keep policy and its
+  unused immutable candidate remains eligible for the existing cleanup path.
+- Concurrent first uploads for different page numbers of the same new member
+  serialize into one member with both pages and two source-revision advances.
+- An empty locked group has current source revision zero, so its first member and page
+  commit together at revision one. Identity-wide invalidation includes a member
+  inserted by that same transaction.
 - Existing exact-member no-op, multi-page, repair, reconcile, force replacement, and
   source-expectation behavior remain unchanged.
 - Focused upload, letter-page, letter lookup, deletion, architecture, and native

@@ -137,6 +137,7 @@ function lockedGroup(
           metadataContentStatus: 'EDITED' as const,
         }, primary]
       : [owner, primary],
+    currentSourceRevision: 7,
     nextSourceRevision: 8,
   };
 }

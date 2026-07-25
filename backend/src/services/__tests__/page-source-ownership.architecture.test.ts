@@ -87,18 +87,18 @@ describe('page source ownership architecture', () => {
 
     expect(pageOwner).toContain('function pageChangeEffectForOwner');
     expect(pageOwner).toMatch(
-      /lockCorrespondenceGroupByLetterId\([\s\S]*?pageChangeEffectForOwner\(sourceGroup\.owner\)/,
+      /lockCorrespondenceGroupByIdentity\([\s\S]*?resolvePageOwner\([\s\S]*?pageChangeEffectForOwner\(sourceGroup\.owner\)/,
     );
     expect(pageOwner).not.toMatch(/interface CreatePageParams[\s\S]*?\beffect\s*:/);
     expect(pageOwner).toMatch(
-      /lockCorrespondenceGroupByLetterId\([\s\S]*?const result = await persistPage\(params, tx\)[\s\S]*?if \(!result\.sourceChanged\)[\s\S]*?primarySourceRevision: sourceGroup\.owner\.primarySourceRevision/,
+      /lockCorrespondenceGroupByIdentity\([\s\S]*?const result = await persistPage\([\s\S]*?if \(!result\.sourceChanged\)[\s\S]*?primarySourceRevision: sourceGroup\.owner\.primarySourceRevision/,
     );
     expect(pageOwner).toMatch(
       /primarySourceRevision: sourceGroup\.nextSourceRevision/,
     );
   });
 
-  it('locks every correspondence member in deterministic order before page persistence', async () => {
+  it('locks every correspondence member by identity before page persistence', async () => {
     const [pageOwner, correspondenceGroup] = await Promise.all([
       readFile(path.join(sourceRoot, 'services/letter-pages.ts'), 'utf8'),
       readFile(
@@ -106,19 +106,84 @@ describe('page source ownership architecture', () => {
         'utf8',
       ),
     ]);
-    const lock = exportedFunction(
+    const identityLock = exportedFunction(
       correspondenceGroup,
-      'lockCorrespondenceGroupByLetterId',
+      'lockCorrespondenceGroupByIdentity',
     );
 
-    expect(lock).toMatch(
+    expect(identityLock).toMatch(
       /\.orderBy\(asc\(letters\.id\)\)[\s\S]*?\.for\('update'\)/,
     );
-    const identityRead = lock.slice(0, lock.indexOf('const target = observed[0]'));
-    expect(identityRead).toContain('where(eq(letters.id, letterId))');
-    expect(identityRead).not.toContain(".for('update')");
-    expect(pageOwner.indexOf('lockCorrespondenceGroupByLetterId('))
-      .toBeLessThan(pageOwner.indexOf('persistPage(params, tx)'));
+    expect(identityLock.indexOf(".for('update')"))
+      .toBeLessThan(identityLock.indexOf('.orderBy(asc(letters.id))'));
+    const pageTransaction = exportedFunction(pageOwner, 'findOrCreatePage');
+    expect(pageTransaction.indexOf('lockCorrespondenceGroupByIdentity('))
+      .toBeLessThan(pageTransaction.indexOf('persistPage('));
+  });
+
+  it('keeps correspondence membership creation inside the transactional page owner', async () => {
+    const letterWriters: string[] = [];
+    const ownerResolverReferences: string[] = [];
+    for (const absolutePath of await productionTypeScriptFiles(sourceRoot)) {
+      const relativePath = path.relative(sourceRoot, absolutePath);
+      const source = await readFile(absolutePath, 'utf8');
+      if (/\.insert\(letters\)/.test(source)) {
+        letterWriters.push(relativePath);
+      }
+      if (/\bresolvePageOwner\s*\(/.test(source)) {
+        ownerResolverReferences.push(relativePath);
+      }
+    }
+
+    expect(letterWriters).toEqual(['services/letter-pages.ts']);
+    expect(ownerResolverReferences).toEqual(['services/letter-pages.ts']);
+
+    const [pageOwner, lettersService, upload] = await Promise.all([
+      readFile(path.join(sourceRoot, 'services/letter-pages.ts'), 'utf8'),
+      readFile(path.join(sourceRoot, 'services/letters.ts'), 'utf8'),
+      readFile(path.join(sourceRoot, 'services/upload.ts'), 'utf8'),
+    ]);
+
+    expect(pageOwner).toContain('letterIdentity: CreateLetterParams');
+    expect(pageOwner).toContain('ownerObservation: LetterOwnerObservation');
+    const createPageParams = pageOwner.slice(
+      pageOwner.indexOf('export interface CreatePageParams'),
+      pageOwner.indexOf('\n}\n', pageOwner.indexOf('export interface CreatePageParams')) + 3,
+    );
+    expect(createPageParams).not.toMatch(
+      /\n\s+(?:collectionId|letterId): string;/,
+    );
+    const resolverStart = pageOwner.indexOf('async function resolvePageOwner');
+    const resolverEnd = pageOwner.indexOf(
+      '\nfunction pageChangeEffectForOwner',
+      resolverStart,
+    );
+    expect(resolverStart).toBeGreaterThanOrEqual(0);
+    expect(resolverEnd).toBeGreaterThan(resolverStart);
+    const ownerResolver = pageOwner.slice(resolverStart, resolverEnd);
+    const pageOwnerOutsideResolver =
+      pageOwner.slice(0, resolverStart) + pageOwner.slice(resolverEnd);
+    expect(ownerResolver.match(/\.insert\(letters\)/g)).toHaveLength(1);
+    expect(pageOwnerOutsideResolver).not.toMatch(/\.insert\(letters\)/);
+    expect(pageOwner.match(/\bresolvePageOwner\s*\(/g)).toHaveLength(2);
+
+    const pageMutation = exportedFunction(pageOwner, 'findOrCreatePage');
+    expect(pageMutation).toContain('return db.transaction(async (tx) =>');
+    expect(pageMutation).toContain('lockCorrespondenceGroupByIdentity(');
+    expect(pageMutation).toMatch(/resolvePageOwner\(\s*params,\s*locked,\s*tx,/);
+    expect(pageMutation.indexOf('return db.transaction(async (tx) =>'))
+      .toBeLessThan(pageMutation.indexOf('resolvePageOwner('));
+    expect(pageMutation).toContain('persistPage(');
+    expect(pageOwner).toContain('params.ownerObservation.kind');
+
+    expect(lettersService).toContain('export async function findLetterByIdentity');
+    expect(lettersService).not.toContain('export async function findOrCreateLetter');
+    expect(upload).toContain('findLetterByIdentity');
+    expect(upload).not.toContain('findOrCreateLetter');
+    expect(upload).toContain('const ownerObservation = observedLetter');
+    expect(upload).toMatch(/findOrCreatePage\(\{[\s\S]*?\bownerObservation,/);
+    expect(upload).toContain("kind: 'present'");
+    expect(upload).toContain("kind: 'absent'");
   });
 
   it('assigns every page-bearing type an explicit source invalidation effect', async () => {

@@ -5,16 +5,21 @@ import {
   letterPages,
   letters,
   type Database,
+  type Letter,
   type LetterType,
   type LetterPage,
 } from '../db/index.js';
+import type { CreateLetterParams } from './letters.js';
 import {
   invalidateExtraContentSource,
   invalidatePrimaryLetterSource,
   invalidateRelatedPageSource,
 } from './letter/page-source-invalidation.js';
 import {
-  lockCorrespondenceGroupByLetterId,
+  lockCorrespondenceGroupByIdentity,
+  type LockedCorrespondenceGroup,
+  type LockedCorrespondenceMember,
+  type LockedCorrespondenceMembers,
 } from './letter/correspondence-group.js';
 import { sourceRevisionChanged } from './letter/source-revision.js';
 
@@ -25,9 +30,13 @@ export interface UploadSourceExpectation {
   checksumSha256: string | null;
 }
 
+export type LetterOwnerObservation =
+  | { kind: 'present'; letterId: string }
+  | { kind: 'absent' };
+
 export interface CreatePageParams {
-  collectionId: string;
-  letterId: string;
+  letterIdentity: CreateLetterParams;
+  ownerObservation: LetterOwnerObservation;
   pageNumber: number;
   storagePath: string;
   originalFilename: string;
@@ -61,6 +70,7 @@ export type PageMutationOutcome =
   | 'unchanged';
 
 export interface PageMutationResult {
+  letter: Letter;
   page: LetterPage;
   outcome: PageMutationOutcome;
   sourceChanged: boolean;
@@ -70,7 +80,7 @@ export interface PageMutationResult {
 
 type PersistedPageMutationResult = Omit<
   PageMutationResult,
-  'primarySourceRevision'
+  'letter' | 'primarySourceRevision'
 >;
 
 export interface UploadPageIdentity {
@@ -147,6 +157,110 @@ type PageDatabase = Pick<
   'query' | 'select' | 'insert' | 'update'
 >;
 
+type PersistPageParams = Omit<
+  CreatePageParams,
+  'letterIdentity' | 'ownerObservation'
+> & {
+  letterId: string;
+};
+
+function lockedMemberFromLetter(letter: Letter): LockedCorrespondenceMember {
+  return {
+    id: letter.id,
+    collectionId: letter.collectionId,
+    dateRaw: letter.dateRaw,
+    typeSequence: letter.typeSequence,
+    type: letter.type,
+    primarySourceRevision: letter.primarySourceRevision,
+    visibility: letter.visibility,
+    transcriptPublished: letter.transcriptPublished,
+    metadataPublished: letter.metadataPublished,
+    transcriptStatus: letter.transcriptStatus,
+    metadataContentStatus: letter.metadataContentStatus,
+  };
+}
+
+async function loadLockedLetter(
+  letterId: string,
+  database: PageDatabase,
+): Promise<Letter> {
+  const letter = await database.query.letters.findFirst({
+    where: eq(letters.id, letterId),
+  });
+  if (!letter) {
+    throw new Error(`Locked page source owner ${letterId} could not be reloaded`);
+  }
+  return letter;
+}
+
+async function resolvePageOwner(
+  params: CreatePageParams,
+  locked: LockedCorrespondenceMembers,
+  database: PageDatabase,
+): Promise<{ letter: Letter; group: LockedCorrespondenceGroup }> {
+  const exactMember = locked.members.find(
+    (member) => member.type === params.letterIdentity.type,
+  );
+
+  if (params.ownerObservation.kind === 'present') {
+    if (exactMember?.id !== params.ownerObservation.letterId) {
+      throw sourceRevisionChanged(
+        'Page source owner changed after upload observation; retry the upload',
+      );
+    }
+    return {
+      letter: await loadLockedLetter(exactMember.id, database),
+      group: { ...locked, owner: exactMember },
+    };
+  }
+
+  if (exactMember) {
+    return {
+      letter: await loadLockedLetter(exactMember.id, database),
+      group: { ...locked, owner: exactMember },
+    };
+  }
+
+  const [created] = await database
+    .insert(letters)
+    .values({
+      ...params.letterIdentity,
+      primarySourceRevision: locked.currentSourceRevision,
+    })
+    .onConflictDoNothing({
+      target: [
+        letters.collectionId,
+        letters.dateRaw,
+        letters.type,
+        letters.typeSequence,
+      ],
+    })
+    .returning();
+  const letter = created ?? await database.query.letters.findFirst({
+    where: and(
+      eq(letters.collectionId, params.letterIdentity.collectionId),
+      eq(letters.dateRaw, params.letterIdentity.dateRaw),
+      eq(letters.type, params.letterIdentity.type),
+      eq(letters.typeSequence, params.letterIdentity.typeSequence),
+    ),
+  });
+  if (!letter) {
+    throw new Error('Letter identity conflicted after locking but could not be reloaded');
+  }
+
+  const owner = lockedMemberFromLetter(letter);
+  const members = [...locked.members, owner]
+    .sort((left, right) => left.id.localeCompare(right.id));
+  return {
+    letter,
+    group: {
+      ...locked,
+      owner,
+      members,
+    },
+  };
+}
+
 function pageChangeEffectForOwner(
   owner: {
     type: LetterType;
@@ -176,12 +290,12 @@ function pageChangeEffectForOwner(
 }
 
 /**
- * Finds an existing page by letter ID and page number, or creates a new one.
+ * Finds an existing page for the resolved owner and page number, or creates one.
  * Existing-page policy is explicit so upload acceptance, pointer repair, and
  * authoritative source replacement cannot be conflated.
  */
 async function persistPage(
-  params: CreatePageParams,
+  params: PersistPageParams,
   database: PageDatabase,
 ): Promise<PersistedPageMutationResult> {
   const existing = await database.query.letterPages.findFirst({
@@ -290,24 +404,32 @@ async function persistPage(
 }
 
 /**
- * Persist a page and any derived-content invalidation in one database transaction.
- * If invalidation fails, the page mutation rolls back so a retry cannot mistake the
- * source as already reconciled.
+ * Resolve or create correspondence membership, persist the page, and invalidate
+ * derived content in one transaction. If any step fails, membership and source
+ * mutation roll back together.
  */
 export async function findOrCreatePage(
   params: CreatePageParams,
 ): Promise<PageMutationResult> {
   return db.transaction(async (tx) => {
-    const sourceGroup = await lockCorrespondenceGroupByLetterId(
-      params.letterId,
+    const locked = await lockCorrespondenceGroupByIdentity(
+      {
+        collectionId: params.letterIdentity.collectionId,
+        dateRaw: params.letterIdentity.dateRaw,
+        typeSequence: params.letterIdentity.typeSequence,
+      },
       tx,
     );
-    if (!sourceGroup) {
-      throw new Error(`Page source owner ${params.letterId} does not exist`);
+    if (!locked) {
+      throw new Error(
+        `Page source collection ${params.letterIdentity.collectionId} does not exist`,
+      );
     }
-    if (sourceGroup.identity.collectionId !== params.collectionId) {
-      throw new Error(`Page source owner ${params.letterId} is in another collection`);
-    }
+    const { letter, group: sourceGroup } = await resolvePageOwner(
+      params,
+      locked,
+      tx,
+    );
     if (
       params.expectedReplacementSource
       && sourceGroup.owner.primarySourceRevision
@@ -319,9 +441,18 @@ export async function findOrCreatePage(
     }
     const effect = pageChangeEffectForOwner(sourceGroup.owner);
 
-    const result = await persistPage(params, tx);
+    const {
+      letterIdentity: _letterIdentity,
+      ownerObservation: _ownerObservation,
+      ...pageParams
+    } = params;
+    const result = await persistPage(
+      { ...pageParams, letterId: sourceGroup.owner.id },
+      tx,
+    );
     if (!result.sourceChanged) {
       return {
+        letter,
         ...result,
         primarySourceRevision: sourceGroup.owner.primarySourceRevision,
       };
@@ -338,7 +469,9 @@ export async function findOrCreatePage(
         await invalidateRelatedPageSource(sourceGroup, tx);
         break;
     }
+    const committedLetter = await loadLockedLetter(sourceGroup.owner.id, tx);
     return {
+      letter: committedLetter,
       ...result,
       primarySourceRevision: sourceGroup.nextSourceRevision,
     };

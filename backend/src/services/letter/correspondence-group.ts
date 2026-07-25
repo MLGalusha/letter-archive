@@ -30,20 +30,83 @@ export interface LockedCorrespondenceMember {
   metadataContentStatus: ContentStatus;
 }
 
-export interface LockedCorrespondenceGroup {
+export interface LockedCorrespondenceMembers {
   identity: CorrespondenceGroupIdentity;
   collection: {
     id: string;
     highlightImageId: string | null;
   };
-  owner: LockedCorrespondenceMember;
   members: LockedCorrespondenceMember[];
+  currentSourceRevision: number;
   nextSourceRevision: number;
+}
+
+export interface LockedCorrespondenceGroup extends LockedCorrespondenceMembers {
+  owner: LockedCorrespondenceMember;
 }
 
 /**
  * Locks a complete correspondence unit using the global mutation order:
  * collection first, then every member in UUID order.
+ *
+ * Identity-based locking also supports a correspondence whose requested member
+ * has not been created yet. The collection lock prevents another supported
+ * membership writer from appearing between the member snapshot and this
+ * transaction's insert.
+ */
+export async function lockCorrespondenceGroupByIdentity(
+  identity: CorrespondenceGroupIdentity,
+  database: CorrespondenceGroupDatabase,
+): Promise<LockedCorrespondenceMembers | null> {
+  const lockedCollections = await database
+    .select({
+      id: collections.id,
+      highlightImageId: collections.highlightImageId,
+    })
+    .from(collections)
+    .where(eq(collections.id, identity.collectionId))
+    .for('update');
+  const collection = lockedCollections[0];
+  if (!collection) return null;
+
+  const members = await database
+    .select({
+      id: letters.id,
+      collectionId: letters.collectionId,
+      dateRaw: letters.dateRaw,
+      typeSequence: letters.typeSequence,
+      type: letters.type,
+      primarySourceRevision: letters.primarySourceRevision,
+      visibility: letters.visibility,
+      transcriptPublished: letters.transcriptPublished,
+      metadataPublished: letters.metadataPublished,
+      transcriptStatus: letters.transcriptStatus,
+      metadataContentStatus: letters.metadataContentStatus,
+    })
+    .from(letters)
+    .where(and(
+      eq(letters.collectionId, identity.collectionId),
+      eq(letters.dateRaw, identity.dateRaw),
+      eq(letters.typeSequence, identity.typeSequence),
+    ))
+    .orderBy(asc(letters.id))
+    .for('update');
+  const currentSourceRevision = members.length === 0
+    ? 0
+    : Math.max(...members.map((member) => member.primarySourceRevision));
+
+  return {
+    identity,
+    collection,
+    members,
+    currentSourceRevision,
+    nextSourceRevision: currentSourceRevision + 1,
+  };
+}
+
+/**
+ * Resolves a letter ID to its identity before taking the shared collection-first,
+ * members-in-UUID-order correspondence lock.
  *
  * The initial identity lookup is deliberately non-locking. Locking the target
  * row before an earlier UUID in its group would invert the shared order and
@@ -66,52 +129,21 @@ export async function lockCorrespondenceGroupByLetterId(
   const target = observed[0];
   if (!target) return null;
 
-  const lockedCollections = await database
-    .select({
-      id: collections.id,
-      highlightImageId: collections.highlightImageId,
-    })
-    .from(collections)
-    .where(eq(collections.id, target.collectionId))
-    .for('update');
-  const collection = lockedCollections[0];
-  if (!collection) return null;
-
-  const members = await database
-    .select({
-      id: letters.id,
-      collectionId: letters.collectionId,
-      dateRaw: letters.dateRaw,
-      typeSequence: letters.typeSequence,
-      type: letters.type,
-      primarySourceRevision: letters.primarySourceRevision,
-      visibility: letters.visibility,
-      transcriptPublished: letters.transcriptPublished,
-      metadataPublished: letters.metadataPublished,
-      transcriptStatus: letters.transcriptStatus,
-      metadataContentStatus: letters.metadataContentStatus,
-    })
-    .from(letters)
-    .where(and(
-      eq(letters.collectionId, target.collectionId),
-      eq(letters.dateRaw, target.dateRaw),
-      eq(letters.typeSequence, target.typeSequence),
-    ))
-    .orderBy(asc(letters.id))
-    .for('update');
-  const owner = members.find((member) => member.id === letterId);
-  if (!owner) return null;
-
-  return {
-    identity: {
+  const group = await lockCorrespondenceGroupByIdentity(
+    {
       collectionId: target.collectionId,
       dateRaw: target.dateRaw,
       typeSequence: target.typeSequence,
     },
-    collection,
+    database,
+  );
+  if (!group) return null;
+
+  const owner = group.members.find((member) => member.id === letterId);
+  if (!owner) return null;
+
+  return {
+    ...group,
     owner,
-    members,
-    nextSourceRevision:
-      Math.max(...members.map((member) => member.primarySourceRevision)) + 1,
   };
 }

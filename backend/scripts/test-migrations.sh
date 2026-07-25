@@ -71,6 +71,9 @@ echo "Transcript confirmation guidance rollout regression passed."
 DATABASE_URL="postgres://$DB_USER:$DB_PASS@localhost:$DB_PORT/$DB_NAME" \
   node scripts/test-page-source-boundary.mjs
 
+DATABASE_URL="postgres://$DB_USER:$DB_PASS@localhost:$DB_PORT/$DB_NAME" \
+  node scripts/test-correspondence-membership-boundary.mjs
+
 recovery_first_setup_count="$(
   docker exec "$CONTAINER_NAME" \
     psql -At -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" \
@@ -905,5 +908,8 @@ fi
 
 DATABASE_URL="postgres://$DB_USER:$DB_PASS@localhost:$DB_PORT/$SOURCE_REVISION_ROLLOUT_DB_NAME" \
   node scripts/test-page-source-boundary.mjs
+
+DATABASE_URL="postgres://$DB_USER:$DB_PASS@localhost:$DB_PORT/$SOURCE_REVISION_ROLLOUT_DB_NAME" \
+  node scripts/test-correspondence-membership-boundary.mjs
 
 echo "Migration 0054 upgraded correspondence regression passed."

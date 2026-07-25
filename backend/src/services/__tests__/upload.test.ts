@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   findOrCreateCollectionMock,
-  findOrCreateLetterMock,
+  findLetterByIdentityMock,
   findOrCreatePageMock,
   getPageMock,
   computeChecksumMock,
@@ -11,7 +11,7 @@ const {
   storeImmutableFileMock,
 } = vi.hoisted(() => ({
   findOrCreateCollectionMock: vi.fn(),
-  findOrCreateLetterMock: vi.fn(),
+  findLetterByIdentityMock: vi.fn(),
   findOrCreatePageMock: vi.fn(),
   getPageMock: vi.fn(),
   computeChecksumMock: vi.fn(),
@@ -25,7 +25,7 @@ vi.mock('../collections.js', () => ({
 }));
 
 vi.mock('../letters.js', () => ({
-  findOrCreateLetter: findOrCreateLetterMock,
+  findLetterByIdentity: findLetterByIdentityMock,
 }));
 
 vi.mock('../letter-pages.js', () => ({
@@ -73,6 +73,18 @@ function replacementExpectation(page: {
   };
 }
 
+const observedLetter = {
+  id: 'letter-1',
+  collectionId: 'collection-1',
+  dateRaw: '19320706',
+  type: 'L',
+  typeSequence: 1,
+};
+
+function pageMutationResult<T extends object>(result: T) {
+  return { letter: observedLetter, ...result };
+}
+
 describe('upload service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -81,14 +93,18 @@ describe('upload service', () => {
       id: 'collection-1',
       collectionCode: '003',
     });
-    findOrCreateLetterMock.mockResolvedValue({ id: 'letter-1' });
+    findLetterByIdentityMock.mockResolvedValue(observedLetter);
     getPageMock.mockResolvedValue(undefined);
-    findOrCreatePageMock.mockResolvedValue({
-      page: { id: 'page-1', storagePath: 'storage/objects/source-a.jpg' },
+    findOrCreatePageMock.mockResolvedValue(pageMutationResult({
+      page: {
+        id: 'page-1',
+        letterId: 'letter-1',
+        storagePath: 'storage/objects/source-a.jpg',
+      },
       outcome: 'created',
       sourceChanged: true,
       primarySourceRevision: 1,
-    });
+    }));
     inspectUploadFileMock.mockResolvedValue({
       checksumSha256: 'abc123',
       sizeBytes: 20_000,
@@ -110,20 +126,18 @@ describe('upload service', () => {
     expect(storeImmutableFileMock).not.toHaveBeenCalled();
   });
 
-  it('creates collection, letter, immutable source, and primary page records', async () => {
+  it('passes the read-only observed letter and exact creation identity to the page owner', async () => {
     const result = await processUploadedFile(
       '/tmp/test.jpg',
       '003-19320706-L01-01.jpg',
     );
 
     expect(findOrCreateCollectionMock).toHaveBeenCalledWith('003');
-    expect(findOrCreateLetterMock).toHaveBeenCalledWith({
+    expect(findLetterByIdentityMock).toHaveBeenCalledWith({
       collectionId: 'collection-1',
       dateRaw: '19320706',
       type: 'L',
       typeSequence: 1,
-      letterDate: '1932-07-06',
-      dateConfidence: 'exact',
     });
     expect(storeImmutableFileMock).toHaveBeenCalledWith(
       '/tmp/test.jpg',
@@ -132,8 +146,15 @@ describe('upload service', () => {
     );
     expect(findOrCreatePageMock).toHaveBeenCalledWith(
       {
-        collectionId: 'collection-1',
-        letterId: 'letter-1',
+        letterIdentity: {
+          collectionId: 'collection-1',
+          dateRaw: '19320706',
+          type: 'L',
+          typeSequence: 1,
+          letterDate: '1932-07-06',
+          dateConfidence: 'exact',
+        },
+        ownerObservation: { kind: 'present', letterId: 'letter-1' },
         pageNumber: 1,
         storagePath: 'storage/objects/source-a.jpg',
         originalFilename: '003-19320706-L01-01.jpg',
@@ -154,13 +175,73 @@ describe('upload service', () => {
     });
   });
 
+  it('lets the transactional page owner create a missing member from the exact identity', async () => {
+    findLetterByIdentityMock.mockResolvedValueOnce(undefined);
+    findOrCreatePageMock.mockResolvedValueOnce({
+      letter: {
+        id: 'letter-created',
+        collectionId: 'collection-1',
+        dateRaw: '19320706',
+        type: 'T',
+        typeSequence: 1,
+      },
+      page: {
+        id: 'page-1',
+        letterId: 'letter-created',
+        storagePath: 'storage/objects/source-a.jpg',
+      },
+      outcome: 'created',
+      sourceChanged: true,
+      primarySourceRevision: 4,
+    });
+
+    const result = await processUploadedFile(
+      '/tmp/test.jpg',
+      '003-19320706-T01-01.jpg',
+    );
+
+    expect(getPageMock).not.toHaveBeenCalled();
+    expect(findOrCreatePageMock).toHaveBeenCalledWith({
+      letterIdentity: {
+        collectionId: 'collection-1',
+        dateRaw: '19320706',
+        type: 'T',
+        typeSequence: 1,
+        letterDate: '1932-07-06',
+        dateConfidence: 'exact',
+      },
+      ownerObservation: { kind: 'absent' },
+      pageNumber: 1,
+      storagePath: 'storage/objects/source-a.jpg',
+      originalFilename: '003-19320706-T01-01.jpg',
+      checksumSha256: 'abc123',
+      width: 1200,
+      height: 1800,
+      existingPagePolicy: 'keep',
+    });
+    expect(findOrCreatePageMock.mock.calls[0]?.[0]).toMatchObject({
+      ownerObservation: { kind: 'absent' },
+    });
+    expect(result).toMatchObject({
+      letter: { id: 'letter-created' },
+      page: { letterId: 'letter-created' },
+      primarySourceRevision: 4,
+    });
+  });
+
   it.each(['T', 'C', 'E'])(
     'commits %s pages through the canonical page boundary',
     async (type) => {
       await processUploadedFile('/tmp/test.jpg', `003-19320706-${type}01-01.jpg`);
 
       expect(findOrCreatePageMock).toHaveBeenCalledWith(
-        expect.objectContaining({ collectionId: 'collection-1' }),
+        expect.objectContaining({
+          letterIdentity: expect.objectContaining({
+            collectionId: 'collection-1',
+            type,
+          }),
+          ownerObservation: { kind: 'present', letterId: 'letter-1' },
+        }),
       );
     },
   );
@@ -174,12 +255,12 @@ describe('upload service', () => {
     };
     getPageMock.mockResolvedValue(existing);
     computeChecksumMock.mockResolvedValue('old-checksum');
-    findOrCreatePageMock.mockResolvedValue({
+    findOrCreatePageMock.mockResolvedValue(pageMutationResult({
       page: { id: 'page-existing', storagePath: 'storage/objects/source-a.jpg' },
       outcome: 'replaced',
       sourceChanged: true,
       primarySourceRevision: 8,
-    });
+    }));
 
     const result = await processUploadedFile(
       '/tmp/test.jpg',
@@ -210,11 +291,11 @@ describe('upload service', () => {
       checksumSha256: 'abc123',
     };
     getPageMock.mockResolvedValue(existing);
-    findOrCreatePageMock.mockResolvedValueOnce({
+    findOrCreatePageMock.mockResolvedValueOnce(pageMutationResult({
       page: existing,
       outcome: 'unchanged',
       sourceChanged: false,
-    });
+    }));
 
     const result = await processUploadedFile(
       '/tmp/test.jpg',
@@ -252,11 +333,11 @@ describe('upload service', () => {
       checksumSha256: 'winner-checksum',
     };
     getPageMock.mockResolvedValue(existing);
-    findOrCreatePageMock.mockResolvedValueOnce({
+    findOrCreatePageMock.mockResolvedValueOnce(pageMutationResult({
       page: winner,
       outcome: 'unchanged',
       sourceChanged: false,
-    });
+    }));
 
     const result = await processUploadedFile(
       '/tmp/test.jpg',
@@ -298,12 +379,12 @@ describe('upload service', () => {
     };
     getPageMock.mockResolvedValue(existing);
     computeChecksumMock.mockRejectedValueOnce(new Error('missing'));
-    findOrCreatePageMock.mockResolvedValueOnce({
+    findOrCreatePageMock.mockResolvedValueOnce(pageMutationResult({
       page: { ...existing, storagePath: 'storage/objects/source-a.jpg' },
       outcome: 'relocated',
       sourceChanged: false,
       previousStoragePath: existing.storagePath,
-    });
+    }));
 
     const result = await processUploadedFile(
       '/tmp/test.jpg',
@@ -339,11 +420,11 @@ describe('upload service', () => {
     };
     getPageMock.mockResolvedValue(existing);
     computeChecksumMock.mockRejectedValueOnce(new Error('missing'));
-    findOrCreatePageMock.mockResolvedValueOnce({
+    findOrCreatePageMock.mockResolvedValueOnce(pageMutationResult({
       page: winner,
       outcome: 'unchanged',
       sourceChanged: false,
-    });
+    }));
 
     const result = await processUploadedFile(
       '/tmp/test.jpg',
@@ -378,7 +459,7 @@ describe('upload service', () => {
       storagePath: 'storage/objects/drifted-source.jpg',
       checksumSha256: 'actual-drift-checksum',
     });
-    findOrCreatePageMock.mockResolvedValueOnce({
+    findOrCreatePageMock.mockResolvedValueOnce(pageMutationResult({
       page: {
         ...existing,
         storagePath: 'storage/objects/drifted-source.jpg',
@@ -386,7 +467,7 @@ describe('upload service', () => {
       },
       outcome: 'replaced',
       sourceChanged: true,
-    });
+    }));
 
     const result = await processUploadedFile(
       '/tmp/test.jpg',
@@ -443,11 +524,11 @@ describe('upload service', () => {
       checksumSha256: 'abc123',
     };
     getPageMock.mockResolvedValue(existing);
-    findOrCreatePageMock.mockResolvedValueOnce({
+    findOrCreatePageMock.mockResolvedValueOnce(pageMutationResult({
       page: existing,
       outcome: 'unchanged',
       sourceChanged: false,
-    });
+    }));
 
     const result = await processUploadedFile(
       '/tmp/test.jpg',
@@ -507,11 +588,11 @@ describe('upload service', () => {
     };
     getPageMock.mockResolvedValue(existing);
     computeChecksumMock.mockRejectedValueOnce(new Error('missing'));
-    findOrCreatePageMock.mockResolvedValueOnce({
+    findOrCreatePageMock.mockResolvedValueOnce(pageMutationResult({
       page: { ...existing, storagePath: 'storage/objects/source-a.jpg' },
       outcome: 'relocated',
       sourceChanged: false,
-    });
+    }));
 
     await processUploadedFile(
       '/tmp/test.jpg',

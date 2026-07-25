@@ -29,56 +29,22 @@ export interface CreateLetterParams extends LetterIdentity {
 }
 
 /**
- * Finds an existing letter by its identity, or creates a new one.
+ * Reads the exact letter currently committed for one filename-derived identity.
+ *
+ * Membership creation belongs to the transactional page-source owner so an upload
+ * cannot expose a page-less correspondence member.
  */
-export async function findOrCreateLetter(params: CreateLetterParams): Promise<Letter> {
-  const existing = await db.query.letters.findFirst({
+export async function findLetterByIdentity(
+  identity: LetterIdentity,
+): Promise<Letter | undefined> {
+  return db.query.letters.findFirst({
     where: and(
-      eq(letters.collectionId, params.collectionId),
-      eq(letters.dateRaw, params.dateRaw),
-      eq(letters.type, params.type),
-      eq(letters.typeSequence, params.typeSequence),
+      eq(letters.collectionId, identity.collectionId),
+      eq(letters.dateRaw, identity.dateRaw),
+      eq(letters.type, identity.type),
+      eq(letters.typeSequence, identity.typeSequence),
     ),
   });
-
-  if (existing) {
-    return existing;
-  }
-
-  const [created] = await db
-    .insert(letters)
-    .values({
-      collectionId: params.collectionId,
-      dateRaw: params.dateRaw,
-      type: params.type,
-      typeSequence: params.typeSequence,
-      letterDate: params.letterDate,
-      dateConfidence: params.dateConfidence,
-    })
-    .onConflictDoNothing({
-      target: [
-        letters.collectionId,
-        letters.dateRaw,
-        letters.type,
-        letters.typeSequence,
-      ],
-    })
-    .returning();
-
-  if (created) return created;
-
-  const winner = await db.query.letters.findFirst({
-    where: and(
-      eq(letters.collectionId, params.collectionId),
-      eq(letters.dateRaw, params.dateRaw),
-      eq(letters.type, params.type),
-      eq(letters.typeSequence, params.typeSequence),
-    ),
-  });
-  if (!winner) {
-    throw new Error('Letter identity conflicted but could not be reloaded');
-  }
-  return winner;
 }
 
 /**

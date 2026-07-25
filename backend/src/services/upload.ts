@@ -10,7 +10,10 @@ import {
   storeImmutableFile,
 } from './storage.js';
 import { findOrCreateCollection } from './collections.js';
-import { findOrCreateLetter } from './letters.js';
+import {
+  findLetterByIdentity,
+  type CreateLetterParams,
+} from './letters.js';
 import {
   findOrCreatePage,
   getPage,
@@ -62,9 +65,9 @@ function uploadOutcome(outcome: PageMutationOutcome): UploadOutcome {
  * Processes an uploaded file:
  * 1. Parses the filename
  * 2. Creates/finds collection
- * 3. Creates/finds letter
- * 4. Stores file to local storage
- * 5. Creates/finds page record
+ * 3. Reads any existing letter/page source
+ * 4. Stores a candidate file when needed
+ * 5. Commits letter membership and page source together
  *
  * @param force - If true, overwrites existing files instead of skipping
  */
@@ -109,16 +112,27 @@ export async function processUploadedFile(
   const collection = await findOrCreateCollection(parsed.collectionCode);
   log.debug({ ...context, collectionId: collection.id }, 'Collection resolved');
 
-  // Get or create letter
-  const letter = await findOrCreateLetter({
+  const letterIdentity: CreateLetterParams = {
     collectionId: collection.id,
     dateRaw: parsed.dateRaw,
     type: parsed.type,
     typeSequence: parsed.typeSequence,
     letterDate: parsed.letterDate,
     dateConfidence: parsed.dateConfidence,
+  };
+  const observedLetter = await findLetterByIdentity({
+    collectionId: letterIdentity.collectionId,
+    dateRaw: letterIdentity.dateRaw,
+    type: letterIdentity.type,
+    typeSequence: letterIdentity.typeSequence,
   });
-  log.debug({ ...context, letterId: letter.id }, 'Letter resolved');
+  const ownerObservation = observedLetter
+    ? { kind: 'present' as const, letterId: observedLetter.id }
+    : { kind: 'absent' as const };
+  log.debug(
+    { ...context, letterId: observedLetter?.id ?? null },
+    'Letter identity observed',
+  );
 
   const logicalPath = buildStoragePath(
     parsed.collectionCode,
@@ -127,7 +141,9 @@ export async function processUploadedFile(
     parsed.typeSequence,
     originalFilename
   );
-  const existing = await getPage(letter.id, parsed.pageNumber);
+  const existing = observedLetter
+    ? await getPage(observedLetter.id, parsed.pageNumber)
+    : undefined;
   if (force) {
     if (!expectedReplacementSource) {
       throw new Error(
@@ -162,8 +178,8 @@ export async function processUploadedFile(
       throw new Error('Cannot confirm a page source that was not observed');
     }
     return findOrCreatePage({
-      collectionId: collection.id,
-      letterId: letter.id,
+      letterIdentity,
+      ownerObservation,
       pageNumber: parsed.pageNumber,
       storagePath: existing.storagePath,
       originalFilename,
@@ -188,8 +204,8 @@ export async function processUploadedFile(
     const dimensions = await readImageDimensions(stored.storagePath);
     try {
       return await findOrCreatePage({
-        collectionId: collection.id,
-        letterId: letter.id,
+        letterIdentity,
+        ownerObservation,
         pageNumber: parsed.pageNumber,
         storagePath: stored.storagePath,
         originalFilename: committedOriginalFilename,
@@ -349,7 +365,7 @@ export async function processUploadedFile(
     {
       ...context,
       collectionId: collection.id,
-      letterId: letter.id,
+      letterId: pageResult.letter.id,
       pageId: pageResult.page.id,
       alreadyExists,
       outcome,
@@ -361,7 +377,7 @@ export async function processUploadedFile(
 
   return {
     collection,
-    letter,
+    letter: pageResult.letter,
     page: pageResult.page,
     storagePath: pageResult.page.storagePath,
     primarySourceRevision: pageResult.primarySourceRevision,

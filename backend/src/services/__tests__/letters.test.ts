@@ -3,10 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const {
   findFirstMock,
   findManyMock,
-  dbInsertMock,
-  insertValuesMock,
-  insertOnConflictMock,
-  insertReturningMock,
   dbUpdateMock,
   updateSetMock,
   updateWhereMock,
@@ -14,10 +10,6 @@ const {
 } = vi.hoisted(() => ({
   findFirstMock: vi.fn(),
   findManyMock: vi.fn(),
-  dbInsertMock: vi.fn(),
-  insertValuesMock: vi.fn(),
-  insertOnConflictMock: vi.fn(),
-  insertReturningMock: vi.fn(),
   dbUpdateMock: vi.fn(),
   updateSetMock: vi.fn(),
   updateWhereMock: vi.fn(),
@@ -45,15 +37,6 @@ vi.mock('drizzle-orm', () => ({
 }));
 
 vi.mock('../../db/index.js', () => {
-  dbInsertMock.mockImplementation(() => ({
-    values: insertValuesMock,
-  }));
-  insertValuesMock.mockImplementation(() => ({
-    onConflictDoNothing: insertOnConflictMock,
-  }));
-  insertOnConflictMock.mockImplementation(() => ({
-    returning: insertReturningMock,
-  }));
   dbUpdateMock.mockImplementation(() => ({
     set: updateSetMock,
   }));
@@ -69,7 +52,6 @@ vi.mock('../../db/index.js', () => {
           findMany: findManyMock,
         },
       },
-      insert: dbInsertMock,
       update: dbUpdateMock,
     },
     letters: {
@@ -103,7 +85,7 @@ vi.mock('../../db/index.js', () => {
 });
 
 import {
-  findOrCreateLetter,
+  findLetterByIdentity,
   resolveRepresentativeLetterId,
   resetLetterForProcessing,
 } from '../letters.js';
@@ -113,20 +95,11 @@ describe('letters service', () => {
     vi.clearAllMocks();
     findFirstMock.mockResolvedValue(undefined);
     findManyMock.mockResolvedValue([]);
-    insertReturningMock.mockResolvedValue([
-      {
-        id: 'letter-new',
-        collectionId: 'collection-1',
-        dateRaw: '19470810',
-        type: 'L',
-        typeSequence: 1,
-      },
-    ]);
     updateWhereMock.mockReturnValue({ returning: updateReturningMock });
     updateReturningMock.mockResolvedValue([]);
   });
 
-  it('returns an existing letter instead of creating a duplicate', async () => {
+  it('finds a letter by its exact immutable identity', async () => {
     const existing = {
       id: 'letter-existing',
       collectionId: 'collection-1',
@@ -136,49 +109,23 @@ describe('letters service', () => {
     };
     findFirstMock.mockResolvedValue(existing);
 
-    const result = await findOrCreateLetter({
+    const result = await findLetterByIdentity({
       collectionId: 'collection-1',
       dateRaw: '19470810',
       type: 'L',
       typeSequence: 1,
-      letterDate: '1947-08-10',
-      dateConfidence: 'exact',
     });
 
     expect(result).toBe(existing);
-    expect(dbInsertMock).not.toHaveBeenCalled();
   });
 
-  it('returns the concurrent identity winner when its insert loses the race', async () => {
-    const winner = {
-      id: 'letter-winner',
+  it('returns undefined without creating a missing identity', async () => {
+    await expect(findLetterByIdentity({
       collectionId: 'collection-1',
       dateRaw: '19470810',
       type: 'L',
       typeSequence: 1,
-    };
-    findFirstMock
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce(winner);
-    insertReturningMock.mockResolvedValueOnce([]);
-
-    await expect(findOrCreateLetter({
-      collectionId: 'collection-1',
-      dateRaw: '19470810',
-      type: 'L',
-      typeSequence: 1,
-      letterDate: '1947-08-10',
-      dateConfidence: 'exact',
-    })).resolves.toBe(winner);
-
-    expect(insertOnConflictMock).toHaveBeenCalledWith({
-      target: [
-        'letters.collectionId',
-        'letters.dateRaw',
-        'letters.type',
-        'letters.typeSequence',
-      ],
-    });
+    })).resolves.toBeUndefined();
   });
 
   it('resolves a companion row to the primary L-type representative', async () => {

@@ -7,14 +7,13 @@ Last updated: July 25, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 041 — remembered SearchBar facet ownership is render-pure,
+- Current checkpoint: 042 — admin letter summaries are explicit and truthful,
   complete
-- Last sealed cleanup implementation: render-pure remembered search facets at
-  `d8f3cb0b`
+- Last sealed cleanup implementation: explicit admin letter summaries at
+  `66fad30b`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Active slice: 042 — introduce an explicit, truthful admin letter summary read
-  model; framed, characterization and implementation pending.
+- Active slice: reassessment pending.
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -88,6 +87,8 @@ tree:
 - [ ] Centralize explicit letter stage, content-review, and publication transitions.
 - [x] Replace public admin-DTO reuse with positive allowlist read models and enforce
   publication gates before matching, ranking, aggregation, or response projection.
+- [x] Give the admin Dashboard list an explicit positive read model with one
+  authoritative correspondence-group page-count owner.
 - [x] Introduce a correspondence-group seam for keying, representative selection,
   visibility, deletion, and companion lookup.
 - [ ] Finish compensation or recoverability across database/filesystem ingestion
@@ -118,7 +119,7 @@ tree:
 
 ## Slice 042 — Explicit, Truthful Admin Letter Summaries
 
-Status: framed; characterization and implementation pending
+Status: complete at `66fad30b`
 
 Problem:
 
@@ -234,7 +235,76 @@ Baseline:
   implementation files. Global frontend lint is down from 154 errors / 28 warnings
   at the recovery base to 81 errors / 13 warnings.
 
-Rollback base: `185743c7`.
+Delivered:
+
+- Added a 129-line backend `AdminLetterSummary` DTO whose exact positive allowlist
+  contains only Dashboard-owned identity, display metadata, publication/content/job
+  status, source-bound processing facts, timestamps, primary type, and page counts.
+- Narrowed the representative Drizzle fetch to explicit columns and the collection
+  title/code relation. It no longer loads pages or transforms list rows through the
+  full admin-detail DTO.
+- Replaced separate letter/extras/photo count maps with one fresh, zero-filled
+  `pageCountsByType` owner populated from the group-wide page-count query for all nine
+  supported types.
+- Derived the required transcript digest from the representative's current raw
+  transcript with the canonical backend helper and confirmation only from
+  `transcriptConfirmedAt !== null`; neither raw transcript nor persisted confirmation
+  digest is serialized.
+- Added the matching frontend summary contract. Dashboard state, tables, selection
+  details, flagging, and single-letter processing now depend on that summary instead
+  of the full `Letter` detail model.
+- Removed list-only count and last-opened fields from `Letter`. Rows derive all totals
+  and individual type cells from the authoritative count map, preserve standalone
+  photo status, and combine extra status only for L representatives with C/T/E
+  companions.
+- Removed browser-side hashing from the Dashboard metadata action. It snapshots and
+  forwards the summary digest, confirmation boolean, source revision, and metadata
+  intent directly.
+- Migrated the admin CLI and entity-extraction browser tests so list callers use
+  summary fields and explicitly fetch detail when they need transcript/entity data.
+- Split mocked list summaries from full mock letter records, gave the mock its own
+  explicit group-wide count source, and consolidated frontend summary fixtures into
+  one reusable test builder.
+- Admin detail, public APIs, mutation DTOs, filtering, sorting, stats, pagination,
+  selection provenance, visible Dashboard columns, and processing eligibility were
+  unchanged.
+
+Evidence:
+
+- Focused backend DTO/query/full-detail tests passed 3 files / 18 tests; backend
+  typecheck passed.
+- Focused frontend Dashboard/content/API tests passed 7 files / 63 tests; touched-file
+  ESLint reported zero findings; the production build passed with only the existing
+  large-chunk warnings.
+- Focused mocked Dashboard browser coverage passed 12/12, including exact summary
+  keys and nonzero rendering for every page-type column. The two real
+  entity-extraction specs compiled and enumerated 18 tests without running their
+  database/OpenAI-dependent cases.
+- Final aggregate verification passed: backend 109 files / 1,129 tests, backend
+  typecheck, frontend 152 files / 1,063 tests, production build, and mocked browser
+  suite 78/78.
+- Global frontend lint remains exactly 81 errors / 13 warnings, unchanged from the
+  slice baseline; touched files are clean.
+- Independent backend and frontend reviews found no unresolved P0-P2 issue. Two P2
+  proof gaps from the final review—representative-derived mock counts and missing
+  standalone-photo/non-L status cases—were fixed and independently confirmed.
+- `git diff --check` passed before the implementation commit.
+
+Residual risk:
+
+- Backend and frontend summary interfaces remain deliberately separate runtime
+  contracts. Exact-key projection tests, typed consumers, and the browser mock expose
+  drift without adding a generic shared-package abstraction before another concrete
+  consumer exists.
+- `queryAdminLetters()` is still an 877-line owner for filtering, statistics,
+  representative selection, sorting, last-opened lookup, count aggregation, and
+  projection. This slice removed its detail-model coupling and competing count owners;
+  further decomposition should be separately framed around one behavior boundary.
+- The backend still reads current transcript text to compute a digest for each returned
+  summary, though it no longer transfers that content. Persisting a source-bound digest
+  would be a separate storage/lifecycle decision, not part of this read-model cleanup.
+
+Rollback base: `40121d0b`.
 
 ## Slice 041 — Make Remembered Search Facets Render-Pure
 

@@ -7,12 +7,12 @@ Last updated: July 24, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 032 — current Dashboard collection-filter and table style owners
+- Current checkpoint: 033 — truthful Dashboard filter-availability feedback
 - Last sealed cleanup implementation: retired Dashboard collection-picker CSS deletion
   at `61ccdbf4`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Current slice: next-slice orientation; no production implementation is open
+- Current slice: framed; production implementation has not started
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -2732,6 +2732,71 @@ layout geometry, computed style, screenshot pixel, product feature, backend beha
 deployment, or external state changed.
 
 Rollback base: `0b2d6b52`.
+
+## Slice 033 — Retire the Stale Dashboard Filter-Pills Contract
+
+Status: framed; production implementation has not started
+
+Problem:
+
+Commit `03559b81` removed `DashboardFilterBar` and its
+`<div className="filter-pills">` renderer when filters moved into the current
+Dashboard manager panel. One `.filter-pills` rule with four declarations remained in
+`AdminDashboard.css`. The live Dashboard E2E selector catalogue and a display test
+also still require that absent wrapper, so the test named `shows filter pills` cannot
+pass against the current application.
+
+The aggregate verifier catches the current mocked Dashboard contract but intentionally
+does not run the data-backed live spec. Its deterministic coverage already opens the
+accessible `Filters` trigger, observes the panel heading and current
+`.filter-option` controls, and exercises server-driven filtering. The stale live
+assertion therefore adds false failure rather than coverage.
+
+Target invariant:
+
+Dashboard filter availability is expressed through the accessible `Filters` trigger,
+its `aria-expanded` state, and the visible current panel—not a removed layout class.
+No runtime path produces `.filter-pills`. Deleting its rule must leave the filter
+panel DOM, computed styles, geometry, responsive behavior, and screenshots unchanged.
+
+Scope:
+
+- Delete the exact `.filter-pills` rule and its legacy-only comment from
+  `AdminDashboard.css`.
+- Remove the obsolete `SELECTORS.dashboard.filterPills` helper.
+- Replace only the impossible `shows filter pills` assertion with an accessible
+  trigger-to-panel contract that proves the trigger begins collapsed, opens the
+  current Filters surface, and reports its expanded state.
+- Capture deterministic current Filters surfaces before and after at desktop and
+  phone viewports, comparing DOM/computed-style fingerprints and screenshots.
+
+Non-goals:
+
+- No production component, state, request, filter semantics, visual style,
+  responsive breakpoint, or API change.
+- Do not rename or delete `.filter-option`, dynamic `filter-*` variants, the current
+  manager panel, or selectors used by live filtering tests.
+- Do not repair unrelated stale assertions in the broader data-backed Dashboard spec
+  or redesign which E2E projects run in CI.
+- Do not add a permanent negative-class test for the retired spelling.
+
+Acceptance:
+
+- Source and history prove `03559b81` removed the sole `.filter-pills` renderer and
+  current production code produces zero exact token.
+- PostCSS identifies one exact target rule with one selector branch and four
+  declarations, no mixed live branch, and the final surviving rule sequence is
+  unchanged.
+- The rewritten live assertion uses roles/ARIA, is discovered successfully, and its
+  current behavior is covered by the deterministic mocked Dashboard suite.
+- Before/after desktop `1440×900` and phone `390×844` filter-panel fingerprints and
+  screenshots are byte-identical.
+- Focused Dashboard tests, the deterministic Dashboard browser spec, frontend
+  suite/build, aggregate verifier, PostCSS parsing, and `git diff --check` pass.
+- Independent selector/cascade, E2E-contract, and skeptical-simplicity reviews find
+  no remaining P0–P2 issue in the bounded cleanup.
+
+Rollback base: `edc78994`.
 
 ## Slice 027 — Validated, Replay-Safe Dashboard Stored State
 

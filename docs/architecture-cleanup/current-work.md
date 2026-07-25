@@ -7,12 +7,14 @@ Last updated: July 25, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 039 — fenced photo-description writes, complete
-- Last sealed cleanup implementation: fenced photo-description writes at `446ebdd9`
+- Current checkpoint: 040 — separated metadata form and verification ownership,
+  complete
+- Last sealed cleanup implementation: metadata form/verification ownership at
+  `c77bc0c0`, with dead hydration-option cleanup at `90cffb15`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Active slice: 040 — separate metadata form state from verification actions; framed,
-  characterization and implementation pending.
+- Active slice: none; reassess the remaining program and frame the next smallest
+  behavior-preserving or correctness-focused boundary before editing production code.
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -116,7 +118,7 @@ tree:
 
 ## Slice 040 — Separate Metadata Form State from Verification Actions
 
-Status: framed; characterization and implementation pending
+Status: complete at `c77bc0c0`, with review cleanup at `90cffb15`
 
 Problem:
 
@@ -192,6 +194,73 @@ Baseline:
   state exists only to compute and return that unused value.
 
 Rollback base: `c348a3f9`.
+
+Delivered:
+
+- The 324-line combined hook is gone. `useMetadataFormState()` is a 119-line,
+  request-free owner for metadata fields, topic-dropdown state, DTO mapping, and
+  identity-only synchronization. `useMetadataVerificationActions()` is a separate
+  115-line owner for verified-field tooltip interaction and verify/unverify request
+  construction.
+- Metadata verification and unverification now delegate to the shared per-visit
+  executor. The executor alone owns all-lane autosave flush, mutation serialization,
+  liveness, guarded DTO adoption, one full editor hydration, request-error handling,
+  and saving-lease release. Success feedback remains inside `afterAdopt`, after
+  accepted hydration.
+- Each action snapshots the clicked letter id and primary-source revision before
+  entering the queue. A later rerender cannot retarget queued work.
+- Tooltip state is explicitly route-visit-owned. It resets on a new opaque visit, and
+  callbacks captured from an inactive visit cannot open or close the current letter's
+  tooltip.
+- `LetterReviewPage` constructs form state before autosave and passes identity
+  synchronization directly. The mutable callback ref and layout-effect bridge were
+  deleted; the page fell from 951 to 932 lines.
+- The unused metadata dirty baseline/comparison path and the review-discovered
+  `includeNotes` option were deleted. The latter had no production caller and would
+  have preserved an unnecessary ref, effect, option type, fallback, branch, and
+  invented test contract.
+- The root architecture walkthrough now links to and describes both current metadata
+  owners instead of the deleted combined hook.
+
+Evidence:
+
+- Focused form, verification, autosave, executor, and architecture suite: 5 files /
+  39 tests passed.
+- Touched frontend ESLint passed with zero findings.
+- Frontend suite: 151 files / 1,039 tests passed.
+- Frontend production build passed with only the existing large-chunk warnings.
+- Targeted mocked verify, save-before-verify, and unverify browser contracts: 3/3
+  passed during independent review.
+- Full mocked browser suite: 77/77 passed.
+- Backend suite: 108 files / 1,124 tests passed; backend typecheck passed.
+- `CI=1 ./scripts/verify-all.sh` passed with `Verification complete` after exposing
+  the configured Node 20 binary on this shell's `PATH`.
+- `git diff --check` passed.
+
+Independent review:
+
+- The initial skeptical review found two P2 cleanup gaps: an unconsumed
+  `includeNotes` form-hydration option and a broken root README link to the deleted
+  combined hook. Both were removed or corrected, then focused checks and the aggregate
+  gate were rerun.
+- Final frontend, DTO/executor, and mocked-browser reviews reported no unresolved
+  P0-P2 finding. They specifically confirmed click-time target capture, success only
+  after accepted hydration, active-visit tooltip isolation, request-free form
+  ownership, and preservation of the visible verify/unverify contracts.
+
+Residual:
+
+- Backend verification still fences the page-source revision rather than a
+  client-observed metadata content revision. A queued verify can therefore approve
+  same-source metadata that changed after the click; current UI saving locks make that
+  uncommon, but exact-content approval needs a durable metadata revision or fingerprint
+  and is outside this structural slice.
+- Verify/unverify still commit before the backend performs the final DTO read. A later
+  DTO-read or transport failure can report failure after a committed outcome; the
+  shared frontend executor does not reconcile that pre-existing ambiguity.
+- Transcript and photo verification retain their existing direct lifecycle owners.
+  They are now visibly separate follow-up candidates rather than justification for
+  widening this completed slice.
 
 ## Slice 039 — Fence Photo-Description Writes
 

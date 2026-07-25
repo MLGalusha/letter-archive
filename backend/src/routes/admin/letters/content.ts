@@ -1095,7 +1095,9 @@ router.delete('/:letterId', async (req, res, next) => {
       letterId,
       groupSize: result.deletedCount,
       storageObjectsRemoved: result.removedStorageObjectCount,
-      orphanedStorageObjects: result.orphanedStoragePaths.length,
+      storageObjectsAlreadyMissing: result.alreadyMissingStoragePaths.length,
+      retainedStorageObjects: result.retainedStoragePaths.length,
+      storageCleanupFailures: result.cleanupFailedStoragePaths.length,
       collectionProfileInvalidated: result.collectionProfileInvalidated,
     }, 'Letter group deleted');
     res.json({

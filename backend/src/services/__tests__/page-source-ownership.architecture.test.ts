@@ -64,6 +64,21 @@ describe('page source ownership architecture', () => {
     expect(writers).toEqual(['services/letter-pages.ts']);
   });
 
+  it('keeps the transactional page owner behind the upload service', async () => {
+    const callers: string[] = [];
+    for (const absolutePath of await productionTypeScriptFiles(sourceRoot)) {
+      const relativePath = path.relative(sourceRoot, absolutePath);
+      if (relativePath === 'services/letter-pages.ts') continue;
+
+      const source = await readFile(absolutePath, 'utf8');
+      if (/\bfindOrCreatePage\s*\(/.test(source)) {
+        callers.push(relativePath);
+      }
+    }
+
+    expect(callers).toEqual(['services/upload.ts']);
+  });
+
   it('derives source effects from the locked owner instead of trusting callers', async () => {
     const pageOwner = await readFile(
       path.join(sourceRoot, 'services/letter-pages.ts'),
@@ -134,6 +149,8 @@ describe('page source ownership architecture', () => {
     expect(storage).toContain('COPYFILE_EXCL');
     expect(storage).toContain('copiedByThisAttempt');
     expect(storage).toContain('Stored upload checksum does not match');
+    expect(storage).toMatch(/objectId\s*=\s*randomUUID\(\)/);
+    expect(storage).toContain('`${checksumSha256}-${objectId}${extension.toLowerCase()}`');
     expect(upload).toContain('storeImmutableFile');
     expect(upload).toContain('expectedExistingSource');
     expect(upload).not.toContain('overwriteFile');

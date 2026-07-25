@@ -104,9 +104,15 @@ function buildImmutableStoragePath(
   );
 }
 
-/** Identifies paths materialized by storeImmutableFile rather than legacy live paths. */
+const IMMUTABLE_OBJECT_FILENAME =
+  /^[a-f0-9]{64}-[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}\.[^./]+$/;
+
+/** Identifies checksum-and-UUID paths materialized by storeImmutableFile. */
 export function isImmutableStoragePath(storagePath: string): boolean {
-  return basename(dirname(dirname(storagePath))) === 'objects';
+  return (
+    basename(dirname(dirname(storagePath))) === 'objects'
+    && IMMUTABLE_OBJECT_FILENAME.test(basename(storagePath))
+  );
 }
 
 /**

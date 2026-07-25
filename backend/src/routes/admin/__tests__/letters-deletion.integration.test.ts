@@ -23,7 +23,9 @@ describe('admin correspondence deletion route', () => {
       deletedCount: 3,
       storageObjectCount: 4,
       removedStorageObjectCount: 3,
-      orphanedStoragePaths: ['storage/orphan.jpg'],
+      alreadyMissingStoragePaths: [],
+      retainedStoragePaths: [],
+      cleanupFailedStoragePaths: ['storage/unreconciled.jpg'],
       collectionProfileInvalidated: true,
     });
 

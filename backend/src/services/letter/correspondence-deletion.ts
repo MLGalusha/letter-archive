@@ -7,7 +7,10 @@ import {
 } from '../../db/index.js';
 import { createLogger } from '../../utils/logger.js';
 import { advanceCollectionProfileRevision } from '../collection-profile-mutations.js';
-import { removeStoredFile } from '../storage.js';
+import {
+  reclaimUnreferencedPageStoragePath,
+  type PageStorageReclamationResult,
+} from '../storage-reference-cleanup.js';
 import { lockCorrespondenceGroupByLetterId } from './correspondence-group.js';
 import { sourceRevisionChanged } from './source-revision.js';
 
@@ -18,13 +21,17 @@ export interface CorrespondenceDeletionResult {
   deletedCount: number;
   storageObjectCount: number;
   removedStorageObjectCount: number;
-  orphanedStoragePaths: string[];
+  alreadyMissingStoragePaths: string[];
+  retainedStoragePaths: string[];
+  cleanupFailedStoragePaths: string[];
   collectionProfileInvalidated: boolean;
 }
 
 interface CorrespondenceDeletionDependencies {
   database?: Database;
-  removeFile?: (storagePath: string) => Promise<void>;
+  reclaimStoragePath?: (
+    storagePath: string,
+  ) => Promise<PageStorageReclamationResult>;
 }
 
 /**
@@ -33,10 +40,11 @@ interface CorrespondenceDeletionDependencies {
  *
  * PostgreSQL owns the authoritative outcome: the collection and every group
  * member are locked in the shared order, page paths are snapshotted, and all
- * member rows are removed by one statement in one transaction. Immutable
- * objects are reclaimed only after commit. A failed reclamation therefore
- * leaves an unreferenced object for later garbage collection instead of a
- * live database row whose bytes have disappeared.
+ * member rows are removed by one statement in one transaction. After commit,
+ * UUID-backed objects are reclaimed only when no surviving page references the
+ * exact path. Legacy and shared paths are retained. A failed reclamation
+ * therefore leaves an object for later garbage collection instead of exposing
+ * a live database row whose bytes have disappeared.
  */
 export async function deleteCorrespondenceGroup(
   letterId: string,
@@ -44,7 +52,8 @@ export async function deleteCorrespondenceGroup(
   dependencies: CorrespondenceDeletionDependencies = {},
 ): Promise<CorrespondenceDeletionResult | null> {
   const database = dependencies.database ?? db;
-  const removeFile = dependencies.removeFile ?? removeStoredFile;
+  const reclaimStoragePath = dependencies.reclaimStoragePath
+    ?? reclaimUnreferencedPageStoragePath;
 
   const committed = await database.transaction(async (tx) => {
     const group = await lockCorrespondenceGroupByLetterId(letterId, tx);
@@ -108,17 +117,28 @@ export async function deleteCorrespondenceGroup(
   });
   if (!committed) return null;
 
-  const orphanedStoragePaths: string[] = [];
+  const alreadyMissingStoragePaths: string[] = [];
+  const retainedStoragePaths: string[] = [];
+  const cleanupFailedStoragePaths: string[] = [];
   let removedStorageObjectCount = 0;
   for (const storagePath of committed.storagePaths) {
     try {
-      await removeFile(storagePath);
-      removedStorageObjectCount += 1;
+      const reclamation = await reclaimStoragePath(storagePath);
+      if (reclamation === 'removed') {
+        removedStorageObjectCount += 1;
+      } else if (reclamation === 'already-missing') {
+        alreadyMissingStoragePaths.push(storagePath);
+      } else if (
+        reclamation === 'still-referenced'
+        || reclamation === 'legacy-path-retained'
+      ) {
+        retainedStoragePaths.push(storagePath);
+      }
     } catch (err) {
-      orphanedStoragePaths.push(storagePath);
+      cleanupFailedStoragePaths.push(storagePath);
       log.warn(
         { err, letterId, storagePath },
-        'Deleted correspondence left an unreferenced storage object',
+        'Deleted correspondence storage cleanup failed',
       );
     }
   }
@@ -128,7 +148,9 @@ export async function deleteCorrespondenceGroup(
     deletedCount: committed.deletedCount,
     storageObjectCount: committed.storagePaths.length,
     removedStorageObjectCount,
-    orphanedStoragePaths,
+    alreadyMissingStoragePaths,
+    retainedStoragePaths,
+    cleanupFailedStoragePaths,
     collectionProfileInvalidated: committed.collectionProfileInvalidated,
   };
 }

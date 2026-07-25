@@ -216,15 +216,16 @@ describe('deleteCorrespondenceGroup', () => {
     vi.clearAllMocks();
   });
 
-  it('deletes every locked group member in one transaction before removing objects', async () => {
+  it('deletes every locked group member before reclaiming unique immutable objects', async () => {
     const harness = createHarness();
-    const removeFile = vi.fn(async (storagePath: string) => {
-      harness.events.push(`remove:${storagePath}`);
+    const reclaimStoragePath = vi.fn(async (storagePath: string) => {
+      harness.events.push(`reclaim:${storagePath}`);
+      return 'removed' as const;
     });
 
     const result = await deleteCorrespondenceGroup('letter-l', 4, {
       database: harness.database,
-      removeFile,
+      reclaimStoragePath,
     });
 
     expect(harness.database.transaction).toHaveBeenCalledTimes(1);
@@ -243,15 +244,17 @@ describe('deleteCorrespondenceGroup', () => {
       'profile-revision',
       'group-delete',
       'transaction-commit',
-      'remove:storage/object-l.jpg',
-      'remove:storage/object-p.jpg',
+      'reclaim:storage/object-l.jpg',
+      'reclaim:storage/object-p.jpg',
     ]);
     expect(result).toEqual({
       letterId: 'letter-l',
       deletedCount: 2,
       storageObjectCount: 2,
       removedStorageObjectCount: 2,
-      orphanedStoragePaths: [],
+      alreadyMissingStoragePaths: [],
+      retainedStoragePaths: [],
+      cleanupFailedStoragePaths: [],
       collectionProfileInvalidated: true,
     });
     expect(harness.profilePatches).toHaveLength(1);
@@ -261,29 +264,29 @@ describe('deleteCorrespondenceGroup', () => {
     const harness = createHarness({
       failDelete: new Error('constraint failure'),
     });
-    const removeFile = vi.fn();
+    const reclaimStoragePath = vi.fn();
 
     await expect(deleteCorrespondenceGroup('letter-l', 4, {
       database: harness.database,
-      removeFile,
+      reclaimStoragePath,
     })).rejects.toThrow('constraint failure');
 
     expect(harness.events.at(-1)).toBe('transaction-rollback');
-    expect(removeFile).not.toHaveBeenCalled();
+    expect(reclaimStoragePath).not.toHaveBeenCalled();
   });
 
   it('returns null without mutating the database or storage when the target is absent', async () => {
     const harness = createHarness({ missing: true });
-    const removeFile = vi.fn();
+    const reclaimStoragePath = vi.fn();
 
     await expect(deleteCorrespondenceGroup('missing-letter', 4, {
       database: harness.database,
-      removeFile,
+      reclaimStoragePath,
     })).resolves.toBeNull();
 
     expect(harness.transactionDatabase.update).not.toHaveBeenCalled();
     expect(harness.transactionDatabase.delete).not.toHaveBeenCalled();
-    expect(removeFile).not.toHaveBeenCalled();
+    expect(reclaimStoragePath).not.toHaveBeenCalled();
     expect(harness.events).toEqual([
       'transaction-begin',
       'identity-read',
@@ -291,7 +294,42 @@ describe('deleteCorrespondenceGroup', () => {
     ]);
   });
 
-  it('keeps a committed deletion successful when object removal fails', async () => {
+  it.each([
+    ['still-referenced', 'storage/collections/009/objects/page/shared-id.jpg'],
+    ['legacy-path-retained', 'storage/collections/009/19470101/L01/page-1.jpg'],
+  ] as const)(
+    'accounts for a %s path as retained rather than removed or orphaned',
+    async (outcome, storagePath) => {
+      const harness = createHarness({
+        pages: [{ id: 'page-l', storagePath }],
+      });
+      const reclaimStoragePath = vi.fn(async (observedPath: string) => {
+        harness.events.push(`reclaim:${observedPath}`);
+        return outcome;
+      });
+
+      const result = await deleteCorrespondenceGroup('letter-l', 4, {
+        database: harness.database,
+        reclaimStoragePath,
+      });
+
+      expect(reclaimStoragePath).toHaveBeenCalledOnce();
+      expect(reclaimStoragePath).toHaveBeenCalledWith(storagePath);
+      expect(harness.events.indexOf('transaction-commit')).toBeLessThan(
+        harness.events.indexOf(`reclaim:${storagePath}`),
+      );
+      expect(result).toMatchObject({
+        storageObjectCount: 1,
+        removedStorageObjectCount: 0,
+        alreadyMissingStoragePaths: [],
+        retainedStoragePaths: [storagePath],
+        cleanupFailedStoragePaths: [],
+      });
+      expect(warnMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps a committed deletion successful when reference-safe reclamation fails', async () => {
     const harness = createHarness({
       collection: {
         id: 'collection-1',
@@ -311,25 +349,28 @@ describe('deleteCorrespondenceGroup', () => {
         metadataContentStatus: 'EDITED',
       }],
     });
-    const removeFile = vi.fn(async (storagePath: string) => {
-      harness.events.push(`remove:${storagePath}`);
+    const reclaimStoragePath = vi.fn(async (storagePath: string) => {
+      harness.events.push(`reclaim:${storagePath}`);
       if (storagePath === 'storage/object-l.jpg') {
-        throw new Error('filesystem unavailable');
+        throw new Error('reference lookup unavailable');
       }
+      return 'removed' as const;
     });
 
     const result = await deleteCorrespondenceGroup('letter-l', 4, {
       database: harness.database,
-      removeFile,
+      reclaimStoragePath,
     });
 
     expect(harness.events.indexOf('transaction-commit')).toBeLessThan(
-      harness.events.indexOf('remove:storage/object-l.jpg'),
+      harness.events.indexOf('reclaim:storage/object-l.jpg'),
     );
     expect(result).toMatchObject({
       deletedCount: 1,
       removedStorageObjectCount: 1,
-      orphanedStoragePaths: ['storage/object-l.jpg'],
+      alreadyMissingStoragePaths: [],
+      retainedStoragePaths: [],
+      cleanupFailedStoragePaths: ['storage/object-l.jpg'],
       collectionProfileInvalidated: true,
     });
     expect(harness.profilePatches[0]).toMatchObject({
@@ -340,8 +381,34 @@ describe('deleteCorrespondenceGroup', () => {
         letterId: 'letter-l',
         storagePath: 'storage/object-l.jpg',
       }),
-      'Deleted correspondence left an unreferenced storage object',
+      'Deleted correspondence storage cleanup failed',
     );
+  });
+
+  it('treats an already-missing immutable object as benign completed cleanup', async () => {
+    const harness = createHarness({
+      pages: [{
+        id: 'page-l',
+        storagePath: 'storage/collections/009/objects/page/missing-id.jpg',
+      }],
+    });
+    const reclaimStoragePath = vi.fn(async () => 'already-missing' as const);
+
+    const result = await deleteCorrespondenceGroup('letter-l', 4, {
+      database: harness.database,
+      reclaimStoragePath,
+    });
+
+    expect(result).toMatchObject({
+      storageObjectCount: 1,
+      removedStorageObjectCount: 0,
+      alreadyMissingStoragePaths: [
+        'storage/collections/009/objects/page/missing-id.jpg',
+      ],
+      retainedStoragePaths: [],
+      cleanupFailedStoragePaths: [],
+    });
+    expect(warnMock).not.toHaveBeenCalled();
   });
 
   it('rejects a stale confirmation after locking a newly changed group member', async () => {
@@ -375,11 +442,11 @@ describe('deleteCorrespondenceGroup', () => {
         },
       ],
     });
-    const removeFile = vi.fn();
+    const reclaimStoragePath = vi.fn();
 
     await expect(deleteCorrespondenceGroup('letter-l', 4, {
       database: harness.database,
-      removeFile,
+      reclaimStoragePath,
     })).rejects.toMatchObject({
       statusCode: 409,
       code: 'SOURCE_REVISION_CHANGED',
@@ -394,6 +461,6 @@ describe('deleteCorrespondenceGroup', () => {
     ]);
     expect(harness.transactionDatabase.update).not.toHaveBeenCalled();
     expect(harness.transactionDatabase.delete).not.toHaveBeenCalled();
-    expect(removeFile).not.toHaveBeenCalled();
+    expect(reclaimStoragePath).not.toHaveBeenCalled();
   });
 });

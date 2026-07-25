@@ -91,7 +91,8 @@ Scope:
   filesystem failures to the deletion owner for best-effort logging.
 - Route every distinct post-commit correspondence path through that helper. Count
   actual removals, track deliberately retained paths separately, and keep genuine
-  cleanup failures in `orphanedStoragePaths`.
+  lookup/unlink failures in `cleanupFailedStoragePaths`. Track already-missing paths
+  separately so the four outcomes partition the snapshotted storage set.
 - Preserve the current database-first ordering: lock the group, snapshot paths, delete
   every member, and commit before any reference lookup or filesystem mutation.
 - Add architecture tripwires that page source pointer writes remain owned by

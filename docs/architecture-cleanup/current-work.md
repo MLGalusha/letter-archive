@@ -1,19 +1,18 @@
 # Architecture Cleanup Current Work
 
-Last updated: July 24, 2026
+Last updated: July 25, 2026
 
 ## Resume Here
 
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 036 — visit-owned Letter Review transcript confirmation
-- Last sealed cleanup implementation: extracted Letter Review transcript
-  confirmation at `05ad2bff`
+- Current checkpoint: 037 — truthful transcript-confirmation characterization
+- Last sealed cleanup implementation: characterized committed-versus-reported
+  confirmation outcomes at `1d9e18f2`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Current slice: 037 — characterize truthful transcript-confirmation completion,
-  framed and in progress.
+- Next slice: 038 — durable worker-owned transcript confirmation, not yet framed.
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -3381,7 +3380,7 @@ in this slice.
 
 ## Slice 037 — Truthful Transcript Confirmation Characterization
 
-Status: framed and in progress
+Status: complete at `1d9e18f2`
 
 Problem:
 
@@ -3405,10 +3404,11 @@ Target invariant:
 The current committed-versus-reported contract is executable and documented before
 production behavior changes. The agreed replacement is a short, exact-source,
 idempotent confirmation mutation that atomically persists source-bound human guidance
-and durable `PENDING` metadata intent. The request performs no AI. The singleton
-worker owns metadata/entity execution and retry, while both frontends use an explicit
-disposition and authoritative reconciliation instead of inferring completion from
-HTTP success or retry safety from an error.
+and durable `PENDING` metadata intent only for newly eligible work, while returning
+exact queued/running/available/failed/not-applicable dispositions for every other
+state. The request performs no AI. The singleton worker owns metadata/entity execution
+and retry, while both frontends use a durable receipt and authoritative reconciliation
+instead of inferring completion from HTTP success or retry safety from an error.
 
 Scope:
 
@@ -3423,9 +3423,10 @@ Scope:
   until an authoritative reload reveals the committed confirmation.
 - Characterize the frontend twenty-second timeout as an ambiguous status-0 failure
   and prove neither current consumer owns committed-outcome reconciliation.
-- Add one-way architecture checks for the intended next boundary: no worker migration
-  is permitted without durable correction guidance, and Dashboard must not infer that
-  confirmed-plus-empty means synchronous regeneration remains safe.
+- Add a temporary current-boundary tripwire that fails when the synchronous producer,
+  plain-Letter response, default timeout, or Dashboard empty-state inference changes.
+  It is characterization only, not proof of the async design; the behavior-changing
+  slice must replace it with executable service, route, worker, and consumer contracts.
 - Use the evidence to specify the minimum schema/service/response/frontend migration.
   Do not implement a partial async path in this characterization slice.
 
@@ -3446,9 +3447,12 @@ Acceptance:
   pre-commit failure and connect the backend state to current frontend behavior.
 - The target document explains why timeout-only, retry-only, status-code-only, and
   worker-without-guidance approaches are unsound.
-- The next implementation has explicit acceptance for atomic enqueue, idempotency,
-  durable correction flow through metadata and deferred entities, wake failure,
-  disposition, ambiguous reconciliation, and duplicate-action suppression.
+- The next implementation has explicit acceptance for atomic enqueue, same- and
+  different-intent concurrency, durable correction flow through metadata and deferred
+  entities, complete metadata-input identity across extra-content/date/collection
+  invalidation, wake failure, exact dispositions, post-commit receipt fallback,
+  ambiguous transport/5xx reconciliation, and duplicate-action suppression. Lexical
+  name scans are not accepted as proof of those behaviors.
 - Focused backend/frontend/browser checks, aggregate verification, touched lint, and
   `git diff --check` pass. Independent backend, frontend, and skeptical-test reviews
   report no remaining P0-P2 characterization gap.
@@ -3465,6 +3469,82 @@ Baseline:
   992 tests, production build, and mocked browser 71/71 passed.
 
 Rollback base: `e5c741af`.
+
+Delivered:
+
+- Recorded the current five-phase request and an executable committed-versus-reported
+  matrix. It now distinguishes pre-commit rejection, fallback confirmation after a
+  lost metadata claim, provider failure, API death, the real twenty-second browser
+  timeout, pre- versus post-metadata-publication source changes, non-fatal entity
+  failure, final DTO failure, canonical versus legacy-incoherent skipped states,
+  non-letter confirmation, and both failed and successful repeat behavior.
+- Proved in the real metadata lifecycle that provider failure preserves confirmation,
+  advances the attempt revision, and lets a blind repeat re-confirm and claim the
+  failed revision as another queued-kind run. Concurrent confirmation claims retain
+  one compare-and-set winner.
+- Extended the route characterization for committed-then-error branches, the
+  claim-lost confirmation fallback, canonical already-running rejection,
+  post-publication authoritative DTO behavior, non-letter exclusion, and partial
+  entity failure without inventing internal fields on the wire DTO.
+- Made the deterministic Letter Review API distinguish a failure before mutation from
+  a failure after authoritative confirmation/metadata/entity state commits. The
+  browser proves the latter looks retryable and stale until reload reveals the
+  committed result.
+- Proved the admin API uses the default 20,000 ms abort signal and maps timeout to
+  status zero without reconciliation. Proved Dashboard both races confirmed-empty
+  state with synchronous regeneration and reports a statefully committed status-zero
+  outcome as failure without an authoritative refresh. Proved MetadataSection offers
+  duplicate generation while `METADATA_EXTRACTING`.
+- Replaced an initially overclaimed future-architecture name scan with an explicitly
+  temporary current-boundary tripwire. The next slice must replace it with behavior
+  tests; lexical names are not accepted as proof of atomic persistence, worker
+  consumption, response disposition, or frontend reconciliation.
+- Defined separate confirmation-intent, complete metadata-input, and job-attempt
+  identities. The target receipt and acceptance cover every provider input,
+  same/different intent concurrency, invalidation, exact dispositions, DTO fallback,
+  and transport/5xx reconciliation.
+- No production endpoint, client, component, worker, database, pipeline, copy, style,
+  timeout, or external behavior changed.
+
+Evidence:
+
+- Focused backend confirmation/metadata/pipeline characterization: 4 files / 90 tests
+  passed.
+- Focused frontend API/Letter Review/MetadataSection/Dashboard characterization:
+  4 files / 38 tests passed.
+- Dedicated mocked transcript-confirmation browser contract: 5/5 passed.
+- Backend typecheck and touched frontend ESLint passed.
+- Aggregate `CI=1 ./scripts/verify-all.sh`: backend 106 files / 1,086 tests, backend
+  typecheck, frontend 147 files / 996 tests, production build, and mocked browser
+  72/72 passed.
+- `git diff --check` passed.
+
+Independent review:
+
+- Backend, frontend/browser, and skeptical-test reviewers challenged the first draft.
+  Their findings exposed an impossible future tripwire, a timeout test that did not
+  prove its duration, stale-revision Dashboard assertions, canonical-state
+  contradictions, unsafe failed-request replay, claim-lost confirmation fallback,
+  pre/post-publication source-change differences, impossible mock DTO fields, a
+  post-commit DTO hole in the target response, incomplete dispositions, an undefined
+  idempotency identity, and missing extra-content/date/collection input identity.
+- All findings were repaired and re-executed. All three reviewers reported no
+  remaining P0-P2 characterization gap.
+
+Residual decisions and next seam:
+
+- The synchronous endpoint and both unsafe frontend consumers remain unchanged by
+  design. The temporary tripwire must fail as soon as the migration starts and be
+  replaced—not weakened—by service, route, worker, and consumer behavior contracts.
+- A dedicated metadata-input identity must change only when provider inputs change;
+  the existing metadata job revision also changes for attempt outcomes and cannot
+  serve that purpose.
+- Slice 038 must frame the smallest coherent rollout of the twelve acceptance items in
+  [transcript-confirmation-outcomes.md](transcript-confirmation-outcomes.md). It may
+  prepare additive persistence before cutover, but it must not remove synchronous AI,
+  enqueue work, or change frontend copy until durable guidance, current-input
+  disposition, receipt fallback, worker consumption, and ambiguous reconciliation are
+  executable together.
 
 ## Slice 027 — Validated, Replay-Safe Dashboard Stored State
 

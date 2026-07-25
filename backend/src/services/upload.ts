@@ -28,6 +28,7 @@ import {
   SourceRevisionChangedError,
   sourceRevisionChanged,
 } from './letter/source-revision.js';
+import { reclaimUnreferencedPageStoragePath } from './storage-reference-cleanup.js';
 
 const log = createLogger({ module: 'upload' });
 
@@ -353,6 +354,19 @@ export async function processUploadedFile(
       log.warn(
         { ...context, storagePath: preparedStoragePath, err: error },
         'Failed to remove an unused immutable upload object',
+      );
+    });
+  }
+
+  const previousStoragePath = pageResult.previousStoragePath;
+  if (
+    previousStoragePath
+    && previousStoragePath !== pageResult.page.storagePath
+  ) {
+    await reclaimUnreferencedPageStoragePath(previousStoragePath).catch((error) => {
+      log.warn(
+        { ...context, storagePath: previousStoragePath, err: error },
+        'Failed to reclaim a superseded immutable page object',
       );
     });
   }

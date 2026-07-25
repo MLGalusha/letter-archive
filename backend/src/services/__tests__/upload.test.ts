@@ -7,6 +7,11 @@ const {
   getPageMock,
   computeChecksumMock,
   inspectUploadFileMock,
+  logDebugMock,
+  logErrorMock,
+  logInfoMock,
+  logWarnMock,
+  reclaimStoragePathMock,
   removeStoredFileMock,
   storeImmutableFileMock,
 } = vi.hoisted(() => ({
@@ -16,6 +21,11 @@ const {
   getPageMock: vi.fn(),
   computeChecksumMock: vi.fn(),
   inspectUploadFileMock: vi.fn(),
+  logDebugMock: vi.fn(),
+  logErrorMock: vi.fn(),
+  logInfoMock: vi.fn(),
+  logWarnMock: vi.fn(),
+  reclaimStoragePathMock: vi.fn(),
   removeStoredFileMock: vi.fn(),
   storeImmutableFileMock: vi.fn(),
 }));
@@ -31,6 +41,10 @@ vi.mock('../letters.js', () => ({
 vi.mock('../letter-pages.js', () => ({
   findOrCreatePage: findOrCreatePageMock,
   getPage: getPageMock,
+}));
+
+vi.mock('../storage-reference-cleanup.js', () => ({
+  reclaimUnreferencedPageStoragePath: reclaimStoragePathMock,
 }));
 
 vi.mock('../storage.js', () => ({
@@ -49,6 +63,15 @@ vi.mock('../storage.js', () => ({
   )),
   removeStoredFile: removeStoredFileMock,
   storeImmutableFile: storeImmutableFileMock,
+}));
+
+vi.mock('../../utils/logger.js', () => ({
+  createLogger: vi.fn(() => ({
+    debug: logDebugMock,
+    error: logErrorMock,
+    info: logInfoMock,
+    warn: logWarnMock,
+  })),
 }));
 
 vi.mock('sharp', () => ({
@@ -79,6 +102,23 @@ const observedLetter = {
   dateRaw: '19320706',
   type: 'L',
   typeSequence: 1,
+};
+
+const preflightExistingPage = {
+  id: 'page-existing',
+  letterId: observedLetter.id,
+  storagePath: 'storage/objects/preflight/source-preflight.jpg',
+  originalFilename: '003-19320706-L01-01.jpg',
+  checksumSha256: 'old-checksum',
+};
+
+const authoritativePreviousStoragePath =
+  'storage/objects/transaction/source-previous.jpg';
+
+const committedReplacementPage = {
+  ...preflightExistingPage,
+  storagePath: 'storage/objects/source-a.jpg',
+  checksumSha256: 'abc123',
 };
 
 function pageMutationResult<T extends object>(result: T) {
@@ -114,6 +154,7 @@ describe('upload service', () => {
       checksumSha256: 'abc123',
     });
     computeChecksumMock.mockResolvedValue('abc123');
+    reclaimStoragePathMock.mockResolvedValue('removed');
     removeStoredFileMock.mockResolvedValue(undefined);
   });
 
@@ -173,6 +214,7 @@ describe('upload service', () => {
       outcome: 'created',
       changed: true,
     });
+    expect(reclaimStoragePathMock).not.toHaveBeenCalled();
   });
 
   it('lets the transactional page owner create a missing member from the exact identity', async () => {
@@ -283,6 +325,156 @@ describe('upload service', () => {
     });
   });
 
+  it.each([
+    'removed',
+    'already-missing',
+    'still-referenced',
+    'legacy-path-retained',
+  ])(
+    'preserves the committed replacement response when old storage is %s',
+    async (reclamation) => {
+      const events: string[] = [];
+      getPageMock.mockResolvedValue(preflightExistingPage);
+      computeChecksumMock.mockResolvedValue('old-checksum');
+      findOrCreatePageMock.mockImplementationOnce(async () => {
+        events.push('page-committed');
+        return pageMutationResult({
+          page: committedReplacementPage,
+          outcome: 'replaced',
+          sourceChanged: true,
+          primarySourceRevision: 8,
+          previousStoragePath: authoritativePreviousStoragePath,
+        });
+      });
+      reclaimStoragePathMock.mockImplementationOnce(async () => {
+        events.push('old-storage-reclaimed');
+        return reclamation;
+      });
+
+      const result = await processUploadedFile(
+        '/tmp/test.jpg',
+        preflightExistingPage.originalFilename,
+        true,
+        replacementExpectation(preflightExistingPage),
+      );
+
+      expect(events).toEqual([
+        'page-committed',
+        'old-storage-reclaimed',
+      ]);
+      expect(reclaimStoragePathMock).toHaveBeenCalledOnce();
+      expect(reclaimStoragePathMock).toHaveBeenCalledWith(
+        authoritativePreviousStoragePath,
+      );
+      expect(reclaimStoragePathMock).not.toHaveBeenCalledWith(
+        preflightExistingPage.storagePath,
+      );
+      expect(removeStoredFileMock).not.toHaveBeenCalledWith(
+        authoritativePreviousStoragePath,
+      );
+      expect(logWarnMock).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        collection: {
+          id: 'collection-1',
+          collectionCode: '003',
+        },
+        letter: observedLetter,
+        page: committedReplacementPage,
+        storagePath: committedReplacementPage.storagePath,
+        primarySourceRevision: 8,
+        alreadyExists: true,
+        outcome: 'replaced',
+        changed: true,
+      });
+    },
+  );
+
+  it('warns and preserves the committed replacement when old storage reclamation fails', async () => {
+    const cleanupError = new Error('storage unavailable');
+    getPageMock.mockResolvedValue(preflightExistingPage);
+    computeChecksumMock.mockResolvedValue('old-checksum');
+    findOrCreatePageMock.mockResolvedValueOnce(pageMutationResult({
+      page: committedReplacementPage,
+      outcome: 'replaced',
+      sourceChanged: true,
+      primarySourceRevision: 8,
+      previousStoragePath: authoritativePreviousStoragePath,
+    }));
+    reclaimStoragePathMock.mockRejectedValueOnce(cleanupError);
+
+    const result = await processUploadedFile(
+      '/tmp/test.jpg',
+      preflightExistingPage.originalFilename,
+      true,
+      replacementExpectation(preflightExistingPage),
+    );
+
+    expect(reclaimStoragePathMock).toHaveBeenCalledWith(
+      authoritativePreviousStoragePath,
+    );
+    expect(reclaimStoragePathMock).not.toHaveBeenCalledWith(
+      preflightExistingPage.storagePath,
+    );
+    expect(removeStoredFileMock).not.toHaveBeenCalledWith(
+      authoritativePreviousStoragePath,
+    );
+    expect(logWarnMock).toHaveBeenCalledOnce();
+    expect(logWarnMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        originalFilename: preflightExistingPage.originalFilename,
+        force: true,
+        storagePath: authoritativePreviousStoragePath,
+        err: cleanupError,
+      }),
+      'Failed to reclaim a superseded immutable page object',
+    );
+    expect(logInfoMock).toHaveBeenCalledOnce();
+    expect(logInfoMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collectionId: 'collection-1',
+        letterId: observedLetter.id,
+        pageId: committedReplacementPage.id,
+        outcome: 'replaced',
+        changed: true,
+      }),
+      'Upload source committed',
+    );
+    expect(result).toEqual({
+      collection: {
+        id: 'collection-1',
+        collectionCode: '003',
+      },
+      letter: observedLetter,
+      page: committedReplacementPage,
+      storagePath: committedReplacementPage.storagePath,
+      primarySourceRevision: 8,
+      alreadyExists: true,
+      outcome: 'replaced',
+      changed: true,
+    });
+  });
+
+  it('does not reclaim when a mutation reports the current path as its previous path', async () => {
+    getPageMock.mockResolvedValue(preflightExistingPage);
+    computeChecksumMock.mockResolvedValue('old-checksum');
+    findOrCreatePageMock.mockResolvedValueOnce(pageMutationResult({
+      page: committedReplacementPage,
+      outcome: 'replaced',
+      sourceChanged: true,
+      primarySourceRevision: 8,
+      previousStoragePath: committedReplacementPage.storagePath,
+    }));
+
+    await processUploadedFile(
+      '/tmp/test.jpg',
+      preflightExistingPage.originalFilename,
+      true,
+      replacementExpectation(preflightExistingPage),
+    );
+
+    expect(reclaimStoragePathMock).not.toHaveBeenCalled();
+  });
+
   it('returns a truthful unchanged outcome without staging a non-force duplicate', async () => {
     const existing = {
       id: 'page-existing',
@@ -318,6 +510,7 @@ describe('upload service', () => {
         checksumSha256: existing.checksumSha256,
       },
     }));
+    expect(reclaimStoragePathMock).not.toHaveBeenCalled();
   });
 
   it('returns the current winner when a non-force no-op races a replacement', async () => {
@@ -434,6 +627,7 @@ describe('upload service', () => {
     expect(removeStoredFileMock).toHaveBeenCalledWith(
       'storage/objects/source-a.jpg',
     );
+    expect(reclaimStoragePathMock).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       page: winner,
       storagePath: winner.storagePath,
@@ -514,6 +708,7 @@ describe('upload service', () => {
 
     expect(storeImmutableFileMock).not.toHaveBeenCalled();
     expect(findOrCreatePageMock).not.toHaveBeenCalled();
+    expect(reclaimStoragePathMock).not.toHaveBeenCalled();
   });
 
   it('does not stage or invalidate when force receives the committed bytes again', async () => {
@@ -548,6 +743,7 @@ describe('upload service', () => {
       'expectedExistingSource',
     );
     expect(result).toMatchObject({ outcome: 'unchanged', changed: false });
+    expect(reclaimStoragePathMock).not.toHaveBeenCalled();
   });
 
   it('rejects a force no-op when the canonical transaction observes a newer source', async () => {
@@ -577,6 +773,7 @@ describe('upload service', () => {
       existingPagePolicy: 'replace',
       expectedReplacementSource: replacementExpectation(existing),
     }));
+    expect(reclaimStoragePathMock).not.toHaveBeenCalled();
   });
 
   it('force-repairs a missing object and still wins a replacement at commit time', async () => {
@@ -628,6 +825,7 @@ describe('upload service', () => {
     expect(inspectUploadFileMock).not.toHaveBeenCalled();
     expect(storeImmutableFileMock).not.toHaveBeenCalled();
     expect(findOrCreatePageMock).not.toHaveBeenCalled();
+    expect(reclaimStoragePathMock).not.toHaveBeenCalled();
   });
 
   it('rejects a stale confirmation before staging when the page pointer already changed', async () => {
@@ -655,6 +853,7 @@ describe('upload service', () => {
     expect(inspectUploadFileMock).not.toHaveBeenCalled();
     expect(storeImmutableFileMock).not.toHaveBeenCalled();
     expect(findOrCreatePageMock).not.toHaveBeenCalled();
+    expect(reclaimStoragePathMock).not.toHaveBeenCalled();
   });
 
   it('removes a prepared force candidate when the locked source epoch is stale', async () => {
@@ -684,6 +883,7 @@ describe('upload service', () => {
     expect(removeStoredFileMock).toHaveBeenCalledWith(
       'storage/objects/source-a.jpg',
     );
+    expect(reclaimStoragePathMock).not.toHaveBeenCalled();
   });
 
   it('retains an immutable candidate and reports database reconciliation failure', async () => {
@@ -695,5 +895,6 @@ describe('upload service', () => {
     )).rejects.toThrow('database reconciliation failed');
 
     expect(removeStoredFileMock).not.toHaveBeenCalled();
+    expect(reclaimStoragePathMock).not.toHaveBeenCalled();
   });
 });

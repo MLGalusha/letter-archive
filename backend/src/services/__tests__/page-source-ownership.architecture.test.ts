@@ -229,6 +229,13 @@ describe('page source ownership architecture', () => {
     expect(upload).toContain('expectedReplacementSource');
     expect(upload).toContain('SourceRevisionChangedError');
     expect(upload).toContain('removeStoredFile(stored.storagePath)');
+    expect(upload).toContain(
+      'const previousStoragePath = pageResult.previousStoragePath',
+    );
+    expect(upload).toContain(
+      'reclaimUnreferencedPageStoragePath(previousStoragePath)',
+    );
+    expect(upload).not.toContain('removeStoredFile(previousStoragePath)');
     expect(pageOwner).toContain(
       'sourceGroup.owner.primarySourceRevision',
     );

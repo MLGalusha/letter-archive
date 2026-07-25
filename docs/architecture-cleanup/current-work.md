@@ -12,7 +12,8 @@ Last updated: July 24, 2026
   regeneration at `575d2b58`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Current slice: checkpoint 034 complete; the next ownership slice is not yet framed.
+- Current slice: 035 — visit-owned Letter Review analysis regeneration, framed and
+  in progress.
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -3036,6 +3037,107 @@ Residual decisions and next seam:
   three present endpoints, modes, and visible choices while moving ownership; remove
   the unread full-mode progress state and establish the measured mobile/dialog
   invariants. Endpoint/mode simplification remains a later product decision.
+
+## Slice 035 — Visit-Owned Letter Review Analysis Regeneration
+
+Status: framed and in progress
+
+Problem:
+
+`LetterReviewPage` still owns analysis-regeneration intent, correction drafts, two
+visible progress lanes, one unread full-mode progress lane, two API adapters, recent
+edit publication, status resets, and an inline popup. That keeps one characterized
+domain coupled to the route's unrelated transcript-confirmation state and duplicates
+the save/flush/adopt/hydrate/error boundary already owned by
+`useLetterReviewMutationExecutor`.
+
+The popup also has no semantic dialog boundary. Its content-box `width`, `max-width`,
+`min-width`, and padding compete: at 390x844 it measures 404 px wide from x=-7 to
+x=397, clipping about seven pixels on both sides.
+
+Target invariant:
+
+One route-visit-owned analysis-regeneration workspace owns the dialog draft, exact
+operation mapping, progress attempts, success feedback, status resets, and recent-edit
+publication. Every request runs through the canonical Letter Review mutation executor;
+the route only composes section and dialog props. Transcript confirmation retains its
+own independent identity draft.
+
+The fixed viewport overlay owns centering and gutters. The dialog owns one
+viewport-safe border-box width and local vertical overflow. At 390x844 it has at least
+16 px horizontal containment, creates no document horizontal overflow, remains
+vertically contained, and keeps both fields, all three choices, and Cancel reachable.
+It is exposed as a labelled modal dialog.
+
+Scope:
+
+- Add focused workspace tests before moving behavior. Prove visit-keyed state,
+  captured-control rejection, all three exact request mappings, current blank-value
+  asymmetry, progress/adoption behavior, standalone entity confirmation, and
+  attempt-safe completion resets.
+- Extract `useAnalysisRegenerationWorkspace`, accepting the active visit, current
+  Letter, live editor identity, `executeLetterMutation`, and the shared status-reset
+  scheduler. Return only section props and semantic dialog props.
+- Route Metadata Only to `regenerateMetadata`, Entities Only to `reExtractLetter`
+  `entities_only`, Both to `reExtractLetter` `full`, and standalone entity retry to
+  `entities_only`, preserving current payloads, source revisions, copy, timers, and
+  recent-edit behavior.
+- Extract `AnalysisRegenerationDialog` from the route. Give it labelled dialog
+  semantics, controlled fields/actions, equivalent Cancel/backdrop behavior, and
+  dedicated viewport-safe layout ownership.
+- Remove the unread full-mode progress state and its unused `metadata-reextract`
+  status-reset lane.
+- Update static ownership checks to follow the new workspace/executor seam rather
+  than deleted route callbacks.
+- Keep all four Slice 034 browser contracts as cross-owner ground truth and add one
+  390x844 semantic/geometry case.
+
+Non-goals:
+
+- No backend route, schema, pipeline, prompt, eligibility, or persistence change.
+- Do not consolidate endpoints, delete API modes, rename choices, change copy, or
+  claim Metadata Only leaves entities untouched.
+- Do not normalize corrections. Metadata Only blanks still become `undefined`;
+  Entities Only/Both blanks still fall back to the live editor identity.
+- Do not refactor transcript confirmation, Dashboard regeneration, entity retry
+  availability, the unused `/regenerate-entities` adapter, or recent-edit policy.
+- Do not introduce a generic modal framework or add focus trapping, Escape handling,
+  focus restoration, or body-scroll locking in this ownership slice. Those behaviors
+  are not supplied consistently by the existing dialog family and require a separately
+  characterized shared accessibility decision.
+- Do not change unrelated Letter Review styling.
+
+Acceptance:
+
+- The route no longer owns analysis popup state, analysis correction drafts, metadata
+  or entity regeneration progress, direct analysis API calls, or the unread full-mode
+  progress state.
+- The workspace snapshots the active target ID, source revision, mode, and corrections
+  before the executor awaits autosaves; a stale visit or rejected adoption cannot
+  publish progress, hydration, recent edits, or success feedback.
+- Metadata and entity progress starts only when the executor invokes the request,
+  becomes done only after guarded adoption, resets on a rejected adoption, and cannot
+  be erased by an older completion timer.
+- Existing Slice 034 request-order, payload, adoption, source-conflict, and A-to-B
+  browser contracts remain green without weakening.
+- At 390x844 the labelled modal dialog satisfies the recorded containment, overflow,
+  visibility, and reachability invariants; desktop geometry remains intentionally
+  bounded and all browser checks have zero console errors.
+- Focused frontend tests, production build, aggregate verifier, and
+  `git diff --check` pass. Independent frontend-ownership, browser-contract, and
+  skeptical-simplicity reviews report no remaining P0-P2 finding.
+
+Baseline:
+
+- Source-conflict ownership and status-reset neighborhood: 2 files / 11 tests passed.
+- Dedicated analysis-regeneration browser contract: 4/4 passed.
+- Slice 034 aggregate checkpoint: backend 105 files / 1,073 tests, frontend 141 files /
+  974 tests, production build, and mocked browser 65/65 passed.
+- Rendered baseline at 1440x900: 464x581.97 px and fully contained.
+- Rendered baseline at 390x844: 404x581.97 px, clipped about seven pixels per side,
+  with no dialog role or `aria-modal`.
+
+Rollback base: `8d1bd594`.
 
 ## Slice 027 — Validated, Replay-Safe Dashboard Stored State
 

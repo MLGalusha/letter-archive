@@ -13,7 +13,8 @@ Last updated: July 25, 2026
   `66fad30b`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Active slice: reassessment pending.
+- Active slice: 043 — make correspondence deletion storage-reference safe, framed
+  below.
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -51,6 +52,104 @@ tree:
   1,871 lines; the largest public backend route is `routes/letters.ts` at about 2,230
   lines, though its search section is comparatively cohesive.
 - Redesign and refactoring docs contained stale active-phase claims.
+
+## Slice 043 — Reference-Safe Correspondence Storage Deletion
+
+Status: framed; implementation pending.
+
+Problem:
+
+`deleteCorrespondenceGroup()` snapshots the deleted group's page paths inside its
+transaction, commits the row deletion, and then unconditionally unlinks every distinct
+path. `letter_pages.storage_path` is not unique. A page outside the deleted group can
+therefore still reference one of those paths, and the successful deletion can remove
+that surviving page's bytes.
+
+The risk is strongest for deterministic legacy paths, which historically had reuse
+and overwrite semantics. A database reference check alone does not make those paths
+safe to unlink: an older binary, maintenance tool, or compatibility workflow could
+reattach one between the check and filesystem mutation. Current immutable paths are
+different. They are created under
+`objects/<page>/<checksum>-<uuid>.<ext>` with `COPYFILE_EXCL`, and the supported page
+source owner never reattaches a superseded immutable path.
+
+Target invariant:
+
+A committed correspondence deletion may remove storage only after the database
+transaction commits, only for an application-owned immutable-object path, and only
+when a fresh database lookup finds no surviving page reference to that exact path.
+Legacy and still-referenced paths are retained and reported separately from cleanup
+failures. An absent file is already-clean success. A reference-query or filesystem
+failure cannot reverse the committed deletion.
+
+Scope:
+
+- Add one narrow storage-reference cleanup service that recognizes immutable paths,
+  checks `letter_pages` for one exact live reference, and reports `removed`,
+  `already-missing`, `still-referenced`, or `legacy-path-retained`.
+- Treat `ENOENT` during unlink as `already-missing`; propagate database and other
+  filesystem failures to the deletion owner for best-effort logging.
+- Route every distinct post-commit correspondence path through that helper. Count
+  actual removals, track deliberately retained paths separately, and keep genuine
+  cleanup failures in `orphanedStoragePaths`.
+- Preserve the current database-first ordering: lock the group, snapshot paths, delete
+  every member, and commit before any reference lookup or filesystem mutation.
+- Add architecture tripwires that page source pointer writes remain owned by
+  `letter-pages.ts`, `findOrCreatePage()` remains called only by `upload.ts`, and new
+  upload candidates are UUID-backed immutable paths. Those constraints are the safety
+  basis for unlinking after the reference check.
+
+Non-goals:
+
+- Do not scan storage, collect historical orphans, add a grace-period job, add a
+  durable cleanup ledger, or claim complete database/filesystem compensation.
+- Do not delete deterministic legacy paths, even when a momentary lookup finds no
+  reference. A legacy migration or collector needs a separately designed age and
+  mixed-writer policy.
+- Do not delete a newly prepared candidate after an ambiguous database failure.
+  Preserve the existing conservative retry/reconciliation behavior.
+- Do not reclaim the previous object from a successful page-pointer replacement in
+  this slice. That becomes a small second consumer after this destructive boundary is
+  proven.
+- Do not change the admin deletion response, source-revision fencing, group locking,
+  profile invalidation, object naming, routes, schema, or migrations.
+
+Acceptance:
+
+- A correspondence containing unique immutable paths commits its database deletion
+  before each exact reference lookup and removes each unreferenced object once.
+- A surviving page that shares an immutable path keeps its bytes; the path is
+  classified as retained and never passed to `removeStoredFile`.
+- A deterministic legacy path is retained without a database lookup or unlink,
+  including when the deleted group was its only observed reference.
+- A missing unreferenced file reports `already-missing`. A database failure performs
+  no unlink, and a non-`ENOENT` unlink failure propagates from the helper.
+- Two concurrent deletion cleanups may race: one removal plus one `already-missing`
+  outcome remains successful.
+- A reference-query or non-`ENOENT` unlink failure is logged with the path and counted
+  as a cleanup failure, but the already-committed correspondence deletion retains its
+  successful result.
+- Transaction rollback, missing target, source-conflict, group deletion, collection
+  profile invalidation, route response, and storage accounting remain truthful.
+- Focused cleanup/deletion/storage/architecture tests pass, followed by backend
+  typecheck, the backend package suite, aggregate verification, and independent review
+  with no unresolved P0-P2 finding.
+
+Baseline:
+
+- Checkpoint 042 aggregate verification passed: backend 109 files / 1,129 tests,
+  backend typecheck, frontend 152 files / 1,063 tests, production build, and mocked
+  browser suite 78/78.
+- The focused correspondence deletion, deletion ownership, storage, and page-source
+  architecture suites pass 4 files / 20 tests.
+- `storeImmutableFile()` materializes checksum-and-UUID paths with `COPYFILE_EXCL`.
+  `letter_pages.storage_path` has no uniqueness constraint, but correspondence
+  deletion currently removes every snapshotted path without checking for a survivor.
+- Current production code has one page-source pointer writer (`letter-pages.ts`) and
+  one caller of that owner (`upload.ts`). New candidates use UUID-backed immutable
+  paths; legacy deterministic paths remain readable.
+
+Rollback base: `5cdfe8a1`.
 
 ## Prioritized Program
 

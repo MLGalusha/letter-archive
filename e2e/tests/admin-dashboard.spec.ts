@@ -33,8 +33,23 @@ test.describe('Admin Dashboard', () => {
       await expect(page.locator(SELECTORS.dashboard.logoutBtn)).toBeVisible();
     });
 
-    test('shows filter pills', async ({ page }) => {
-      await expect(page.locator(SELECTORS.dashboard.filterPills)).toBeVisible();
+    test('opens and closes the current Filters panel', async ({ page }) => {
+      const filtersTrigger = page.getByRole('button', {
+        name: 'Filters',
+        exact: true,
+      });
+
+      await expect(filtersTrigger).toBeVisible();
+      await expect(filtersTrigger).toHaveAttribute('aria-expanded', 'false');
+
+      await filtersTrigger.click();
+      const filtersHeading = page.getByRole('heading', { name: 'Filters' });
+      await expect(filtersTrigger).toHaveAttribute('aria-expanded', 'true');
+      await expect(filtersHeading).toBeVisible();
+
+      await filtersTrigger.click();
+      await expect(filtersTrigger).toHaveAttribute('aria-expanded', 'false');
+      await expect(filtersHeading).not.toBeVisible();
     });
 
     test('shows table rows with letter data', async ({ page }) => {

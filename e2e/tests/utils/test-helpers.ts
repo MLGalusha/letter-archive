@@ -212,7 +212,6 @@ export const SELECTORS = {
     paginationPrev: '.pagination-btn:has-text("Previous")',
     paginationNext: '.pagination-btn:has-text("Next")',
     paginationInfo: '.pagination-info',
-    filterPills: '.filter-pills',
     visibilityPublished: '.filter-published',
     visibilityHidden: '.filter-hidden',
     columnToggle: 'button:has-text("Columns")',

@@ -8,11 +8,11 @@ Last updated: July 24, 2026
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
 - Current checkpoint: 034 — executable Letter Review analysis-regeneration contract
-- Last sealed cleanup implementation: retired Dashboard filter-pills contract
-  at `6708ef6c`
+- Last sealed cleanup implementation: characterized Letter Review analysis
+  regeneration at `575d2b58`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Current slice: framed; characterization implementation has not started.
+- Current slice: checkpoint 034 complete; the next ownership slice is not yet framed.
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -2865,7 +2865,7 @@ Rollback base: `edc78994`.
 
 ## Slice 034 — Characterize Letter Review Analysis Regeneration
 
-Status: framed; characterization implementation has not started
+Status: complete at `575d2b58`
 
 Problem:
 
@@ -2952,6 +2952,90 @@ Baseline:
   frontend 141 files / 974 tests, production build, and mocked browser 61/61.
 
 Rollback base: `ad39d6e0`.
+
+Delivered:
+
+- Added table-driven backend route characterization for successful
+  `/regenerate-metadata`, `/re-extract` `metadata_only`, and `/re-extract` `full`
+  requests. All three prove the exact requested claim, source revision,
+  correction/previous-identity options, claim token, response DTO, and absence of
+  direct entity-only delegation.
+- Extended the deterministic Letter Review mock API with request journals,
+  source-revision and confirmed-transcript eligibility checks, coded failures, and
+  distinct returned metadata/entity results for `/regenerate-metadata` and
+  `/re-extract`.
+- Added a dedicated `letter-review-analysis-regeneration.mocked.spec.ts` instead of
+  growing the already broad general Letter Review spec. It owns four executable
+  contracts:
+  - a held metadata PUT must complete before Metadata Only can begin;
+  - Entities Only sends its exact mode/corrections and adopts response-owned entity
+    data that is deliberately independent of those corrections;
+  - Both preserves coded source-conflict detail and request ID without success;
+  - a delayed Both response from letter A cannot repaint letter B, leak A's saving
+    lease, or emit A's success feedback.
+- No production route, pipeline, client, state, component, copy, persistence, or
+  styling behavior changed.
+
+Verification:
+
+- Focused backend extraction-route neighborhood: 1 file / 41 tests passed, up from
+  38.
+- Frontend API/source-conflict/status-reset neighborhood: 3 files / 22 tests passed.
+- Dedicated analysis-regeneration browser spec: 4/4 passed.
+- Combined deterministic Letter Review browser surface: 33/33 passed, up from 29.
+- Backend typecheck: passed.
+- Frontend production build: passed. Existing large-chunk warnings remain:
+  `LetterReviewPage` 527.84 kB and `UpdateEditorPage` 1,182.96 kB.
+- Final aggregate `CI=1 ./scripts/verify-all.sh`: backend 105 files / 1,073 tests,
+  backend typecheck, frontend 141 files / 974 tests, production build, and mocked
+  browser 65/65 passed.
+- `git diff --check`: passed.
+
+Rendered ground truth:
+
+- Playwright CLI used a deterministic, confirmed-transcript Letter Review fixture
+  with all unrelated backend requests mocked. The final inspection had zero browser
+  console errors.
+- At 1440x900, the popup measured 464x581.97 px from x=488 to x=952 and
+  y=159.02 to y=740.98; it was fully contained.
+- At 390x844, it measured 404x581.97 px from x=-7 to x=397. The controls remained
+  reachable, but the popup clips about 7 px on each side.
+- The popup element is a plain `div` with no `role="dialog"` or `aria-modal`.
+- Temporary Slice 034 fixtures, snapshots, and screenshots were moved to Trash
+  after review. The older ignored Slice 011B screenshots were preserved.
+
+Independent review:
+
+- Initial backend, browser, and skeptical-simplicity reviews caught six
+  false-confidence/maintenance issues: saved location was incorrectly asserted to
+  survive regenerated output; request-start order did not prove PUT completion;
+  browser fixtures lacked transcript confirmation; entity output was derived from
+  correction input; A-to-B saving ownership was not checked before response release;
+  and the new domain was appended to a 1,056-line general spec.
+- The implementation now returns and adopts a distinct regenerated location, gates
+  the exact PUT response, rejects backend-ineligible mock requests, uses fixed
+  response-owned entity output, proves visit-local saving state before and after
+  navigation, and isolates the four cases in their own spec.
+- All three reviewers re-read the repaired diff and reported no remaining P0-P2
+  finding.
+
+Residual decisions and next seam:
+
+- `Metadata Only` and `Both` still present distinct visible/wire choices while using
+  the same default two-phase metadata producer. Do not rename, remove, or redefine
+  either without a product-contract decision.
+- The route still owns six fragmented regeneration values, including unread
+  full-mode progress state; post-success `Queued` copy is misleading for a
+  synchronous request; the frontend `/regenerate-entities` adapter is unused; blank
+  correction fallback differs by path; and entity retry availability is inconsistent.
+- Backend follow-ups remain explicit: re-extract whitespace eligibility differs from
+  metadata regeneration, and the re-extract fallback reads sender/recipient as
+  objects although the current metadata V2 schema stores nullable strings.
+- The smallest structural continuation is a visit-owned analysis-regeneration
+  workspace/controller plus a dedicated semantic, responsive dialog. Preserve all
+  three present endpoints, modes, and visible choices while moving ownership; remove
+  the unread full-mode progress state and establish the measured mobile/dialog
+  invariants. Endpoint/mode simplification remains a later product decision.
 
 ## Slice 027 — Validated, Replay-Safe Dashboard Stored State
 

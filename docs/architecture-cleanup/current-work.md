@@ -7,13 +7,14 @@ Last updated: July 25, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 045 — superseded immutable page objects are reclaimed after
-  successful pointer commits, complete
-- Last sealed cleanup implementation: post-commit superseded page storage
-  reclamation at `583fbb0f`
+- Current checkpoint: 046 — public archive URL, controls, persistence, and requests
+  share one canonical state owner, complete
+- Last sealed cleanup implementation: canonical public archive URL state at
+  `ffea16b0`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Active slice: 046 — establish one canonical public archive URL-state owner.
+- Active slice: 047 — orient the shared Home/Collection archive-surface seam now
+  unlocked by the canonical state contract.
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -54,7 +55,7 @@ tree:
 
 ## Slice 046 — Canonical Public Archive URL State
 
-Status: framed; implementation pending.
+Status: complete at `ffea16b0`.
 
 Problem:
 
@@ -111,7 +112,9 @@ Scope:
   compose instead of restoring stale state.
 - Remove the 250 ms URL-write delay. Local changes still use `replace`, never `push`,
   but become durable before the existing 180 ms search starts. Keep search and
-  persistence debounce behavior unchanged.
+  ordinary persistence debounce behavior unchanged. Persist a canonical explicit
+  clear immediately because a clean URL is otherwise indistinguishable from an
+  initial visit that should hydrate old private persistence.
 - Distinguish a self-authored URL replacement from external PUSH/REPLACE/POP. External
   navigation cancels stale work, adopts the complete selected URL snapshot, and may
   perform one canonical replacement without a feedback loop.
@@ -173,6 +176,67 @@ Baseline:
 - The real Header contains a Home link to `/`. From `/?q=mother`, clicking it performs
   a same-route navigation without unmounting Home, reproducing the stale-state writer
   defect.
+
+Delivered:
+
+- `SearchFilters` and its sort/order types now belong to the archive-search domain
+  module. SearchBar retains compatibility type exports, while the hook, persistence,
+  and component helpers no longer depend on a 783-line UI component for their domain
+  contract.
+- One pure codec now owns the complete archive key registry, hostile-state
+  normalization, URL decoding, canonical encoding, default sort pair, generic fixed
+  filters, and foreign-parameter preservation. It round-trips both boolean values,
+  repeated formats, list facets, ranges, and every other addressable criterion.
+- `useArchiveSearch()` owns one normalized `{ query, filters }` snapshot with a
+  synchronous ref-backed local commit boundary. Sequential SearchBar callbacks
+  compose, and query draft whitespace remains intact while URL/request forms are
+  canonical.
+- Initial hydration, configuration-scope changes, external same-route PUSH/REPLACE,
+  empty POP, and self-authored replacements now have explicit precedence. A recognized
+  target URL owns its complete snapshot; a clean scope target loads only that scope's
+  persistence; later clean same-scope navigation selects empty/default state.
+- Local edits replace the current URL entry immediately and preserve every unowned
+  parameter and repeat. The old 250 ms URL timer and `startTransition` path are gone,
+  so the URL is durable before the 180 ms search request can run.
+- Ordinary persistence remains debounced. A canonical local clear or clean same-scope
+  navigation persists the empty/default snapshot immediately so an unmount before
+  300 ms cannot resurrect the previous saved search.
+- The mocked browser suite now drives the real Header Home link and proves URL,
+  SearchBar input, and API request parity through clear, Back restore, and Forward
+  clear.
+
+Evidence:
+
+- Focused codec, hook, persistence, Home, and Collection coverage passed 5 files /
+  58 tests; frontend TypeScript, changed-file ESLint, and `git diff --check` passed.
+- Complete frontend coverage passed 153 files / 1,088 tests, and the production build
+  passed with only the existing large-chunk warnings.
+- Complete backend coverage passed 110 files / 1,157 tests; backend typecheck passed.
+- The new deterministic browser history proof passed 1/1. Final isolated and CI-mode
+  mocked-browser suites passed 79/79.
+- Final aggregate verification passed via `CI=1 ./scripts/verify-all.sh`: backend tests
+  and typecheck, frontend tests and build, and all mocked browser tests.
+- Three independent codec, state/navigation, and browser/simplicity reviews found and
+  closed two issues before approval: simultaneous clean collection-scope navigation
+  now hydrates the target scope, and explicit clean state survives immediate
+  unmount/remount. Re-review found no remaining P0-P3 issue.
+
+Residuals:
+
+- `archiveSearch.ts` is now 464 lines because the previously scattered type,
+  normalization, validation, and complete URL table are explicit in one pure domain
+  module. Reviews found no smaller honest split; do not fragment it by length without
+  a second real consumer boundary.
+- `useArchiveSearch()` remains a 321-line cohesive orchestration owner for URL,
+  persistence, requests, cancellation, pagination, and result state. Splitting those
+  effects across coordinating hooks would recreate the ownership problem.
+- Home and Collection Detail still duplicate stable-facet retention, sticky-dock refs
+  and manager wiring, SearchBar composition, ArchiveList plumbing, and BackToSearch.
+  The stable canonical state contract now makes that the smallest ready reuse seam
+  for Slice 047; route-specific headings, classes, collection constraints, and
+  navigation must remain explicit variants rather than one generic page framework.
+- No cross-tab persistence sync or browser `storage` event handling was added. The
+  public comma-delimited facet protocol and existing search/request debounce remain.
 
 Rollback base: `eaaff1c4`.
 

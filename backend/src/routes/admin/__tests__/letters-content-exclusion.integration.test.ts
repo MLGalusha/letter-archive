@@ -616,6 +616,89 @@ describe('admin downstream extraction exclusion', () => {
     expect(runMetadataExtractionV2Mock).not.toHaveBeenCalled();
   });
 
+  it.each([
+    {
+      description: 'metadata regeneration',
+      url: '/letter-1/regenerate-metadata',
+      body: {
+        primarySourceRevision: 7,
+        confirmedSender: 'Mabel',
+        confirmedRecipient: 'Theo',
+      },
+    },
+    {
+      description: 'metadata-only re-extraction',
+      url: '/letter-1/re-extract',
+      body: {
+        primarySourceRevision: 7,
+        confirmedSender: 'Mabel',
+        confirmedRecipient: 'Theo',
+        mode: 'metadata_only',
+      },
+    },
+    {
+      description: 'full re-extraction',
+      url: '/letter-1/re-extract',
+      body: {
+        primarySourceRevision: 7,
+        confirmedSender: 'Mabel',
+        confirmedRecipient: 'Theo',
+        mode: 'full',
+      },
+    },
+  ])('characterizes successful $description as the same metadata producer', async ({
+    url,
+    body,
+  }) => {
+    const letter = {
+      id: 'letter-1',
+      type: 'L',
+      transcriptConfirmedAt: new Date(),
+      workflow: 'TRANSCRIBED',
+      transcriptionStatus: 'SUCCESS',
+      transcriptionText: 'transcript',
+      metadataStatus: 'SUCCESS',
+      entityExtractionStatus: 'SUCCESS',
+      metadataV2Json: null,
+      primarySourceRevision: 7,
+      sender: 'Prior AI sender',
+      recipient: 'Prior AI recipient',
+    };
+    const claim = {
+      runId: 'metadata-run-1',
+      revision: 4,
+    };
+    getLetterByIdMock.mockResolvedValue(letter);
+    claimRequestedMetadataMock.mockResolvedValue(claim);
+
+    const response = await invokeRouter(contentRouter, {
+      method: 'POST',
+      url,
+      path: url,
+      body,
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual({ id: 'letter-1' });
+    expect(claimRequestedMetadataMock).toHaveBeenCalledWith(
+      'letter-1',
+      { letter },
+      7,
+    );
+    expect(runMetadataExtractionV2Mock).toHaveBeenCalledWith(
+      'letter-1',
+      {
+        confirmedSender: 'Mabel',
+        confirmedRecipient: 'Theo',
+        previousAiSender: 'Prior AI sender',
+        previousAiRecipient: 'Prior AI recipient',
+      },
+      claim,
+    );
+    expect(runEntityExtractionOnlyMock).not.toHaveBeenCalled();
+  });
+
   it('does not preclaim metadata when transcription wins the atomic race', async () => {
     getLetterByIdMock.mockResolvedValue({
       type: 'L',

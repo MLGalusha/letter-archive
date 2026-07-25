@@ -68,6 +68,7 @@ interface MockLetterReviewLetter {
   photoDescriptionContext?: string;
   createdAt: string;
   updatedAt?: string;
+  transcriptConfirmedAt?: string;
   transcriptVerifiedAt?: string;
   metadataVerifiedAt?: string;
   extraContentVerifiedAt?: string;
@@ -155,6 +156,18 @@ interface MockPhotoDescriptionRequest {
     photoDescription?: string;
     photoDescriptionContext?: string;
     primarySourceRevision?: number;
+  };
+}
+
+type MockReExtractMode = 'full' | 'metadata_only' | 'entities_only';
+
+interface MockAnalysisRegenerationRequest {
+  url: string;
+  body: {
+    primarySourceRevision?: number;
+    confirmedSender?: string;
+    confirmedRecipient?: string;
+    mode?: MockReExtractMode;
   };
 }
 
@@ -258,6 +271,19 @@ function clearMetadataVerification(letter: MockLetterReviewLetter) {
   letter.metadataContentStatus = 'EDITED';
   letter.metadata.verified = false;
   delete letter.metadataVerifiedAt;
+}
+
+function createRegeneratedEntity(name: string) {
+  return {
+    name,
+    aliases: [],
+    role: 'mentioned' as const,
+    relationship_to_sender: null,
+    details: [],
+    emotional_significance: null,
+    quotes: [],
+    confidence: 0.96,
+  };
 }
 
 function createLineSegment(
@@ -423,6 +449,8 @@ export interface MockLetterReviewContext {
     url: string;
     body: { primarySourceRevision?: number };
   }>;
+  regenerateMetadataRequests: MockAnalysisRegenerationRequest[];
+  reExtractRequests: MockAnalysisRegenerationRequest[];
 }
 
 export async function installMockLetterReviewApi(
@@ -447,6 +475,8 @@ export async function installMockLetterReviewApi(
         | 'transcribeLetter'
         | 'transcribeExtras'
         | 'generateReadingView'
+        | 'regenerateMetadata'
+        | 'reExtract'
         | 'verifyMetadata'
         | 'extraContent'
         | 'describePhoto'
@@ -489,6 +519,8 @@ export async function installMockLetterReviewApi(
   const transcribeLetterRequests: MockLetterReviewContext['transcribeLetterRequests'] = [];
   const transcribeExtrasRequests: MockLetterReviewContext['transcribeExtrasRequests'] = [];
   const generateReadingViewRequests: MockLetterReviewContext['generateReadingViewRequests'] = [];
+  const regenerateMetadataRequests: MockLetterReviewContext['regenerateMetadataRequests'] = [];
+  const reExtractRequests: MockLetterReviewContext['reExtractRequests'] = [];
   const letterPath = `${API_BASE_URL}/admin/letters/${letter.id}`;
   const detectLinesByPageId = options.detectLinesByPageId
     ? clone(options.detectLinesByPageId)
@@ -760,6 +792,129 @@ export async function installMockLetterReviewApi(
       'I arrived safely in Boston. The weather has been kind.',
       'Love, Alice',
     ].join('\n\n');
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(letter),
+    });
+  });
+
+  await page.route(new RegExp(`${escapeRegex(letterPath)}/regenerate-metadata$`), async (route) => {
+    const body = route.request().postDataJSON() as MockAnalysisRegenerationRequest['body'];
+    regenerateMetadataRequests.push({
+      url: route.request().url(),
+      body,
+    });
+    if (routeFailures.regenerateMetadata) {
+      await fulfillFailure(route, routeFailures.regenerateMetadata);
+      return;
+    }
+    if (body.primarySourceRevision !== letter.primarySourceRevision) {
+      await fulfillFailure(route, {
+        status: 409,
+        error: 'Letter source changed; reload before regenerating metadata',
+        code: 'SOURCE_REVISION_CHANGED',
+      });
+      return;
+    }
+    if (!letter.transcriptConfirmedAt) {
+      await fulfillFailure(route, {
+        status: 400,
+        error: 'Transcript must be confirmed before regenerating metadata',
+      });
+      return;
+    }
+
+    if (body.confirmedSender !== undefined) {
+      letter.metadata.sender = body.confirmedSender;
+    }
+    if (body.confirmedRecipient !== undefined) {
+      letter.metadata.recipient = body.confirmedRecipient;
+    }
+    letter.metadata.location = 'Regenerated Location';
+    letter.metadata.hook = 'Metadata analysis regenerated.';
+    letter.metadataContentStatus = 'AI_DRAFT';
+    letter.metadata.verified = false;
+    delete letter.metadataVerifiedAt;
+    letter.entityExtractionStatus = 'SUCCESS';
+    letter.entityExtractionJson = {
+      people: [createRegeneratedEntity('Metadata Phase Entity')],
+      places: [],
+      relationships: [],
+      person_place_connections: [],
+    };
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(letter),
+    });
+  });
+
+  await page.route(new RegExp(`${escapeRegex(letterPath)}/re-extract$`), async (route) => {
+    const body = route.request().postDataJSON() as MockAnalysisRegenerationRequest['body'];
+    reExtractRequests.push({
+      url: route.request().url(),
+      body,
+    });
+    if (routeFailures.reExtract) {
+      await fulfillFailure(route, routeFailures.reExtract);
+      return;
+    }
+    if (body.primarySourceRevision !== letter.primarySourceRevision) {
+      await fulfillFailure(route, {
+        status: 409,
+        error: 'Letter source changed; reload before re-extracting content',
+        code: 'SOURCE_REVISION_CHANGED',
+      });
+      return;
+    }
+    if (
+      body.mode !== 'full'
+      && body.mode !== 'metadata_only'
+      && body.mode !== 'entities_only'
+    ) {
+      await fulfillFailure(route, {
+        status: 400,
+        error: 'Invalid re-extraction mode',
+      });
+      return;
+    }
+    if (body.mode !== 'entities_only' && !letter.transcriptConfirmedAt) {
+      await fulfillFailure(route, {
+        status: 400,
+        error: 'Transcript must be confirmed before re-extracting metadata',
+      });
+      return;
+    }
+
+    if (body.mode !== 'entities_only') {
+      if (body.confirmedSender !== undefined) {
+        letter.metadata.sender = body.confirmedSender;
+      }
+      if (body.confirmedRecipient !== undefined) {
+        letter.metadata.recipient = body.confirmedRecipient;
+      }
+      letter.metadata.hook = body.mode === 'full'
+        ? 'Full analysis regenerated.'
+        : 'Metadata re-extraction completed.';
+      letter.metadataContentStatus = 'AI_DRAFT';
+      letter.metadata.verified = false;
+      delete letter.metadataVerifiedAt;
+    }
+    const entityName = body.mode === 'entities_only'
+      ? 'Entities Only Result'
+      : body.mode === 'full'
+        ? 'Full Analysis Result'
+        : 'Metadata Re-extraction Result';
+    letter.entityExtractionStatus = 'SUCCESS';
+    letter.entityExtractionJson = {
+      people: [createRegeneratedEntity(entityName)],
+      places: [],
+      relationships: [],
+      person_place_connections: [],
+    };
 
     await route.fulfill({
       status: 200,
@@ -1244,5 +1399,7 @@ export async function installMockLetterReviewApi(
     transcribeLetterRequests,
     transcribeExtrasRequests,
     generateReadingViewRequests,
+    regenerateMetadataRequests,
+    reExtractRequests,
   };
 }

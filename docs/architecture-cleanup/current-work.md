@@ -7,14 +7,13 @@ Last updated: July 25, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 044 — correspondence membership and its first page commit
-  atomically, complete
-- Last sealed cleanup implementation: atomic correspondence membership and first
-  page at `c183dad6`
+- Current checkpoint: 045 — superseded immutable page objects are reclaimed after
+  successful pointer commits, complete
+- Last sealed cleanup implementation: post-commit superseded page storage
+  reclamation at `583fbb0f`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Active slice: 045 — reclaim superseded immutable page objects after a successful
-  pointer commit.
+- Active slice: 046 — establish one canonical public archive URL-state owner.
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -55,7 +54,7 @@ tree:
 
 ## Slice 045 — Reclaim Superseded Page Objects After Commit
 
-Status: framed; implementation pending.
+Status: complete at `583fbb0f`.
 
 Problem:
 
@@ -141,6 +140,51 @@ Baseline:
   `pageResult.previousStoragePath`.
 - Slice 043's cleanup owner already proves exact live-reference retention, immutable
   removal, legacy retention, benign `ENOENT`, and query/unlink failure behavior.
+
+Delivered:
+
+- `processUploadedFile()` now consumes only the transaction-returned
+  `previousStoragePath` after the page owner resolves successfully. It never derives
+  destructive cleanup from the stale preflight page.
+- A distinct previous path is awaited through
+  `reclaimUnreferencedPageStoragePath()`. Removed, already-missing, still-referenced,
+  and legacy-retained classifications all preserve the exact committed upload result.
+- Reference-query or filesystem failure emits one object-first warning, then the
+  normal success log and response remain authoritative.
+- The never-committed prepared-candidate cleanup remains separate. Creates, no-ops,
+  same-path results, conflicts, and ambiguous database failures do not request
+  previous-path reclamation.
+- Behavior coverage distinguishes the transaction-authoritative old pointer from the
+  preflight pointer and explicitly forbids raw unlink of that path. The architecture
+  fence requires the safe helper and rejects a literal direct removal.
+
+Evidence:
+
+- Focused upload, letter-page, storage-reference cleanup, and ownership coverage
+  passed 4 files / 73 tests; backend typecheck passed.
+- Complete backend coverage passed 110 files / 1,157 tests.
+- Aggregate verification passed: backend 110 files / 1,157 tests, frontend 152 files /
+  1,063 tests, backend typecheck, frontend production build, and mocked browser suite
+  78/78.
+- `git diff --check` passed.
+- Three independent production-safety, proof-adequacy, and maintainability reviews
+  found no remaining P0-P3 issue. Review tightened the destructive ownership fence,
+  exact warning count/message, resolved-outcome silence, and truthful normal success
+  logging before final approval.
+
+Residuals:
+
+- The database reference check and filesystem unlink are not atomic. Safety still
+  depends on the mechanically fenced supported-writer rule that a superseded
+  UUID-backed immutable path is never reattached.
+- Legacy and still-referenced paths are deliberately retained. Historical orphans,
+  candidates retained after ambiguous database failures, and cleanup failures have no
+  retry queue, durable ledger, or collector.
+- Exact storage-path lookup has no dedicated index. Add one only if measured cleanup
+  latency justifies the migration.
+- Upload's policy decision matrix remains inside `processUploadedFile()`. Extract a
+  pure exhaustive plan only as a separately characterized slice; do not mix that
+  structural work into this sealed lifecycle fix.
 
 Rollback base: `eb2ab962`.
 

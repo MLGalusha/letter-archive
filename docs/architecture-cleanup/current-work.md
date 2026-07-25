@@ -13,8 +13,8 @@ Last updated: July 25, 2026
   `ffea16b0`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Active slice: 047 — orient the shared Home/Collection archive-surface seam now
-  unlocked by the canonical state contract.
+- Active slice: 047 — audit and harden the complete release candidate, then
+  fast-forward it into `main`.
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -52,6 +52,114 @@ tree:
   1,871 lines; the largest public backend route is `routes/letters.ts` at about 2,230
   lines, though its search section is comparatively cohesive.
 - Redesign and refactoring docs contained stale active-phase claims.
+
+## Slice 047 — Release-Candidate Audit and Main Integration
+
+Status: framed; audit and remediation in progress.
+
+Problem:
+
+The architecture-cleanup branch now contains the complete redesign plus 46 sealed
+cleanup slices, 268 commits ahead of `main`. Each cleanup slice was reviewed and
+verified at its own boundary, but integrating the whole program requires a fresh
+release-level pass over the combined backend, frontend, migrations, deployment
+configuration, dependencies, and regression gates.
+
+The first release baseline is green, but dependency auditing found newly published
+advisories that did not exist when much of this work was written. Production-only
+audits report nine backend vulnerabilities, including four high severity, and seven
+frontend vulnerabilities, including five high severity. Full audits also expose
+critical development-tool advisories in the installed Vitest line. Shipping a large
+branch while knowingly leaving straightforward patched versions unapplied would make
+the release checkpoint dishonest.
+
+Target invariant:
+
+`main` receives exactly one clean, reviewed, reproducible release candidate. Every
+confirmed P0-P2 finding is fixed or explicitly demonstrated to be unreachable; direct
+and transitive dependencies are advanced to the smallest compatible patched versions;
+the migration chain works from a fresh database; unit, integration, type, build, and
+browser gates pass from the final tree; and the post-merge `main` tree is byte-for-byte
+the reviewed candidate.
+
+Scope:
+
+- Review the complete `main...architecture-cleanup` diff and current tree in parallel
+  across backend/data integrity, frontend/user behavior, and release/deployment
+  readiness.
+- Run secret, generated-artifact, package-lock, migration-journal, workflow, and git
+  topology checks.
+- Upgrade vulnerable runtime and development dependencies to the smallest maintained
+  patched versions that preserve the application's APIs. Do not use an unreviewed
+  blanket forced upgrade.
+- Separate the push-triggered Cloud Build packaging check from the controlled
+  migration/deployment pipeline. Require an explicit write-quiescence acknowledgement
+  before the manual deploy graph can build, migrate, or replace any service/job.
+- Add or adjust focused regression coverage only when a confirmed finding lacks an
+  executable contract.
+- Re-run focused checks after each remediation, then the aggregate verifier, clean
+  dependency installation/build checks, migration harness, and browser suites.
+- Record exact residual risks and deferred work before fast-forwarding local `main`,
+  pushing it, and checking the resulting remote workflow.
+
+Non-goals:
+
+- Do not add product features or continue the proposed Home/Collection
+  `PublicArchiveSurface` extraction in this release slice.
+- Do not erase the remaining repository-wide frontend lint debt through broad
+  React/CSS rewrites immediately before integration. Measure it, fix any release
+  finding it reveals, and report the remainder honestly.
+- Do not adopt unstable React Router RSC APIs, a new ORM, a new test framework, or a
+  new deployment topology merely to silence an advisory.
+- Do not rewrite or squash the checkpoint history. The recoverable sequence is part of
+  the audit trail.
+- Do not treat a source merge as authorization to run a mixed-binary production
+  rollout. Migration 0054 and the atomic first-page writer require the already
+  documented pause/drain/quiescence procedure.
+
+Acceptance:
+
+- `origin/main` remains the exact merge base until integration; the worktree contains
+  no unexplained files, secrets, or generated artifacts.
+- Independent backend, frontend, and release reviews have no unresolved P0-P2
+  finding. Any lower-severity residual is recorded with impact and follow-up.
+- Runtime dependency audits are clean, or the only remaining advisory is proven to
+  affect an unused mode and is documented with the upstream scope statement.
+- Backend tests, build/typecheck, migration validation, and the temporary-Postgres
+  migration/concurrency harness pass.
+- Frontend tests, typecheck/build, changed-file lint, and mocked browser tests pass.
+  The complete lint count is recorded rather than hidden.
+- Real-server admin-auth/navigation smoke tests pass. Run the broader real-server
+  suite when the local database fixture contract can be exercised safely.
+- `git diff --check` passes, a clean install can reproduce both packages, and the
+  final aggregate verifier passes from the exact candidate commit.
+- `main` is fast-forwarded to that commit. Push it without force only after confirming
+  the actual Cloud Build trigger is file-backed to the new non-deploying
+  `cloudbuild.yaml`; otherwise stop at the clean local merge and require an operator
+  to hold the trigger. When pushed, check the post-push GitHub Actions result and
+  require local and remote `main` to resolve to the same reviewed commit.
+
+Baseline:
+
+- Recovery point: `ce3247d4` (`Record canonical archive URL checkpoint`).
+- After fetching on July 25, 2026, local and `origin/main` both resolve to
+  `bcf2dab9`; `main` is the exact ancestor of `architecture-cleanup`, which is 268
+  commits ahead and zero behind.
+- The clean release baseline passed `CI=1 ./scripts/verify-all.sh`: backend 110 files /
+  1,157 tests and typecheck, frontend 153 files / 1,088 tests and production build,
+  and mocked browser 79/79.
+- `git diff --check` and a tracked-secret signature scan passed.
+- Full frontend lint currently reports 80 errors and 13 warnings, improved from the
+  historical cleanup baseline of 154 errors and 28 warnings but not yet a zero-debt
+  gate.
+- Production dependency audits report backend 9 vulnerabilities (4 high, 5 moderate)
+  and frontend 7 vulnerabilities (5 high, 2 moderate); e2e reports zero.
+- The current `cloudbuild.yaml` is documented as the push-to-main trigger and runs
+  migrations before replacing the API and worker. Migration 0054 explicitly requires
+  administrative writes and workers to be paused, every old API/worker process to be
+  drained, the migration to run under write quiescence, and 100% new binaries before
+  reopening. Therefore the unmodified automatic pipeline is not safe for this first
+  integration push.
 
 ## Slice 046 — Canonical Public Archive URL State
 

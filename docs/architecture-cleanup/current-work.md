@@ -13,7 +13,8 @@ Last updated: July 25, 2026
   page at `c183dad6`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Active slice: reassessment pending.
+- Active slice: 045 — reclaim superseded immutable page objects after a successful
+  pointer commit.
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -51,6 +52,97 @@ tree:
   1,871 lines; the largest public backend route is `routes/letters.ts` at about 2,230
   lines, though its search section is comparatively cohesive.
 - Redesign and refactoring docs contained stale active-phase claims.
+
+## Slice 045 — Reclaim Superseded Page Objects After Commit
+
+Status: framed; implementation pending.
+
+Problem:
+
+The transactional page-source owner already returns `previousStoragePath` from the
+locked row whenever a successful replacement or relocation moves the page pointer.
+`processUploadedFile()` receives that authoritative result but ignores the previous
+path. Every routine immutable-to-immutable replacement can therefore leave a known
+superseded object on disk indefinitely.
+
+Deleting the preflight page path directly would be unsafe: the preflight can be stale,
+`letter_pages.storage_path` is not unique, legacy paths historically had reuse
+semantics, and the database commit must remain authoritative if filesystem cleanup
+fails. Slice 043 already established the required destructive boundary in
+`reclaimUnreferencedPageStoragePath()`: recognize only current UUID-backed immutable
+objects, perform a fresh exact-reference lookup after commit, retain shared or legacy
+paths, and classify a missing file as already clean.
+
+Target invariant:
+
+After a successful page-pointer move, upload best-effort reclaims exactly the
+transaction-authoritative previous path through the reference-safe cleanup owner,
+only when it differs from the committed current path. Cleanup happens after commit
+and can never fail or reverse the successful upload response. Creates, no-ops,
+conflicts, and ambiguous database failures perform no previous-path cleanup.
+
+Scope:
+
+- Consume `PageMutationResult.previousStoragePath` in `processUploadedFile()` after
+  `findOrCreatePage()` returns successfully.
+- Call `reclaimUnreferencedPageStoragePath()` only when the previous path exists and
+  differs from `pageResult.page.storagePath`.
+- Await the cleanup attempt so its outcome is bounded to this upload. Treat
+  `removed`, `already-missing`, `still-referenced`, and `legacy-path-retained` as
+  successful classifications that do not alter the upload result.
+- Catch and warn on reference-query or filesystem failures without changing the
+  committed response, revision, outcome, or logging truth.
+- Keep the existing direct removal of an unused newly prepared candidate separate.
+  That object was never committed; it is not the superseded authoritative source.
+- Add behavior and ownership coverage that the cleanup input comes from the
+  transaction result, not from the stale preflight `existing` row.
+
+Non-goals:
+
+- Do not scan storage for historical orphans, collect deterministic legacy paths,
+  add a grace-period job, durable cleanup ledger, retry queue, schema index, migration,
+  or database/filesystem transaction claim.
+- Do not change page replacement, repair, reconcile, invalidation, duplicate
+  confirmation, candidate retention after ambiguous commit failure, or response JSON.
+- Do not move cleanup inside the page transaction or make a cleanup failure reject a
+  committed upload.
+- Do not refactor the full upload decision matrix in this slice. Its pure planning
+  boundary remains a separately characterized follow-up.
+- Do not combine the public archive URL/history correction. That higher-leverage
+  frontend boundary is queued for Slice 046 after this small lifecycle leak is sealed.
+
+Acceptance:
+
+- A successful immutable pointer replacement invokes the reference-safe owner with
+  the committed result's `previousStoragePath`, strictly after page commit.
+- `removed`, `already-missing`, `still-referenced`, and `legacy-path-retained` all
+  preserve the exact successful upload response.
+- A cleanup rejection emits one object-first warning and still returns the committed
+  page, authoritative Letter, source revision, and outcome.
+- A create, true no-op, same-path result, source conflict, or database reconciliation
+  failure never requests previous-path reclamation.
+- A losing prepared candidate continues through its existing unused-candidate cleanup
+  path and is not confused with a committed previous source.
+- No production caller bypasses `reclaimUnreferencedPageStoragePath()` to unlink a
+  transaction-authoritative previous path.
+- Focused upload, letter-page, storage-cleanup, and ownership coverage pass, followed
+  by backend typecheck, the backend package suite, aggregate verification, and
+  independent review with no unresolved P0-P2 finding.
+
+Baseline:
+
+- Checkpoint 044 aggregate verification passed: backend 110 files / 1,151 tests,
+  backend typecheck, frontend 152 files / 1,063 tests, production build, and mocked
+  browser suite 78/78.
+- The focused upload, letter-page, storage-reference cleanup, and page-source
+  ownership suites pass 4 files / 67 tests.
+- `letter-pages.ts` returns the locked old pointer for every committed replacement or
+  relocation. `upload.ts` cleans a losing prepared candidate but never reads
+  `pageResult.previousStoragePath`.
+- Slice 043's cleanup owner already proves exact live-reference retention, immutable
+  removal, legacy retention, benign `ENOENT`, and query/unlink failure behavior.
+
+Rollback base: `eb2ab962`.
 
 ## Slice 044 — Atomic Correspondence Membership and First Page
 

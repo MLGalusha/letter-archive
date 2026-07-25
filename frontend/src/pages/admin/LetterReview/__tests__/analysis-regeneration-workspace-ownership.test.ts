@@ -54,8 +54,6 @@ describe('Letter Review analysis regeneration ownership', () => {
     }
     expect(page).not.toMatch(/\bregenerateMetadata\b/);
     expect(page).not.toMatch(/\breExtractLetter\b/);
-    expect(page).toContain('confirmationSender');
-    expect(page).toContain('confirmationRecipient');
     expect(page).not.toContain('extractionSender');
     expect(page).not.toContain('extractionRecipient');
 

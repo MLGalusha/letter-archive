@@ -9,10 +9,7 @@ import {
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { isAuthenticated } from "../../api/auth";
 import { getAdminLetterById, deleteLetter } from "../../api/letters";
-import {
-  updateLetter,
-  confirmTranscript,
-} from "../../api/admin";
+import { updateLetter } from "../../api/admin";
 import { toggleLetterFlag } from "../../api/admin/letters";
 import LetterViewer from "../../components/LetterViewer/LetterViewer";
 import AdminLayout from "../../components/AdminLayout";
@@ -57,6 +54,7 @@ import { useReadingViewWorkspace } from "./LetterReview/useReadingViewWorkspace"
 import { useLetterTranscriptionWorkspace } from "./LetterReview/useLetterTranscriptionWorkspace";
 import { useLineReviewWorkspace } from "./LetterReview/useLineReviewWorkspace";
 import { useAnalysisRegenerationWorkspace } from "./LetterReview/useAnalysisRegenerationWorkspace";
+import { useTranscriptConfirmationWorkspace } from "./LetterReview/useTranscriptConfirmationWorkspace";
 import TranscriptionRegenerationDialog from "./LetterReview/TranscriptionRegenerationDialog";
 import AnalysisRegenerationDialog from "./LetterReview/AnalysisRegenerationDialog";
 import { loadCurrentLetter } from "./LetterReview/loadCurrentLetter";
@@ -87,22 +85,11 @@ export default function LetterReviewPage() {
 
   const [transcript, setTranscript] = useState("");
 
-  const [
-    showTranscriptConfirmationPopup,
-    setShowTranscriptConfirmationPopup,
-  ] = useState(false);
-  const [confirmationSender, setConfirmationSender] = useState("");
-  const [confirmationRecipient, setConfirmationRecipient] = useState("");
-
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
   const { saving, beginSaving } = useLetterSavingState(visit);
   const [message, setMessage] = useState("");
   const editorRef = useRef<HTMLDivElement>(null);
-
-  useLayoutEffect(() => {
-    setShowTranscriptConfirmationPopup(false);
-  }, [visit]);
 
   const transcriptFontSize = usePretextFontSize(
     editorRef,
@@ -253,6 +240,14 @@ export default function LetterReviewPage() {
     executeLetterMutation,
     scheduleStatusReset,
   });
+  const transcriptConfirmationWorkspace =
+    useTranscriptConfirmationWorkspace({
+      visit,
+      letter,
+      sender,
+      recipient,
+      executeLetterMutation,
+    });
   const extraContentWorkspace = useExtraContentWorkspace({
     visit,
     letter,
@@ -400,55 +395,6 @@ export default function LetterReviewPage() {
     showToast,
   ]);
 
-  const handleConfirmTranscript = useCallback(() => {
-    if (!letterId) return;
-    setConfirmationSender(sender || "");
-    setConfirmationRecipient(recipient || "");
-    setShowTranscriptConfirmationPopup(true);
-  }, [letterId, recipient, sender]);
-
-  const executeConfirmTranscript = useCallback(async () => {
-    if (!letterId || !letter) return;
-    setShowTranscriptConfirmationPopup(false);
-    const releaseSaving = beginSaving();
-
-    try {
-      if (!visit.isActive() || !await flushPendingSaves()) return;
-
-      const updated = await confirmTranscript(
-        letterId,
-        letter.primarySourceRevision,
-        {
-          confirmedSender: confirmationSender || undefined,
-          confirmedRecipient: confirmationRecipient || undefined,
-        },
-      );
-      if (!tryAdoptLetter(updated)) return;
-      hydrateAdoptedLetter(updated);
-      showToast(
-        "Transcript confirmed — metadata extracted",
-        "success",
-      );
-    } catch (err) {
-      handleMutationError(err, "Failed to confirm transcript");
-      console.error("Confirm transcript error:", err);
-    } finally {
-      releaseSaving();
-    }
-  }, [
-    beginSaving,
-    confirmationRecipient,
-    confirmationSender,
-    flushPendingSaves,
-    handleMutationError,
-    hydrateAdoptedLetter,
-    letter,
-    letterId,
-    showToast,
-    tryAdoptLetter,
-    visit,
-  ]);
-
   const handleDelete = useCallback(async () => {
     if (!letterId || !letter) return;
     const primarySourceRevision = letter.primarySourceRevision;
@@ -553,7 +499,7 @@ export default function LetterReviewPage() {
           !letter.transcriptConfirmedAt && (
             <button
               className="header-action confirm"
-              onClick={handleConfirmTranscript}
+              onClick={transcriptConfirmationWorkspace.openDialog}
               disabled={saving}
               data-tooltip="Confirm Transcript"
             >
@@ -841,7 +787,9 @@ export default function LetterReviewPage() {
                 identityUpdateSecondsRemaining={identityUpdateSecondsRemaining}
                 retagState={retagState}
                 onVerifyMetadata={handleVerifyMetadata}
-                onConfirmTranscript={handleConfirmTranscript}
+                onConfirmTranscript={
+                  transcriptConfirmationWorkspace.openDialog
+                }
                 {...analysisRegenerationWorkspace.metadataSectionProps}
                 onMetadataFieldClick={handleMetadataFieldClick}
                 onMetadataFieldDoubleClick={handleMetadataFieldDoubleClick}
@@ -946,13 +894,7 @@ export default function LetterReviewPage() {
       />
 
       <IdentityExtractionModal
-        isOpen={showTranscriptConfirmationPopup}
-        onClose={() => setShowTranscriptConfirmationPopup(false)}
-        onConfirm={() => void executeConfirmTranscript()}
-        sender={confirmationSender}
-        recipient={confirmationRecipient}
-        onSenderChange={setConfirmationSender}
-        onRecipientChange={setConfirmationRecipient}
+        {...transcriptConfirmationWorkspace.dialogProps}
         submitting={saving}
         mode="extract"
         letterTitle={letter?.title}

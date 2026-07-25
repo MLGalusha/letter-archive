@@ -2,12 +2,12 @@ import {
   expect,
   test,
   type Page,
-  type Route,
 } from '@playwright/test';
 import {
   createMockLetterReviewLetter,
   installMockLetterReviewApi,
 } from './utils/mock-letter-review-api';
+import { deferRoute } from './utils/deferred-route';
 import { API_BASE_URL } from './utils/test-helpers';
 
 const TRANSCRIPT_CONFIRMED_AT = '2025-03-01T00:00:00.000Z';
@@ -69,39 +69,6 @@ async function openAnalysisReview(
     initialLetter.transcript.pages[0]?.text ?? initialLetter.transcript.fullText,
   );
   return mockedApi;
-}
-
-async function deferRoute(
-  page: Page,
-  pattern: RegExp,
-  predicate: (route: Route) => boolean = () => true,
-) {
-  let markStarted!: () => void;
-  let release!: () => void;
-  let startedCount = 0;
-  const started = new Promise<void>((resolve) => {
-    markStarted = resolve;
-  });
-  const responseGate = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-
-  await page.route(pattern, async (route) => {
-    if (!predicate(route)) {
-      await route.fallback();
-      return;
-    }
-    startedCount += 1;
-    markStarted();
-    await responseGate;
-    await route.fallback();
-  });
-
-  return {
-    started,
-    release,
-    startedCount: () => startedCount,
-  };
 }
 
 test.describe('@mocked Letter Review analysis regeneration', () => {

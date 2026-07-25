@@ -74,6 +74,10 @@ const analysisRegenerationWorkspacePath = path.resolve(
   process.cwd(),
   'src/pages/admin/LetterReview/useAnalysisRegenerationWorkspace.ts',
 );
+const transcriptConfirmationWorkspacePath = path.resolve(
+  process.cwd(),
+  'src/pages/admin/LetterReview/useTranscriptConfirmationWorkspace.ts',
+);
 const lineReviewWorkspacePath = path.resolve(
   process.cwd(),
   'src/pages/admin/LetterReview/useLineReviewWorkspace.ts',
@@ -108,6 +112,7 @@ describe('Letter Review source-conflict ownership', () => {
       readingViewWorkspace,
       letterTranscriptionWorkspace,
       analysisRegenerationWorkspace,
+      transcriptConfirmationWorkspace,
       reviewableDynamicEditor,
       mutationExecutor,
       structuredNoteActions,
@@ -121,18 +126,22 @@ describe('Letter Review source-conflict ownership', () => {
       readFile(readingViewWorkspacePath, 'utf8'),
       readFile(letterTranscriptionWorkspacePath, 'utf8'),
       readFile(analysisRegenerationWorkspacePath, 'utf8'),
+      readFile(transcriptConfirmationWorkspacePath, 'utf8'),
       readFile(reviewableDynamicEditorPath, 'utf8'),
       readFile(mutationExecutorPath, 'utf8'),
       readFile(structuredNoteActionsPath, 'utf8'),
     ]);
 
     expect(page).toContain('useLetterSourceConflict(showToast, visit)');
-    for (const callback of [
-      'executeConfirmTranscript',
-      'handleDelete',
-    ]) {
-      expect(callbackBlock(page, callback)).toContain('handleMutationError(');
-    }
+    expect(callbackBlock(page, 'handleDelete')).toContain(
+      'handleMutationError(',
+    );
+    expect(transcriptConfirmationWorkspace).toContain(
+      'executeLetterMutation({',
+    );
+    expect(transcriptConfirmationWorkspace).toContain(
+      'confirmTranscript(',
+    );
     expect(callbackBlock(
       analysisRegenerationWorkspace,
       'regenerate',
@@ -369,6 +378,7 @@ describe('Letter Review source-conflict ownership', () => {
       readingViewWorkspace,
       letterTranscriptionWorkspace,
       analysisRegenerationWorkspace,
+      transcriptConfirmationWorkspace,
       autoSaveCoordinator,
       mutationExecutor,
       structuredNoteActions,
@@ -382,6 +392,7 @@ describe('Letter Review source-conflict ownership', () => {
       readFile(readingViewWorkspacePath, 'utf8'),
       readFile(letterTranscriptionWorkspacePath, 'utf8'),
       readFile(analysisRegenerationWorkspacePath, 'utf8'),
+      readFile(transcriptConfirmationWorkspacePath, 'utf8'),
       readFile(autoSaveCoordinatorPath, 'utf8'),
       readFile(mutationExecutorPath, 'utf8'),
       readFile(structuredNoteActionsPath, 'utf8'),
@@ -394,15 +405,15 @@ describe('Letter Review source-conflict ownership', () => {
       'if (!visit.isActive() || !target) return false',
     );
     expect(page).toContain('flushPendingSaves,');
-    const confirmationBlock = callbackBlock(
-      page,
-      'executeConfirmTranscript',
+    expect(transcriptConfirmationWorkspace).toContain(
+      'executeLetterMutation({',
     );
-    expect(confirmationBlock).toContain('await flushPendingSaves()');
-    expect(confirmationBlock).toContain(
-      'if (!visit.isActive() || !await flushPendingSaves())',
+    expect(transcriptConfirmationWorkspace).not.toContain(
+      'flushPendingSaves',
     );
-    expect(confirmationBlock).toContain('hydrateAdoptedLetter(');
+    expect(transcriptConfirmationWorkspace).not.toContain(
+      'hydrateAdoptedLetter',
+    );
     const regenerationBlock = callbackBlock(
       analysisRegenerationWorkspace,
       'regenerate',

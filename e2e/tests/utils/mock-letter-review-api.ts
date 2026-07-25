@@ -171,6 +171,15 @@ interface MockAnalysisRegenerationRequest {
   };
 }
 
+interface MockTranscriptConfirmationRequest {
+  url: string;
+  body: {
+    primarySourceRevision?: number;
+    confirmedSender?: string;
+    confirmedRecipient?: string;
+  };
+}
+
 interface MockAiNotesRequest {
   url: string;
   body: {
@@ -449,6 +458,7 @@ export interface MockLetterReviewContext {
     url: string;
     body: { primarySourceRevision?: number };
   }>;
+  confirmTranscriptRequests: MockTranscriptConfirmationRequest[];
   regenerateMetadataRequests: MockAnalysisRegenerationRequest[];
   reExtractRequests: MockAnalysisRegenerationRequest[];
 }
@@ -475,6 +485,7 @@ export async function installMockLetterReviewApi(
         | 'transcribeLetter'
         | 'transcribeExtras'
         | 'generateReadingView'
+        | 'confirmTranscript'
         | 'regenerateMetadata'
         | 'reExtract'
         | 'verifyMetadata'
@@ -519,6 +530,7 @@ export async function installMockLetterReviewApi(
   const transcribeLetterRequests: MockLetterReviewContext['transcribeLetterRequests'] = [];
   const transcribeExtrasRequests: MockLetterReviewContext['transcribeExtrasRequests'] = [];
   const generateReadingViewRequests: MockLetterReviewContext['generateReadingViewRequests'] = [];
+  const confirmTranscriptRequests: MockLetterReviewContext['confirmTranscriptRequests'] = [];
   const regenerateMetadataRequests: MockLetterReviewContext['regenerateMetadataRequests'] = [];
   const reExtractRequests: MockLetterReviewContext['reExtractRequests'] = [];
   const letterPath = `${API_BASE_URL}/admin/letters/${letter.id}`;
@@ -792,6 +804,53 @@ export async function installMockLetterReviewApi(
       'I arrived safely in Boston. The weather has been kind.',
       'Love, Alice',
     ].join('\n\n');
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(letter),
+    });
+  });
+
+  await page.route(new RegExp(`${escapeRegex(letterPath)}/confirm-transcript$`), async (route) => {
+    const body = route.request().postDataJSON() as MockTranscriptConfirmationRequest['body'];
+    confirmTranscriptRequests.push({
+      url: route.request().url(),
+      body,
+    });
+    if (routeFailures.confirmTranscript) {
+      await fulfillFailure(route, routeFailures.confirmTranscript);
+      return;
+    }
+    if (body.primarySourceRevision !== letter.primarySourceRevision) {
+      await fulfillFailure(route, {
+        status: 409,
+        error: 'Letter source changed; reload before confirming its transcript',
+        code: 'SOURCE_REVISION_CHANGED',
+      });
+      return;
+    }
+
+    letter.transcriptConfirmedAt = '2025-03-05T00:00:00.000Z';
+    if (body.confirmedSender !== undefined) {
+      letter.metadata.sender = body.confirmedSender;
+    }
+    if (body.confirmedRecipient !== undefined) {
+      letter.metadata.recipient = body.confirmedRecipient;
+    }
+    letter.metadata.location = 'Confirmed Response Location';
+    letter.metadata.hook = 'Confirmation response hydrated.';
+    letter.metadataContentStatus = 'AI_DRAFT';
+    letter.metadata.verified = false;
+    delete letter.metadataVerifiedAt;
+    letter.workflowState = 'METADATA_DRAFTED';
+    letter.entityExtractionStatus = 'SUCCESS';
+    letter.entityExtractionJson = {
+      people: [createRegeneratedEntity('Confirmation Result Entity')],
+      places: [],
+      relationships: [],
+      person_place_connections: [],
+    };
 
     await route.fulfill({
       status: 200,
@@ -1399,6 +1458,7 @@ export async function installMockLetterReviewApi(
     transcribeLetterRequests,
     transcribeExtrasRequests,
     generateReadingViewRequests,
+    confirmTranscriptRequests,
     regenerateMetadataRequests,
     reExtractRequests,
   };

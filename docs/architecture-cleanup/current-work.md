@@ -7,12 +7,12 @@ Last updated: July 24, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 031 — one live Dashboard filter-option style family
+- Current checkpoint: 032 — remove the retired Dashboard collection-picker style surface
 - Last sealed cleanup implementation: dead Dashboard filter CSS deletion at
   `6ebe7886`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Current slice: next-slice orientation; no production implementation is open
+- Current slice: framed; production implementation has not started
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -2579,6 +2579,79 @@ computed style, screenshot pixel, product feature, backend behavior, deployment,
 external state changed.
 
 Rollback base: `6365ec4f`.
+
+## Slice 032 — Delete the Retired Dashboard Collection-Picker Style Surface
+
+Status: framed; production implementation has not started
+
+Problem:
+
+`AdminDashboard.css` still carries a complete visual vocabulary for the former
+collection-suggestion picker: `.collection-filter-group`, `.collection-suggestions`,
+`.collection-selected`, `.selected-label`, `.selected-code`, and
+`.collection-table`. Commit `c3b2aa43` removed that picker, its sorting and selection
+state, and its renderer from `AdminDashboard.tsx`, but retained the associated rules.
+
+The current Dashboard collection-code filter is rendered by the filter panel and uses
+the live `.collection-input` cascade. The current Collections Dashboard is
+`AdminCollectionsListPage.tsx`; it deliberately renders the shared
+`.letters-table` surface plus its own collection-cell styles. A repository-wide
+source search finds no producer for any of the six retired exact class tokens outside
+the stylesheet and this checkpoint note.
+
+Target invariant:
+
+The collection-code filter remains owned by its live `.collection-input` rules, and
+both current Dashboard tables remain owned by `.letters-table`. No runtime path
+produces the retired picker class tokens. Removing selector blocks that require one of
+those absent tokens must leave Letters and Collections DOM structure, table geometry,
+computed styles, interactions, responsive behavior, and screenshots unchanged.
+
+Scope:
+
+- Delete only selector blocks that require the exact `.collection-filter-group`,
+  `.collection-suggestions`, `.collection-selected`, `.selected-label`,
+  `.selected-code`, or `.collection-table` class token, together with comments that
+  document only the retired picker.
+- Preserve every `.collection-input` rule, the complete `.letters-table` family,
+  `AdminCollectionsListPage.css`, generic filter/search layout selectors, and nearby
+  class names such as `.clear-btn`, `.col-sortable`, or `.selected` when they are not
+  rooted in a retired token.
+- Capture deterministic Letters and Collections views before and after at desktop,
+  tablet, and phone viewports.
+- Compare exact legacy/live DOM counts, table/container/row/cell rectangles and
+  computed styles, overflow and scroll extents, plus screenshots.
+
+Non-goals:
+
+- No selector rename, live style repartitioning, formatting sweep, table redesign, or
+  Dashboard component/state refactor.
+- Do not delete duplicate-looking `.collection-input`, `.letters-table`, generic
+  filter/search, or column-class rules merely because they are adjacent.
+- Do not combine the separately suspicious plural `.filter-pills` and its E2E locator
+  contract with this historical picker.
+- No product behavior, responsive breakpoint, API, storage, backend, deployment, or
+  external-state change.
+
+Acceptance:
+
+- Source and history evidence proves `c3b2aa43` removed the only picker renderer and
+  that all current collection filtering/table renderers use the preserved owners.
+- PostCSS identifies exactly 33 target rules, 34 selector branches, and 91
+  declarations with no mixed live selector branch; the final stylesheet has zero
+  target token and every surviving rule retains its selector/declaration sequence.
+- Before/after desktop `1440×900`, tablet `768×1024`, and phone `390×844`
+  screenshots are pixel-identical for deterministic Letters and Collections states.
+- Before/after measurements report zero retired picker elements and identical live
+  table/container/row/cell geometry, typography, colors, borders, backgrounds,
+  overflow, and scroll extents.
+- Focused Dashboard/Collections tests, the deterministic Dashboard browser spec,
+  frontend suite/build, aggregate verifier, PostCSS parsing, and `git diff --check`
+  pass.
+- Independent selector/cascade, rendered-evidence, and skeptical-simplicity reviews
+  find no remaining P0–P2 issue in the bounded deletion.
+
+Rollback base: `0b2d6b52`.
 
 ## Slice 027 — Validated, Replay-Safe Dashboard Stored State
 

@@ -7,14 +7,13 @@ Last updated: July 25, 2026
 - Working branch: `architecture-cleanup`
 - Recovery base: `admin-main-redesign` at `bb0bfb29`
 - Program guide: [README.md](README.md)
-- Current checkpoint: 040 — separated metadata form and verification ownership,
+- Current checkpoint: 041 — remembered SearchBar facet ownership is render-pure,
   complete
-- Last sealed cleanup implementation: metadata form/verification ownership at
-  `c77bc0c0`, with dead hydration-option cleanup at `90cffb15`
+- Last sealed cleanup implementation: render-pure remembered search facets at
+  `d8f3cb0b`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Active slice: 041 — make remembered SearchBar facet options render-pure; framed,
-  characterization and implementation pending.
+- Active slice: reassessment pending.
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -118,7 +117,7 @@ tree:
 
 ## Slice 041 — Make Remembered Search Facets Render-Pure
 
-Status: framed; characterization and implementation pending
+Status: complete at `d8f3cb0b`
 
 Problem:
 
@@ -187,6 +186,69 @@ Baseline:
   facet refs being read, passed, or mutated during render.
 
 Rollback base: `9e334abc`.
+
+Delivered:
+
+- `useRememberedSearchFacets()` is now the single owner for remembered Tone,
+  Relationship, normalized Topic category, and Year identities. Its pure
+  copy-on-write merge retains prior Set identities when a response contributes no
+  new values and never mutates committed state.
+- Current facet values are merged through a guarded React render-time state
+  adjustment. React restarts the component before committing a new identity, while
+  work abandoned by Suspense cannot publish its work-in-progress state into a later
+  committed UI.
+- The four remembered-facet refs, their effect, and all render-time ref reads and
+  mutations were removed from `SearchBar`. Choice lists now derive only from the
+  remembered owner, and `SearchBar.tsx` fell from 835 to 797 lines.
+- Topic category normalization and Year padding/clamping remain unchanged. Counts
+  were removed from remembered state because none of these four option lists renders
+  them.
+- Neighboring refine/sort setters and effect dependencies now express their actual
+  ownership. The touched SearchBar surface fell from 12 ESLint errors and 6 warnings
+  to zero findings.
+- Characterization covers initial values, committed narrowing, later expansion, and
+  repeated narrowing for all four remembered facet families. A concurrent
+  transition/Suspense regression proves that transient Topic and Year values from an
+  abandoned render do not leak into the next committed render.
+
+Evidence:
+
+- Focused SearchBar and remembered-owner suite: 2 files / 18 tests passed.
+- Touched frontend ESLint passed with zero findings.
+- Frontend suite: 152 files / 1,044 tests passed.
+- Frontend production build passed with only the existing large-chunk warnings.
+- Backend suite: 108 files / 1,124 tests passed; backend typecheck passed.
+- Full mocked browser suite: 77/77 passed.
+- `CI=1 ./scripts/verify-all.sh` passed with `Verification complete` after exposing
+  the configured Node 20 binary on this shell's `PATH`.
+- `git diff --check` passed.
+
+Independent review:
+
+- The initial skeptical React reviews found one P2 evidence gap: committed rerenders
+  did not prove that an abandoned render could not leak remembered values. A
+  transition renders transient Topic and Year facets before a following sibling
+  suspends; an urgent narrowed commit then proves that only the original Family and
+  1947 identities remain.
+- Both final reviewers confirmed that the new regression genuinely discriminates the
+  retired implementation: its Topic and Year refs would have mutated before the
+  sibling threw, causing Work and 2000 to leak. They reported no unresolved P0-P2
+  finding in the copy-on-write owner, guarded state adjustment, controlled/uncontrolled
+  behavior, normalization, or retention semantics.
+- The mocked-browser reviewer found no observable regression and no need for a new
+  browser-only contract because the boundary is component-local and fully
+  deterministic.
+
+Residual:
+
+- Memory intentionally remains scoped to one mounted `SearchBar`. If a caller reuses
+  the same mounted instance for a different collection or archive scope, values from
+  the earlier scope remain available. Reset semantics require an explicit product
+  scope/key decision and were a stated non-goal of this slice.
+- The regression proves retained Year identities and the unchanged production formula
+  still applies `dataMin - 50`, `dataMax + 50`, 1700, and current-year bounds. It does
+  not separately enumerate all padded endpoint cases; that is proof hardening, not a
+  known behavior change.
 
 ## Slice 040 — Separate Metadata Form State from Verification Actions
 

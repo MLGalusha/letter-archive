@@ -13,7 +13,8 @@ Last updated: July 25, 2026
   `d8f3cb0b`
 - Feedback reliability checkpoints: Express request deadlines at `c8ac080b`;
   Processing Queue clear-request proof at `c909580c`
-- Active slice: reassessment pending.
+- Active slice: 042 — introduce an explicit, truthful admin letter summary read
+  model; framed, characterization and implementation pending.
 
 Before editing, run `git status --short --branch` and confirm the current slice still
 matches the working tree.
@@ -114,6 +115,126 @@ tree:
   drift; do not create a generic shared package without a concrete consumer.
 - [ ] Remove proven-unused dependencies, exports, scripts, and obsolete configuration.
 - [ ] Make tracked `docs/` the single documentation source and archive stale plans.
+
+## Slice 042 — Explicit, Truthful Admin Letter Summaries
+
+Status: framed; characterization and implementation pending
+
+Problem:
+
+`GET /admin/letters` is a paginated Dashboard list endpoint, but
+`queryAdminLetters()` projects each representative through the full admin-detail
+`transformLetterToDTO()`. The response therefore carries raw transcript content,
+page/image details, structured OCR, broad metadata, AI notes, reading text, entity
+state, and other detail-only fields that the list does not own.
+
+Despite that over-broad contract, the list cannot describe correspondence-group
+content truthfully. Filtering, stats, and sorting observe pages from every grouped
+L/P/C/T/N/E/A/D/V item, while the response exposes explicit counts only for L,
+all non-L extras, and P. Dashboard Cover, Telegram, Card, Ephemera, Voice, Article,
+and Diary columns fall back to the representative letter's `images`, so they can
+display zero even when the same server response was filtered or sorted by that
+grouped content.
+
+Target invariant:
+
+The admin list endpoint returns a positive, Dashboard-specific
+`AdminLetterSummary` contract. One backend projection owns the fields needed for
+row rendering, selection, publishing counts, flagging, copy/edit, and processing
+intents. It includes authoritative group-wide page counts for every supported image
+type plus the representative's primary type. No Dashboard consumer infers
+correspondence-group content from representative-only detail images.
+
+Scope:
+
+- Add one explicit backend admin-summary DTO/projection and return it only from
+  `GET /admin/letters`; keep `GET /admin/letters/:letterId` and all mutation DTOs on
+  the full admin-detail contract.
+- Replace the three ad hoc L/extras/P count maps with one group page-count owner for
+  letter, photo, cover, telegram, card, ephemera, voice, article, and diary pages.
+- Include only Dashboard-owned identity, source revision, minimal sender/recipient/
+  date display metadata, processing/publication/content status, flag, timestamp,
+  primary-type, count, and single-letter processing-intent facts.
+- Project the canonical transcript digest and confirmation fact needed by the
+  single-letter metadata action instead of sending raw transcript text solely so the
+  browser can hash it. Compute the required lowercase SHA-256 digest with the
+  existing `transcriptDigest(representative.transcriptionText ?? '')` helper in the
+  same read result as `primarySourceRevision`; never substitute the persisted
+  confirmation digest. Define confirmation exactly as
+  `representative.transcriptConfirmedAt !== null`.
+- Add a matching frontend `AdminLetterSummary` contract and migrate Dashboard data,
+  row, selection-detail, processing-action, and optimistic flag state to it.
+- Make the mocked admin-list API project summaries separately from its full
+  letter-detail fixtures.
+
+The exact positive summary contract is:
+
+- Top level: `id`, `title`, `collectionCode`, `primarySourceRevision`,
+  `primaryImageType`, `pageCountsByType`, `metadata`, `visibility`,
+  `transcriptPublished`, `metadataPublished`, `transcriptStatus`,
+  `metadataContentStatus`, `extraContentStatus`, `photoDescriptionStatus`,
+  `metadataJobStatus`, `transcriptDigest`, `transcriptConfirmed`, `flagged`,
+  `createdAt`, `updatedAt`, and optional `lastOpenedAt`.
+- `metadata`: optional `sender`, optional `recipient`, and required `dateRaw`.
+- `pageCountsByType`: required zero-filled `letter`, `photo`, `cover`, `telegram`,
+  `card`, `ephemera`, `voice`, `article`, and `diary` page counts.
+
+Non-goals:
+
+- Do not change public letter APIs, admin letter detail, Letter Review hydration,
+  mutation response contracts, filtering, sorting, pagination, stats, selection
+  provenance, or processing eligibility.
+- Do not add, remove, rename, or reorder Dashboard columns or change visible copy,
+  layout, badges, or interactions.
+- Do not redesign transcript confirmation or metadata generation. Preserve the same
+  source-revision and transcript-digest request contract and feedback.
+- Do not introduce a generic monorepo shared-contract package without another
+  concrete runtime consumer.
+
+Acceptance:
+
+- A group containing L, P, C, T, N, E, A, D, and V pages returns exact counts under
+  each frontend image-type key and the same L/extras/P totals users already see.
+- Cover, Telegram, Card, Ephemera, Voice, Article, and Diary cells read the
+  authoritative count contract and cannot fall back to representative-only images.
+- Summary primary-type and count facts preserve photo-description versus transcript
+  status selection for L, standalone P, and non-L representatives.
+- Combined transcript status observes `extraContentStatus` only for an L
+  representative whose group includes C, T, or E pages. L+P/N/A/D/V remains
+  main-transcript-only.
+- Single-letter metadata processing uses the summary's canonical transcript digest,
+  confirmation fact, source revision, sender, recipient, job state, and content state
+  without receiving the raw transcript.
+- An unconfirmed current transcript, null/empty transcript, changed transcript, and a
+  legacy-confirmed row without confirmation-identity fields each preserve their
+  current processing branch and exact digest semantics.
+- The list payload has no `images`, transcript body/structured pages, original
+  filenames/checksums, broad metadata analysis, AI notes, reading text, linked
+  entities, or extraction JSON/error fields.
+- Projection tests assert exact summary keys, an explicit representative `columns`
+  selection, no `pages` relation, and that raw transcript text is selected only as
+  digest input rather than serialized.
+- Existing admin-detail and mutation DTO tests remain unchanged and green.
+- Focused backend projection/query and frontend Dashboard tests pass, followed by
+  backend typecheck, frontend lint/build, both package suites, mocked browser suite,
+  aggregate verification, and independent review with no unresolved P0-P2 finding.
+
+Baseline:
+
+- Checkpoint 041: backend 108 files / 1,124 tests, frontend 152 files / 1,044 tests,
+  production build, mocked browser 77/77, and aggregate verification passed.
+- `queryAdminLetters()` returns `ReturnType<typeof transformLetterToDTO>` plus
+  `lettersCount`, `extrasCount`, `photosCount`, and `lastOpenedAt`; the full
+  transformer serializes multiple detail-only content and provenance surfaces.
+- Group filtering/sorting already recognizes all nine supported image types, but
+  output count maps cover only L, non-L aggregate, and P. `RecentActivityRow` derives
+  all remaining type columns from representative-only `letter.images`.
+- The focused backend letter-query suite passes 1 file / 9 tests. The five focused
+  Dashboard suites pass 5 files / 38 tests, and ESLint reports no findings in their
+  implementation files. Global frontend lint is down from 154 errors / 28 warnings
+  at the recovery base to 81 errors / 13 warnings.
+
+Rollback base: `185743c7`.
 
 ## Slice 041 — Make Remembered Search Facets Render-Pure
 

@@ -237,6 +237,7 @@ steps:
       - execute
       - letter-archive-migrate
       - --region=${_REGION}
+      - --args=dist/cli/migrate.js
       - --wait
     waitFor:
       - establish-write-quiescence

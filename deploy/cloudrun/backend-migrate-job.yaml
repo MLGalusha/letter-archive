@@ -24,6 +24,7 @@ spec:
                 - node
               args:
                 - dist/cli/migrate.js
+                - --preflight
               env:
                 - name: NODE_ENV
                   value: production

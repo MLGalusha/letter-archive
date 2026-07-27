@@ -130,6 +130,10 @@ verifies write quiescence itself:
    passes does the build remove public backend invocation, route traffic to a
    non-writing maintenance revision, pause reconciliation if present, verify no
    active worker, and wait beyond the old request timeout before migration.
+
+The deployed migration job also defaults to preflight-only. The controlled and
+automatic release orchestrators explicitly override the job arguments only after
+their migration safety gate passes.
 3. Route 100% of API traffic to the new revision, confirm old revisions are gone,
    perform the migration 0054/upload/manual-worker-wake smoke checks recorded in
    `docs/architecture-cleanup/current-work.md`, and only then reopen administrative

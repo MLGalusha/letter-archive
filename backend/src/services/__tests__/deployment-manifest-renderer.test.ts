@@ -225,6 +225,9 @@ describe('Cloud Run deployment manifest renderer', () => {
     expect(manifests.get('backend-migrate-job.yaml')).toMatch(
       /name: MIGRATION_RELEASE_MODE\s+value: automatic/,
     );
+    expect(manifests.get('backend-migrate-job.yaml')).toMatch(
+      /args:\s+- dist\/cli\/migrate\.js\s+- --preflight/,
+    );
   });
 
   it('fails closed when a required render value is missing', () => {

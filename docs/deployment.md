@@ -150,6 +150,11 @@ Preflight failure leaves the existing public release untouched. If the pipeline
 fails after maintenance begins, the backend remains closed instead of reopening
 an unverified or mixed-version release.
 
+The deployed migration job defaults to `--preflight`. Release orchestration must
+explicitly override its arguments to apply migrations after the relevant
+quiescence or rolling-safety gate, so an ad hoc job execution cannot apply
+maintenance migrations early.
+
 ## External controls
 
 - The legacy `deploy-full` and `deploy-frontend` Cloud Build triggers are

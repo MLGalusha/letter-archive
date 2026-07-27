@@ -8,6 +8,7 @@ vi.mock('drizzle-orm', () => ({
     values,
   })),
   ne: vi.fn((field: unknown, value: unknown) => ({ kind: 'ne', field, value })),
+  exists: vi.fn((query: unknown) => ({ kind: 'exists', query })),
   isNotNull: vi.fn((field: unknown) => ({ kind: 'isNotNull', field })),
   isNull: vi.fn((field: unknown) => ({ kind: 'isNull', field })),
   and: vi.fn((...clauses: unknown[]) => ({ kind: 'and', clauses })),
@@ -20,6 +21,16 @@ vi.mock('drizzle-orm', () => ({
 }));
 
 vi.mock('../../db/index.js', () => ({
+  db: {
+    select: vi.fn(() => ({
+      from: vi.fn(() => ({
+        where: vi.fn((condition: unknown) => ({
+          kind: 'subquery',
+          condition,
+        })),
+      })),
+    })),
+  },
   letters: {
     type: 'letters.type',
     workflow: 'letters.workflow',
@@ -89,10 +100,7 @@ describe('durable processing eligibility', () => {
       },
       { kind: 'ne', field: 'letters.metadataStatus', value: 'RUNNING' },
       { kind: 'ne', field: 'letters.entityExtractionStatus', value: 'RUNNING' },
-      expect.objectContaining({
-        kind: 'sql',
-        strings: expect.arrayContaining([expect.stringContaining('EXISTS')]),
-      }),
+      expect.objectContaining({ kind: 'exists' }),
       { kind: 'eq', field: 'letters.workflow', value: 'UPLOADED' },
       { kind: 'eq', field: 'letters.transcriptionStatus', value: 'PENDING' },
       { kind: 'isNull', field: 'letters.transcriptionRunId' },

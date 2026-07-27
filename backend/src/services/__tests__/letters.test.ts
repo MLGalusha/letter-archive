@@ -18,6 +18,7 @@ const {
 
 vi.mock('drizzle-orm', () => ({
   eq: vi.fn((field: unknown, value: unknown) => ({ kind: 'eq', field, value })),
+  exists: vi.fn((query: unknown) => ({ kind: 'exists', query })),
   ne: vi.fn((field: unknown, value: unknown) => ({ kind: 'ne', field, value })),
   and: vi.fn((...clauses: unknown[]) => ({ kind: 'and', clauses })),
   gt: vi.fn((field: unknown, value: unknown) => ({ kind: 'gt', field, value })),
@@ -52,6 +53,14 @@ vi.mock('../../db/index.js', () => {
           findMany: findManyMock,
         },
       },
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn((condition: unknown) => ({
+            kind: 'subquery',
+            condition,
+          })),
+        })),
+      })),
       update: dbUpdateMock,
     },
     letters: {
@@ -243,17 +252,7 @@ describe('letters service', () => {
         },
         { kind: 'ne', field: 'letters.metadataStatus', value: 'RUNNING' },
         { kind: 'ne', field: 'letters.entityExtractionStatus', value: 'RUNNING' },
-        expect.objectContaining({
-          kind: 'sql',
-          strings: expect.arrayContaining([
-            expect.stringContaining('EXISTS'),
-          ]),
-          values: [
-            { letterId: 'letterPages.letterId' },
-            'letterPages.letterId',
-            'letters.id',
-          ],
-        }),
+        expect.objectContaining({ kind: 'exists' }),
         { kind: 'ne', field: 'letters.transcriptionStatus', value: 'RUNNING' },
       ],
     });

@@ -1,6 +1,7 @@
 import {
   and,
   eq,
+  exists,
   inArray,
   isNotNull,
   isNull,
@@ -9,7 +10,7 @@ import {
   sql,
   type SQL,
 } from 'drizzle-orm';
-import { letterPages, letters } from '../db/index.js';
+import { db, letterPages, letters } from '../db/index.js';
 import {
   isTranscribableType,
   TRANSCRIBABLE_TYPES,
@@ -94,11 +95,11 @@ export function transcriptionPrerequisiteConditions(): SQL[] {
     inArray(letters.type, [...TRANSCRIBABLE_TYPES]),
     ne(letters.metadataStatus, 'RUNNING'),
     ne(letters.entityExtractionStatus, 'RUNNING'),
-    sql`EXISTS (
-      SELECT 1
-      FROM ${letterPages}
-      WHERE ${letterPages.letterId} = ${letters.id}
-    )`,
+    exists(
+      db.select({ one: sql`1` })
+        .from(letterPages)
+        .where(eq(letterPages.letterId, letters.id)),
+    ),
   ];
 }
 

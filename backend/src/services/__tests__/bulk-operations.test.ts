@@ -37,6 +37,7 @@ const {
 vi.mock('drizzle-orm', () => ({
   and: vi.fn((...clauses: unknown[]) => ({ kind: 'and', clauses })),
   eq: vi.fn((field: unknown, value: unknown) => ({ kind: 'eq', field, value })),
+  exists: vi.fn((query: unknown) => ({ kind: 'exists', query })),
   inArray: vi.fn((field: unknown, values: unknown[]) => ({ kind: 'inArray', field, values })),
   isNull: vi.fn((field: unknown) => ({ kind: 'isNull', field })),
   isNotNull: vi.fn((field: unknown) => ({ kind: 'isNotNull', field })),
@@ -65,6 +66,14 @@ vi.mock('../../db/index.js', () => {
   return {
     db: {
       query: { letters: { findMany: findManyMock, findFirst: findFirstMock } },
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn((condition: unknown) => ({
+            kind: 'subquery',
+            condition,
+          })),
+        })),
+      })),
       update: dbUpdateMock,
       transaction: dbTransactionMock,
     },
@@ -261,7 +270,7 @@ describe('bulk transcription ownership', () => {
             },
             { kind: 'ne', field: 'letters.metadataStatus', value: 'RUNNING' },
             { kind: 'ne', field: 'letters.entityExtractionStatus', value: 'RUNNING' },
-            expect.objectContaining({ kind: 'sql' }),
+            expect.objectContaining({ kind: 'exists' }),
             { kind: 'eq', field: 'letters.primarySourceRevision', value: 7 },
             { kind: 'eq', field: 'letters.transcriptionStatus', value: 'PENDING' },
             { kind: 'eq', field: 'letters.workflow', value: 'UPLOADED' },

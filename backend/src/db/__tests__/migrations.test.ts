@@ -224,6 +224,47 @@ describe("migration validation", () => {
     expect(sql).not.toMatch(/DEFAULT\s+gen_random_uuid/i);
   });
 
+  it("repairs extra-content ownership for databases that already advanced past 0045", () => {
+    const journal = readJournal();
+    const transcriptIntent = journal.entries.find(
+      (entry) => entry.tag === "0055_add_transcript_confirmation_intent",
+    );
+    const ownershipRepair = journal.entries.find(
+      (entry) => entry.tag === "0056_repair_extra_content_job_ownership",
+    );
+    const sql = readMigrationSql("0056_repair_extra_content_job_ownership");
+
+    expect(ownershipRepair).toBeDefined();
+    expect(ownershipRepair!.idx).toBe(transcriptIntent!.idx + 1);
+    expect(sql).toContain(
+      'ADD COLUMN IF NOT EXISTS "extra_content_job_run_id" uuid',
+    );
+    expect(sql).toContain(
+      'ADD COLUMN IF NOT EXISTS "extra_content_job_dirty" boolean DEFAULT false NOT NULL',
+    );
+    expect(sql).toContain(
+      'ALTER COLUMN "extra_content_job_dirty" SET DEFAULT false',
+    );
+    expect(sql).toContain(
+      'ALTER COLUMN "extra_content_job_dirty" SET NOT NULL',
+    );
+    expect(sql).toMatch(
+      /UPDATE\s+"letters"[\s\S]*?"extra_content_job_status"\s*=\s*'PENDING'[\s\S]*?WHERE\s+"extra_content_job_status"\s*=\s*'RUNNING'[\s\S]*?"extra_content_job_run_id"\s+IS\s+NULL/i,
+    );
+    expect(sql).toContain(
+      'ADD CONSTRAINT "extra_content_job_run_id_matches_running"',
+    );
+    expect(sql).toContain(
+      'ADD CONSTRAINT "extra_content_job_dirty_requires_running"',
+    );
+    expect(sql).toContain(
+      'VALIDATE CONSTRAINT "extra_content_job_run_id_matches_running"',
+    );
+    expect(sql).toContain(
+      'VALIDATE CONSTRAINT "extra_content_job_dirty_requires_running"',
+    );
+  });
+
   it("orders entity extraction liveness after the ownership rollout boundaries", () => {
     const journal = readJournal();
     const commitBoundary = journal.entries.find(

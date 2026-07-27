@@ -25,6 +25,10 @@ const acquireReleaseLockScript = path.join(
   repositoryRoot,
   'deploy/cloudrun/acquire-release-lock.sh',
 );
+const ensureJobInvokerScript = path.join(
+  repositoryRoot,
+  'deploy/cloudrun/ensure-job-invoker.sh',
+);
 const temporaryDirectories: string[] = [];
 
 function createTemporaryDirectory(prefix: string): string {
@@ -57,6 +61,158 @@ afterEach(() => {
 });
 
 describe('production release shell orchestration', () => {
+  it('retries and verifies Cloud Run job invoker IAM updates', () => {
+    const temporaryRoot = createTemporaryDirectory(
+      'letter-archive-job-invoker-',
+    );
+    const fakeBin = path.join(temporaryRoot, 'bin');
+    mkdirSync(fakeBin);
+
+    const statePath = path.join(temporaryRoot, 'gcloud-state.json');
+    writeFileSync(statePath, JSON.stringify({ addAttempts: 0, reads: 0 }));
+
+    writeExecutable(fakeBin, 'sleep', '#!/usr/bin/env node\n');
+    writeExecutable(fakeBin, 'gcloud', `#!/usr/bin/env node
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+const statePath = process.env.FAKE_GCLOUD_STATE;
+const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+
+if (args.slice(0, 3).join(' ') === 'run jobs get-iam-policy') {
+  state.reads += 1;
+  fs.writeFileSync(statePath, JSON.stringify(state));
+  const members = state.addAttempts >= 2
+    ? ['serviceAccount:worker@test-project.iam.gserviceaccount.com']
+    : [];
+  process.stdout.write(JSON.stringify({
+    bindings: [{ role: 'roles/run.invoker', members }],
+  }));
+  process.exit(0);
+}
+
+if (args.slice(0, 3).join(' ') === 'run jobs add-iam-policy-binding') {
+  const expected = [
+    'run',
+    'jobs',
+    'add-iam-policy-binding',
+    'letter-archive-worker',
+    '--project=test-project',
+    '--region=us-east1',
+    '--member=serviceAccount:worker@test-project.iam.gserviceaccount.com',
+    '--role=roles/run.invoker',
+    '--quiet',
+  ];
+  if (JSON.stringify(args) !== JSON.stringify(expected)) {
+    process.stderr.write('Unexpected IAM arguments: ' + args.join(' ') + '\\n');
+    process.exit(97);
+  }
+  state.addAttempts += 1;
+  fs.writeFileSync(statePath, JSON.stringify(state));
+  process.exit(state.addAttempts === 1 ? 9 : 0);
+}
+
+process.stderr.write('Unexpected fake gcloud call: ' + args.join(' ') + '\\n');
+process.exit(98);
+`);
+
+    const result = spawnSync('bash', [ensureJobInvokerScript], {
+      cwd: repositoryRoot,
+      env: {
+        ...process.env,
+        PATH: `${fakeBin}:${process.env.PATH ?? ''}`,
+        FAKE_GCLOUD_STATE: statePath,
+        LETTER_ARCHIVE_PROJECT_ID: 'test-project',
+        LETTER_ARCHIVE_REGION: 'us-east1',
+        LETTER_ARCHIVE_JOB_NAME: 'letter-archive-worker',
+        LETTER_ARCHIVE_INVOKER_SERVICE_ACCOUNT:
+          'worker@test-project.iam.gserviceaccount.com',
+      },
+      encoding: 'utf8',
+    });
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(JSON.parse(readFileSync(statePath, 'utf8'))).toEqual({
+      addAttempts: 2,
+      reads: 3,
+    });
+  });
+
+  it('fails closed when a Cloud Run job invoker binding never appears', () => {
+    const temporaryRoot = createTemporaryDirectory(
+      'letter-archive-job-invoker-exhausted-',
+    );
+    const fakeBin = path.join(temporaryRoot, 'bin');
+    mkdirSync(fakeBin);
+
+    const statePath = path.join(temporaryRoot, 'gcloud-state.json');
+    writeFileSync(statePath, JSON.stringify({ addAttempts: 0 }));
+
+    writeExecutable(fakeBin, 'sleep', '#!/usr/bin/env node\n');
+    writeExecutable(fakeBin, 'gcloud', `#!/usr/bin/env node
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+const statePath = process.env.FAKE_GCLOUD_STATE;
+const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+
+if (args.slice(0, 3).join(' ') === 'run jobs get-iam-policy') {
+  process.stdout.write(JSON.stringify({ bindings: [] }));
+  process.exit(0);
+}
+
+if (args.slice(0, 3).join(' ') === 'run jobs add-iam-policy-binding') {
+  state.addAttempts += 1;
+  fs.writeFileSync(statePath, JSON.stringify(state));
+  process.exit(0);
+}
+
+process.stderr.write('Unexpected fake gcloud call: ' + args.join(' ') + '\\n');
+process.exit(98);
+`);
+
+    const result = spawnSync('bash', [ensureJobInvokerScript], {
+      cwd: repositoryRoot,
+      env: {
+        ...process.env,
+        PATH: `${fakeBin}:${process.env.PATH ?? ''}`,
+        FAKE_GCLOUD_STATE: statePath,
+        LETTER_ARCHIVE_PROJECT_ID: 'test-project',
+        LETTER_ARCHIVE_REGION: 'us-east1',
+        LETTER_ARCHIVE_JOB_NAME: 'letter-archive-worker',
+        LETTER_ARCHIVE_INVOKER_SERVICE_ACCOUNT:
+          'worker@test-project.iam.gserviceaccount.com',
+      },
+      encoding: 'utf8',
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      'Failed to verify serviceAccount:worker@test-project.iam.gserviceaccount.com on letter-archive-worker',
+    );
+    expect(JSON.parse(readFileSync(statePath, 'utf8'))).toEqual({
+      addAttempts: 5,
+    });
+  });
+
+  it('rejects job invoker identities outside the release project', () => {
+    const result = spawnSync('bash', [ensureJobInvokerScript], {
+      cwd: repositoryRoot,
+      env: {
+        ...process.env,
+        LETTER_ARCHIVE_PROJECT_ID: 'test-project',
+        LETTER_ARCHIVE_REGION: 'us-east1',
+        LETTER_ARCHIVE_JOB_NAME: 'letter-archive-worker',
+        LETTER_ARCHIVE_INVOKER_SERVICE_ACCOUNT:
+          'worker@other-project.iam.gserviceaccount.com',
+      },
+      encoding: 'utf8',
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      'Invoker service account is invalid for the release project',
+    );
+  });
+
   it('rolls back and probes the previous revision after an ambiguous promotion failure', () => {
     const temporaryRoot = createTemporaryDirectory(
       'letter-archive-promotion-rollback-',

@@ -269,29 +269,27 @@ steps:
 
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: grant-backend-worker-job-invoke
-    entrypoint: gcloud
+    entrypoint: bash
+    env:
+      - 'LETTER_ARCHIVE_PROJECT_ID=${PROJECT_ID}'
+      - 'LETTER_ARCHIVE_REGION=${_REGION}'
+      - 'LETTER_ARCHIVE_JOB_NAME=letter-archive-worker'
+      - 'LETTER_ARCHIVE_INVOKER_SERVICE_ACCOUNT=${_BACKEND_SERVICE_ACCOUNT}'
     args:
-      - run
-      - jobs
-      - add-iam-policy-binding
-      - letter-archive-worker
-      - --region=${_REGION}
-      - --member=serviceAccount:${_BACKEND_SERVICE_ACCOUNT}
-      - --role=roles/run.invoker
+      - deploy/cloudrun/ensure-job-invoker.sh
     waitFor: ['deploy-worker']
 
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: grant-worker-handoff-job-invoke
-    entrypoint: gcloud
+    entrypoint: bash
+    env:
+      - 'LETTER_ARCHIVE_PROJECT_ID=${PROJECT_ID}'
+      - 'LETTER_ARCHIVE_REGION=${_REGION}'
+      - 'LETTER_ARCHIVE_JOB_NAME=letter-archive-worker'
+      - 'LETTER_ARCHIVE_INVOKER_SERVICE_ACCOUNT=${_WORKER_SERVICE_ACCOUNT}'
     args:
-      - run
-      - jobs
-      - add-iam-policy-binding
-      - letter-archive-worker
-      - --region=${_REGION}
-      - --member=serviceAccount:${_WORKER_SERVICE_ACCOUNT}
-      - --role=roles/run.invoker
-    waitFor: ['deploy-worker']
+      - deploy/cloudrun/ensure-job-invoker.sh
+    waitFor: ['grant-backend-worker-job-invoke']
 
   # The backend's startup reconciler can invoke the worker job. Declare and
   # authorize that job before starting the new backend revision.
@@ -373,6 +371,7 @@ steps:
     id: grant-scheduler-worker-job-invoke
     entrypoint: bash
     env:
+      - 'LETTER_ARCHIVE_PROJECT_ID=${PROJECT_ID}'
       - 'LETTER_ARCHIVE_ENABLE_SCHEDULER=${_ENABLE_WORKER_RECONCILIATION_SCHEDULE}'
       - 'LETTER_ARCHIVE_REGION=${_REGION}'
       - 'LETTER_ARCHIVE_SCHEDULER_SERVICE_ACCOUNT=${_SCHEDULER_SERVICE_ACCOUNT}'
@@ -384,11 +383,10 @@ steps:
           echo "Scheduled worker reconciliation remains disabled for this deployment."
           exit 0
         fi
-        gcloud run jobs add-iam-policy-binding letter-archive-worker \
-          --region="$${LETTER_ARCHIVE_REGION}" \
-          --member="serviceAccount:$${LETTER_ARCHIVE_SCHEDULER_SERVICE_ACCOUNT}" \
-          --role=roles/run.invoker
-    waitFor: ['grant-backend-worker-job-invoke']
+        export LETTER_ARCHIVE_JOB_NAME=letter-archive-worker
+        export LETTER_ARCHIVE_INVOKER_SERVICE_ACCOUNT="$${LETTER_ARCHIVE_SCHEDULER_SERVICE_ACCOUNT}"
+        bash deploy/cloudrun/ensure-job-invoker.sh
+    waitFor: ['grant-worker-handoff-job-invoke']
 
   # Cloud Scheduler calls the asynchronous Cloud Run jobs.run API. The worker's
   # database execution lease, not Scheduler delivery, serializes executions.

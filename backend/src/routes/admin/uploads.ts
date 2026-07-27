@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { processUploadedFile } from '../../services/upload.js';
 import { parseFilename } from '../../services/filename-parser.js';
 import {
-  findPageByChecksum,
+  findPagesByChecksums,
   findObservedPageSourcesByIdentity,
   uploadPageIdentityKey,
   type UploadPageIdentity,
@@ -33,6 +33,20 @@ const uploadSourceExpectationsSchema = z.record(
   z.string(),
   uploadSourceExpectationSchema,
 );
+const sha256Schema = z.string().regex(
+  /^[a-f0-9]{64}$/i,
+  'hashes must be hex-encoded SHA-256 values',
+).transform((hash) => hash.toLowerCase());
+const duplicateCheckRequestSchema = z.object({
+  filenames: z.array(z.string().min(1).max(255)).max(500),
+  hashes: z.record(
+    z.string().min(1).max(255),
+    sha256Schema,
+  ).refine(
+    (hashes) => Object.keys(hashes).length <= 500,
+    'hashes cannot contain more than 500 entries',
+  ).optional(),
+}).strict();
 
 async function cleanupTempFiles(files: Express.Multer.File[]): Promise<void> {
   await Promise.all(
@@ -72,15 +86,19 @@ const upload = multer({
  */
 router.post('/uploads/check-duplicates', async (req, res, next) => {
   try {
-    const { filenames, hashes } = req.body as {
-      filenames?: string[];
-      hashes?: Record<string, string>;
-    };
-
-    if (!filenames || !Array.isArray(filenames)) {
+    if (!Array.isArray(req.body?.filenames)) {
       res.status(400).json({ error: 'filenames must be an array of strings' });
       return;
     }
+    const parsedRequest = duplicateCheckRequestSchema.safeParse(req.body);
+    if (!parsedRequest.success) {
+      res.status(400).json({
+        error: 'Invalid duplicate check request',
+        details: parsedRequest.error.flatten(),
+      });
+      return;
+    }
+    const { filenames, hashes } = parsedRequest.data;
 
     const parsedByFilename = new Map<string, UploadPageIdentity>();
     for (const filename of filenames) {
@@ -106,16 +124,20 @@ router.post('/uploads/check-duplicates', async (req, res, next) => {
           : null,
       ];
     }));
-    const contentDuplicates = Object.fromEntries(
-      await Promise.all(filenames.flatMap((filename) => {
-        const hash = hashes?.[filename];
-        if (!hash) return [];
-        return [findPageByChecksum(hash).then((page) => [
-          filename,
-          page !== undefined,
-        ] as const)];
-      })),
-    );
+    const requestedHashes = [...new Set(filenames.flatMap((filename) => {
+      const hash = hashes?.[filename];
+      return hash ? [hash] : [];
+    }))];
+    const pagesByChecksum = await findPagesByChecksums(requestedHashes);
+    const observedChecksums = new Set(pagesByChecksum.flatMap((page) => (
+      page.checksumSha256 ? [page.checksumSha256] : []
+    )));
+    const contentDuplicates = Object.fromEntries(filenames.flatMap((filename) => {
+      const hash = hashes?.[filename];
+      return hash
+        ? [[filename, observedChecksums.has(hash)] as const]
+        : [];
+    }));
 
     res.json({ duplicates, sourceExpectations, contentDuplicates });
   } catch (error) {

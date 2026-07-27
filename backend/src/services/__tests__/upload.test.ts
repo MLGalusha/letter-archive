@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   findOrCreateCollectionMock,
+  getCollectionByCodeMock,
   getCollectionByIdMock,
   findLetterByIdentityMock,
-  getLetterByIdMock,
-  findPageByChecksumMock,
+  findDurableContentDuplicateByIdentityMock,
   findOrCreatePageMock,
   getPageMock,
   computeChecksumMock,
@@ -17,12 +17,13 @@ const {
   reclaimStoragePathMock,
   removeStoredFileMock,
   storeImmutableFileMock,
+  withContentChecksumLockMock,
 } = vi.hoisted(() => ({
   findOrCreateCollectionMock: vi.fn(),
+  getCollectionByCodeMock: vi.fn(),
   getCollectionByIdMock: vi.fn(),
   findLetterByIdentityMock: vi.fn(),
-  getLetterByIdMock: vi.fn(),
-  findPageByChecksumMock: vi.fn(),
+  findDurableContentDuplicateByIdentityMock: vi.fn(),
   findOrCreatePageMock: vi.fn(),
   getPageMock: vi.fn(),
   computeChecksumMock: vi.fn(),
@@ -34,22 +35,28 @@ const {
   reclaimStoragePathMock: vi.fn(),
   removeStoredFileMock: vi.fn(),
   storeImmutableFileMock: vi.fn(),
+  withContentChecksumLockMock: vi.fn(),
 }));
 
 vi.mock('../collections.js', () => ({
   findOrCreateCollection: findOrCreateCollectionMock,
+  getCollectionByCode: getCollectionByCodeMock,
   getCollectionById: getCollectionByIdMock,
 }));
 
 vi.mock('../letters.js', () => ({
   findLetterByIdentity: findLetterByIdentityMock,
-  getLetterById: getLetterByIdMock,
 }));
 
 vi.mock('../letter-pages.js', () => ({
-  findPageByChecksum: findPageByChecksumMock,
+  findDurableContentDuplicateByIdentity:
+    findDurableContentDuplicateByIdentityMock,
   findOrCreatePage: findOrCreatePageMock,
   getPage: getPageMock,
+}));
+
+vi.mock('../content-checksum-lock.js', () => ({
+  withContentChecksumLock: withContentChecksumLockMock,
 }));
 
 vi.mock('../storage-reference-cleanup.js', () => ({
@@ -142,8 +149,13 @@ describe('upload service', () => {
       id: 'collection-1',
       collectionCode: '003',
     });
+    getCollectionByCodeMock.mockResolvedValue(undefined);
+    getCollectionByIdMock.mockResolvedValue({
+      id: 'collection-1',
+      collectionCode: '003',
+    });
     findLetterByIdentityMock.mockResolvedValue(observedLetter);
-    findPageByChecksumMock.mockResolvedValue(undefined);
+    findDurableContentDuplicateByIdentityMock.mockResolvedValue(undefined);
     getPageMock.mockResolvedValue(undefined);
     findOrCreatePageMock.mockResolvedValue(pageMutationResult({
       page: {
@@ -166,6 +178,9 @@ describe('upload service', () => {
     computeChecksumMock.mockResolvedValue('abc123');
     reclaimStoragePathMock.mockResolvedValue('removed');
     removeStoredFileMock.mockResolvedValue(undefined);
+    withContentChecksumLockMock.mockImplementation(
+      async (_checksum: string, work: () => Promise<unknown>) => work(),
+    );
   });
 
   it('rejects invalid filenames before touching downstream services', async () => {
@@ -177,7 +192,7 @@ describe('upload service', () => {
     expect(storeImmutableFileMock).not.toHaveBeenCalled();
   });
 
-  it('returns the existing owner for renamed content before creating membership', async () => {
+  it('returns a durable renamed-content owner before creating membership', async () => {
     const existingPage = {
       id: 'page-existing-content',
       letterId: 'letter-existing-content',
@@ -198,8 +213,13 @@ describe('upload service', () => {
       id: 'collection-existing-content',
       collectionCode: '004',
     };
-    findPageByChecksumMock.mockResolvedValueOnce(existingPage);
-    getLetterByIdMock.mockResolvedValueOnce(existingLetter);
+    findDurableContentDuplicateByIdentityMock.mockResolvedValueOnce({
+      letter: existingLetter,
+      page: existingPage,
+      outcome: 'unchanged',
+      sourceChanged: false,
+      primarySourceRevision: 9,
+    });
     getCollectionByIdMock.mockResolvedValueOnce(existingCollection);
 
     const result = await processUploadedFile(
@@ -207,7 +227,22 @@ describe('upload service', () => {
       '003-19320706-L01-01.jpg',
     );
 
-    expect(findPageByChecksumMock).toHaveBeenCalledWith('abc123');
+    expect(withContentChecksumLockMock).toHaveBeenCalledWith(
+      'abc123',
+      expect.any(Function),
+    );
+    expect(findDurableContentDuplicateByIdentityMock).toHaveBeenCalledWith(
+      {
+        dateRaw: '19320706',
+        type: 'L',
+        typeSequence: 1,
+        pageNumber: 1,
+      },
+      {
+        checksumSha256: 'abc123',
+        isDurableSource: expect.any(Function),
+      },
+    );
     expect(findOrCreateCollectionMock).not.toHaveBeenCalled();
     expect(findLetterByIdentityMock).not.toHaveBeenCalled();
     expect(storeImmutableFileMock).not.toHaveBeenCalled();
@@ -231,12 +266,7 @@ describe('upload service', () => {
       pageNumber: 1,
       checksumSha256: 'abc123',
     };
-    findPageByChecksumMock.mockResolvedValueOnce(sameIdentityPage);
-    getLetterByIdMock.mockResolvedValueOnce({
-      ...observedLetter,
-      primarySourceRevision: 7,
-    });
-    getCollectionByIdMock.mockResolvedValueOnce({
+    getCollectionByCodeMock.mockResolvedValueOnce({
       id: 'collection-1',
       collectionCode: '003',
     });
@@ -253,13 +283,126 @@ describe('upload service', () => {
       '003-19320706-L01-01.jpg',
     );
 
-    expect(findOrCreateCollectionMock).toHaveBeenCalledWith('003');
+    expect(findDurableContentDuplicateByIdentityMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collectionId: 'collection-1',
+        pageNumber: 1,
+      }),
+      expect.any(Object),
+    );
+    expect(findOrCreateCollectionMock).not.toHaveBeenCalled();
     expect(findOrCreatePageMock).toHaveBeenCalled();
     expect(result).toMatchObject({
       outcome: 'unchanged',
       changed: false,
     });
     expect(result).not.toHaveProperty('duplicateReason');
+  });
+
+  it.each([
+    ['missing', new Error('missing object')],
+    ['corrupt', 'different-checksum'],
+  ])(
+    'does not discard an upload when a checksum claimant is %s',
+    async (_label, checksumResult) => {
+      const claimant = {
+        id: 'page-broken-content',
+        letterId: 'letter-broken-content',
+        storagePath: 'storage/objects/broken.jpg',
+        checksumSha256: 'abc123',
+      };
+      if (checksumResult instanceof Error) {
+        computeChecksumMock.mockRejectedValueOnce(checksumResult);
+      } else {
+        computeChecksumMock.mockResolvedValueOnce(checksumResult);
+      }
+      findDurableContentDuplicateByIdentityMock.mockImplementationOnce(
+        async (_identity, lookup) => {
+          expect(await lookup.isDurableSource(claimant)).toBe(false);
+          return undefined;
+        },
+      );
+
+      const result = await processUploadedFile(
+        '/tmp/renamed.jpg',
+        '003-19320706-L01-01.jpg',
+      );
+
+      expect(result).toMatchObject({
+        page: { id: 'page-1' },
+        outcome: 'created',
+        changed: true,
+      });
+      expect(result).not.toHaveProperty('duplicateReason');
+      expect(logWarnMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          existingPageId: claimant.id,
+        }),
+        expect.stringContaining('missing or corrupt'),
+      );
+    },
+  );
+
+  it('serializes first writers through duplicate lookup before collection creation', async () => {
+    let releasePrevious = Promise.resolve();
+    withContentChecksumLockMock.mockImplementation(
+      async (_checksum: string, work: () => Promise<unknown>) => {
+        const waitForPrevious = releasePrevious;
+        let releaseCurrent!: () => void;
+        releasePrevious = new Promise<void>((resolve) => {
+          releaseCurrent = resolve;
+        });
+        await waitForPrevious;
+        try {
+          return await work();
+        } finally {
+          releaseCurrent();
+        }
+      },
+    );
+
+    let committed = false;
+    const committedPage = {
+      id: 'page-1',
+      letterId: 'letter-1',
+      pageNumber: 1,
+      storagePath: 'storage/objects/source-a.jpg',
+      checksumSha256: 'abc123',
+    };
+    findDurableContentDuplicateByIdentityMock.mockImplementation(async () => (
+      committed
+        ? {
+            letter: { ...observedLetter, primarySourceRevision: 1 },
+            page: committedPage,
+            outcome: 'unchanged',
+            sourceChanged: false,
+            primarySourceRevision: 1,
+          }
+        : undefined
+    ));
+    findOrCreatePageMock.mockImplementationOnce(async () => {
+      committed = true;
+      return pageMutationResult({
+        page: committedPage,
+        outcome: 'created',
+        sourceChanged: true,
+        primarySourceRevision: 1,
+      });
+    });
+
+    const [winner, contender] = await Promise.all([
+      processUploadedFile('/tmp/first.jpg', '003-19320706-L01-01.jpg'),
+      processUploadedFile('/tmp/second.jpg', '004-19400102-L01-01.jpg'),
+    ]);
+
+    expect(winner).toMatchObject({ outcome: 'created' });
+    expect(contender).toMatchObject({
+      outcome: 'unchanged',
+      duplicateReason: 'duplicate_content',
+    });
+    expect(findOrCreateCollectionMock).toHaveBeenCalledTimes(1);
+    expect(storeImmutableFileMock).toHaveBeenCalledTimes(1);
+    expect(findOrCreatePageMock).toHaveBeenCalledTimes(1);
   });
 
   it('passes the read-only observed letter and exact creation identity to the page owner', async () => {

@@ -9,14 +9,17 @@ import {
   removeStoredFile,
   storeImmutableFile,
 } from './storage.js';
-import { findOrCreateCollection, getCollectionById } from './collections.js';
+import {
+  findOrCreateCollection,
+  getCollectionByCode,
+  getCollectionById,
+} from './collections.js';
 import {
   findLetterByIdentity,
-  getLetterById,
   type CreateLetterParams,
 } from './letters.js';
 import {
-  findPageByChecksum,
+  findDurableContentDuplicateByIdentity,
   findOrCreatePage,
   getPage,
   type ExistingPagePolicy,
@@ -31,6 +34,7 @@ import {
   sourceRevisionChanged,
 } from './letter/source-revision.js';
 import { reclaimUnreferencedPageStoragePath } from './storage-reference-cleanup.js';
+import { withContentChecksumLock } from './content-checksum-lock.js';
 
 const log = createLogger({ module: 'upload' });
 
@@ -66,6 +70,18 @@ function uploadOutcome(outcome: PageMutationOutcome): UploadOutcome {
   return 'unchanged';
 }
 
+async function isDurableChecksumSource(
+  page: LetterPage,
+  checksumSha256: string,
+): Promise<boolean> {
+  try {
+    return await computeChecksum(getAbsoluteStoragePath(page.storagePath))
+      === checksumSha256;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Processes an uploaded file:
  * 1. Parses the filename
@@ -76,11 +92,13 @@ function uploadOutcome(outcome: PageMutationOutcome): UploadOutcome {
  *
  * @param force - If true, overwrites existing files instead of skipping
  */
-export async function processUploadedFile(
+async function processUploadedFileInternal(
   tempPath: string,
   originalFilename: string,
   force = false,
   expectedReplacementSource?: UploadSourceExpectation,
+  contentLockHeld = false,
+  inspectedFile?: Awaited<ReturnType<typeof inspectUploadFile>>,
 ): Promise<UploadResult> {
   const start = Date.now();
   const context = { originalFilename, force };
@@ -113,70 +131,92 @@ export async function processUploadedFile(
     'Filename parsed successfully'
   );
 
-  // Resolve content duplicates before creating collection or letter membership.
-  // A renamed upload can parse to a different identity even when its bytes are
-  // already archived, and creating that identity first would leave page-less
-  // metadata behind when the upload short-circuits.
-  const inspectedUpload = force ? null : await inspectUploadFile(tempPath);
-  if (inspectedUpload) {
-    const existingByChecksum = await findPageByChecksum(
+  const inspectedUpload = force
+    ? null
+    : inspectedFile ?? await inspectUploadFile(tempPath);
+  if (inspectedUpload && !contentLockHeld) {
+    return withContentChecksumLock(
       inspectedUpload.checksumSha256,
+      () => processUploadedFileInternal(
+        tempPath,
+        originalFilename,
+        force,
+        expectedReplacementSource,
+        true,
+        inspectedUpload,
+      ),
     );
-    if (existingByChecksum) {
-      const existingLetter = await getLetterById(existingByChecksum.letterId);
-      const existingCollection = existingLetter
-        ? await getCollectionById(existingLetter.collectionId)
-        : undefined;
-      const samePageIdentity = Boolean(
-        existingLetter
-        && existingCollection
-        && existingCollection.collectionCode === parsed.collectionCode
-        && existingLetter.dateRaw === parsed.dateRaw
-        && existingLetter.type === parsed.type
-        && existingLetter.typeSequence === parsed.typeSequence
-        && existingByChecksum.pageNumber === parsed.pageNumber
-      );
-
-      if (existingLetter && existingCollection && !samePageIdentity) {
-        log.info(
-          {
-            ...context,
-            checksumSha256:
-              inspectedUpload.checksumSha256.substring(0, 12) + '...',
-            existingPageId: existingByChecksum.id,
-            existingStoragePath: existingByChecksum.storagePath,
-          },
-          'Content-hash duplicate, skipping storage and membership writes',
-        );
-        return {
-          collection: existingCollection,
-          letter: existingLetter,
-          page: existingByChecksum,
-          storagePath: existingByChecksum.storagePath,
-          primarySourceRevision: existingLetter.primarySourceRevision,
-          alreadyExists: true,
-          outcome: 'unchanged',
-          changed: false,
-          duplicateReason: 'duplicate_content',
-        };
-      }
-
-      if (!existingLetter || !existingCollection) {
-        log.warn(
-          {
-            ...context,
-            existingPageId: existingByChecksum.id,
-            letterFound: Boolean(existingLetter),
-            collectionFound: Boolean(existingCollection),
-          },
-          'Content-hash match has no complete owner; continuing normal upload reconciliation',
-        );
-      }
-    }
   }
 
-  // Get or create collection
-  const collection = await findOrCreateCollection(parsed.collectionCode);
+  const observedCollection = await getCollectionByCode(parsed.collectionCode);
+  const duplicate = inspectedUpload
+    ? await findDurableContentDuplicateByIdentity(
+        {
+          ...(observedCollection ? { collectionId: observedCollection.id } : {}),
+          dateRaw: parsed.dateRaw,
+          type: parsed.type,
+          typeSequence: parsed.typeSequence,
+          pageNumber: parsed.pageNumber,
+        },
+        {
+          checksumSha256: inspectedUpload.checksumSha256,
+          isDurableSource: async (page) => {
+            const durable = await isDurableChecksumSource(
+              page,
+              inspectedUpload.checksumSha256,
+            );
+            if (!durable) {
+              log.warn(
+                {
+                  ...context,
+                  existingPageId: page.id,
+                  existingStoragePath: page.storagePath,
+                },
+                'Ignoring a content-hash match whose archived object is missing or corrupt',
+              );
+            }
+            return durable;
+          },
+        },
+      )
+    : undefined;
+  if (duplicate) {
+    const duplicateCollection = await getCollectionById(
+      duplicate.letter.collectionId,
+    );
+    if (!duplicateCollection) {
+      throw new Error(
+        `Content duplicate owner collection ${duplicate.letter.collectionId} could not be loaded`,
+      );
+    }
+    log.info(
+      {
+        ...context,
+        collectionId: duplicateCollection.id,
+        letterId: duplicate.letter.id,
+        pageId: duplicate.page.id,
+        alreadyExists: true,
+        outcome: 'unchanged',
+        changed: false,
+        duration: Date.now() - start,
+      },
+      'Upload source unchanged',
+    );
+    return {
+      collection: duplicateCollection,
+      letter: duplicate.letter,
+      page: duplicate.page,
+      storagePath: duplicate.page.storagePath,
+      primarySourceRevision: duplicate.primarySourceRevision,
+      alreadyExists: true,
+      outcome: 'unchanged',
+      changed: false,
+      duplicateReason: 'duplicate_content',
+    };
+  }
+
+  const collection = observedCollection
+    ?? await findOrCreateCollection(parsed.collectionCode);
   log.debug({ ...context, collectionId: collection.id }, 'Collection resolved');
 
   const letterIdentity: CreateLetterParams = {
@@ -465,4 +505,18 @@ export async function processUploadedFile(
     outcome,
     changed: pageResult.sourceChanged,
   };
+}
+
+export async function processUploadedFile(
+  tempPath: string,
+  originalFilename: string,
+  force = false,
+  expectedReplacementSource?: UploadSourceExpectation,
+): Promise<UploadResult> {
+  return processUploadedFileInternal(
+    tempPath,
+    originalFilename,
+    force,
+    expectedReplacementSource,
+  );
 }

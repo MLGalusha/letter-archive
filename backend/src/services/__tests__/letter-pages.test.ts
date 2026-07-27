@@ -50,6 +50,11 @@ const {
 
 vi.mock('drizzle-orm', () => ({
   eq: vi.fn((field: unknown, value: unknown) => ({ kind: 'eq', field, value })),
+  inArray: vi.fn((field: unknown, values: unknown[]) => ({
+    kind: 'inArray',
+    field,
+    values,
+  })),
   isNull: vi.fn((field: unknown) => ({ kind: 'isNull', field })),
   and: vi.fn((...clauses: unknown[]) => ({ kind: 'and', clauses })),
   or: vi.fn((...clauses: unknown[]) => ({ kind: 'or', clauses })),
@@ -143,8 +148,10 @@ vi.mock('../letter/correspondence-group.js', () => ({
 }));
 
 import {
+  findDurableContentDuplicateByIdentity,
   findOrCreatePage,
   findPageByChecksum,
+  findPagesByChecksums,
   getPage,
   getPagesByLetterId,
   updatePageDimensionsIfSourceCurrent,
@@ -958,6 +965,97 @@ describe('letter pages service', () => {
     expect(result).toEqual({
       id: 'page-checksum',
       checksumSha256: 'checksum-z',
+    });
+  });
+
+  it('prefers the requested page over a cross-identity checksum match', async () => {
+    const targetPage = {
+      id: 'page-target',
+      letterId: 'letter-1',
+      pageNumber: 1,
+      storagePath: 'storage/target.jpg',
+      checksumSha256: 'checksum-z',
+    };
+    findFirstMock.mockResolvedValueOnce(targetPage);
+    const isDurableSource = vi.fn().mockResolvedValue(true);
+
+    const result = await findDurableContentDuplicateByIdentity(
+      {
+        collectionId: 'collection-1',
+        dateRaw: '19470810',
+        type: 'L',
+        typeSequence: 1,
+        pageNumber: 1,
+      },
+      {
+        checksumSha256: 'checksum-z',
+        isDurableSource,
+      },
+    );
+
+    expect(result).toBeUndefined();
+    expect(findManyMock).not.toHaveBeenCalled();
+    expect(isDurableSource).not.toHaveBeenCalled();
+  });
+
+  it('returns a locked and durable cross-identity checksum owner', async () => {
+    const duplicatePage = {
+      id: 'page-duplicate',
+      letterId: 'letter-1',
+      pageNumber: 4,
+      storagePath: 'storage/duplicate.jpg',
+      checksumSha256: 'checksum-z',
+    };
+    findManyMock.mockResolvedValueOnce([duplicatePage]);
+    findFirstMock.mockResolvedValue(duplicatePage);
+    const isDurableSource = vi.fn().mockResolvedValue(true);
+
+    const result = await findDurableContentDuplicateByIdentity(
+      {
+        dateRaw: '19500101',
+        type: 'L',
+        typeSequence: 1,
+        pageNumber: 1,
+      },
+      {
+        checksumSha256: 'checksum-z',
+        isDurableSource,
+      },
+    );
+
+    expect(result).toMatchObject({
+      letter: { id: 'letter-1' },
+      page: duplicatePage,
+      outcome: 'unchanged',
+      sourceChanged: false,
+    });
+    expect(lockCorrespondenceGroupByIdentityMock).toHaveBeenCalledWith(
+      {
+        collectionId: 'collection-1',
+        dateRaw: '19470810',
+        typeSequence: 1,
+      },
+      expect.any(Object),
+    );
+    expect(isDurableSource).toHaveBeenCalledWith(duplicatePage);
+  });
+
+  it('batches checksum lookups', async () => {
+    findManyMock.mockResolvedValueOnce([
+      { id: 'page-a', checksumSha256: 'checksum-a' },
+    ]);
+
+    const result = await findPagesByChecksums(['checksum-a', 'checksum-b']);
+
+    expect(result).toEqual([
+      { id: 'page-a', checksumSha256: 'checksum-a' },
+    ]);
+    expect(findManyMock).toHaveBeenCalledWith({
+      where: {
+        kind: 'inArray',
+        field: 'letterPages.checksumSha256',
+        values: ['checksum-a', 'checksum-b'],
+      },
     });
   });
 

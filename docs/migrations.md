@@ -14,17 +14,28 @@ schema.ts + reviewed SQL + journal entry → validation → drizzle:migrate
 5. Run `npm run drizzle:migrate` to apply it locally
 
 `npm run drizzle:generate` is intentionally guarded and exits without writing files.
-The SQL journal and `schema.ts` are current through migration 0055, while Drizzle's
+The SQL journal and `schema.ts` are current through migration 0056, while Drizzle's
 snapshot lineage stops at 0013. In that state `drizzle-kit generate` compares the
 current schema with a stale snapshot and can propose DDL for changes that migrations
-0014–0055 already made.
+0014–0056 already made.
 
 Until a dedicated snapshot-baseline repair is completed, every migration must:
 
 - be registered explicitly in `meta/_journal.json`;
 - stay consistent with `schema.ts`;
 - include filesystem validation and a fresh PostgreSQL regression;
-- document mixed-version behavior and the later contraction step.
+- document mixed-version behavior and the later contraction step;
+- add an explicit `automatic` or `maintenance` classification to
+  `src/db/migration-release-policy.ts` for every migration after the production
+  automatic-release baseline.
+
+An `automatic` migration must be expand-only and safe while the previous
+application revision is still serving or being restored. Destructive DDL,
+contract migrations, and changes that reject old writers are `maintenance`.
+The production migration executable checks both this policy and the live applied
+migration ledger before running SQL. The live ledger must be the exact ordered
+prefix of the repository journal, including each timestamp and SHA-256 SQL hash;
+a matching count alone is not sufficient.
 
 Do not invoke `npx drizzle-kit generate` directly as a workaround. Re-enabling
 generation requires reconstructing a current snapshot in an isolated copy, proving it

@@ -15,8 +15,13 @@ substitutions:
   _REGION: us-east1
   _CLOUD_SQL_INSTANCE: letter-archive-db
   _ARCHIVE_BUCKET: letter-archive-485110-archive
+  _RELEASE_LOCK_BUCKET: letter-archive-485110-release-lock
   _DOMAIN: voicesthatremain.com
-  _SERVICE_ACCOUNT: 'letter-archive-runner@${PROJECT_ID}.iam.gserviceaccount.com'
+  _BACKEND_SERVICE_ACCOUNT: 'letter-archive-backend@${PROJECT_ID}.iam.gserviceaccount.com'
+  _FRONTEND_SERVICE_ACCOUNT: 'letter-archive-frontend@${PROJECT_ID}.iam.gserviceaccount.com'
+  _WORKER_SERVICE_ACCOUNT: 'letter-archive-worker@${PROJECT_ID}.iam.gserviceaccount.com'
+  _MIGRATE_SERVICE_ACCOUNT: 'letter-archive-migrate@${PROJECT_ID}.iam.gserviceaccount.com'
+  _BACKFILL_SERVICE_ACCOUNT: 'letter-archive-backfill@${PROJECT_ID}.iam.gserviceaccount.com'
   _SCHEDULER_SERVICE_ACCOUNT: 'letter-archive-scheduler@${PROJECT_ID}.iam.gserviceaccount.com'
   _WORKER_RECONCILIATION_SCHEDULE: '*/5 * * * *'
   # Initial lease rollout must drain pre-lease executions before this is enabled.
@@ -30,34 +35,79 @@ options:
 
 steps:
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: verify-source
+    entrypoint: bash
+    env:
+      - 'LETTER_ARCHIVE_PROJECT_ID=${PROJECT_ID}'
+      - 'LETTER_ARCHIVE_BUILD_LOCATION=${_REGION}'
+      - 'LETTER_ARCHIVE_BUILD_ID=${BUILD_ID}'
+      - 'LETTER_ARCHIVE_RELEASE_SHA=${_TAG}'
+    args:
+      - deploy/cloudrun/verify-build-source.sh
+    waitFor: ['-']
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: acquire-release-lock
+    entrypoint: bash
+    env:
+      - 'LETTER_ARCHIVE_PROJECT_ID=${PROJECT_ID}'
+      - 'LETTER_ARCHIVE_REGION=${_REGION}'
+      - 'LETTER_ARCHIVE_RELEASE_SHA=${_TAG}'
+      - 'LETTER_ARCHIVE_BUILD_ID=${BUILD_ID}'
+      - 'LETTER_ARCHIVE_RELEASE_LOCK_BUCKET=${_RELEASE_LOCK_BUCKET}'
+    args:
+      - deploy/cloudrun/acquire-release-lock.sh
+    waitFor: ['verify-source']
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: verify-current-main
+    entrypoint: bash
+    env:
+      - 'LETTER_ARCHIVE_RELEASE_SHA=${_TAG}'
+    args:
+      - deploy/cloudrun/verify-current-main.sh
+    waitFor: ['acquire-release-lock']
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: confirm-write-quiescence
     entrypoint: bash
+    env:
+      - 'LETTER_ARCHIVE_CONFIRM_MAINTENANCE=${_CONFIRM_WRITE_QUIESCENCE}'
+      - 'LETTER_ARCHIVE_RELEASE_SHA=${_TAG}'
     args:
       - -c
       - |
         set -euo pipefail
-        if [[ "${_CONFIRM_WRITE_QUIESCENCE}" != "true" ]]; then
-          echo "Refusing deployment: pause workers, Scheduler, and administrative writes; drain all old API/worker processes; then pass _CONFIRM_WRITE_QUIESCENCE=true."
+        if [[ "$${LETTER_ARCHIVE_CONFIRM_MAINTENANCE}" != "true" ]]; then
+          echo "Refusing deployment: pass _CONFIRM_WRITE_QUIESCENCE=true to authorize the enforced maintenance window."
           exit 1
         fi
-        if [[ ! "${_TAG}" =~ ^[0-9a-f]{40}$ ]]; then
+        if [[ ! "$${LETTER_ARCHIVE_RELEASE_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
           echo "Refusing deployment: _TAG must be the full lowercase Git commit SHA selected as the build source."
           exit 1
         fi
-        echo "Write quiescence acknowledged for source commit ${_TAG}."
-    waitFor: ['-']
+        echo "Maintenance release authorized for source commit $${LETTER_ARCHIVE_RELEASE_SHA}."
+    waitFor: ['verify-current-main']
 
   # ── Pull cached images for layer reuse ───────────────────────
   - name: gcr.io/cloud-builders/docker
     id: pull-backend-cache
     entrypoint: bash
-    args: ['-c', 'docker pull ${_BACKEND_IMAGE}:latest || true']
+    env:
+      - 'LETTER_ARCHIVE_IMAGE_REPOSITORY=${_BACKEND_IMAGE}'
+    args:
+      - -c
+      - docker pull "$$LETTER_ARCHIVE_IMAGE_REPOSITORY:latest" || true
     waitFor: ['confirm-write-quiescence']
 
   - name: gcr.io/cloud-builders/docker
     id: pull-frontend-cache
     entrypoint: bash
-    args: ['-c', 'docker pull ${_FRONTEND_IMAGE}:latest || true']
+    env:
+      - 'LETTER_ARCHIVE_IMAGE_REPOSITORY=${_FRONTEND_IMAGE}'
+    args:
+      - -c
+      - docker pull "$$LETTER_ARCHIVE_IMAGE_REPOSITORY:latest" || true
     waitFor: ['confirm-write-quiescence']
 
   # ── Build images (parallel) ────────────────────────────────
@@ -90,6 +140,8 @@ steps:
       - 'VITE_API_URL=https://api.${_DOMAIN}'
       - --build-arg
       - 'VITE_SITE_URL=https://${_DOMAIN}'
+      - --build-arg
+      - 'RELEASE_SHA=${_TAG}'
       - -f
       - frontend/Dockerfile
       - frontend
@@ -110,23 +162,40 @@ steps:
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: prepare-manifests
     entrypoint: bash
+    env:
+      - 'LETTER_ARCHIVE_PROJECT_ID=${PROJECT_ID}'
+      - 'LETTER_ARCHIVE_REGION=${_REGION}'
+      - 'LETTER_ARCHIVE_CLOUD_SQL_INSTANCE=${_CLOUD_SQL_INSTANCE}'
+      - 'LETTER_ARCHIVE_ARCHIVE_BUCKET=${_ARCHIVE_BUCKET}'
+      - 'LETTER_ARCHIVE_DOMAIN=${_DOMAIN}'
+      - 'LETTER_ARCHIVE_BACKEND_SERVICE_ACCOUNT=${_BACKEND_SERVICE_ACCOUNT}'
+      - 'LETTER_ARCHIVE_FRONTEND_SERVICE_ACCOUNT=${_FRONTEND_SERVICE_ACCOUNT}'
+      - 'LETTER_ARCHIVE_WORKER_SERVICE_ACCOUNT=${_WORKER_SERVICE_ACCOUNT}'
+      - 'LETTER_ARCHIVE_MIGRATE_SERVICE_ACCOUNT=${_MIGRATE_SERVICE_ACCOUNT}'
+      - 'LETTER_ARCHIVE_BACKFILL_SERVICE_ACCOUNT=${_BACKFILL_SERVICE_ACCOUNT}'
+      - 'LETTER_ARCHIVE_MIGRATION_RELEASE_MODE=maintenance'
+      - 'LETTER_ARCHIVE_RELEASE_SHA=${_TAG}'
+      - 'LETTER_ARCHIVE_BACKEND_IMAGE_REPOSITORY=${_BACKEND_IMAGE}'
+      - 'LETTER_ARCHIVE_FRONTEND_IMAGE_REPOSITORY=${_FRONTEND_IMAGE}'
     args:
-      - -c
-      - |
-        for f in deploy/cloudrun/*.yaml; do
-          sed -i \
-            -e "s|SERVICE_ACCOUNT_EMAIL|${_SERVICE_ACCOUNT}|g" \
-            -e "s|CLOUD_SQL_INSTANCE|${_CLOUD_SQL_INSTANCE}|g" \
-            -e "s|ARCHIVE_BUCKET|${_ARCHIVE_BUCKET}|g" \
-            -e "s|BACKEND_IMAGE|${_BACKEND_IMAGE}:${_TAG}|g" \
-            -e "s|FRONTEND_IMAGE|${_FRONTEND_IMAGE}:${_TAG}|g" \
-            -e "s|PROJECT_NUMBER|${PROJECT_ID}|g" \
-            -e "s|PROJECT_ID|${PROJECT_ID}|g" \
-            -e "s|YOUR_DOMAIN|${_DOMAIN}|g" \
-            -e "s|REGION|${_REGION}|g" \
-            "$$f"
-        done
-    waitFor: ['confirm-write-quiescence']
+      - deploy/cloudrun/prepare-release-manifests.sh
+    waitFor: ['push-backend', 'push-frontend']
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: establish-write-quiescence
+    entrypoint: bash
+    env:
+      - 'LETTER_ARCHIVE_PROJECT_ID=${PROJECT_ID}'
+      - 'LETTER_ARCHIVE_REGION=${_REGION}'
+      - 'LETTER_ARCHIVE_RELEASE_SHA=${_TAG}'
+      - 'LETTER_ARCHIVE_FRONTEND_IMAGE_REPOSITORY=${_FRONTEND_IMAGE}'
+      - 'LETTER_ARCHIVE_FRONTEND_SERVICE_ACCOUNT=${_FRONTEND_SERVICE_ACCOUNT}'
+      - 'LETTER_ARCHIVE_BACKEND_SERVICE_ACCOUNT=${_BACKEND_SERVICE_ACCOUNT}'
+      - 'LETTER_ARCHIVE_WORKER_SERVICE_ACCOUNT=${_WORKER_SERVICE_ACCOUNT}'
+      - 'LETTER_ARCHIVE_BUILD_ID=${BUILD_ID}'
+    args:
+      - deploy/cloudrun/quiesce-production.sh
+    waitFor: ['push-backend', 'push-frontend']
 
   # ── Deploy + run migrations ─────────────────────────────────
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
@@ -136,9 +205,12 @@ steps:
       - run
       - jobs
       - replace
-      - deploy/cloudrun/backend-migrate-job.yaml
+      - rendered/cloudrun/backend-migrate-job.yaml
       - --region=${_REGION}
-    waitFor: ['push-backend', 'prepare-manifests']
+    waitFor:
+      - push-backend
+      - prepare-manifests
+      - establish-write-quiescence
 
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: run-migrations
@@ -160,21 +232,11 @@ steps:
       - run
       - jobs
       - replace
-      - deploy/cloudrun/backend-backfill-dimensions-job.yaml
+      - rendered/cloudrun/backend-backfill-dimensions-job.yaml
       - --region=${_REGION}
     waitFor: ['push-backend', 'prepare-manifests']
 
   # ── Deploy worker job ───────────────────────────────────────
-  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    id: delete-legacy-worker-pool
-    entrypoint: bash
-    args:
-      - -c
-      - |
-        gcloud beta run worker-pools delete letter-archive-worker \
-          --region=${_REGION} --quiet || true
-    waitFor: ['run-migrations']
-
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: deploy-worker
     entrypoint: gcloud
@@ -182,9 +244,9 @@ steps:
       - run
       - jobs
       - replace
-      - deploy/cloudrun/backend-worker-job.yaml
+      - rendered/cloudrun/backend-worker-job.yaml
       - --region=${_REGION}
-    waitFor: ['delete-legacy-worker-pool', 'prepare-manifests']
+    waitFor: ['run-migrations', 'prepare-manifests']
 
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: grant-backend-worker-job-invoke
@@ -195,7 +257,20 @@ steps:
       - add-iam-policy-binding
       - letter-archive-worker
       - --region=${_REGION}
-      - --member=serviceAccount:${_SERVICE_ACCOUNT}
+      - --member=serviceAccount:${_BACKEND_SERVICE_ACCOUNT}
+      - --role=roles/run.invoker
+    waitFor: ['deploy-worker']
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: grant-worker-handoff-job-invoke
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - add-iam-policy-binding
+      - letter-archive-worker
+      - --region=${_REGION}
+      - --member=serviceAccount:${_WORKER_SERVICE_ACCOUNT}
       - --role=roles/run.invoker
     waitFor: ['deploy-worker']
 
@@ -204,16 +279,43 @@ steps:
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: deploy-backend
     entrypoint: bash
+    env:
+      - 'LETTER_ARCHIVE_PROJECT_ID=${PROJECT_ID}'
+      - 'LETTER_ARCHIVE_REGION=${_REGION}'
+      - 'LETTER_ARCHIVE_RELEASE_SHA=${_TAG}'
     args:
       - -c
       - |
-        set -e
-        gcloud run services replace deploy/cloudrun/backend-service.yaml \
-          --region=${_REGION}
+        set -euo pipefail
+        gcloud run services replace rendered/cloudrun/backend-service.yaml \
+          --project="$${LETTER_ARCHIVE_PROJECT_ID}" \
+          --region="$${LETTER_ARCHIVE_REGION}"
+        service_url="$$(gcloud run services describe letter-archive-backend \
+          --project="$${LETTER_ARCHIVE_PROJECT_ID}" \
+          --region="$${LETTER_ARCHIVE_REGION}" \
+          --format='value(status.url)')"
+        identity_token="$$(gcloud auth print-identity-token \
+          --audiences="$${service_url}")"
+        health="$$(curl --retry 10 --retry-all-errors --retry-delay 3 -fsS \
+          -H "Authorization: Bearer $${identity_token}" \
+          "$${service_url}/health")"
+        if [[ "$${health}" != \
+          "{\"ok\":true,\"releaseSha\":\"$${LETTER_ARCHIVE_RELEASE_SHA}\"}" ]]; then
+          echo "Private backend release identity probe failed."
+          exit 1
+        fi
+        curl --retry 10 --retry-all-errors --retry-delay 3 -fsS \
+          -H "Authorization: Bearer $${identity_token}" \
+          "$${service_url}/health/ready" >/dev/null
+        curl --retry 10 --retry-all-errors --retry-delay 3 -fsS \
+          -H "Authorization: Bearer $${identity_token}" \
+          "$${service_url}/auth/status" >/dev/null
         binding_applied=false
         for i in 1 2 3; do
           if gcloud run services add-iam-policy-binding letter-archive-backend \
-            --region=${_REGION} --member=allUsers --role=roles/run.invoker --quiet; then
+            --project="$${LETTER_ARCHIVE_PROJECT_ID}" \
+            --region="$${LETTER_ARCHIVE_REGION}" \
+            --member=allUsers --role=roles/run.invoker --quiet; then
             binding_applied=true
             break
           fi
@@ -228,47 +330,44 @@ steps:
       - run-migrations
       - prepare-manifests
       - grant-backend-worker-job-invoke
+      - grant-worker-handoff-job-invoke
 
   # ── Deploy frontend service ─────────────────────────────────
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: deploy-frontend
     entrypoint: bash
+    env:
+      - 'LETTER_ARCHIVE_PROJECT_ID=${PROJECT_ID}'
+      - 'LETTER_ARCHIVE_REGION=${_REGION}'
+      - 'LETTER_ARCHIVE_SERVICE=letter-archive-frontend'
+      - 'LETTER_ARCHIVE_SERVICE_ACCOUNT=${_FRONTEND_SERVICE_ACCOUNT}'
+      - 'LETTER_ARCHIVE_IMAGE_REPOSITORY=${_FRONTEND_IMAGE}'
+      - 'LETTER_ARCHIVE_RELEASE_SHA=${_TAG}'
+      - 'LETTER_ARCHIVE_BUILD_ID=${BUILD_ID}'
+      - 'LETTER_ARCHIVE_PRODUCTION_URL=https://${_DOMAIN}'
+      - 'LETTER_ARCHIVE_SERVICE_MANIFEST=rendered/cloudrun/frontend-service.yaml'
     args:
-      - -c
-      - |
-        set -e
-        gcloud run services replace deploy/cloudrun/frontend-service.yaml \
-          --region=${_REGION}
-        binding_applied=false
-        for i in 1 2 3; do
-          if gcloud run services add-iam-policy-binding letter-archive-frontend \
-            --region=${_REGION} --member=allUsers --role=roles/run.invoker --quiet; then
-            binding_applied=true
-            break
-          fi
-          echo "IAM binding retry $$i/3 (frontend)..."
-          sleep $$((i * 2))
-        done
-        if [[ "$${binding_applied}" != "true" ]]; then
-          echo "Failed to apply the public frontend invoker binding."
-          exit 1
-        fi
+      - deploy/cloudrun/promote-service.sh
     waitFor: ['push-frontend', 'prepare-manifests', 'deploy-backend']
 
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: grant-scheduler-worker-job-invoke
     entrypoint: bash
+    env:
+      - 'LETTER_ARCHIVE_ENABLE_SCHEDULER=${_ENABLE_WORKER_RECONCILIATION_SCHEDULE}'
+      - 'LETTER_ARCHIVE_REGION=${_REGION}'
+      - 'LETTER_ARCHIVE_SCHEDULER_SERVICE_ACCOUNT=${_SCHEDULER_SERVICE_ACCOUNT}'
     args:
       - -c
       - |
         set -euo pipefail
-        if [[ "${_ENABLE_WORKER_RECONCILIATION_SCHEDULE}" != "true" ]]; then
+        if [[ "$${LETTER_ARCHIVE_ENABLE_SCHEDULER}" != "true" ]]; then
           echo "Scheduled worker reconciliation remains disabled for this deployment."
           exit 0
         fi
         gcloud run jobs add-iam-policy-binding letter-archive-worker \
-          --region="${_REGION}" \
-          --member="serviceAccount:${_SCHEDULER_SERVICE_ACCOUNT}" \
+          --region="$${LETTER_ARCHIVE_REGION}" \
+          --member="serviceAccount:$${LETTER_ARCHIVE_SCHEDULER_SERVICE_ACCOUNT}" \
           --role=roles/run.invoker
     waitFor: ['grant-backend-worker-job-invoke']
 
@@ -277,17 +376,23 @@ steps:
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: configure-worker-reconciliation-schedule
     entrypoint: bash
+    env:
+      - 'LETTER_ARCHIVE_PROJECT_ID=${PROJECT_ID}'
+      - 'LETTER_ARCHIVE_ENABLE_SCHEDULER=${_ENABLE_WORKER_RECONCILIATION_SCHEDULE}'
+      - 'LETTER_ARCHIVE_REGION=${_REGION}'
+      - 'LETTER_ARCHIVE_WORKER_SCHEDULE=${_WORKER_RECONCILIATION_SCHEDULE}'
+      - 'LETTER_ARCHIVE_SCHEDULER_SERVICE_ACCOUNT=${_SCHEDULER_SERVICE_ACCOUNT}'
     args:
       - -c
       - |
         set -euo pipefail
-        if [[ "${_ENABLE_WORKER_RECONCILIATION_SCHEDULE}" != "true" ]]; then
+        if [[ "$${LETTER_ARCHIVE_ENABLE_SCHEDULER}" != "true" ]]; then
           echo "Skipping Scheduler configuration until the lease rollout is proven."
           exit 0
         fi
         if gcloud scheduler jobs describe letter-archive-worker-reconcile \
-          --project="${PROJECT_ID}" \
-          --location="${_REGION}" >/dev/null 2>&1; then
+          --project="$${LETTER_ARCHIVE_PROJECT_ID}" \
+          --location="$${LETTER_ARCHIVE_REGION}" >/dev/null 2>&1; then
           scheduler_action=update
         else
           scheduler_action=create
@@ -295,13 +400,13 @@ steps:
 
         gcloud scheduler jobs "$${scheduler_action}" http \
           letter-archive-worker-reconcile \
-          --project="${PROJECT_ID}" \
-          --location="${_REGION}" \
-          --schedule="${_WORKER_RECONCILIATION_SCHEDULE}" \
+          --project="$${LETTER_ARCHIVE_PROJECT_ID}" \
+          --location="$${LETTER_ARCHIVE_REGION}" \
+          --schedule="$${LETTER_ARCHIVE_WORKER_SCHEDULE}" \
           --time-zone=Etc/UTC \
-          --uri="https://run.googleapis.com/v2/projects/${PROJECT_ID}/locations/${_REGION}/jobs/letter-archive-worker:run" \
+          --uri="https://run.googleapis.com/v2/projects/$${LETTER_ARCHIVE_PROJECT_ID}/locations/$${LETTER_ARCHIVE_REGION}/jobs/letter-archive-worker:run" \
           --http-method=POST \
-          --oauth-service-account-email="${_SCHEDULER_SERVICE_ACCOUNT}" \
+          --oauth-service-account-email="$${LETTER_ARCHIVE_SCHEDULER_SERVICE_ACCOUNT}" \
           --oauth-token-scope=https://www.googleapis.com/auth/cloud-platform \
           --attempt-deadline=30s \
           --max-retry-attempts=0 \
@@ -310,4 +415,19 @@ steps:
           --quiet
     waitFor: ['grant-scheduler-worker-job-invoke']
 
-timeout: 2400s
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: release-production-lock
+    entrypoint: bash
+    env:
+      - 'LETTER_ARCHIVE_PROJECT_ID=${PROJECT_ID}'
+      - 'LETTER_ARCHIVE_RELEASE_SHA=${_TAG}'
+      - 'LETTER_ARCHIVE_BUILD_ID=${BUILD_ID}'
+      - 'LETTER_ARCHIVE_RELEASE_LOCK_BUCKET=${_RELEASE_LOCK_BUCKET}'
+    args:
+      - deploy/cloudrun/release-release-lock.sh
+    waitFor:
+      - configure-worker-reconciliation-schedule
+      - deploy-frontend
+      - deploy-backfill-job
+
+timeout: 3600s

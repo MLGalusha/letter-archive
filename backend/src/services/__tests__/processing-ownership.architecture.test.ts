@@ -229,6 +229,15 @@ describe('processing execution ownership', () => {
     expect(controlledDeploy).toMatch(
       /id: deploy-backend[\s\S]*?waitFor:[\s\S]*?- grant-backend-worker-job-invoke/,
     );
+    expect(controlledDeploy).toMatch(
+      /id: grant-backend-worker-job-invoke[\s\S]*?deploy\/cloudrun\/ensure-job-invoker\.sh[\s\S]*?waitFor: \['deploy-worker'\]/,
+    );
+    expect(controlledDeploy).toMatch(
+      /id: grant-worker-handoff-job-invoke[\s\S]*?deploy\/cloudrun\/ensure-job-invoker\.sh[\s\S]*?waitFor: \['grant-backend-worker-job-invoke'\]/,
+    );
+    expect(controlledDeploy).toMatch(
+      /id: grant-scheduler-worker-job-invoke[\s\S]*?deploy\/cloudrun\/ensure-job-invoker\.sh[\s\S]*?waitFor: \['grant-worker-handoff-job-invoke'\]/,
+    );
 
     const workerDeploy = controlledDeploy.indexOf('id: deploy-worker');
     const backendWorkerGrant = controlledDeploy.indexOf(
@@ -394,22 +403,22 @@ describe('processing execution ownership', () => {
     expect(scheduleStep).toBeGreaterThan(schedulerGrant);
 
     expect(controlledDeploy.slice(backendGrant, schedulerGrant)).toContain(
-      '--member=serviceAccount:${_BACKEND_SERVICE_ACCOUNT}',
+      'LETTER_ARCHIVE_INVOKER_SERVICE_ACCOUNT=${_BACKEND_SERVICE_ACCOUNT}',
     );
     expect(controlledDeploy.slice(backendGrant, schedulerGrant)).toContain(
-      '--role=roles/run.invoker',
+      'deploy/cloudrun/ensure-job-invoker.sh',
     );
     expect(controlledDeploy.slice(schedulerGrant, scheduleStep)).toContain(
-      '--member="serviceAccount:$${LETTER_ARCHIVE_SCHEDULER_SERVICE_ACCOUNT}"',
+      'export LETTER_ARCHIVE_INVOKER_SERVICE_ACCOUNT="$${LETTER_ARCHIVE_SCHEDULER_SERVICE_ACCOUNT}"',
     );
     expect(controlledDeploy.slice(schedulerGrant, scheduleStep)).toContain(
-      '--role=roles/run.invoker',
+      'bash deploy/cloudrun/ensure-job-invoker.sh',
     );
     expect(controlledDeploy.slice(schedulerGrant, scheduleStep)).toContain(
       'if [[ "$${LETTER_ARCHIVE_ENABLE_SCHEDULER}" != "true" ]]',
     );
     expect(controlledDeploy.slice(schedulerGrant, scheduleStep)).toContain(
-      "waitFor: ['grant-backend-worker-job-invoke']",
+      "waitFor: ['grant-worker-handoff-job-invoke']",
     );
 
     const scheduleContract = controlledDeploy.slice(scheduleStep);

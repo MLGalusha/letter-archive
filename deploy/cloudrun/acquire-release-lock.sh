@@ -41,10 +41,28 @@ for attempt in $(seq 1 180); do
     exit 0
   fi
 
-  current_payload="$(
-    gcloud storage cat "$lock_uri" \
-      --project="$LETTER_ARCHIVE_PROJECT_ID" 2>/dev/null || true
-  )"
+  # Read one immutable object version. Fetching the live payload and its
+  # generation separately would allow another contender to replace the lock
+  # between those reads, causing us to delete that contender's live lock.
+  if ! lock_generation="$(
+    gcloud storage objects describe "$lock_uri" \
+      --project="$LETTER_ARCHIVE_PROJECT_ID" \
+      --format='value(generation)' 2>/dev/null
+  )"; then
+    continue
+  fi
+  if [[ ! "$lock_generation" =~ ^[0-9]+$ ]]; then
+    echo "Production release lock generation is invalid" >&2
+    exit 1
+  fi
+  if ! current_payload="$(
+    gcloud storage cat "${lock_uri}#${lock_generation}" \
+      --project="$LETTER_ARCHIVE_PROJECT_ID" 2>/dev/null
+  )"; then
+    # The observed generation stopped being readable before its payload was
+    # fetched. Re-observe instead of making a decision about a different lock.
+    continue
+  fi
   read -r owner_build_id owner_release_sha extra <<<"$current_payload"
   if [[ ! "$owner_build_id" =~ ^[0-9a-f-]{8,64}$ ]] \
     || [[ ! "$owner_release_sha" =~ ^[0-9a-f]{40}$ ]] \
@@ -67,15 +85,6 @@ for attempt in $(seq 1 180); do
       sleep 10
       ;;
     SUCCESS|FAILURE|INTERNAL_ERROR|TIMEOUT|CANCELLED|EXPIRED)
-      lock_generation="$(
-        gcloud storage objects describe "$lock_uri" \
-          --project="$LETTER_ARCHIVE_PROJECT_ID" \
-          --format='value(generation)'
-      )"
-      if [[ ! "$lock_generation" =~ ^[0-9]+$ ]]; then
-        echo "Production release lock generation is invalid" >&2
-        exit 1
-      fi
       gcloud storage rm "$lock_uri" \
         --project="$LETTER_ARCHIVE_PROJECT_ID" \
         --if-generation-match="$lock_generation" >/dev/null 2>&1 || true

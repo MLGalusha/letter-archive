@@ -79,6 +79,19 @@ const statePath = process.env.FAKE_GCLOUD_STATE;
 const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
 
 if (args.slice(0, 3).join(' ') === 'run jobs get-iam-policy') {
+  const expected = [
+    'run',
+    'jobs',
+    'get-iam-policy',
+    'letter-archive-worker',
+    '--project=test-project',
+    '--region=us-east1',
+    '--format=json',
+  ];
+  if (JSON.stringify(args) !== JSON.stringify(expected)) {
+    process.stderr.write('Unexpected policy read arguments: ' + args.join(' ') + '\\n');
+    process.exit(96);
+  }
   state.reads += 1;
   fs.writeFileSync(statePath, JSON.stringify(state));
   const members = state.addAttempts >= 2
@@ -155,6 +168,19 @@ const statePath = process.env.FAKE_GCLOUD_STATE;
 const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
 
 if (args.slice(0, 3).join(' ') === 'run jobs get-iam-policy') {
+  const expected = [
+    'run',
+    'jobs',
+    'get-iam-policy',
+    'letter-archive-worker',
+    '--project=test-project',
+    '--region=us-east1',
+    '--format=json',
+  ];
+  if (JSON.stringify(args) !== JSON.stringify(expected)) {
+    process.stderr.write('Unexpected policy read arguments: ' + args.join(' ') + '\\n');
+    process.exit(96);
+  }
   process.stdout.write(JSON.stringify({ bindings: [] }));
   process.exit(0);
 }

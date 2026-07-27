@@ -342,6 +342,20 @@ describe('processing execution ownership', () => {
     expect(migrationPolicy).toContain(
       "automaticMigrationBaselineTag =\n  '0056_repair_extra_content_job_ownership'",
     );
+
+    const migrationCli = await readFile(
+      path.join(sourceRoot, 'cli/migrate.ts'),
+      'utf8',
+    );
+    expect(migrationCli).toContain(
+      "'SELECT, INSERT'",
+    );
+    expect(migrationCli).toContain(
+      "namespace.nspname IN ('public', 'drizzle')",
+    );
+    expect(migrationCli).toContain(
+      "NOT pg_has_role(current_user, owner_oid, 'USAGE')",
+    );
   });
 
   it('keeps scheduled worker reconciliation authenticated and ordered after invoker grants', async () => {

@@ -1,4 +1,4 @@
-import { eq, and, isNull, or } from 'drizzle-orm';
+import { eq, and, inArray, isNull, or } from 'drizzle-orm';
 import {
   collections,
   db,
@@ -97,6 +97,19 @@ export interface ObservedPageSource {
   checksumSha256: string | null;
 }
 
+export interface ContentDuplicateIdentity {
+  collectionId?: string;
+  dateRaw: string;
+  type: LetterType;
+  typeSequence: number;
+  pageNumber: number;
+}
+
+export interface DurableContentLookup {
+  checksumSha256: string;
+  isDurableSource: (page: LetterPage) => Promise<boolean>;
+}
+
 export function uploadPageIdentityKey(identity: UploadPageIdentity): string {
   return [
     identity.collectionCode,
@@ -191,6 +204,103 @@ async function loadLockedLetter(
     throw new Error(`Locked page source owner ${letterId} could not be reloaded`);
   }
   return letter;
+}
+
+/**
+ * Finds a durable page with matching content while preserving target identity.
+ *
+ * The caller must hold the checksum-scoped advisory lock for the full upload
+ * workflow. This transaction locks any requested or matching correspondence
+ * group so force replacement cannot invalidate the duplicate decision while
+ * its stored object is being verified.
+ */
+export async function findDurableContentDuplicateByIdentity(
+  identity: ContentDuplicateIdentity,
+  lookup: DurableContentLookup,
+): Promise<PageMutationResult | undefined> {
+  return db.transaction(async (tx) => {
+    if (identity.collectionId) {
+      const targetGroup = await lockCorrespondenceGroupByIdentity(
+        {
+          collectionId: identity.collectionId,
+          dateRaw: identity.dateRaw,
+          typeSequence: identity.typeSequence,
+        },
+        tx,
+      );
+      const targetOwner = targetGroup?.members.find(
+        (member) => member.type === identity.type,
+      );
+      const targetPage = targetOwner
+        ? await tx.query.letterPages.findFirst({
+            where: and(
+              eq(letterPages.letterId, targetOwner.id),
+              eq(letterPages.pageNumber, identity.pageNumber),
+            ),
+          })
+        : undefined;
+      if (targetPage) return undefined;
+    }
+
+    const matchingPages = await tx.query.letterPages.findMany({
+      where: eq(letterPages.checksumSha256, lookup.checksumSha256),
+    });
+    for (const observedPage of matchingPages) {
+      const observedOwner = await tx.query.letters.findFirst({
+        where: eq(letters.id, observedPage.letterId),
+      });
+      if (!observedOwner) continue;
+
+      const ownerGroup = await lockCorrespondenceGroupByIdentity(
+        {
+          collectionId: observedOwner.collectionId,
+          dateRaw: observedOwner.dateRaw,
+          typeSequence: observedOwner.typeSequence,
+        },
+        tx,
+      );
+      if (
+        !ownerGroup
+        || !ownerGroup.members.some((member) => member.id === observedOwner.id)
+      ) {
+        continue;
+      }
+
+      const currentPage = await tx.query.letterPages.findFirst({
+        where: eq(letterPages.id, observedPage.id),
+      });
+      if (
+        !currentPage
+        || currentPage.letterId !== observedPage.letterId
+        || currentPage.storagePath !== observedPage.storagePath
+        || currentPage.checksumSha256 !== lookup.checksumSha256
+        || !(await lookup.isDurableSource(currentPage))
+      ) {
+        continue;
+      }
+
+      const confirmedPage = await tx.query.letterPages.findFirst({
+        where: eq(letterPages.id, currentPage.id),
+      });
+      const confirmedOwner = await loadLockedLetter(observedOwner.id, tx);
+      if (
+        confirmedPage
+        && confirmedPage.letterId === confirmedOwner.id
+        && confirmedPage.storagePath === currentPage.storagePath
+        && confirmedPage.checksumSha256 === lookup.checksumSha256
+      ) {
+        return {
+          letter: confirmedOwner,
+          page: confirmedPage,
+          outcome: 'unchanged',
+          sourceChanged: false,
+          primarySourceRevision: confirmedOwner.primarySourceRevision,
+        };
+      }
+    }
+
+    return undefined;
+  });
 }
 
 async function resolvePageOwner(
@@ -532,5 +642,15 @@ export async function getPage(
 export async function findPageByChecksum(checksum: string): Promise<LetterPage | undefined> {
   return db.query.letterPages.findFirst({
     where: eq(letterPages.checksumSha256, checksum),
+  });
+}
+
+/**
+ * Gets every page matching any checksum in one query.
+ */
+export async function findPagesByChecksums(checksums: string[]): Promise<LetterPage[]> {
+  if (checksums.length === 0) return [];
+  return db.query.letterPages.findMany({
+    where: inArray(letterPages.checksumSha256, checksums),
   });
 }

@@ -9,12 +9,17 @@ import {
   removeStoredFile,
   storeImmutableFile,
 } from './storage.js';
-import { findOrCreateCollection } from './collections.js';
+import {
+  findOrCreateCollection,
+  getCollectionByCode,
+  getCollectionById,
+} from './collections.js';
 import {
   findLetterByIdentity,
   type CreateLetterParams,
 } from './letters.js';
 import {
+  findDurableContentDuplicateByIdentity,
   findOrCreatePage,
   getPage,
   type ExistingPagePolicy,
@@ -29,6 +34,7 @@ import {
   sourceRevisionChanged,
 } from './letter/source-revision.js';
 import { reclaimUnreferencedPageStoragePath } from './storage-reference-cleanup.js';
+import { withContentChecksumLock } from './content-checksum-lock.js';
 
 const log = createLogger({ module: 'upload' });
 
@@ -41,9 +47,11 @@ export interface UploadResult {
   alreadyExists: boolean;
   outcome: UploadOutcome;
   changed: boolean;
+  duplicateReason?: DuplicateReason;
 }
 
 export type UploadOutcome = 'created' | 'replaced' | 'unchanged';
+export type DuplicateReason = 'duplicate_content';
 
 async function readImageDimensions(
   storagePath: string,
@@ -62,6 +70,18 @@ function uploadOutcome(outcome: PageMutationOutcome): UploadOutcome {
   return 'unchanged';
 }
 
+async function isDurableChecksumSource(
+  page: LetterPage,
+  checksumSha256: string,
+): Promise<boolean> {
+  try {
+    return await computeChecksum(getAbsoluteStoragePath(page.storagePath))
+      === checksumSha256;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Processes an uploaded file:
  * 1. Parses the filename
@@ -72,11 +92,13 @@ function uploadOutcome(outcome: PageMutationOutcome): UploadOutcome {
  *
  * @param force - If true, overwrites existing files instead of skipping
  */
-export async function processUploadedFile(
+async function processUploadedFileInternal(
   tempPath: string,
   originalFilename: string,
   force = false,
   expectedReplacementSource?: UploadSourceExpectation,
+  contentLockHeld = false,
+  inspectedFile?: Awaited<ReturnType<typeof inspectUploadFile>>,
 ): Promise<UploadResult> {
   const start = Date.now();
   const context = { originalFilename, force };
@@ -109,8 +131,92 @@ export async function processUploadedFile(
     'Filename parsed successfully'
   );
 
-  // Get or create collection
-  const collection = await findOrCreateCollection(parsed.collectionCode);
+  const inspectedUpload = force
+    ? null
+    : inspectedFile ?? await inspectUploadFile(tempPath);
+  if (inspectedUpload && !contentLockHeld) {
+    return withContentChecksumLock(
+      inspectedUpload.checksumSha256,
+      () => processUploadedFileInternal(
+        tempPath,
+        originalFilename,
+        force,
+        expectedReplacementSource,
+        true,
+        inspectedUpload,
+      ),
+    );
+  }
+
+  const observedCollection = await getCollectionByCode(parsed.collectionCode);
+  const duplicate = inspectedUpload
+    ? await findDurableContentDuplicateByIdentity(
+        {
+          ...(observedCollection ? { collectionId: observedCollection.id } : {}),
+          dateRaw: parsed.dateRaw,
+          type: parsed.type,
+          typeSequence: parsed.typeSequence,
+          pageNumber: parsed.pageNumber,
+        },
+        {
+          checksumSha256: inspectedUpload.checksumSha256,
+          isDurableSource: async (page) => {
+            const durable = await isDurableChecksumSource(
+              page,
+              inspectedUpload.checksumSha256,
+            );
+            if (!durable) {
+              log.warn(
+                {
+                  ...context,
+                  existingPageId: page.id,
+                  existingStoragePath: page.storagePath,
+                },
+                'Ignoring a content-hash match whose archived object is missing or corrupt',
+              );
+            }
+            return durable;
+          },
+        },
+      )
+    : undefined;
+  if (duplicate) {
+    const duplicateCollection = await getCollectionById(
+      duplicate.letter.collectionId,
+    );
+    if (!duplicateCollection) {
+      throw new Error(
+        `Content duplicate owner collection ${duplicate.letter.collectionId} could not be loaded`,
+      );
+    }
+    log.info(
+      {
+        ...context,
+        collectionId: duplicateCollection.id,
+        letterId: duplicate.letter.id,
+        pageId: duplicate.page.id,
+        alreadyExists: true,
+        outcome: 'unchanged',
+        changed: false,
+        duration: Date.now() - start,
+      },
+      'Upload source unchanged',
+    );
+    return {
+      collection: duplicateCollection,
+      letter: duplicate.letter,
+      page: duplicate.page,
+      storagePath: duplicate.page.storagePath,
+      primarySourceRevision: duplicate.primarySourceRevision,
+      alreadyExists: true,
+      outcome: 'unchanged',
+      changed: false,
+      duplicateReason: 'duplicate_content',
+    };
+  }
+
+  const collection = observedCollection
+    ?? await findOrCreateCollection(parsed.collectionCode);
   log.debug({ ...context, collectionId: collection.id }, 'Collection resolved');
 
   const letterIdentity: CreateLetterParams = {
@@ -259,7 +365,7 @@ export async function processUploadedFile(
     ) {
       pageResult = await commitObservedSource(actualChecksum, 'keep');
     } else {
-      const inspected = await inspectUploadFile(tempPath);
+      const inspected = inspectedUpload ?? await inspectUploadFile(tempPath);
       if (inspected.checksumSha256 === existing.checksumSha256) {
         const stored = await storeImmutableFile(
           tempPath,
@@ -294,7 +400,7 @@ export async function processUploadedFile(
       }
     }
   } else {
-    const inspected = await inspectUploadFile(tempPath);
+    const inspected = inspectedUpload ?? await inspectUploadFile(tempPath);
 
     if (existing) {
       let actualChecksum: string | null = null;
@@ -399,4 +505,18 @@ export async function processUploadedFile(
     outcome,
     changed: pageResult.sourceChanged,
   };
+}
+
+export async function processUploadedFile(
+  tempPath: string,
+  originalFilename: string,
+  force = false,
+  expectedReplacementSource?: UploadSourceExpectation,
+): Promise<UploadResult> {
+  return processUploadedFileInternal(
+    tempPath,
+    originalFilename,
+    force,
+    expectedReplacementSource,
+  );
 }

@@ -1,5 +1,7 @@
 import { apiPost } from "../client";
 
+export type DuplicateReason = "duplicate_content";
+
 export interface UploadResult {
   filename: string;
   letterId: string;
@@ -10,6 +12,7 @@ export interface UploadResult {
   alreadyExists: boolean;
   outcome: "created" | "replaced" | "unchanged";
   changed: boolean;
+  duplicateReason?: DuplicateReason;
 }
 
 export interface UploadError {
@@ -58,8 +61,15 @@ export async function uploadFiles(
 export interface CheckDuplicatesResponse {
   duplicates: Record<string, boolean>;
   sourceExpectations: Record<string, UploadSourceExpectation | null>;
+  contentDuplicates: Record<string, boolean>;
 }
 
-export async function checkDuplicates(filenames: string[]): Promise<CheckDuplicatesResponse> {
-  return apiPost<CheckDuplicatesResponse>("/admin/uploads/check-duplicates", { filenames });
+export async function checkDuplicates(
+  filenames: string[],
+  hashes?: Record<string, string>,
+): Promise<CheckDuplicatesResponse> {
+  return apiPost<CheckDuplicatesResponse>(
+    "/admin/uploads/check-duplicates",
+    hashes ? { filenames, hashes } : { filenames },
+  );
 }

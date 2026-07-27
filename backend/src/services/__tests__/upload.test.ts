@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   findOrCreateCollectionMock,
+  getCollectionByCodeMock,
+  getCollectionByIdMock,
   findLetterByIdentityMock,
+  findDurableContentDuplicateByIdentityMock,
   findOrCreatePageMock,
   getPageMock,
   computeChecksumMock,
@@ -14,9 +17,13 @@ const {
   reclaimStoragePathMock,
   removeStoredFileMock,
   storeImmutableFileMock,
+  withContentChecksumLockMock,
 } = vi.hoisted(() => ({
   findOrCreateCollectionMock: vi.fn(),
+  getCollectionByCodeMock: vi.fn(),
+  getCollectionByIdMock: vi.fn(),
   findLetterByIdentityMock: vi.fn(),
+  findDurableContentDuplicateByIdentityMock: vi.fn(),
   findOrCreatePageMock: vi.fn(),
   getPageMock: vi.fn(),
   computeChecksumMock: vi.fn(),
@@ -28,10 +35,13 @@ const {
   reclaimStoragePathMock: vi.fn(),
   removeStoredFileMock: vi.fn(),
   storeImmutableFileMock: vi.fn(),
+  withContentChecksumLockMock: vi.fn(),
 }));
 
 vi.mock('../collections.js', () => ({
   findOrCreateCollection: findOrCreateCollectionMock,
+  getCollectionByCode: getCollectionByCodeMock,
+  getCollectionById: getCollectionByIdMock,
 }));
 
 vi.mock('../letters.js', () => ({
@@ -39,8 +49,14 @@ vi.mock('../letters.js', () => ({
 }));
 
 vi.mock('../letter-pages.js', () => ({
+  findDurableContentDuplicateByIdentity:
+    findDurableContentDuplicateByIdentityMock,
   findOrCreatePage: findOrCreatePageMock,
   getPage: getPageMock,
+}));
+
+vi.mock('../content-checksum-lock.js', () => ({
+  withContentChecksumLock: withContentChecksumLockMock,
 }));
 
 vi.mock('../storage-reference-cleanup.js', () => ({
@@ -133,7 +149,13 @@ describe('upload service', () => {
       id: 'collection-1',
       collectionCode: '003',
     });
+    getCollectionByCodeMock.mockResolvedValue(undefined);
+    getCollectionByIdMock.mockResolvedValue({
+      id: 'collection-1',
+      collectionCode: '003',
+    });
     findLetterByIdentityMock.mockResolvedValue(observedLetter);
+    findDurableContentDuplicateByIdentityMock.mockResolvedValue(undefined);
     getPageMock.mockResolvedValue(undefined);
     findOrCreatePageMock.mockResolvedValue(pageMutationResult({
       page: {
@@ -156,6 +178,9 @@ describe('upload service', () => {
     computeChecksumMock.mockResolvedValue('abc123');
     reclaimStoragePathMock.mockResolvedValue('removed');
     removeStoredFileMock.mockResolvedValue(undefined);
+    withContentChecksumLockMock.mockImplementation(
+      async (_checksum: string, work: () => Promise<unknown>) => work(),
+    );
   });
 
   it('rejects invalid filenames before touching downstream services', async () => {
@@ -165,6 +190,219 @@ describe('upload service', () => {
 
     expect(findOrCreateCollectionMock).not.toHaveBeenCalled();
     expect(storeImmutableFileMock).not.toHaveBeenCalled();
+  });
+
+  it('returns a durable renamed-content owner before creating membership', async () => {
+    const existingPage = {
+      id: 'page-existing-content',
+      letterId: 'letter-existing-content',
+      pageNumber: 5,
+      storagePath: 'storage/collections/004/objects/existing.jpg',
+      originalFilename: '004-19400102-L01-05.jpg',
+      checksumSha256: 'abc123',
+    };
+    const existingLetter = {
+      id: 'letter-existing-content',
+      collectionId: 'collection-existing-content',
+      dateRaw: '19400102',
+      type: 'L',
+      typeSequence: 1,
+      primarySourceRevision: 9,
+    };
+    const existingCollection = {
+      id: 'collection-existing-content',
+      collectionCode: '004',
+    };
+    findDurableContentDuplicateByIdentityMock.mockResolvedValueOnce({
+      letter: existingLetter,
+      page: existingPage,
+      outcome: 'unchanged',
+      sourceChanged: false,
+      primarySourceRevision: 9,
+    });
+    getCollectionByIdMock.mockResolvedValueOnce(existingCollection);
+
+    const result = await processUploadedFile(
+      '/tmp/renamed.jpg',
+      '003-19320706-L01-01.jpg',
+    );
+
+    expect(withContentChecksumLockMock).toHaveBeenCalledWith(
+      'abc123',
+      expect.any(Function),
+    );
+    expect(findDurableContentDuplicateByIdentityMock).toHaveBeenCalledWith(
+      {
+        dateRaw: '19320706',
+        type: 'L',
+        typeSequence: 1,
+        pageNumber: 1,
+      },
+      {
+        checksumSha256: 'abc123',
+        isDurableSource: expect.any(Function),
+      },
+    );
+    expect(findOrCreateCollectionMock).not.toHaveBeenCalled();
+    expect(findLetterByIdentityMock).not.toHaveBeenCalled();
+    expect(storeImmutableFileMock).not.toHaveBeenCalled();
+    expect(findOrCreatePageMock).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      collection: existingCollection,
+      letter: existingLetter,
+      page: existingPage,
+      storagePath: existingPage.storagePath,
+      primarySourceRevision: 9,
+      alreadyExists: true,
+      outcome: 'unchanged',
+      changed: false,
+      duplicateReason: 'duplicate_content',
+    });
+  });
+
+  it('keeps normal reconciliation for matching content at the requested identity', async () => {
+    const sameIdentityPage = {
+      ...preflightExistingPage,
+      pageNumber: 1,
+      checksumSha256: 'abc123',
+    };
+    getCollectionByCodeMock.mockResolvedValueOnce({
+      id: 'collection-1',
+      collectionCode: '003',
+    });
+    getPageMock.mockResolvedValueOnce(sameIdentityPage);
+    findOrCreatePageMock.mockResolvedValueOnce(pageMutationResult({
+      page: sameIdentityPage,
+      outcome: 'unchanged',
+      sourceChanged: false,
+      primarySourceRevision: 7,
+    }));
+
+    const result = await processUploadedFile(
+      '/tmp/test.jpg',
+      '003-19320706-L01-01.jpg',
+    );
+
+    expect(findDurableContentDuplicateByIdentityMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collectionId: 'collection-1',
+        pageNumber: 1,
+      }),
+      expect.any(Object),
+    );
+    expect(findOrCreateCollectionMock).not.toHaveBeenCalled();
+    expect(findOrCreatePageMock).toHaveBeenCalled();
+    expect(result).toMatchObject({
+      outcome: 'unchanged',
+      changed: false,
+    });
+    expect(result).not.toHaveProperty('duplicateReason');
+  });
+
+  it.each([
+    ['missing', new Error('missing object')],
+    ['corrupt', 'different-checksum'],
+  ])(
+    'does not discard an upload when a checksum claimant is %s',
+    async (_label, checksumResult) => {
+      const claimant = {
+        id: 'page-broken-content',
+        letterId: 'letter-broken-content',
+        storagePath: 'storage/objects/broken.jpg',
+        checksumSha256: 'abc123',
+      };
+      if (checksumResult instanceof Error) {
+        computeChecksumMock.mockRejectedValueOnce(checksumResult);
+      } else {
+        computeChecksumMock.mockResolvedValueOnce(checksumResult);
+      }
+      findDurableContentDuplicateByIdentityMock.mockImplementationOnce(
+        async (_identity, lookup) => {
+          expect(await lookup.isDurableSource(claimant)).toBe(false);
+          return undefined;
+        },
+      );
+
+      const result = await processUploadedFile(
+        '/tmp/renamed.jpg',
+        '003-19320706-L01-01.jpg',
+      );
+
+      expect(result).toMatchObject({
+        page: { id: 'page-1' },
+        outcome: 'created',
+        changed: true,
+      });
+      expect(result).not.toHaveProperty('duplicateReason');
+      expect(logWarnMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          existingPageId: claimant.id,
+        }),
+        expect.stringContaining('missing or corrupt'),
+      );
+    },
+  );
+
+  it('serializes first writers through duplicate lookup before collection creation', async () => {
+    let releasePrevious = Promise.resolve();
+    withContentChecksumLockMock.mockImplementation(
+      async (_checksum: string, work: () => Promise<unknown>) => {
+        const waitForPrevious = releasePrevious;
+        let releaseCurrent!: () => void;
+        releasePrevious = new Promise<void>((resolve) => {
+          releaseCurrent = resolve;
+        });
+        await waitForPrevious;
+        try {
+          return await work();
+        } finally {
+          releaseCurrent();
+        }
+      },
+    );
+
+    let committed = false;
+    const committedPage = {
+      id: 'page-1',
+      letterId: 'letter-1',
+      pageNumber: 1,
+      storagePath: 'storage/objects/source-a.jpg',
+      checksumSha256: 'abc123',
+    };
+    findDurableContentDuplicateByIdentityMock.mockImplementation(async () => (
+      committed
+        ? {
+            letter: { ...observedLetter, primarySourceRevision: 1 },
+            page: committedPage,
+            outcome: 'unchanged',
+            sourceChanged: false,
+            primarySourceRevision: 1,
+          }
+        : undefined
+    ));
+    findOrCreatePageMock.mockImplementationOnce(async () => {
+      committed = true;
+      return pageMutationResult({
+        page: committedPage,
+        outcome: 'created',
+        sourceChanged: true,
+        primarySourceRevision: 1,
+      });
+    });
+
+    const [winner, contender] = await Promise.all([
+      processUploadedFile('/tmp/first.jpg', '003-19320706-L01-01.jpg'),
+      processUploadedFile('/tmp/second.jpg', '004-19400102-L01-01.jpg'),
+    ]);
+
+    expect(winner).toMatchObject({ outcome: 'created' });
+    expect(contender).toMatchObject({
+      outcome: 'unchanged',
+      duplicateReason: 'duplicate_content',
+    });
+    expect(findOrCreateCollectionMock).toHaveBeenCalledTimes(1);
+    expect(storeImmutableFileMock).toHaveBeenCalledTimes(1);
+    expect(findOrCreatePageMock).toHaveBeenCalledTimes(1);
   });
 
   it('passes the read-only observed letter and exact creation identity to the page owner', async () => {

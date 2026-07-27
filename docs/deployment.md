@@ -130,21 +130,25 @@ explicit maintenance authorization, but it also establishes and verifies the
 maintenance state itself:
 
 1. build and push the exact reviewed release first;
-2. remove the public backend invoker binding;
-3. route backend traffic to a static maintenance revision with no database,
+2. execute the migration image in preflight-only mode to verify the exact
+   ledger, database connection, and schema-creation privilege without applying
+   a migration;
+3. remove the public backend invoker binding;
+4. route backend traffic to a static maintenance revision with no database,
    secret, archive, or worker access;
-4. pause scheduled reconciliation when present;
-5. revoke both API-to-worker and worker self-handoff invocation;
-6. remove the legacy worker pool and wait longer than the old API request
+5. pause scheduled reconciliation when present;
+6. revoke both API-to-worker and worker self-handoff invocation;
+7. remove the legacy worker pool and wait longer than the old API request
    timeout;
-7. require two consecutive observations with no active worker execution;
-8. run migrations in `maintenance` mode;
-9. deploy the new jobs and backend identities;
-10. privately verify backend release identity, DB readiness, and auth status;
-11. reopen the public backend and promote the frontend candidate.
+8. require two consecutive observations with no active worker execution;
+9. run migrations in `maintenance` mode;
+10. deploy the new jobs and backend identities;
+11. privately verify backend release identity, DB readiness, and auth status;
+12. reopen the public backend and promote the frontend candidate.
 
-If the pipeline fails after maintenance begins, the backend remains closed
-instead of reopening an unverified or mixed-version release.
+Preflight failure leaves the existing public release untouched. If the pipeline
+fails after maintenance begins, the backend remains closed instead of reopening
+an unverified or mixed-version release.
 
 ## External controls
 

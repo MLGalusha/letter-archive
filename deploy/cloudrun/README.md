@@ -124,9 +124,12 @@ verifies write quiescence itself:
      --substitutions=_TAG="$DEPLOY_SHA",_CONFIRM_WRITE_QUIESCENCE=true
    ```
 
-2. The build removes public backend invocation, routes traffic to a non-writing
-   maintenance revision, pauses reconciliation if present, verifies no active worker,
-   and waits beyond the old request timeout before migration.
+2. The build first runs the migration job in preflight-only mode. It verifies the
+   exact ledger and the migration role's database/schema privileges without applying
+   migrations, so external permission drift fails before downtime. Only after that
+   passes does the build remove public backend invocation, route traffic to a
+   non-writing maintenance revision, pause reconciliation if present, verify no
+   active worker, and wait beyond the old request timeout before migration.
 3. Route 100% of API traffic to the new revision, confirm old revisions are gone,
    perform the migration 0054/upload/manual-worker-wake smoke checks recorded in
    `docs/architecture-cleanup/current-work.md`, and only then reopen administrative

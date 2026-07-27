@@ -217,6 +217,9 @@ describe('processing execution ownership', () => {
     expect(controlledDeploy).toMatch(
       /id: establish-write-quiescence[\s\S]*?deploy\/cloudrun\/quiesce-production\.sh/,
     );
+    expect(controlledDeploy).toMatch(
+      /id: preflight-migrations[\s\S]*?--args=dist\/cli\/migrate\.js,--preflight/,
+    );
     expect(controlledDeploy).not.toContain(
       'worker-pools delete letter-archive-worker \\\n          --region=${_REGION} --quiet || true',
     );
@@ -232,8 +235,21 @@ describe('processing execution ownership', () => {
       'id: grant-worker-handoff-job-invoke',
     );
     const backendDeploy = controlledDeploy.indexOf('id: deploy-backend');
+    const migrationPreflight = controlledDeploy.indexOf(
+      'id: preflight-migrations',
+    );
+    const writeQuiescence = controlledDeploy.indexOf(
+      'id: establish-write-quiescence',
+    );
+    const migrationExecution = controlledDeploy.indexOf('id: run-migrations');
 
     expect(workerDeploy).toBeGreaterThan(-1);
+    expect(migrationPreflight).toBeGreaterThan(-1);
+    expect(writeQuiescence).toBeGreaterThan(migrationPreflight);
+    expect(migrationExecution).toBeGreaterThan(writeQuiescence);
+    expect(
+      controlledDeploy.slice(writeQuiescence, migrationExecution),
+    ).toContain('- preflight-migrations');
     expect(backendWorkerGrant).toBeGreaterThan(workerDeploy);
     expect(workerHandoffGrant).toBeGreaterThan(workerDeploy);
     expect(backendDeploy).toBeGreaterThan(backendWorkerGrant);

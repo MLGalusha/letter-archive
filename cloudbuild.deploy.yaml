@@ -181,6 +181,33 @@ steps:
       - deploy/cloudrun/prepare-release-manifests.sh
     waitFor: ['push-backend', 'push-frontend']
 
+  # ── Prove migration access before entering maintenance ──────
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy-migrate-job
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - replace
+      - rendered/cloudrun/backend-migrate-job.yaml
+      - --region=${_REGION}
+    waitFor:
+      - push-backend
+      - prepare-manifests
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: preflight-migrations
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - execute
+      - letter-archive-migrate
+      - --region=${_REGION}
+      - --args=dist/cli/migrate.js,--preflight
+      - --wait
+    waitFor: ['deploy-migrate-job']
+
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: establish-write-quiescence
     entrypoint: bash
@@ -195,23 +222,12 @@ steps:
       - 'LETTER_ARCHIVE_BUILD_ID=${BUILD_ID}'
     args:
       - deploy/cloudrun/quiesce-production.sh
-    waitFor: ['push-backend', 'push-frontend']
-
-  # ── Deploy + run migrations ─────────────────────────────────
-  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    id: deploy-migrate-job
-    entrypoint: gcloud
-    args:
-      - run
-      - jobs
-      - replace
-      - rendered/cloudrun/backend-migrate-job.yaml
-      - --region=${_REGION}
     waitFor:
       - push-backend
-      - prepare-manifests
-      - establish-write-quiescence
+      - push-frontend
+      - preflight-migrations
 
+  # ── Apply migrations only after writers are quiescent ────────
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: run-migrations
     entrypoint: gcloud
@@ -222,7 +238,9 @@ steps:
       - letter-archive-migrate
       - --region=${_REGION}
       - --wait
-    waitFor: ['deploy-migrate-job']
+    waitFor:
+      - establish-write-quiescence
+      - preflight-migrations
 
   # ── Deploy backfill job (run manually via gcloud) ───────────
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk

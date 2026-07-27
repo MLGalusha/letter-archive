@@ -15,6 +15,19 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const migrationsFolder = path.resolve(__dirname, '../../src/db/migrations');
 
+function isPreflightOnly(): boolean {
+  const argumentsAfterScript = process.argv.slice(2);
+  const unexpected = argumentsAfterScript.filter(
+    (argument) => argument !== '--preflight',
+  );
+  if (unexpected.length > 0) {
+    throw new Error(
+      `Unsupported migration argument(s): ${unexpected.join(', ')}`,
+    );
+  }
+  return argumentsAfterScript.includes('--preflight');
+}
+
 async function appliedMigrationLedger(): Promise<AppliedMigrationEntry[]> {
   try {
     const rows = await sql<{
@@ -79,7 +92,30 @@ async function migrationJournal(): Promise<MigrationJournalEntry[]> {
   }));
 }
 
+async function assertMigrationDatabasePrivileges(): Promise<void> {
+  const [privileges] = await sql<{
+    canCreateSchema: boolean;
+  }[]>`
+    SELECT has_database_privilege(
+      current_user,
+      current_database(),
+      'CREATE'
+    ) AS "canCreateSchema"
+  `;
+  if (!privileges?.canCreateSchema) {
+    throw new Error(
+      'Migration database role requires CREATE on the current database',
+    );
+  }
+
+  // Drizzle performs this statement before reading or applying its ledger.
+  // Running the same harmless, idempotent statement during preflight catches
+  // database-level privilege drift before production enters maintenance.
+  await sql`CREATE SCHEMA IF NOT EXISTS drizzle`;
+}
+
 async function main(): Promise<void> {
+  const preflightOnly = isPreflightOnly();
   const mode = process.env.MIGRATION_RELEASE_MODE;
   if (mode !== 'automatic' && mode !== 'maintenance') {
     throw new Error(
@@ -101,6 +137,11 @@ async function main(): Promise<void> {
     `Migration release policy accepted ${pending.length} pending migration(s) `
     + `in ${mode} mode`,
   );
+  await assertMigrationDatabasePrivileges();
+  if (preflightOnly) {
+    console.log('Migration preflight completed without applying migrations');
+    return;
+  }
   await migrate(db, { migrationsFolder });
   console.log(`Migrations applied from ${migrationsFolder}`);
 }

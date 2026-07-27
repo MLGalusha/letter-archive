@@ -97,7 +97,10 @@ async function assertMigrationDatabasePrivileges(): Promise<void> {
     canCreateSchema: boolean;
     canCreateInDrizzle: boolean;
     canCreateInPublic: boolean;
-    canWriteLedger: boolean;
+    canInsertLedger: boolean;
+    canReadLedger: boolean;
+    canUseDrizzle: boolean;
+    canUsePublic: boolean;
   }[]>`
     SELECT
       has_database_privilege(
@@ -110,29 +113,54 @@ async function assertMigrationDatabasePrivileges(): Promise<void> {
         ELSE has_schema_privilege(
           current_user,
           'drizzle',
-          'USAGE, CREATE'
+          'CREATE'
         )
       END AS "canCreateInDrizzle",
       has_schema_privilege(
         current_user,
         'public',
-        'USAGE, CREATE'
+        'CREATE'
       ) AS "canCreateInPublic",
+      CASE
+        WHEN to_regnamespace('drizzle') IS NULL THEN true
+        ELSE has_schema_privilege(
+          current_user,
+          'drizzle',
+          'USAGE'
+        )
+      END AS "canUseDrizzle",
+      has_schema_privilege(
+        current_user,
+        'public',
+        'USAGE'
+      ) AS "canUsePublic",
       CASE
         WHEN to_regclass('drizzle.__drizzle_migrations') IS NULL THEN true
         ELSE has_table_privilege(
           current_user,
           'drizzle.__drizzle_migrations',
-          'SELECT, INSERT'
+          'INSERT'
         )
-      END AS "canWriteLedger"
+      END AS "canInsertLedger",
+      CASE
+        WHEN to_regclass('drizzle.__drizzle_migrations') IS NULL THEN true
+        ELSE has_table_privilege(
+          current_user,
+          'drizzle.__drizzle_migrations',
+          'SELECT'
+        )
+      END AS "canReadLedger"
   `;
   const missingPrivileges = [
     !privileges?.canCreateSchema && 'CREATE on the current database',
-    !privileges?.canCreateInDrizzle && 'USAGE/CREATE on schema drizzle',
-    !privileges?.canCreateInPublic && 'USAGE/CREATE on schema public',
-    !privileges?.canWriteLedger
-      && 'SELECT/INSERT on drizzle.__drizzle_migrations',
+    !privileges?.canUseDrizzle && 'USAGE on schema drizzle',
+    !privileges?.canCreateInDrizzle && 'CREATE on schema drizzle',
+    !privileges?.canUsePublic && 'USAGE on schema public',
+    !privileges?.canCreateInPublic && 'CREATE on schema public',
+    !privileges?.canReadLedger
+      && 'SELECT on drizzle.__drizzle_migrations',
+    !privileges?.canInsertLedger
+      && 'INSERT on drizzle.__drizzle_migrations',
   ].filter((value): value is string => Boolean(value));
   if (missingPrivileges.length > 0) {
     throw new Error(

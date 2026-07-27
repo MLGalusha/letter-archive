@@ -353,9 +353,10 @@ describe('processing execution ownership', () => {
       path.join(sourceRoot, 'cli/migrate.ts'),
       'utf8',
     );
-    expect(migrationCli).toContain(
-      "'SELECT, INSERT'",
-    );
+    expect(migrationCli).toContain("'SELECT'");
+    expect(migrationCli).toContain("'INSERT'");
+    expect(migrationCli).not.toContain("'SELECT, INSERT'");
+    expect(migrationCli).not.toContain("'USAGE, CREATE'");
     expect(migrationCli).toContain(
       "namespace.nspname IN ('public', 'drizzle')",
     );

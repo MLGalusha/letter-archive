@@ -17,17 +17,44 @@ These templates assume:
 - `backend-migrate-job.yaml` — one-off migration job
 - `frontend-service.yaml` — frontend nginx container
 
-## Required substitutions
+## Manifest rendering
 
-Replace the placeholder values before applying:
+`render-manifests.sh` replaces the templates' collision-resistant `__NAME__`
+placeholders, validates every value, and atomically writes a separate rendered
+directory. It fails without modifying the templates if a value is missing or invalid
+or any placeholder remains. `cloudbuild.deploy.yaml` supplies the required values as
+step environment data during the controlled deployment. Keep environment variable
+names such as `CLOUD_RUN_REGION` outside the placeholder tokens.
 
-- `PROJECT_NUMBER` / `PROJECT_ID`
-- `REGION`
-- `BACKEND_IMAGE` / `FRONTEND_IMAGE`
-- `SERVICE_ACCOUNT_EMAIL`
-- `CLOUD_SQL_INSTANCE`
-- `ARCHIVE_BUCKET`
-- `YOUR_DOMAIN`
+Required render values:
+
+- `LETTER_ARCHIVE_PROJECT_ID`
+- `LETTER_ARCHIVE_REGION`
+- `LETTER_ARCHIVE_BACKEND_IMAGE` / `LETTER_ARCHIVE_FRONTEND_IMAGE`
+- `LETTER_ARCHIVE_BACKEND_SERVICE_ACCOUNT`
+- `LETTER_ARCHIVE_FRONTEND_SERVICE_ACCOUNT`
+- `LETTER_ARCHIVE_WORKER_SERVICE_ACCOUNT`
+- `LETTER_ARCHIVE_MIGRATE_SERVICE_ACCOUNT`
+- `LETTER_ARCHIVE_BACKFILL_SERVICE_ACCOUNT`
+- `LETTER_ARCHIVE_MIGRATION_RELEASE_MODE`
+- `LETTER_ARCHIVE_RELEASE_SHA`
+- `LETTER_ARCHIVE_CLOUD_SQL_INSTANCE`
+- `LETTER_ARCHIVE_ARCHIVE_BUCKET`
+- `LETTER_ARCHIVE_DOMAIN`
+
+## Release lock prerequisite
+
+Before any controlled or automatic production build, create the regional,
+uniform-access bucket `gs://letter-archive-485110-release-lock` in `US-EAST1`
+with public access prevention enforced. Grant
+`letter-archive-build@letter-archive-485110.iam.gserviceaccount.com` object
+create, read, and delete access on this bucket only (for example,
+bucket-scoped `roles/storage.objectAdmin`).
+
+The three production build configurations fail closed without this bucket.
+Their scripts use object-generation preconditions so only one build owns the
+lock and only the observed generation can be reaped or released. Do not replace
+those operations with unconditional object writes or deletes.
 
 ## Secrets
 
@@ -37,12 +64,24 @@ Store sensitive values in Secret Manager and reference them in YAML:
 gcloud secrets create jwt-secret --replication-policy="automatic"
 echo -n "your-random-secret" | gcloud secrets versions add jwt-secret --data-file=-
 
-gcloud secrets create database-url --replication-policy="automatic"
-echo -n "postgresql://..." | gcloud secrets versions add database-url --data-file=-
+gcloud secrets create database-url-api --replication-policy="automatic"
+gcloud secrets create database-url-worker --replication-policy="automatic"
+gcloud secrets create database-url-migrate --replication-policy="automatic"
+gcloud secrets create database-url-backfill --replication-policy="automatic"
 
 gcloud secrets create openai-api-key --replication-policy="automatic"
 echo -n "sk-..." | gcloud secrets versions add openai-api-key --data-file=-
 ```
+
+Add each database URL as a secret version without writing it to shell history.
+The API and worker database roles are DML-only, the migration role owns
+migration-managed objects, and the backfill role is limited to reading and
+updating `letter_pages`. Grant each runtime service account access only to its
+matching secret. The shared legacy `database-url` secret is not used by these
+templates.
+
+The release architecture, identity boundaries, migration policy, and rollback
+behavior are documented in [`docs/deployment.md`](../../docs/deployment.md).
 
 ## Push-time build validation
 
@@ -58,16 +97,13 @@ deployment config. This separation is intentional: migrations 0054/0055 and the
 atomic first-page writer cannot be introduced safely while an older API or worker can
 still write.
 
-## Controlled deployment
+## Controlled baseline deployment
 
-Use `cloudbuild.deploy.yaml` only after an operator has established write quiescence:
+Use `cloudbuild.deploy.yaml` only for the one-time maintenance baseline. The
+operator authorizes a maintenance window; the pipeline then establishes and
+verifies write quiescence itself:
 
-1. Pause administrative writes and uploads.
-2. Pause `letter-archive-worker-reconcile` if that Scheduler job exists.
-3. Stop new worker wakes and drain or terminate every old worker execution.
-4. Drain every old API revision that can write with the pre-0054 contract.
-5. Confirm no old API or worker writer remains.
-6. Fetch `origin/main`, confirm the reviewed commit is the clean local and remote
+1. Fetch `origin/main`, confirm the reviewed commit is the clean local and remote
    `main`, then submit the remote repository pinned to that full commit SHA. This
    prevents a dirty local directory from being uploaded and merely labelled as the
    reviewed commit:
@@ -80,12 +116,18 @@ Use `cloudbuild.deploy.yaml` only after an operator has established write quiesc
    test "$(git rev-parse --verify origin/main)" = "$DEPLOY_SHA"
    DEPLOY_SOURCE="$(git remote get-url origin)"
    gcloud builds submit "$DEPLOY_SOURCE" \
+     --project=letter-archive-485110 \
+     --region=us-east1 \
      --git-source-revision="$DEPLOY_SHA" \
+     --service-account=projects/letter-archive-485110/serviceAccounts/letter-archive-build@letter-archive-485110.iam.gserviceaccount.com \
      --config=cloudbuild.deploy.yaml \
      --substitutions=_TAG="$DEPLOY_SHA",_CONFIRM_WRITE_QUIESCENCE=true
    ```
 
-7. Route 100% of API traffic to the new revision, confirm old revisions are gone,
+2. The build removes public backend invocation, routes traffic to a non-writing
+   maintenance revision, pauses reconciliation if present, verifies no active worker,
+   and waits beyond the old request timeout before migration.
+3. Route 100% of API traffic to the new revision, confirm old revisions are gone,
    perform the migration 0054/upload/manual-worker-wake smoke checks recorded in
    `docs/architecture-cleanup/current-work.md`, and only then reopen administrative
    writes. Keep `letter-archive-worker-reconcile` paused or absent and keep
@@ -93,8 +135,8 @@ Use `cloudbuild.deploy.yaml` only after an operator has established write quiesc
    separate, later proof sequence below.
 
 The deployment graph rejects an omitted confirmation and any `_TAG` that is not a
-full lowercase Git SHA. The acknowledgement is an operator assertion, not an
-automatic drain mechanism.
+full lowercase Git SHA. The confirmation authorizes downtime; the build still has to
+establish and verify the drain before its migration step can start.
 
 The checked-in build keeps scheduled reconciliation disabled by default. This is a
 rollout gate: replacing a Cloud Run Job does not stop an older execution that began

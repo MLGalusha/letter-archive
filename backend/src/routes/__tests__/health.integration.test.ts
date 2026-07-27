@@ -10,7 +10,10 @@ describe('health route integration', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.body).toEqual({ ok: true });
+    expect(response.body).toEqual({
+      ok: true,
+      releaseSha: 'development',
+    });
     expect(response.headers['x-request-id']).toMatch(/^[0-9a-f-]{36}$/i);
   });
 });

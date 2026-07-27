@@ -17,6 +17,40 @@ export async function installMockImageSessionApi(page: Page): Promise<void> {
   await page.route(`${API_BASE_URL}/auth/image-session`, async (route) => {
     await route.fulfill({ status: 204 });
   });
+
+  // The authenticated admin shell always mounts the notification badge and
+  // stream. Keep those shell-owned requests inside the mocked boundary too:
+  // an unmocked 401 intentionally clears adminToken and redirects to login.
+  await page.route(`${API_BASE_URL}/admin/notifications/unread-count`, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        count: 0,
+        bySeverity: { info: 0, warn: 0, error: 0, critical: 0 },
+        maxSeverity: null,
+      }),
+    });
+  });
+  await page.route(`${API_BASE_URL}/admin/notifications/stream-token`, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        token: 'mock-notification-stream-token',
+        expiresAt: Date.now() + 60_000,
+      }),
+    });
+  });
+  await page.route(
+    `${API_BASE_URL}/admin/notifications/stream?token=mock-notification-stream-token`,
+    async (route) => {
+      await route.fulfill({
+        status: 204,
+        contentType: 'text/event-stream',
+      });
+    },
+  );
 }
 
 export async function waitForAdminDashboardReady(page: Page): Promise<void> {

@@ -1,0 +1,185 @@
+# Automatic full production release.
+# Invoked by GitHub Actions after required CI succeeds on protected main.
+# Migration policy fails closed unless production is past the maintenance
+# baseline and every pending migration is explicitly rolling-safe.
+
+substitutions:
+  _TAG: unset
+  _REGION: us-east1
+  _CLOUD_SQL_INSTANCE: letter-archive-db
+  _ARCHIVE_BUCKET: letter-archive-485110-archive
+  _DOMAIN: voicesthatremain.com
+  _RELEASE_LOCK_BUCKET: letter-archive-485110-release-lock
+  _BACKEND_SERVICE_ACCOUNT: 'letter-archive-backend@${PROJECT_ID}.iam.gserviceaccount.com'
+  _FRONTEND_SERVICE_ACCOUNT: 'letter-archive-frontend@${PROJECT_ID}.iam.gserviceaccount.com'
+  _WORKER_SERVICE_ACCOUNT: 'letter-archive-worker@${PROJECT_ID}.iam.gserviceaccount.com'
+  _MIGRATE_SERVICE_ACCOUNT: 'letter-archive-migrate@${PROJECT_ID}.iam.gserviceaccount.com'
+  _BACKFILL_SERVICE_ACCOUNT: 'letter-archive-backfill@${PROJECT_ID}.iam.gserviceaccount.com'
+  _BACKEND_IMAGE: '${_REGION}-docker.pkg.dev/${PROJECT_ID}/letter-archive/backend'
+  _FRONTEND_IMAGE: '${_REGION}-docker.pkg.dev/${PROJECT_ID}/letter-archive/frontend'
+
+options:
+  dynamic_substitutions: true
+  logging: CLOUD_LOGGING_ONLY
+
+steps:
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: verify-source
+    entrypoint: bash
+    env:
+      - 'LETTER_ARCHIVE_PROJECT_ID=${PROJECT_ID}'
+      - 'LETTER_ARCHIVE_BUILD_LOCATION=${_REGION}'
+      - 'LETTER_ARCHIVE_BUILD_ID=${BUILD_ID}'
+      - 'LETTER_ARCHIVE_RELEASE_SHA=${_TAG}'
+    args:
+      - deploy/cloudrun/verify-build-source.sh
+    waitFor: ['-']
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: acquire-release-lock
+    entrypoint: bash
+    env:
+      - 'LETTER_ARCHIVE_PROJECT_ID=${PROJECT_ID}'
+      - 'LETTER_ARCHIVE_REGION=${_REGION}'
+      - 'LETTER_ARCHIVE_RELEASE_SHA=${_TAG}'
+      - 'LETTER_ARCHIVE_BUILD_ID=${BUILD_ID}'
+      - 'LETTER_ARCHIVE_RELEASE_LOCK_BUCKET=${_RELEASE_LOCK_BUCKET}'
+    args:
+      - deploy/cloudrun/acquire-release-lock.sh
+    waitFor: ['verify-source']
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: verify-current-main
+    entrypoint: bash
+    env:
+      - 'LETTER_ARCHIVE_RELEASE_SHA=${_TAG}'
+    args:
+      - deploy/cloudrun/verify-current-main.sh
+    waitFor: ['acquire-release-lock']
+
+  - name: gcr.io/cloud-builders/docker
+    id: pull-backend-cache
+    entrypoint: bash
+    env:
+      - 'LETTER_ARCHIVE_IMAGE_REPOSITORY=${_BACKEND_IMAGE}'
+    args:
+      - -c
+      - docker pull "$$LETTER_ARCHIVE_IMAGE_REPOSITORY:latest" || true
+    waitFor: ['verify-current-main']
+
+  - name: gcr.io/cloud-builders/docker
+    id: pull-frontend-cache
+    entrypoint: bash
+    env:
+      - 'LETTER_ARCHIVE_IMAGE_REPOSITORY=${_FRONTEND_IMAGE}'
+    args:
+      - -c
+      - docker pull "$$LETTER_ARCHIVE_IMAGE_REPOSITORY:latest" || true
+    waitFor: ['verify-current-main']
+
+  - name: gcr.io/cloud-builders/docker
+    id: build-backend
+    args:
+      - build
+      - --cache-from
+      - '${_BACKEND_IMAGE}:latest'
+      - -t
+      - '${_BACKEND_IMAGE}:${_TAG}'
+      - -t
+      - '${_BACKEND_IMAGE}:latest'
+      - -f
+      - backend/Dockerfile
+      - backend
+    waitFor: ['pull-backend-cache']
+
+  - name: gcr.io/cloud-builders/docker
+    id: build-frontend
+    args:
+      - build
+      - --cache-from
+      - '${_FRONTEND_IMAGE}:latest'
+      - -t
+      - '${_FRONTEND_IMAGE}:${_TAG}'
+      - -t
+      - '${_FRONTEND_IMAGE}:latest'
+      - --build-arg
+      - 'VITE_API_URL=https://api.${_DOMAIN}'
+      - --build-arg
+      - 'VITE_SITE_URL=https://${_DOMAIN}'
+      - --build-arg
+      - 'RELEASE_SHA=${_TAG}'
+      - -f
+      - frontend/Dockerfile
+      - frontend
+    waitFor: ['pull-frontend-cache']
+
+  - name: gcr.io/cloud-builders/docker
+    id: push-backend
+    args:
+      - push
+      - --all-tags
+      - '${_BACKEND_IMAGE}'
+    waitFor: ['build-backend']
+
+  - name: gcr.io/cloud-builders/docker
+    id: push-frontend
+    args:
+      - push
+      - --all-tags
+      - '${_FRONTEND_IMAGE}'
+    waitFor: ['build-frontend']
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: prepare-manifests
+    entrypoint: bash
+    env:
+      - 'LETTER_ARCHIVE_PROJECT_ID=${PROJECT_ID}'
+      - 'LETTER_ARCHIVE_REGION=${_REGION}'
+      - 'LETTER_ARCHIVE_RELEASE_SHA=${_TAG}'
+      - 'LETTER_ARCHIVE_BACKEND_IMAGE_REPOSITORY=${_BACKEND_IMAGE}'
+      - 'LETTER_ARCHIVE_FRONTEND_IMAGE_REPOSITORY=${_FRONTEND_IMAGE}'
+      - 'LETTER_ARCHIVE_CLOUD_SQL_INSTANCE=${_CLOUD_SQL_INSTANCE}'
+      - 'LETTER_ARCHIVE_ARCHIVE_BUCKET=${_ARCHIVE_BUCKET}'
+      - 'LETTER_ARCHIVE_DOMAIN=${_DOMAIN}'
+      - 'LETTER_ARCHIVE_BACKEND_SERVICE_ACCOUNT=${_BACKEND_SERVICE_ACCOUNT}'
+      - 'LETTER_ARCHIVE_FRONTEND_SERVICE_ACCOUNT=${_FRONTEND_SERVICE_ACCOUNT}'
+      - 'LETTER_ARCHIVE_WORKER_SERVICE_ACCOUNT=${_WORKER_SERVICE_ACCOUNT}'
+      - 'LETTER_ARCHIVE_MIGRATE_SERVICE_ACCOUNT=${_MIGRATE_SERVICE_ACCOUNT}'
+      - 'LETTER_ARCHIVE_BACKFILL_SERVICE_ACCOUNT=${_BACKFILL_SERVICE_ACCOUNT}'
+      - 'LETTER_ARCHIVE_MIGRATION_RELEASE_MODE=automatic'
+    args:
+      - deploy/cloudrun/prepare-release-manifests.sh
+    waitFor: ['push-backend', 'push-frontend']
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: release-production
+    entrypoint: bash
+    env:
+      - 'LETTER_ARCHIVE_PROJECT_ID=${PROJECT_ID}'
+      - 'LETTER_ARCHIVE_REGION=${_REGION}'
+      - 'LETTER_ARCHIVE_RELEASE_SHA=${_TAG}'
+      - 'LETTER_ARCHIVE_BUILD_ID=${BUILD_ID}'
+      - 'LETTER_ARCHIVE_BACKEND_SERVICE_ACCOUNT=${_BACKEND_SERVICE_ACCOUNT}'
+      - 'LETTER_ARCHIVE_FRONTEND_SERVICE_ACCOUNT=${_FRONTEND_SERVICE_ACCOUNT}'
+      - 'LETTER_ARCHIVE_WORKER_SERVICE_ACCOUNT=${_WORKER_SERVICE_ACCOUNT}'
+      - 'LETTER_ARCHIVE_BACKEND_IMAGE_REPOSITORY=${_BACKEND_IMAGE}'
+      - 'LETTER_ARCHIVE_FRONTEND_IMAGE_REPOSITORY=${_FRONTEND_IMAGE}'
+      - 'LETTER_ARCHIVE_BACKEND_PRODUCTION_URL=https://api.${_DOMAIN}'
+      - 'LETTER_ARCHIVE_FRONTEND_PRODUCTION_URL=https://${_DOMAIN}'
+    args:
+      - deploy/cloudrun/release-full.sh
+    waitFor: ['prepare-manifests']
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: release-production-lock
+    entrypoint: bash
+    env:
+      - 'LETTER_ARCHIVE_PROJECT_ID=${PROJECT_ID}'
+      - 'LETTER_ARCHIVE_RELEASE_SHA=${_TAG}'
+      - 'LETTER_ARCHIVE_BUILD_ID=${BUILD_ID}'
+      - 'LETTER_ARCHIVE_RELEASE_LOCK_BUCKET=${_RELEASE_LOCK_BUCKET}'
+    args:
+      - deploy/cloudrun/release-release-lock.sh
+    waitFor: ['release-production']
+
+timeout: 3600s

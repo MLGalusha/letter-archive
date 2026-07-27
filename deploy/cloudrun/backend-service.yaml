@@ -2,22 +2,22 @@ apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
   name: letter-archive-backend
-  namespace: PROJECT_NUMBER
+  namespace: __PROJECT_ID__
   labels:
-    cloud.googleapis.com/location: REGION
+    cloud.googleapis.com/location: __REGION__
 spec:
   template:
     metadata:
       annotations:
         autoscaling.knative.dev/minScale: "0"
         autoscaling.knative.dev/maxScale: "5"
-        run.googleapis.com/cloudsql-instances: PROJECT_ID:REGION:CLOUD_SQL_INSTANCE
+        run.googleapis.com/cloudsql-instances: __PROJECT_ID__:__REGION__:__CLOUD_SQL_INSTANCE__
     spec:
       containerConcurrency: 40
       timeoutSeconds: 300
-      serviceAccountName: SERVICE_ACCOUNT_EMAIL
+      serviceAccountName: __BACKEND_SERVICE_ACCOUNT__
       containers:
-        - image: BACKEND_IMAGE
+        - image: __BACKEND_IMAGE__
           ports:
             - name: http1
               containerPort: 8080
@@ -25,9 +25,9 @@ spec:
             - name: NODE_ENV
               value: production
             - name: SITE_URL
-              value: https://YOUR_DOMAIN
+              value: https://__DOMAIN__
             - name: CORS_ORIGINS
-              value: https://YOUR_DOMAIN
+              value: https://__DOMAIN__
             - name: STORAGE_DIR
               value: /mnt/archive
             - name: LOG_TO_FILES
@@ -36,17 +36,19 @@ spec:
               value: "false"
             - name: SEED_DEV_ADMIN
               value: "false"
+            - name: RELEASE_SHA
+              value: __RELEASE_SHA__
             - name: GOOGLE_CLOUD_PROJECT
-              value: PROJECT_ID
+              value: __PROJECT_ID__
             - name: CLOUD_RUN_REGION
-              value: REGION
+              value: __REGION__
             - name: CLOUD_RUN_WORKER_JOB_NAME
               value: letter-archive-worker
             # Secrets from Secret Manager
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
-                  name: database-url
+                  name: database-url-api
                   key: latest
             - name: JWT_SECRET
               valueFrom:
@@ -64,7 +66,7 @@ spec:
               memory: 1Gi
           startupProbe:
             httpGet:
-              path: /health
+              path: /health/ready
               port: 8080
             failureThreshold: 10
             periodSeconds: 3
@@ -77,7 +79,7 @@ spec:
             driver: gcsfuse.run.googleapis.com
             readOnly: false
             volumeAttributes:
-              bucketName: ARCHIVE_BUCKET
+              bucketName: __ARCHIVE_BUCKET__
   traffic:
     - percent: 100
       latestRevision: true

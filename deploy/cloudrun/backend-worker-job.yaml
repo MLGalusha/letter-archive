@@ -2,14 +2,14 @@ apiVersion: run.googleapis.com/v1
 kind: Job
 metadata:
   name: letter-archive-worker
-  namespace: PROJECT_NUMBER
+  namespace: __PROJECT_ID__
   labels:
-    cloud.googleapis.com/location: REGION
+    cloud.googleapis.com/location: __REGION__
 spec:
   template:
     metadata:
       annotations:
-        run.googleapis.com/cloudsql-instances: PROJECT_ID:REGION:CLOUD_SQL_INSTANCE
+        run.googleapis.com/cloudsql-instances: __PROJECT_ID__:__REGION__:__CLOUD_SQL_INSTANCE__
     spec:
       taskCount: 1
       parallelism: 1
@@ -18,9 +18,9 @@ spec:
           # Keep Cloud Run's default retry budget; fenced claims make retries safe.
           maxRetries: 3
           timeoutSeconds: 3600
-          serviceAccountName: SERVICE_ACCOUNT_EMAIL
+          serviceAccountName: __WORKER_SERVICE_ACCOUNT__
           containers:
-            - image: BACKEND_IMAGE
+            - image: __BACKEND_IMAGE__
               command:
                 - node
               args:
@@ -39,16 +39,16 @@ spec:
                 - name: SEED_DEV_ADMIN
                   value: "false"
                 - name: GOOGLE_CLOUD_PROJECT
-                  value: PROJECT_ID
+                  value: __PROJECT_ID__
                 - name: CLOUD_RUN_REGION
-                  value: REGION
+                  value: __REGION__
                 - name: CLOUD_RUN_WORKER_JOB_NAME
                   value: letter-archive-worker
                 # Secrets from Secret Manager
                 - name: DATABASE_URL
                   valueFrom:
                     secretKeyRef:
-                      name: database-url
+                      name: database-url-worker
                       key: latest
                 - name: OPENAI_API_KEY
                   valueFrom:
@@ -68,4 +68,4 @@ spec:
                 driver: gcsfuse.run.googleapis.com
                 readOnly: false
                 volumeAttributes:
-                  bucketName: ARCHIVE_BUCKET
+                  bucketName: __ARCHIVE_BUCKET__

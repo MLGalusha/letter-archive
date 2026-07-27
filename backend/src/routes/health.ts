@@ -6,7 +6,10 @@ const router = Router();
 // Liveness probe — always returns ok if the process is running.
 // Used by Cloud Run startupProbe / livenessProbe.
 router.get('/health', (_req, res) => {
-  res.json({ ok: true });
+  res.json({
+    ok: true,
+    releaseSha: process.env.RELEASE_SHA ?? 'development',
+  });
 });
 
 // Readiness probe — validates database connectivity.

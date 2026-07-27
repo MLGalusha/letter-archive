@@ -518,26 +518,34 @@ test.describe('@mocked Letter Review', () => {
     const mockedApi = await openMockLetterReview(page, initialLetter);
     let markRequestStarted!: () => void;
     let releaseResponse!: () => void;
+    let markResponseSettled!: () => void;
     const requestStarted = new Promise<void>((resolve) => {
       markRequestStarted = resolve;
     });
     const responseGate = new Promise<void>((resolve) => {
       releaseResponse = resolve;
     });
+    const responseSettled = new Promise<void>((resolve) => {
+      markResponseSettled = resolve;
+    });
     await page.route(/\/transcribe-letter$/, async (route) => {
       markRequestStarted();
       await responseGate;
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          letter: initialLetter,
-          transcribed: {
-            pageCount: initialLetter.transcript.pages.length,
-            textLength: initialLetter.transcript.fullText.length,
-          },
-        }),
-      });
+      try {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            letter: initialLetter,
+            transcribed: {
+              pageCount: initialLetter.transcript.pages.length,
+              textLength: initialLetter.transcript.fullText.length,
+            },
+          }),
+        });
+      } finally {
+        markResponseSettled();
+      }
     });
 
     await transcriptionSection(page).locator('.transcribe-btn').click();
@@ -552,12 +560,11 @@ test.describe('@mocked Letter Review', () => {
     }).click();
     await expect(page).toHaveURL(/\/admin$/);
     await expect(page.locator('.letter-review-page')).toHaveCount(0);
-    const response = page.waitForResponse(/\/transcribe-letter$/);
     releaseResponse();
-    await response;
-    await page.evaluate(() => new Promise<void>((resolve) => {
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-    }));
+    await responseSettled;
+    // Let the abandoned mutation continuation run without borrowing a page
+    // execution context; the SPA may still replace its route context here.
+    await page.waitForTimeout(100);
 
     expect(mockedApi.transcribeExtrasRequests).toHaveLength(0);
     await expect(page.locator('.toast', {

@@ -2,14 +2,14 @@ apiVersion: run.googleapis.com/v1
 kind: Job
 metadata:
   name: letter-archive-migrate
-  namespace: PROJECT_NUMBER
+  namespace: __PROJECT_ID__
   labels:
-    cloud.googleapis.com/location: REGION
+    cloud.googleapis.com/location: __REGION__
 spec:
   template:
     metadata:
       annotations:
-        run.googleapis.com/cloudsql-instances: PROJECT_ID:REGION:CLOUD_SQL_INSTANCE
+        run.googleapis.com/cloudsql-instances: __PROJECT_ID__:__REGION__:__CLOUD_SQL_INSTANCE__
     spec:
       taskCount: 1
       parallelism: 1
@@ -17,9 +17,9 @@ spec:
         spec:
           maxRetries: 0
           timeoutSeconds: 900
-          serviceAccountName: SERVICE_ACCOUNT_EMAIL
+          serviceAccountName: __MIGRATE_SERVICE_ACCOUNT__
           containers:
-            - image: BACKEND_IMAGE
+            - image: __BACKEND_IMAGE__
               command:
                 - node
               args:
@@ -29,11 +29,13 @@ spec:
                   value: production
                 - name: LOG_TO_FILES
                   value: "false"
+                - name: MIGRATION_RELEASE_MODE
+                  value: __MIGRATION_RELEASE_MODE__
                 # Secret from Secret Manager
                 - name: DATABASE_URL
                   valueFrom:
                     secretKeyRef:
-                      name: database-url
+                      name: database-url-migrate
                       key: latest
               resources:
                 limits:

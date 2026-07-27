@@ -2,9 +2,9 @@ apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
   name: letter-archive-frontend
-  namespace: PROJECT_NUMBER
+  namespace: __PROJECT_ID__
   labels:
-    cloud.googleapis.com/location: REGION
+    cloud.googleapis.com/location: __REGION__
 spec:
   template:
     metadata:
@@ -14,9 +14,9 @@ spec:
     spec:
       containerConcurrency: 80
       timeoutSeconds: 60
-      serviceAccountName: SERVICE_ACCOUNT_EMAIL
+      serviceAccountName: __FRONTEND_SERVICE_ACCOUNT__
       containers:
-        - image: FRONTEND_IMAGE
+        - image: __FRONTEND_IMAGE__
           ports:
             - name: http1
               containerPort: 8080

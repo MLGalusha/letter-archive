@@ -153,9 +153,17 @@ describe('processing execution ownership', () => {
         file.startsWith('cloudbuild')
         && file.endsWith('.yaml')
       ));
-    const pushValidationFiles = cloudBuildFiles.filter(
-      (file) => file !== 'cloudbuild.deploy.yaml',
-    );
+    expect(cloudBuildFiles.sort()).toEqual([
+      'cloudbuild-frontend.yaml',
+      'cloudbuild.deploy.yaml',
+      'cloudbuild.frontend-release.yaml',
+      'cloudbuild.release.yaml',
+      'cloudbuild.yaml',
+    ]);
+    const pushValidationFiles = [
+      'cloudbuild-frontend.yaml',
+      'cloudbuild.yaml',
+    ];
     const [pushValidations, controlledDeploy] = await Promise.all([
       Promise.all(pushValidationFiles.map(async (file) => ({
         file,
@@ -167,10 +175,6 @@ describe('processing execution ownership', () => {
       ),
     ]);
 
-    expect(pushValidationFiles.sort()).toEqual([
-      'cloudbuild-frontend.yaml',
-      'cloudbuild.yaml',
-    ]);
     for (const { file, source } of pushValidations) {
       expect(source, file).toContain('-validation:${BUILD_ID}');
       expect(source, file).not.toMatch(
@@ -188,17 +192,33 @@ describe('processing execution ownership', () => {
       "_CONFIRM_WRITE_QUIESCENCE: 'false'",
     );
     expect(controlledDeploy).toContain(
-      'if [[ "${_CONFIRM_WRITE_QUIESCENCE}" != "true" ]]',
+      'if [[ "$${LETTER_ARCHIVE_CONFIRM_MAINTENANCE}" != "true" ]]',
     );
     expect(controlledDeploy).toContain(
-      'if [[ ! "${_TAG}" =~ ^[0-9a-f]{40}$ ]]',
+      'if [[ ! "$${LETTER_ARCHIVE_RELEASE_SHA}" =~ ^[0-9a-f]{40}$ ]]',
+    );
+    expect(controlledDeploy).toContain(
+      'deploy/cloudrun/prepare-release-manifests.sh',
+    );
+    expect(controlledDeploy).not.toContain('-e "s|REGION|');
+    expect(controlledDeploy).not.toContain(
+      'export LETTER_ARCHIVE_REGION="${_REGION}"',
     );
     expect(controlledDeploy.match(/waitFor: \['-'\]/g)).toHaveLength(1);
     expect(controlledDeploy).toMatch(
-      /id: confirm-write-quiescence[\s\S]*?waitFor: \['-'\]/,
+      /id: verify-source[\s\S]*?waitFor: \['-'\]/,
+    );
+    expect(controlledDeploy).toMatch(
+      /id: confirm-write-quiescence[\s\S]*?waitFor: \['verify-current-main'\]/,
     );
     expect(controlledDeploy).toMatch(
       /id: deploy-frontend[\s\S]*?waitFor: \[[^\]]*'deploy-backend'[^\]]*\]/,
+    );
+    expect(controlledDeploy).toMatch(
+      /id: establish-write-quiescence[\s\S]*?deploy\/cloudrun\/quiesce-production\.sh/,
+    );
+    expect(controlledDeploy).not.toContain(
+      'worker-pools delete letter-archive-worker \\\n          --region=${_REGION} --quiet || true',
     );
     expect(controlledDeploy).toMatch(
       /id: deploy-backend[\s\S]*?waitFor:[\s\S]*?- grant-backend-worker-job-invoke/,
@@ -208,11 +228,104 @@ describe('processing execution ownership', () => {
     const backendWorkerGrant = controlledDeploy.indexOf(
       'id: grant-backend-worker-job-invoke',
     );
+    const workerHandoffGrant = controlledDeploy.indexOf(
+      'id: grant-worker-handoff-job-invoke',
+    );
     const backendDeploy = controlledDeploy.indexOf('id: deploy-backend');
 
     expect(workerDeploy).toBeGreaterThan(-1);
     expect(backendWorkerGrant).toBeGreaterThan(workerDeploy);
+    expect(workerHandoffGrant).toBeGreaterThan(workerDeploy);
     expect(backendDeploy).toBeGreaterThan(backendWorkerGrant);
+    expect(backendDeploy).toBeGreaterThan(workerHandoffGrant);
+  });
+
+  it('keeps automatic releases exact-SHA, serialized, and migration-gated', async () => {
+    const [
+      workflow,
+      fullRelease,
+      frontendRelease,
+      fullReleaseScript,
+      migrationPolicy,
+    ] = await Promise.all([
+      readFile(
+        path.join(repositoryRoot, '.github/workflows/ci.yml'),
+        'utf8',
+      ),
+      readFile(
+        path.join(repositoryRoot, 'cloudbuild.release.yaml'),
+        'utf8',
+      ),
+      readFile(
+        path.join(repositoryRoot, 'cloudbuild.frontend-release.yaml'),
+        'utf8',
+      ),
+      readFile(
+        path.join(repositoryRoot, 'deploy/cloudrun/release-full.sh'),
+        'utf8',
+      ),
+      readFile(
+        path.join(sourceRoot, 'db/migration-release-policy.ts'),
+        'utf8',
+      ),
+    ]);
+
+    expect(workflow).toContain('group: letter-archive-production');
+    expect(workflow).toContain('cancel-in-progress: false');
+    expect(workflow).toContain(
+      "vars.AUTOMATIC_RELEASES_ENABLED == 'true'",
+    );
+    expect(workflow).toContain(
+      'google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3',
+    );
+    expect(workflow).toContain(
+      'https://api.voicesthatremain.com/health',
+    );
+    expect(workflow).toContain(
+      'https://voicesthatremain.com/version.json',
+    );
+    expect(workflow).not.toContain('github.event.before');
+    expect(workflow).toContain('--git-source-revision="$RELEASE_SHA"');
+    expect(workflow).toContain('--substitutions="_TAG=$RELEASE_SHA"');
+
+    for (const [file, source] of [
+      ['cloudbuild.release.yaml', fullRelease],
+      ['cloudbuild.frontend-release.yaml', frontendRelease],
+    ]) {
+      expect(source, file).toContain('id: verify-source');
+      expect(source, file).toContain(
+        'deploy/cloudrun/verify-build-source.sh',
+      );
+      expect(source, file).toContain('LETTER_ARCHIVE_RELEASE_SHA=${_TAG}');
+      expect(source, file).not.toContain('latestRevision: true');
+    }
+    expect(fullRelease).toContain('deploy/cloudrun/release-full.sh');
+    expect(fullReleaseScript).toContain(
+      'bash deploy/cloudrun/promote-service.sh',
+    );
+    expect(frontendRelease).toContain(
+      'deploy/cloudrun/promote-service.sh',
+    );
+
+    expect(fullRelease).toContain(
+      'LETTER_ARCHIVE_MIGRATION_RELEASE_MODE=automatic',
+    );
+    expect(fullReleaseScript).toContain(
+      'gcloud run jobs execute letter-archive-migrate',
+    );
+    expect(fullReleaseScript.indexOf(
+      'gcloud run jobs execute letter-archive-migrate',
+    )).toBeLessThan(
+      fullReleaseScript.indexOf(
+        'export LETTER_ARCHIVE_SERVICE=letter-archive-backend',
+      ),
+    );
+    expect(frontendRelease).not.toMatch(
+      /\b(?:run-migrations|backend-migrate-job|promote-backend)\b/,
+    );
+    expect(migrationPolicy).toContain(
+      "automaticMigrationBaselineTag =\n  '0056_repair_extra_content_job_ownership'",
+    );
   });
 
   it('keeps scheduled worker reconciliation authenticated and ordered after invoker grants', async () => {
@@ -244,19 +357,19 @@ describe('processing execution ownership', () => {
     expect(scheduleStep).toBeGreaterThan(schedulerGrant);
 
     expect(controlledDeploy.slice(backendGrant, schedulerGrant)).toContain(
-      '--member=serviceAccount:${_SERVICE_ACCOUNT}',
+      '--member=serviceAccount:${_BACKEND_SERVICE_ACCOUNT}',
     );
     expect(controlledDeploy.slice(backendGrant, schedulerGrant)).toContain(
       '--role=roles/run.invoker',
     );
     expect(controlledDeploy.slice(schedulerGrant, scheduleStep)).toContain(
-      '--member="serviceAccount:${_SCHEDULER_SERVICE_ACCOUNT}"',
+      '--member="serviceAccount:$${LETTER_ARCHIVE_SCHEDULER_SERVICE_ACCOUNT}"',
     );
     expect(controlledDeploy.slice(schedulerGrant, scheduleStep)).toContain(
       '--role=roles/run.invoker',
     );
     expect(controlledDeploy.slice(schedulerGrant, scheduleStep)).toContain(
-      'if [[ "${_ENABLE_WORKER_RECONCILIATION_SCHEDULE}" != "true" ]]',
+      'if [[ "$${LETTER_ARCHIVE_ENABLE_SCHEDULER}" != "true" ]]',
     );
     expect(controlledDeploy.slice(schedulerGrant, scheduleStep)).toContain(
       "waitFor: ['grant-backend-worker-job-invoke']",
@@ -267,7 +380,7 @@ describe('processing execution ownership', () => {
       "waitFor: ['grant-scheduler-worker-job-invoke']",
     );
     expect(scheduleContract).toContain(
-      'if [[ "${_ENABLE_WORKER_RECONCILIATION_SCHEDULE}" != "true" ]]',
+      'if [[ "$${LETTER_ARCHIVE_ENABLE_SCHEDULER}" != "true" ]]',
     );
     expect(scheduleContract).toContain(
       'gcloud scheduler jobs "$${scheduler_action}" http',
@@ -276,14 +389,14 @@ describe('processing execution ownership', () => {
       'gcloud scheduler jobs describe letter-archive-worker-reconcile',
     );
     expect(scheduleContract).toContain(
-      '--schedule="${_WORKER_RECONCILIATION_SCHEDULE}"',
+      '--schedule="$${LETTER_ARCHIVE_WORKER_SCHEDULE}"',
     );
     expect(scheduleContract).toContain('--time-zone=Etc/UTC');
     expect(scheduleContract).toContain(
-      '--uri="https://run.googleapis.com/v2/projects/${PROJECT_ID}/locations/${_REGION}/jobs/letter-archive-worker:run"',
+      '--uri="https://run.googleapis.com/v2/projects/$${LETTER_ARCHIVE_PROJECT_ID}/locations/$${LETTER_ARCHIVE_REGION}/jobs/letter-archive-worker:run"',
     );
     expect(scheduleContract).toContain(
-      '--oauth-service-account-email="${_SCHEDULER_SERVICE_ACCOUNT}"',
+      '--oauth-service-account-email="$${LETTER_ARCHIVE_SCHEDULER_SERVICE_ACCOUNT}"',
     );
     expect(scheduleContract).toContain(
       '--oauth-token-scope=https://www.googleapis.com/auth/cloud-platform',

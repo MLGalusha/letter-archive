@@ -1,0 +1,133 @@
+# Automatic frontend-only production release.
+# Invoked by GitHub Actions after required CI succeeds on protected main.
+
+substitutions:
+  _TAG: unset
+  _REGION: us-east1
+  _DOMAIN: voicesthatremain.com
+  _RELEASE_LOCK_BUCKET: letter-archive-485110-release-lock
+  _FRONTEND_IMAGE: '${_REGION}-docker.pkg.dev/${PROJECT_ID}/letter-archive/frontend'
+  _FRONTEND_SERVICE_ACCOUNT: 'letter-archive-frontend@${PROJECT_ID}.iam.gserviceaccount.com'
+
+options:
+  dynamic_substitutions: true
+  logging: CLOUD_LOGGING_ONLY
+
+steps:
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: verify-source
+    entrypoint: bash
+    env:
+      - 'LETTER_ARCHIVE_PROJECT_ID=${PROJECT_ID}'
+      - 'LETTER_ARCHIVE_BUILD_LOCATION=${_REGION}'
+      - 'LETTER_ARCHIVE_BUILD_ID=${BUILD_ID}'
+      - 'LETTER_ARCHIVE_RELEASE_SHA=${_TAG}'
+    args:
+      - deploy/cloudrun/verify-build-source.sh
+    waitFor: ['-']
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: acquire-release-lock
+    entrypoint: bash
+    env:
+      - 'LETTER_ARCHIVE_PROJECT_ID=${PROJECT_ID}'
+      - 'LETTER_ARCHIVE_REGION=${_REGION}'
+      - 'LETTER_ARCHIVE_RELEASE_SHA=${_TAG}'
+      - 'LETTER_ARCHIVE_BUILD_ID=${BUILD_ID}'
+      - 'LETTER_ARCHIVE_RELEASE_LOCK_BUCKET=${_RELEASE_LOCK_BUCKET}'
+    args:
+      - deploy/cloudrun/acquire-release-lock.sh
+    waitFor: ['verify-source']
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: verify-current-main
+    entrypoint: bash
+    env:
+      - 'LETTER_ARCHIVE_RELEASE_SHA=${_TAG}'
+    args:
+      - deploy/cloudrun/verify-current-main.sh
+    waitFor: ['acquire-release-lock']
+
+  - name: gcr.io/cloud-builders/docker
+    id: pull-frontend-cache
+    entrypoint: bash
+    env:
+      - 'LETTER_ARCHIVE_IMAGE_REPOSITORY=${_FRONTEND_IMAGE}'
+    args:
+      - -c
+      - docker pull "$$LETTER_ARCHIVE_IMAGE_REPOSITORY:latest" || true
+    waitFor: ['verify-current-main']
+
+  - name: gcr.io/cloud-builders/docker
+    id: build-frontend
+    args:
+      - build
+      - --cache-from
+      - '${_FRONTEND_IMAGE}:latest'
+      - -t
+      - '${_FRONTEND_IMAGE}:${_TAG}'
+      - -t
+      - '${_FRONTEND_IMAGE}:latest'
+      - --build-arg
+      - 'VITE_API_URL=https://api.${_DOMAIN}'
+      - --build-arg
+      - 'VITE_SITE_URL=https://${_DOMAIN}'
+      - --build-arg
+      - 'RELEASE_SHA=${_TAG}'
+      - -f
+      - frontend/Dockerfile
+      - frontend
+    waitFor: ['pull-frontend-cache']
+
+  - name: gcr.io/cloud-builders/docker
+    id: push-frontend
+    args:
+      - push
+      - --all-tags
+      - '${_FRONTEND_IMAGE}'
+    waitFor: ['build-frontend']
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: prepare-frontend-manifest
+    entrypoint: bash
+    env:
+      - 'LETTER_ARCHIVE_PROJECT_ID=${PROJECT_ID}'
+      - 'LETTER_ARCHIVE_REGION=${_REGION}'
+      - 'LETTER_ARCHIVE_RELEASE_SHA=${_TAG}'
+      - 'LETTER_ARCHIVE_FRONTEND_IMAGE_REPOSITORY=${_FRONTEND_IMAGE}'
+      - 'LETTER_ARCHIVE_DOMAIN=${_DOMAIN}'
+      - 'LETTER_ARCHIVE_FRONTEND_SERVICE_ACCOUNT=${_FRONTEND_SERVICE_ACCOUNT}'
+    args:
+      - deploy/cloudrun/prepare-frontend-release-manifest.sh
+    waitFor: ['push-frontend']
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: promote-frontend
+    entrypoint: bash
+    env:
+      - 'LETTER_ARCHIVE_PROJECT_ID=${PROJECT_ID}'
+      - 'LETTER_ARCHIVE_REGION=${_REGION}'
+      - 'LETTER_ARCHIVE_SERVICE=letter-archive-frontend'
+      - 'LETTER_ARCHIVE_SERVICE_ACCOUNT=${_FRONTEND_SERVICE_ACCOUNT}'
+      - 'LETTER_ARCHIVE_IMAGE_REPOSITORY=${_FRONTEND_IMAGE}'
+      - 'LETTER_ARCHIVE_RELEASE_SHA=${_TAG}'
+      - 'LETTER_ARCHIVE_BUILD_ID=${BUILD_ID}'
+      - 'LETTER_ARCHIVE_PRODUCTION_URL=https://${_DOMAIN}'
+      - 'LETTER_ARCHIVE_SERVICE_MANIFEST=rendered/cloudrun/frontend-service.yaml'
+    args:
+      - deploy/cloudrun/promote-service.sh
+    waitFor: ['prepare-frontend-manifest']
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: release-production-lock
+    entrypoint: bash
+    env:
+      - 'LETTER_ARCHIVE_PROJECT_ID=${PROJECT_ID}'
+      - 'LETTER_ARCHIVE_RELEASE_SHA=${_TAG}'
+      - 'LETTER_ARCHIVE_BUILD_ID=${BUILD_ID}'
+      - 'LETTER_ARCHIVE_RELEASE_LOCK_BUCKET=${_RELEASE_LOCK_BUCKET}'
+    args:
+      - deploy/cloudrun/release-release-lock.sh
+    waitFor: ['promote-frontend']
+
+timeout: 3600s

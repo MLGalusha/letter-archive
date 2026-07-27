@@ -13,8 +13,10 @@ ARG VITE_API_URL
 ENV VITE_API_URL=${VITE_API_URL}
 ARG VITE_SITE_URL
 ENV VITE_SITE_URL=${VITE_SITE_URL}
+ARG RELEASE_SHA=development
 
 RUN npm run build
+RUN printf '{"releaseSha":"%s"}\n' "${RELEASE_SHA}" > dist/version.json
 
 # ---- Stage 2: Serve with nginx ----
 FROM nginx:alpine AS production

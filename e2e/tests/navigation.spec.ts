@@ -115,18 +115,14 @@ test.describe('Navigation', () => {
         .then(() => true).catch(() => false);
       test.skip(!hasRow, 'No letters in database');
 
-      await firstRow.click();
+      // Click a non-interactive cell. The row center can land on the review
+      // flag button, which intentionally stops propagation.
+      await firstRow.locator('[data-column="sender"]').click();
       await page.waitForURL(/\/admin\/letters\//);
 
-      // Navigate back
-      const backLink = page.locator('a[href="/admin"], button:has-text("Back"), .back-link');
-
-      if (await backLink.first().isVisible()) {
-        await backLink.first().click();
-      } else {
-        await page.goBack();
-      }
-
+      // Browser history remains available even if the selected letter opens a
+      // full-screen review surface that intentionally blocks sidebar clicks.
+      await page.goBack();
       await page.waitForURL(/\/admin$/);
       expect(page.url()).toMatch(/\/admin$/);
     });
@@ -217,7 +213,7 @@ test.describe('Navigation', () => {
         .then(() => true).catch(() => false);
       test.skip(!hasRow, 'No letters in database');
 
-      await firstRow.click();
+      await firstRow.locator('[data-column="sender"]').click();
       await page.waitForURL(/\/admin\/letters\//);
 
       const url = page.url();

@@ -493,6 +493,9 @@ if (args.slice(0, 2).join(' ') === 'storage cp') {
 }
 
 if (args.slice(0, 2).join(' ') === 'storage cat') {
+  if (!args.includes(
+    'gs://test-project-release-lock/production.lock#7',
+  )) process.exit(95);
   process.stdout.write(
     '11111111-1111-1111-1111-111111111111 ' + 'c'.repeat(40),
   );
@@ -550,14 +553,22 @@ process.exit(98);
     const generationRead = calls.findIndex((call) =>
       call.startsWith('gcloud storage objects describe')
     );
+    const versionedPayloadReads = calls.filter((call) =>
+      call.startsWith('gcloud storage cat')
+    );
     const removal = calls.findIndex((call) =>
       call.startsWith('gcloud storage rm')
     );
     const acquisition = calls.indexOf('ACQUIRED');
     expect(workingStatus).toBeGreaterThan(-1);
     expect(terminalStatus).toBeGreaterThan(workingStatus);
-    expect(generationRead).toBeGreaterThan(terminalStatus);
-    expect(removal).toBeGreaterThan(generationRead);
+    expect(generationRead).toBeGreaterThan(-1);
+    expect(workingStatus).toBeGreaterThan(generationRead);
+    expect(versionedPayloadReads).toHaveLength(2);
+    expect(versionedPayloadReads.every((call) =>
+      call.includes('production.lock#7')
+    )).toBe(true);
+    expect(removal).toBeGreaterThan(terminalStatus);
     expect(calls[removal]).toContain('--if-generation-match=7');
     expect(acquisition).toBeGreaterThan(removal);
     expect(calls.filter((call) =>

@@ -166,6 +166,7 @@ gcloud run jobs replace rendered/cloudrun/backend-migrate-job.yaml \
 gcloud run jobs execute letter-archive-migrate \
   --project="$LETTER_ARCHIVE_PROJECT_ID" \
   --region="$LETTER_ARCHIVE_REGION" \
+  --args=dist/cli/migrate.js \
   --wait
 
 rollback_jobs=true

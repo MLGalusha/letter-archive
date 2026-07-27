@@ -220,6 +220,9 @@ describe('processing execution ownership', () => {
     expect(controlledDeploy).toMatch(
       /id: preflight-migrations[\s\S]*?--args=dist\/cli\/migrate\.js,--preflight/,
     );
+    expect(controlledDeploy).toMatch(
+      /id: run-migrations[\s\S]*?--args=dist\/cli\/migrate\.js/,
+    );
     expect(controlledDeploy).not.toContain(
       'worker-pools delete letter-archive-worker \\\n          --region=${_REGION} --quiet || true',
     );
@@ -328,6 +331,9 @@ describe('processing execution ownership', () => {
     );
     expect(fullReleaseScript).toContain(
       'gcloud run jobs execute letter-archive-migrate',
+    );
+    expect(fullReleaseScript).toMatch(
+      /gcloud run jobs execute letter-archive-migrate[\s\S]*?--args=dist\/cli\/migrate\.js/,
     );
     expect(fullReleaseScript.indexOf(
       'gcloud run jobs execute letter-archive-migrate',

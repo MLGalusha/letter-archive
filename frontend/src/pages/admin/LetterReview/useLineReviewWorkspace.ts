@@ -55,7 +55,6 @@ interface LineReviewSession {
   viewerPageIndex: number;
   debugMode: boolean;
   selectedText: string;
-  segmentFirstEvaluated: boolean;
 }
 
 interface OwnedModeHandle {
@@ -100,16 +99,7 @@ const sessionFrom = (owner: LetterReviewVisit): LineReviewSession => ({
   viewerPageIndex: 0,
   debugMode: false,
   selectedText: '',
-  segmentFirstEvaluated: false,
 });
-
-const hasUnverifiedSegments = (letter: Letter): boolean =>
-  letter.images.some((image) => (
-    image.type === 'letter'
-    && image.segmentTrustState !== 'trusted'
-    && Array.isArray(image.lineSegments)
-    && image.lineSegments.length > 0
-  ));
 
 const validPageIndex = (
   letter: Letter | null,
@@ -185,45 +175,10 @@ export function useLineReviewWorkspace({
   ) => {
     if (!visit.isActive()) return;
 
-    setStoredSession((current) => (
-      current.owner === visit
-        ? update(current)
-        : current
-    ));
-  }, [visit]);
-
-  const establishSession = useCallback((
-    update: (current: LineReviewSession) => LineReviewSession,
-  ) => {
-    if (!visit.isActive()) return;
-
     setStoredSession((current) => update(
       current.owner === visit ? current : sessionFrom(visit),
     ));
   }, [visit]);
-
-  useEffect(() => {
-    if (!letter || !visit.isActive()) return;
-
-    // This finite transition records that the authoritative letter was
-    // evaluated once; subsequent DTO refreshes must not reopen the mode.
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- DTO arrival establishes one owner-tagged session transition.
-    establishSession((current) => {
-      if (current.segmentFirstEvaluated) return current;
-
-      return {
-        ...current,
-        entry: hasUnverifiedSegments(letter)
-          ? {
-              kind: 'segment-first',
-              owner: entryOwnerFrom(visit),
-              mappingText: undefined,
-            }
-          : current.entry,
-        segmentFirstEvaluated: true,
-      };
-    });
-  }, [establishSession, letter, visit]);
 
   useEffect(() => {
     const clearSelection = () => {

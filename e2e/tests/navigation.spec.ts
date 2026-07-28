@@ -120,8 +120,7 @@ test.describe('Navigation', () => {
       await firstRow.locator('[data-column="sender"]').click();
       await page.waitForURL(/\/admin\/letters\//);
 
-      // Browser history remains available even if the selected letter opens a
-      // full-screen review surface that intentionally blocks sidebar clicks.
+      // Exercise route-level back navigation from the normal letter review.
       await page.goBack();
       await page.waitForURL(/\/admin$/);
       expect(page.url()).toMatch(/\/admin$/);

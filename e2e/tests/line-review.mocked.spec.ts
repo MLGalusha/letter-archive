@@ -17,21 +17,10 @@ async function openLineReview(
   });
   await page.goto(`/admin/letters/${initialLetter.id}`);
   await page.locator('.letter-review-page').waitFor({ state: 'visible' });
-
-  // Letters with stored line segments auto-enter segment-first review mode, so
-  // .viewer-image is never shown — wait directly for line-review-mode in that case.
-  const hasStoredSegments = initialLetter.images.some(
-    (img) => Array.isArray(img.lineSegments) && img.lineSegments.length > 0,
-  );
-
-  if (!hasStoredSegments) {
-    await page.locator('.viewer-image').waitFor({ state: 'visible' });
-    await page.locator('.viewer-image').click();
-  }
+  await page.locator('.viewer-image').waitFor({ state: 'visible' });
+  await page.locator('.viewer-image').click();
   await page.locator('.line-review-mode').waitFor({ state: 'visible' });
-  await page.locator(
-    hasStoredSegments ? '.seg-editor-actions' : '.line-review-input-overlay',
-  ).waitFor({ state: 'visible' });
+  await page.locator('.line-review-input-overlay').waitFor({ state: 'visible' });
   return mockedApi;
 }
 
@@ -42,6 +31,7 @@ function createLetterWithStoredLineSegments() {
   return createMockLetterReviewLetter({
     images: initialLetter.images.map((image) => ({
       ...image,
+      segmentTrustState: 'unverified',
       lineSegments: detectLinesByPageId[image.id]?.lineSegments ?? [],
     })),
   });
@@ -74,6 +64,25 @@ test.describe('@mocked Line Review', () => {
     await expect(page.locator('.line-review-editable')).toContainText(
       'The weather has been kind.',
     );
+  });
+
+  test('keeps stored unverified segments on the split review until the image is clicked', async ({
+    page,
+  }) => {
+    const initialLetter = createLetterWithStoredLineSegments();
+    await installMockLetterReviewApi(page, { initialLetter });
+
+    await page.goto(`/admin/letters/${initialLetter.id}`);
+    await page.locator('.letter-review-page').waitFor({ state: 'visible' });
+
+    await expect(page.locator('.viewer-image')).toBeVisible();
+    await expect(page.locator('.transcript-editor')).toBeVisible();
+    await expect(page.locator('.line-review-mode')).toHaveCount(0);
+
+    await page.locator('.viewer-image').click();
+
+    await expect(page.locator('.line-review-mode')).toBeVisible();
+    await expect(page.locator('.line-review-input-overlay')).toBeVisible();
   });
 
   test('starts a fresh review shell when navigating to another letter', async ({
@@ -194,6 +203,9 @@ test.describe('@mocked Line Review', () => {
   }) => {
     const initialLetter = createLetterWithStoredLineSegments();
     const mockedApi = await openLineReview(page, initialLetter);
+
+    await page.getByRole('button', { name: 'Segments', exact: true }).click();
+    await expect(page.locator('.seg-editor-actions')).toBeVisible();
 
     await page.locator('.segment-editor-rect').first().dispatchEvent(
       'pointerdown',

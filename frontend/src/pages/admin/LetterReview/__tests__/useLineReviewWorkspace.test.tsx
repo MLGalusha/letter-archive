@@ -430,71 +430,60 @@ describe('useLineReviewWorkspace', () => {
     expect(reloadFreshA).toHaveBeenCalledOnce();
   });
 
-  it('auto-enters segment-first mode at most once for each opaque visit', () => {
+  it('keeps stored segments closed until an explicit entry action', () => {
     const firstAActive = { current: true };
-    const bActive = { current: false };
     const freshAActive = { current: false };
     const visits = {
       firstA: visit('letter-a', firstAActive),
-      b: visit('letter-b', bActive),
       freshA: visit('letter-a', freshAActive),
     };
-    const eligibleA = makeEligibleLetter();
     const initialProps = baseProps(visits.firstA, {
-      letter: eligibleA,
+      letter: null,
     });
     const { result, rerender } = renderHook(useWorkspace, {
       initialProps,
     });
 
-    expect(result.current.active).toBe(true);
-    expect(result.current.modeProps.fullViewport).toBe(true);
+    expect(result.current.active).toBe(false);
+    expect(result.current.modeProps.fullViewport).toBe(false);
     expect(result.current.modeProps.mappingText).toBeUndefined();
 
-    act(() => {
-      result.current.modeProps.onExit();
+    rerender({
+      ...initialProps,
+      letter: makeEligibleLetter(),
     });
     expect(result.current.active).toBe(false);
+    expect(result.current.modeProps.fullViewport).toBe(false);
+    expect(result.current.modeProps.mappingText).toBeUndefined();
 
     rerender({
       ...initialProps,
       letter: makeEligibleLetter({
-        title: 'Updated Letter A',
+        title: 'Refreshed Letter A',
+        primarySourceRevision: 4,
       }),
     });
     expect(result.current.active).toBe(false);
+    expect(result.current.modeProps.fullViewport).toBe(false);
+    expect(result.current.modeProps.mappingText).toBeUndefined();
 
     firstAActive.current = false;
-    bActive.current = true;
-    rerender({
-      ...initialProps,
-      currentVisit: visits.b,
-      letter: makeLetter({
-        id: 'letter-b',
-        title: 'Letter B',
-      }),
-    });
-    expect(result.current.active).toBe(false);
-
-    rerender({
-      ...initialProps,
-      currentVisit: visits.b,
-      letter: makeEligibleLetter({
-        id: 'letter-b',
-        title: 'Letter B with later segments',
-      }),
-    });
-    expect(result.current.active).toBe(false);
-
-    bActive.current = false;
     freshAActive.current = true;
     rerender({
       ...initialProps,
       currentVisit: visits.freshA,
       letter: makeEligibleLetter(),
     });
+    expect(result.current.active).toBe(false);
+    expect(result.current.modeProps.fullViewport).toBe(false);
+    expect(result.current.modeProps.mappingText).toBeUndefined();
+
+    act(() => {
+      result.current.viewerProps.onImageClick(0);
+    });
     expect(result.current.active).toBe(true);
-    expect(result.current.modeProps.fullViewport).toBe(true);
+    expect(result.current.modeProps.fullViewport).toBe(false);
+    expect(result.current.modeProps.mappingText).toBeUndefined();
   });
 
   it('refreshes and adopts the current letter after mapping, and catches refresh failures', async () => {

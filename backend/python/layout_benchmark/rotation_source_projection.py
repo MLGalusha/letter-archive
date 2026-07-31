@@ -18,7 +18,7 @@ from .preparation import (
     RASTER_FINGERPRINT_ALGORITHM,
     fingerprint_prepared_png,
 )
-from .rotation_ensemble import (
+from rotation_geometry import (
     COORDINATE_TRANSFORM_VERSION,
     MERGE_POLICIES,
     PASS_STATUSES,

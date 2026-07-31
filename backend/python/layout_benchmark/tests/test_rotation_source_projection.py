@@ -16,7 +16,7 @@ from layout_benchmark.page_mask_stage import (
 )
 from layout_benchmark.paths import RUNS_ROOT
 from layout_benchmark.preparation import fingerprint_prepared_png
-from layout_benchmark.rotation_ensemble import merge_rotation_passes
+from rotation_geometry import merge_rotation_passes
 from layout_benchmark.rotation_source_projection import (
     compose_page_evidence,
     external_snapshot_paths,

@@ -224,7 +224,7 @@ def segment(
         image = source.convert("RGB")
         inference_started = time.perf_counter()
         if api == "segmentation-task":
-            from layout_benchmark.rotation_ensemble import (
+            from rotation_geometry import (
                 ROTATION_EVIDENCE_CONTRACT,
                 merge_rotation_passes,
                 rotate_image,

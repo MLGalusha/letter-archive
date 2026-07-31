@@ -5,7 +5,7 @@ import unittest
 
 from PIL import Image
 
-from layout_benchmark.rotation_ensemble import (
+from rotation_geometry import (
     merge_rotation_passes,
     rotate_image,
     transform_point_to_source,

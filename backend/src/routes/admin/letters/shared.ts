@@ -1,4 +1,7 @@
 import { z } from 'zod';
+import { krakenNativePageLayoutV2Schema } from '../../../services/kraken-page-layout-adapter.js';
+import { lineSegmentsSchema } from '../../../schemas/line-segment.js';
+import { pageLayoutStableIdSchema } from '../../../schemas/page-layout-v2.js';
 import {
   EmotionalToneEnum,
   PrimaryTopicEnum,
@@ -142,14 +145,28 @@ const pageSourceExpectationShape = {
 };
 
 export const saveLineSegmentsSchema = z.object({
-  lineSegments: z.array(z.unknown()),
+  lineSegments: lineSegmentsSchema,
+  expectedGeometryRevision: z.number().int().nonnegative(),
+  expectedLineSegmentsChecksumSha256: z.string().regex(/^[0-9a-f]{64}$/),
   ...pageSourceExpectationShape,
-});
+}).strict();
+
+export const saveKrakenPageLayoutSchema = z.object({
+  nativePageLayout: krakenNativePageLayoutV2Schema,
+  // One execution ID is shared by every page processed in a CLI/worker run.
+  runId: pageLayoutStableIdSchema,
+  primarySourceRevision: z.number().int().nonnegative(),
+  // Native detector output must always be tied to an immutable source object.
+  // Pages without a checksum are deliberately excluded from the queue.
+  sourceChecksum: z.string().regex(/^[0-9a-f]{64}$/i),
+}).strict();
 
 export const updatePageSegmentTrustSchema = z.object({
   trustState: z.enum(['unverified', 'trusted']),
+  expectedGeometryRevision: z.number().int().nonnegative(),
+  expectedGeometryChecksumSha256: z.string().regex(/^[0-9a-f]{64}$/),
   ...pageSourceExpectationShape,
-});
+}).strict();
 
 export const updateLetterSegmentTrustSchema = z.object({
   trustState: z.enum(['unverified', 'trusted']),
@@ -157,8 +174,10 @@ export const updateLetterSegmentTrustSchema = z.object({
   pages: z.array(z.object({
     pageId: z.string().uuid(),
     sourceChecksum: z.string().regex(/^[0-9a-f]{64}$/i).nullable(),
-  })).min(1),
-});
+    expectedGeometryRevision: z.number().int().nonnegative(),
+    expectedGeometryChecksumSha256: z.string().regex(/^[0-9a-f]{64}$/),
+  }).strict()).min(1),
+}).strict();
 
 export const updateIdentitySchema = z.object({
   primarySourceRevision: z.number().int().nonnegative().optional(),

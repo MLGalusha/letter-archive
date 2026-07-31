@@ -2,10 +2,10 @@ import {
   startTransition,
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from 'react';
 import type { RefObject } from 'react';
-import { getAdminLetterById } from '../../../api/letters';
 import type { Letter } from '../../../types/Letter';
 import { hasPrimaryTranscriptContent } from '../../../utils/letterContent';
 import type {
@@ -14,13 +14,62 @@ import type {
 import type { AutoSaveData } from './useAutoSave';
 import type { LetterReviewVisit } from './useLetterReviewVisit';
 
+export interface LineReviewRepairIntent {
+  token: string;
+  pageIndex: number;
+  originalFilename?: string;
+  repairText?: string;
+}
+
+const LINE_REVIEW_REPAIR_QUERY_KEYS = [
+  'repairGeometry',
+  'repairIntent',
+  'repairPageIndex',
+  'repairPageFilename',
+  'repairText',
+] as const;
+
+export function lineReviewRepairIntentFromSearch(
+  search: string,
+): LineReviewRepairIntent | null {
+  const params = new URLSearchParams(search);
+  if (params.get('repairGeometry') !== '1') return null;
+
+  const token = params.get('repairIntent')?.trim();
+  const pageIndexValue = params.get('repairPageIndex');
+  const pageIndex = pageIndexValue === null
+    ? Number.NaN
+    : Number(pageIndexValue);
+  if (!token || !Number.isInteger(pageIndex) || pageIndex < 0) return null;
+
+  const originalFilename = params.get('repairPageFilename')?.trim();
+  const repairText = params.get('repairText')?.trim();
+  return {
+    token,
+    pageIndex,
+    ...(originalFilename ? { originalFilename } : {}),
+    ...(repairText ? { repairText } : {}),
+  };
+}
+
+export function searchAfterLineReviewRepairConsumption(
+  search: string,
+  token: string,
+): string | null {
+  const params = new URLSearchParams(search);
+  if (params.get('repairIntent') !== token) return null;
+  LINE_REVIEW_REPAIR_QUERY_KEYS.forEach((key) => params.delete(key));
+  return params.toString();
+}
+
 interface UseLineReviewWorkspaceOptions {
   visit: LetterReviewVisit;
   letter: Letter | null;
   editorRef: RefObject<HTMLDivElement | null>;
   isTranscriptEditing: boolean;
   lineReviewBlocked: boolean;
-  tryAdoptLetter: (letter: Letter) => boolean;
+  repairIntent?: LineReviewRepairIntent | null;
+  onRepairIntentConsumed?: (token: string) => void;
   onTranscriptChange: (text: string) => void;
   onAutoSave: (data: AutoSaveData) => void;
 }
@@ -37,7 +86,7 @@ type LineReviewEntry =
   | {
       kind: 'segment-first';
       owner: LineReviewEntryOwner;
-      mappingText: string | undefined;
+      repairText: string | undefined;
     };
 
 interface LineReviewEntryOwner {
@@ -113,6 +162,25 @@ const validPageIndex = (
     : 0
 );
 
+const repairPageIndex = (
+  letter: Letter,
+  intent: LineReviewRepairIntent,
+): number | null => {
+  const exactFilename = intent.originalFilename?.trim();
+  if (exactFilename) {
+    const matches = letter.images
+      .map((image, index) => ({ image, index }))
+      .filter(({ image }) => image.originalFilename === exactFilename);
+    return matches.length === 1 ? matches[0].index : null;
+  }
+
+  return Number.isInteger(intent.pageIndex)
+    && intent.pageIndex >= 0
+    && intent.pageIndex < letter.images.length
+    ? intent.pageIndex
+    : null;
+};
+
 /**
  * Owns the complete Line Review session for one Letter Review visit.
  *
@@ -126,10 +194,14 @@ export function useLineReviewWorkspace({
   editorRef,
   isTranscriptEditing,
   lineReviewBlocked,
-  tryAdoptLetter,
+  repairIntent,
+  onRepairIntentConsumed,
   onTranscriptChange,
   onAutoSave,
 }: UseLineReviewWorkspaceOptions) {
+  const repairConsumptionRef = useRef(
+    new WeakMap<LetterReviewVisit, Set<string>>(),
+  );
   const [storedModeHandle, setStoredModeHandle] =
     useState<OwnedModeHandle | null>(null);
   const [storedSession, setStoredSession] = useState(
@@ -141,9 +213,6 @@ export function useLineReviewWorkspace({
   const entryOwner = session.entry.kind === 'closed'
     ? null
     : session.entry.owner;
-  const mappingOwner = session.entry.kind === 'segment-first'
-    ? session.entry.owner
-    : null;
   const previousEntryOwner = session.entry.kind === 'closed'
     ? session.entry.previousOwner
     : undefined;
@@ -179,6 +248,65 @@ export function useLineReviewWorkspace({
       current.owner === visit ? current : sessionFrom(visit),
     ));
   }, [visit]);
+
+  const consumeRepairIntent = useCallback((
+    intent: LineReviewRepairIntent,
+  ) => {
+    let consumedTokens = repairConsumptionRef.current.get(visit);
+    if (!consumedTokens) {
+      consumedTokens = new Set();
+      repairConsumptionRef.current.set(visit, consumedTokens);
+    }
+    if (
+      !visit.isActive()
+      || !letter
+      || !hasPrimaryTranscriptContent(letter)
+      || isTranscriptEditing
+      || lineReviewBlocked
+      || session.entry.kind !== 'closed'
+      || consumedTokens.has(intent.token)
+    ) {
+      return;
+    }
+
+    const targetPageIndex = repairPageIndex(letter, intent);
+    consumedTokens.add(intent.token);
+    onRepairIntentConsumed?.(intent.token);
+    if (targetPageIndex === null) return;
+
+    previousEntryOwner?.supersede();
+    const repairText = intent.repairText?.trim() || undefined;
+    updateSession((current) => (
+      current.entry.kind === 'closed'
+        ? {
+            ...current,
+            entry: {
+              kind: 'segment-first',
+              owner: entryOwnerFrom(visit),
+              repairText,
+            },
+            viewerPageIndex: targetPageIndex,
+          }
+        : current
+    ));
+  }, [
+    isTranscriptEditing,
+    letter,
+    lineReviewBlocked,
+    onRepairIntentConsumed,
+    previousEntryOwner,
+    session.entry.kind,
+    updateSession,
+    visit,
+  ]);
+
+  useEffect(() => {
+    if (!repairIntent) return;
+    queueMicrotask(() => consumeRepairIntent(repairIntent));
+  }, [
+    consumeRepairIntent,
+    repairIntent,
+  ]);
 
   useEffect(() => {
     const clearSelection = () => {
@@ -336,6 +464,19 @@ export function useLineReviewWorkspace({
     modeHandle?.reloadSegments();
   }, [entryOwner, modeHandle]);
 
+  const hasPendingChanges = useCallback(() => (
+    !!entryOwner?.isActive()
+    && (
+      modeHandle === null
+      || modeHandle.hasPendingChanges()
+    )
+  ), [entryOwner, modeHandle]);
+
+  const flushPendingChanges = useCallback(async () => {
+    if (!entryOwner?.isActive()) return false;
+    return modeHandle?.flushPendingChanges() ?? false;
+  }, [entryOwner, modeHandle]);
+
   const reviewSegments = useCallback(() => {
     if (session.entry.kind !== 'closed') return;
     previousEntryOwner?.supersede();
@@ -347,7 +488,7 @@ export function useLineReviewWorkspace({
             entry: {
               kind: 'segment-first',
               owner: entryOwnerFrom(visit),
-              mappingText: undefined,
+              repairText: undefined,
             },
           }
         : current
@@ -359,7 +500,7 @@ export function useLineReviewWorkspace({
     visit,
   ]);
 
-  const mapSelectedText = useCallback(() => {
+  const repairSelectedText = useCallback(() => {
     if (
       !transcriptSelectionEnabled
       || session.entry.kind !== 'closed'
@@ -372,15 +513,15 @@ export function useLineReviewWorkspace({
     updateSession((current) => {
       if (current.entry.kind !== 'closed') return current;
 
-      const mappingText = current.selectedText.trim();
-      if (mappingText.length === 0) return current;
+      const repairText = current.selectedText.trim();
+      if (repairText.length === 0) return current;
 
       return {
         ...current,
         entry: {
           kind: 'segment-first',
           owner: entryOwnerFrom(visit),
-          mappingText,
+          repairText,
         },
       };
     });
@@ -405,46 +546,8 @@ export function useLineReviewWorkspace({
     void onAutoSave(data);
   }, [entryOwner, onAutoSave]);
 
-  const onMappingComplete = useCallback(() => {
-    if (!mappingOwner?.canRefresh()) return;
-    const refresh = mappingOwner.beginRefresh();
-
-    if (mappingOwner.isActive()) {
-      updateSession((current) => (
-        current.entry.kind === 'segment-first'
-        && current.entry.owner === mappingOwner
-          ? {
-              ...current,
-              entry: {
-                ...current.entry,
-                mappingText: undefined,
-              },
-            }
-          : current
-      ));
-    }
-
-    const targetLetterId = letter?.id;
-    if (!targetLetterId) return;
-
-    void getAdminLetterById(targetLetterId)
-      .then((updatedLetter) => {
-        if (!mappingOwner.isCurrentRefresh(refresh)) return;
-        tryAdoptLetter(updatedLetter);
-      })
-      .catch((error: unknown) => {
-        if (!mappingOwner.isCurrentRefresh(refresh)) return;
-        console.error('Failed to refresh mapped segments:', error);
-      });
-  }, [
-    letter?.id,
-    mappingOwner,
-    tryAdoptLetter,
-    updateSession,
-  ]);
-
-  const mappingText = session.entry.kind === 'segment-first'
-    ? session.entry.mappingText
+  const repairText = session.entry.kind === 'segment-first'
+    ? session.entry.repairText
     : undefined;
 
   return {
@@ -462,9 +565,13 @@ export function useLineReviewWorkspace({
       reloadSegments,
       reloadDisabled: modeHandle?.isLoading ?? false,
     },
-    mappingControls: {
+    navigationControls: {
+      flushPendingChanges,
+      hasPendingChanges,
+    },
+    repairControls: {
       reviewSegments,
-      mapSelectedText,
+      repairSelectedText,
     },
     modeProps: {
       onTranscriptChange: guardedTranscriptChange,
@@ -474,8 +581,7 @@ export function useLineReviewWorkspace({
       onDebugModeChange: setModeDebugMode,
       initialPageIndex: viewerPageIndex,
       fullViewport: session.entry.kind === 'segment-first',
-      mappingText,
-      onMappingComplete,
+      repairText,
     },
   } as const;
 }

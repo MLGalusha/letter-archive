@@ -760,6 +760,49 @@ describe('useIdentityAutoSave', () => {
     );
   });
 
+  it('keeps failed identity work pending until an explicit retry succeeds', async () => {
+    const owner = makeVisit('letter-a');
+    const letter = makeLetter('letter-a');
+    const failure = new Error('temporary identity failure');
+    const updated = makeLetter('letter-a', {
+      metadata: {
+        ...letter.metadata,
+        sender: 'Recovered sender',
+      },
+    });
+    updateIdentityMock
+      .mockRejectedValueOnce(failure)
+      .mockResolvedValueOnce(updated);
+    retagMetadataMock.mockResolvedValue(updated);
+    const harness = makeHarness({
+      initialVisit: owner.value,
+      initialLetter: letter,
+    });
+
+    act(() => {
+      harness.result.current.scheduleIdentityUpdate({
+        sender: 'Recovered sender',
+      });
+    });
+    await act(async () => {
+      await expect(
+        harness.scheduledInLane('identity')[0].task(),
+      ).rejects.toBe(failure);
+    });
+
+    expect(harness.result.current.hasPendingIdentityWork()).toBe(true);
+
+    act(() => {
+      harness.result.current.retryPendingIdentityWork();
+    });
+    await act(async () => {
+      await harness.scheduledInLane('identity')[1].task();
+    });
+
+    expect(updateIdentityMock).toHaveBeenCalledTimes(2);
+    expect(harness.result.current.hasPendingIdentityWork()).toBe(false);
+  });
+
   it('cancels the identity lane when the pending edit returns to baseline', async () => {
     const owner = makeVisit('letter-a');
     const letter = makeLetter('letter-a');
@@ -1018,6 +1061,7 @@ describe('useIdentityAutoSave', () => {
       identityUpdateState: 'idle',
       retagState: 'idle',
     });
+    expect(harness.result.current.hasPendingIdentityWork()).toBe(true);
 
     retagMetadataMock.mockResolvedValue(updated);
     act(() => {
@@ -1030,6 +1074,7 @@ describe('useIdentityAutoSave', () => {
     expect(updateIdentityMock).toHaveBeenCalledTimes(1);
     expect(retagMetadataMock).toHaveBeenCalledTimes(2);
     expect(harness.result.current.retagState).toBe('done');
+    expect(harness.result.current.hasPendingIdentityWork()).toBe(false);
   });
 
   it('clears a newer countdown when its prerequisite retag fails', async () => {

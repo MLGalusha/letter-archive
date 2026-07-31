@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "profileId": "layout-shared-rgb-png-v1",
+  "sourceVerification": {
+    "sha256": true,
+    "encodedDimensions": true
+  },
+  "orientation": {
+    "policy": "exif-transpose",
+    "removeOrientationMetadata": true
+  },
+  "pixels": {
+    "preserveFullFrame": true,
+    "colorMode": "RGB",
+    "resize": null,
+    "binarize": false,
+    "contrastAdjustment": false
+  },
+  "output": {
+    "format": "PNG",
+    "compressLevel": 9,
+    "optimize": false,
+    "interlace": false,
+    "metadata": "stripped"
+  }
+}

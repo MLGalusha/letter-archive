@@ -1,0 +1,977 @@
+{
+  "schemaVersion": 1,
+  "cohortId": "handwriting-layout-v1",
+  "createdAt": "2026-07-28",
+  "description": "Full-letter layout benchmark for comparing Kraken, Eynollah, and later provider-neutral layout engines.",
+  "sourceDimensionConvention": "encoded pixels before EXIF normalization",
+  "preprocessingRequirements": {
+    "applyExifOrientation": true,
+    "recordPreparedInputChecksum": true,
+    "recordPreparedInputDimensions": true
+  },
+  "coverage": {
+    "policy": "at-least-one-complete-L-record-per-collection",
+    "collectionCodesAtSelection": [
+      "001",
+      "002",
+      "003",
+      "004",
+      "005",
+      "006",
+      "007",
+      "008",
+      "009",
+      "010",
+      "011",
+      "012",
+      "013",
+      "014"
+    ],
+    "letterCount": 14,
+    "pageCount": 66
+  },
+  "groundTruth": {
+    "defaultStatus": "unannotated",
+    "artifactDirectory": "ground-truth"
+  },
+  "letters": [
+    {
+      "identity": {
+        "collectionCode": "001",
+        "dateRaw": "18881103",
+        "type": "L",
+        "typeSequence": 1
+      },
+      "selection": {
+        "kind": "user_requested",
+        "reason": "Explicitly selected by the archive owner."
+      },
+      "pages": [
+        {
+          "pageNumber": 1,
+          "originalFilename": "001-18881103-L01-01.jpg",
+          "checksumSha256": "d5a8688c2b066558e0a4cdb48e78f57944d8d4cefb61998cd173cd9d0fc0b663",
+          "width": 2588,
+          "height": 3632,
+          "challengeTags": []
+        },
+        {
+          "pageNumber": 2,
+          "originalFilename": "001-18881103-L01-02.jpg",
+          "checksumSha256": "6f86c35026ce3af44576172d64d7ad791d2ab5b8b001162ccb5b1f3a2a702569",
+          "width": 2312,
+          "height": 3398,
+          "challengeTags": []
+        },
+        {
+          "pageNumber": 3,
+          "originalFilename": "001-18881103-L01-03.jpg",
+          "checksumSha256": "4db7b5350ebb9cbf4368d97fd4d913c1f220aae961a06b77f150b5ddd62ca67d",
+          "width": 2264,
+          "height": 3288,
+          "challengeTags": []
+        },
+        {
+          "pageNumber": 4,
+          "originalFilename": "001-18881103-L01-04.jpg",
+          "checksumSha256": "e05e0478de24c5c8e5d55c89d5bbcb72e46fd8306b7ccf5811f9d46595af4506",
+          "width": 2502,
+          "height": 3464,
+          "challengeTags": []
+        },
+        {
+          "pageNumber": 5,
+          "originalFilename": "001-18881103-L01-05.jpg",
+          "checksumSha256": "d4d2360eff502dc4b8360cb4a4fc0ca200ef78122d7afe265faf2069bdc64e38",
+          "width": 2510,
+          "height": 3552,
+          "challengeTags": []
+        },
+        {
+          "pageNumber": 6,
+          "originalFilename": "001-18881103-L01-06.jpg",
+          "checksumSha256": "29ed4b30c993db6be0a0043706a3192f3be7de7a0aa573465cef7669762247bd",
+          "width": 2512,
+          "height": 3552,
+          "challengeTags": []
+        },
+        {
+          "pageNumber": 7,
+          "originalFilename": "001-18881103-L01-07.jpg",
+          "checksumSha256": "59b8a61a29aca0255709f40fca608e0520f40e513bd5dafbd6114b934b796c56",
+          "width": 2451,
+          "height": 3302,
+          "challengeTags": []
+        }
+      ]
+    },
+    {
+      "identity": {
+        "collectionCode": "002",
+        "dateRaw": "19001113",
+        "type": "L",
+        "typeSequence": 1
+      },
+      "selection": {
+        "kind": "user_requested",
+        "reason": "Explicitly selected by the archive owner."
+      },
+      "pages": [
+        {
+          "pageNumber": 1,
+          "originalFilename": "002-19001113-L01-01.jpg",
+          "checksumSha256": "f8c16d52d973bd77231564d3b634b60dd8f820be2bea346a4bb80e5fd951ca09",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "exif-orientation"
+          ]
+        },
+        {
+          "pageNumber": 2,
+          "originalFilename": "002-19001113-L01-02.jpg",
+          "checksumSha256": "52fd6f08b7cf9d93e9ff1ab5b1ee3bd00887500dafa282f6138e6959af97a4f1",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "exif-orientation"
+          ]
+        },
+        {
+          "pageNumber": 3,
+          "originalFilename": "002-19001113-L01-03.jpg",
+          "checksumSha256": "8c503b33c5f7469fe115cc04fcb579e3d42f14ea488afd0ae3ba48de679edaca",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "exif-orientation"
+          ]
+        }
+      ]
+    },
+    {
+      "identity": {
+        "collectionCode": "003",
+        "dateRaw": "18880810",
+        "type": "L",
+        "typeSequence": 1
+      },
+      "selection": {
+        "kind": "collection_coverage",
+        "reason": "Four pages spanning ordinary longhand, a folded landscape page with perpendicular writing, and a sparse faint final page."
+      },
+      "pages": [
+        {
+          "pageNumber": 1,
+          "originalFilename": "003-18880810-L01-01.jpg",
+          "checksumSha256": "ffc480d31aa7bb52e838472487aa8531824804da4fb7413bc1842dd2a03b2363",
+          "width": 2766,
+          "height": 3874,
+          "challengeTags": [
+            "dense-handwriting"
+          ]
+        },
+        {
+          "pageNumber": 2,
+          "originalFilename": "003-18880810-L01-02.jpg",
+          "checksumSha256": "b4227844144da3fc07c96b43eaddb737afe613537e36789d6cf63f94e4203774",
+          "width": 2652,
+          "height": 3924,
+          "challengeTags": [
+            "dense-handwriting"
+          ]
+        },
+        {
+          "pageNumber": 3,
+          "originalFilename": "003-18880810-L01-03.jpg",
+          "checksumSha256": "f4111c987a9f55f20608a862aeca99c30060d5a03250fc32ed34b5e47004439d",
+          "width": 3728,
+          "height": 2596,
+          "challengeTags": [
+            "dense-handwriting",
+            "folded-paper",
+            "marginalia",
+            "sideways-text"
+          ]
+        },
+        {
+          "pageNumber": 4,
+          "originalFilename": "003-18880810-L01-04.jpg",
+          "checksumSha256": "ecb82b319f2834b1a52f605273b5d3a63b368e4ca9486597efce7725b4a9dc5d",
+          "width": 2378,
+          "height": 3784,
+          "challengeTags": [
+            "faint-ink",
+            "sparse-page"
+          ]
+        }
+      ]
+    },
+    {
+      "identity": {
+        "collectionCode": "004",
+        "dateRaw": "19090407",
+        "type": "L",
+        "typeSequence": 1
+      },
+      "selection": {
+        "kind": "collection_coverage",
+        "reason": "The collection's only letter; a six-page cold-start case with faint longhand, ruled paper, and folds."
+      },
+      "pages": [
+        {
+          "pageNumber": 1,
+          "originalFilename": "004-19090407-L01-01.jpg",
+          "checksumSha256": "f2d67b5a3e463a4043d083eee07a98d2cbb5233679725b030adfb8f6100dbef2",
+          "width": 2546,
+          "height": 3396,
+          "challengeTags": [
+            "faint-ink",
+            "folded-paper",
+            "ruled-paper"
+          ]
+        },
+        {
+          "pageNumber": 2,
+          "originalFilename": "004-19090407-L01-02.jpg",
+          "checksumSha256": "1763a3222ecc1d113fd4fe85bb4c6ca708cfa6f5212c04530e322f1fe7c1c8e3",
+          "width": 2610,
+          "height": 3480,
+          "challengeTags": [
+            "faint-ink",
+            "folded-paper",
+            "ruled-paper"
+          ]
+        },
+        {
+          "pageNumber": 3,
+          "originalFilename": "004-19090407-L01-03.jpg",
+          "checksumSha256": "72fadc036291dac4b6afe24433dbe0cdb4491f857ba4b68316822d01d179cfac",
+          "width": 2634,
+          "height": 3512,
+          "challengeTags": [
+            "faint-ink",
+            "folded-paper",
+            "ruled-paper"
+          ]
+        },
+        {
+          "pageNumber": 4,
+          "originalFilename": "004-19090407-L01-04.jpg",
+          "checksumSha256": "84b8f9693768e110358554166c7582ed4cb954c7be3ae5aea901e0706d4826d3",
+          "width": 2610,
+          "height": 3480,
+          "challengeTags": [
+            "faint-ink",
+            "folded-paper",
+            "ruled-paper"
+          ]
+        },
+        {
+          "pageNumber": 5,
+          "originalFilename": "004-19090407-L01-05.jpg",
+          "checksumSha256": "f9db21915f6c6e8440ccd7eb3dc87cc7212427ce784c55046b637abb6b1b4fb3",
+          "width": 2662,
+          "height": 3550,
+          "challengeTags": [
+            "faint-ink",
+            "folded-paper",
+            "ruled-paper"
+          ]
+        },
+        {
+          "pageNumber": 6,
+          "originalFilename": "004-19090407-L01-06.jpg",
+          "checksumSha256": "c95737527648b12435d631cf8cce5d4f0f703beaadc6fbe8bfdb8d6f337c396f",
+          "width": 2678,
+          "height": 3570,
+          "challengeTags": [
+            "faint-ink",
+            "folded-paper",
+            "ruled-paper"
+          ]
+        }
+      ]
+    },
+    {
+      "identity": {
+        "collectionCode": "005",
+        "dateRaw": "19150813",
+        "type": "L",
+        "typeSequence": 1
+      },
+      "selection": {
+        "kind": "user_requested",
+        "reason": "Explicitly selected by the archive owner; a known example where positional segment alignment can fail despite equal transcript and segment counts."
+      },
+      "pages": [
+        {
+          "pageNumber": 1,
+          "originalFilename": "005-19150813-L01.jpg",
+          "checksumSha256": "f68d22f0f5e26217412d9cea1b20dc6d4a4e9acda66eee73c4808c446a7cbc7a",
+          "width": 2852,
+          "height": 3804,
+          "challengeTags": [
+            "curved-lines",
+            "dense-handwriting",
+            "folded-paper",
+            "marginalia",
+            "strikeovers"
+          ]
+        }
+      ]
+    },
+    {
+      "identity": {
+        "collectionCode": "006",
+        "dateRaw": "19270418",
+        "type": "L",
+        "typeSequence": 1
+      },
+      "selection": {
+        "kind": "collection_coverage",
+        "reason": "Six pages with mixed encoded orientations, hotel stationery in multiple scripts, handwriting, folds, paper edges, and show-through."
+      },
+      "pages": [
+        {
+          "pageNumber": 1,
+          "originalFilename": "006-19270418-L01-01.jpg",
+          "checksumSha256": "a5867e50163580939003bbb5d9422a07eaab5b3087c19964c7275e6eba290276",
+          "width": 3000,
+          "height": 4000,
+          "challengeTags": [
+            "bleed-through",
+            "mixed-image-and-text",
+            "printed-letterhead"
+          ]
+        },
+        {
+          "pageNumber": 2,
+          "originalFilename": "006-19270418-L01-02.jpg",
+          "checksumSha256": "afac6fea548afa0411fff8756f71472e8c8cd0795607d29d80b5d3ff8ca53728",
+          "width": 3000,
+          "height": 4000,
+          "challengeTags": [
+            "bleed-through",
+            "mixed-image-and-text",
+            "printed-letterhead"
+          ]
+        },
+        {
+          "pageNumber": 3,
+          "originalFilename": "006-19270418-L01-03.jpg",
+          "checksumSha256": "6e9be37e024f87be997554f1f464b69c0fb46b3f84b93ac94896ff53e115ab4f",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "bleed-through",
+            "mixed-image-and-text",
+            "printed-letterhead"
+          ]
+        },
+        {
+          "pageNumber": 4,
+          "originalFilename": "006-19270418-L01-04.jpg",
+          "checksumSha256": "fc55959e9db589bf2e85228335c10e79b4b4616fa130423797d2a70ce76bb50d",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "bleed-through",
+            "mixed-image-and-text",
+            "printed-letterhead"
+          ]
+        },
+        {
+          "pageNumber": 5,
+          "originalFilename": "006-19270418-L01-05.jpg",
+          "checksumSha256": "a4984ffd3e8be4a33cfaadff50343a073cb4c0965758e8565111cf04314cc8c6",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "bleed-through",
+            "mixed-image-and-text",
+            "printed-letterhead"
+          ]
+        },
+        {
+          "pageNumber": 6,
+          "originalFilename": "006-19270418-L01-06.jpg",
+          "checksumSha256": "6025a2f4994b048834be43926c9de0ac1ee0a9043b8e37a0f674052e774eff0e",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "bleed-through",
+            "mixed-image-and-text",
+            "printed-letterhead"
+          ]
+        }
+      ]
+    },
+    {
+      "identity": {
+        "collectionCode": "007",
+        "dateRaw": "19181119",
+        "type": "L",
+        "typeSequence": 1
+      },
+      "selection": {
+        "kind": "collection_coverage",
+        "reason": "The collection's longest letter; eight pages with mixed encoded dimensions, ruled stock, folds, bleed-through, and widely varying writing density."
+      },
+      "pages": [
+        {
+          "pageNumber": 1,
+          "originalFilename": "007-19181119-L01-01.jpg",
+          "checksumSha256": "c6059f447cdce140ddaffda0e4dc5ed4cbd157a468d88aeb7cbdb59e7d629663",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "folded-paper",
+            "mixed-image-and-text",
+            "printed-letterhead",
+            "ruled-paper"
+          ]
+        },
+        {
+          "pageNumber": 2,
+          "originalFilename": "007-19181119-L01-02.jpg",
+          "checksumSha256": "7efa4bf256ace634d55cb6fc5048020ad09b00fc2edd01c3b00595ef5b0d0fdf",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "bleed-through",
+            "dense-handwriting",
+            "folded-paper",
+            "ruled-paper"
+          ]
+        },
+        {
+          "pageNumber": 3,
+          "originalFilename": "007-19181119-L01-03.jpg",
+          "checksumSha256": "65f1344c06908bdd4e979555be1a80011f8d25a1ce2771fade28603354661cb7",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "bleed-through",
+            "folded-paper",
+            "ruled-paper"
+          ]
+        },
+        {
+          "pageNumber": 4,
+          "originalFilename": "007-19181119-L01-04.jpg",
+          "checksumSha256": "381db5d81f51eba8ba146a8b63fae3294d1a1f62630b1b0e1e38da3c35f4ef29",
+          "width": 3000,
+          "height": 4000,
+          "challengeTags": [
+            "bleed-through",
+            "folded-paper",
+            "ruled-paper"
+          ]
+        },
+        {
+          "pageNumber": 5,
+          "originalFilename": "007-19181119-L01-05.jpg",
+          "checksumSha256": "37bed4cb3e7074a82ca0fc2aa0ff193c7398173b878c33ad552ded681172e61b",
+          "width": 3000,
+          "height": 4000,
+          "challengeTags": [
+            "bleed-through",
+            "folded-paper",
+            "ruled-paper"
+          ]
+        },
+        {
+          "pageNumber": 6,
+          "originalFilename": "007-19181119-L01-06.jpg",
+          "checksumSha256": "2139a52c8fafdfa0ddb7cbf7d5e9aee659e37161f2e4647190237114337e20b8",
+          "width": 3000,
+          "height": 4000,
+          "challengeTags": [
+            "bleed-through",
+            "folded-paper",
+            "ruled-paper"
+          ]
+        },
+        {
+          "pageNumber": 7,
+          "originalFilename": "007-19181119-L01-07.jpg",
+          "checksumSha256": "9ddc7d3e5dc40d2543f76ddec2b26f7e544eb2a5797f66946b118fb9758b831c",
+          "width": 3000,
+          "height": 4000,
+          "challengeTags": [
+            "bleed-through",
+            "folded-paper",
+            "ruled-paper"
+          ]
+        },
+        {
+          "pageNumber": 8,
+          "originalFilename": "007-19181119-L01-08.jpg",
+          "checksumSha256": "68b0e4bdc42f55492330e739957be35a0fd35ffb36f557800b25608bcd9fc334",
+          "width": 3000,
+          "height": 4000,
+          "challengeTags": [
+            "faint-ink",
+            "folded-paper",
+            "ruled-paper",
+            "sparse-page"
+          ]
+        }
+      ]
+    },
+    {
+      "identity": {
+        "collectionCode": "008",
+        "dateRaw": "18850922",
+        "type": "L",
+        "typeSequence": 1
+      },
+      "selection": {
+        "kind": "collection_coverage",
+        "reason": "The collection's only letter; two pages with variable ink, corrections, and overwriting. Its current AI draft is known stub material and is not benchmark truth."
+      },
+      "pages": [
+        {
+          "pageNumber": 1,
+          "originalFilename": "008-18850922-L01-01.jpg",
+          "checksumSha256": "c47f9b615ac6626b561be194af6af553ccea88be3e3c8c50a0c1040f14f6fabb",
+          "width": 2798,
+          "height": 3730,
+          "challengeTags": [
+            "dense-handwriting",
+            "faint-ink",
+            "strikeovers"
+          ]
+        },
+        {
+          "pageNumber": 2,
+          "originalFilename": "008-18850922-L01-02.jpg",
+          "checksumSha256": "be380a5070d13a2331eeb8eacd01d8b823dd8a26996624b97bc0e31150187cc6",
+          "width": 2842,
+          "height": 3790,
+          "challengeTags": [
+            "dense-handwriting",
+            "faint-ink",
+            "strikeovers"
+          ]
+        }
+      ]
+    },
+    {
+      "identity": {
+        "collectionCode": "009",
+        "dateRaw": "19470830",
+        "type": "L",
+        "typeSequence": 1
+      },
+      "selection": {
+        "kind": "collection_coverage",
+        "reason": "The collection's longest letter; nine pages provide a dense typed-text and strikeover contrast with a much sparser final page."
+      },
+      "pages": [
+        {
+          "pageNumber": 1,
+          "originalFilename": "009-19470830-L01-01.jpg",
+          "checksumSha256": "5b2dc89e0683b3c896122300e24d1f4ef9127ae7931b80525be90941f6d19fca",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "bleed-through",
+            "strikeovers",
+            "typed-text"
+          ]
+        },
+        {
+          "pageNumber": 2,
+          "originalFilename": "009-19470830-L01-02.jpg",
+          "checksumSha256": "4a8039f90f52fc5ea3e6c44758982c833f588ba9d97a8bdef8b53a0606ba783e",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "bleed-through",
+            "strikeovers",
+            "typed-text"
+          ]
+        },
+        {
+          "pageNumber": 3,
+          "originalFilename": "009-19470830-L01-03.jpg",
+          "checksumSha256": "35db9870b2a95eaaea13452b2476bff2d5978dbf012afc145f766df2d42cb444",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "bleed-through",
+            "strikeovers",
+            "typed-text"
+          ]
+        },
+        {
+          "pageNumber": 4,
+          "originalFilename": "009-19470830-L01-04.jpg",
+          "checksumSha256": "bcaaa12c76d9d55f73ebf377e7756b2f3c59bd9be09b6bf9792c11d606796382",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "bleed-through",
+            "strikeovers",
+            "typed-text"
+          ]
+        },
+        {
+          "pageNumber": 5,
+          "originalFilename": "009-19470830-L01-05.jpg",
+          "checksumSha256": "d02cbece118e3004d92230f759de051cbdbdb99352556d8d1c0c29682630a72d",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "bleed-through",
+            "strikeovers",
+            "typed-text"
+          ]
+        },
+        {
+          "pageNumber": 6,
+          "originalFilename": "009-19470830-L01-06.jpg",
+          "checksumSha256": "c5442f15e775e36570f1a07158f86e7406ff706e3598bdb26f9bd167792cf577",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "bleed-through",
+            "strikeovers",
+            "typed-text"
+          ]
+        },
+        {
+          "pageNumber": 7,
+          "originalFilename": "009-19470830-L01-07.jpg",
+          "checksumSha256": "5e4b9cdc558110ebdef1ef8aa53fea391b30f90701cce5bc047bf7323bf04832",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "bleed-through",
+            "strikeovers",
+            "typed-text"
+          ]
+        },
+        {
+          "pageNumber": 8,
+          "originalFilename": "009-19470830-L01-08.jpg",
+          "checksumSha256": "026cb68ea1a9e3c5024705a3a362f18fc9f9e1d536ae5bdee580def20861155a",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "bleed-through",
+            "strikeovers",
+            "typed-text"
+          ]
+        },
+        {
+          "pageNumber": 9,
+          "originalFilename": "009-19470830-L01-09.jpg",
+          "checksumSha256": "59c5de3ee34ae6292e12593a2d2427bb7953343bf24bf0d9c00643beda7f8ede",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "sparse-page",
+            "typed-text"
+          ]
+        }
+      ]
+    },
+    {
+      "identity": {
+        "collectionCode": "010",
+        "dateRaw": "19460119",
+        "type": "L",
+        "typeSequence": 1
+      },
+      "selection": {
+        "kind": "collection_coverage",
+        "reason": "The collection's only letter; three relatively regular handwritten pages provide a cold-start positive control."
+      },
+      "pages": [
+        {
+          "pageNumber": 1,
+          "originalFilename": "010-19460119-L01-01.jpg",
+          "checksumSha256": "d0b7027f61e001eb6452ebe4ec7b59a21fc34bb18192ea9585b98a3fd0033579",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "folded-paper",
+            "ordinary-horizontal"
+          ]
+        },
+        {
+          "pageNumber": 2,
+          "originalFilename": "010-19460119-L01-02.jpg",
+          "checksumSha256": "01bcb39ddbea0db33a0fa9ffbed90a330f6560c01830535feb363f5f25ff8447",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "folded-paper",
+            "ordinary-horizontal"
+          ]
+        },
+        {
+          "pageNumber": 3,
+          "originalFilename": "010-19460119-L01-03.jpg",
+          "checksumSha256": "7be5a017aa7749b758c1da17c23be4f0ca60e50820e320eafddd5791c3f71d37",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "folded-paper",
+            "ordinary-horizontal"
+          ]
+        }
+      ]
+    },
+    {
+      "identity": {
+        "collectionCode": "011",
+        "dateRaw": "19450424",
+        "type": "L",
+        "typeSequence": 1
+      },
+      "selection": {
+        "kind": "collection_coverage",
+        "reason": "The collection's only letter; two clearer longhand pages provide an easier positive control."
+      },
+      "pages": [
+        {
+          "pageNumber": 1,
+          "originalFilename": "011-19450424-L01-01.jpg",
+          "checksumSha256": "e6fd109ac2661eaaf4adc108fbce644fd6b303f662d2e0a7a8f22693ece7f4be",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "faint-ink",
+            "folded-paper",
+            "ordinary-horizontal"
+          ]
+        },
+        {
+          "pageNumber": 2,
+          "originalFilename": "011-19450424-L01-02.jpg",
+          "checksumSha256": "63c39203e635a968d38f1c3642705da84aa5edb4dc8e500e54d3b2b9bc100801",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "faint-ink",
+            "folded-paper",
+            "ordinary-horizontal"
+          ]
+        }
+      ]
+    },
+    {
+      "identity": {
+        "collectionCode": "012",
+        "dateRaw": "18620606",
+        "type": "L",
+        "typeSequence": 1
+      },
+      "selection": {
+        "kind": "user_requested",
+        "reason": "Explicitly selected by the archive owner."
+      },
+      "pages": [
+        {
+          "pageNumber": 1,
+          "originalFilename": "012-18620606-L01-01.jpg",
+          "checksumSha256": "d65d0a7111a9b77a7417ccda8642b85f8e7431e37f534794b93972097a4f136b",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "exif-orientation"
+          ]
+        },
+        {
+          "pageNumber": 2,
+          "originalFilename": "012-18620606-L01-02.jpg",
+          "checksumSha256": "09c381a9ba3bdd4d61d2b41e4e6009463861051e572f89a14c409776fcb26266",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "exif-orientation"
+          ]
+        },
+        {
+          "pageNumber": 3,
+          "originalFilename": "012-18620606-L01-03.jpg",
+          "checksumSha256": "4498ccc925fb399f4dbe8bb9138464d77d54d27e3c243ca1ec1d4888f0b54d04",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "exif-orientation"
+          ]
+        },
+        {
+          "pageNumber": 4,
+          "originalFilename": "012-18620606-L01-04.jpg",
+          "checksumSha256": "dbf5f933d2e745fbfb154d9e28453adbcb10ede708f5488d42969aebeb6ac779",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "exif-orientation"
+          ]
+        }
+      ]
+    },
+    {
+      "identity": {
+        "collectionCode": "013",
+        "dateRaw": "19441223",
+        "type": "L",
+        "typeSequence": 1
+      },
+      "selection": {
+        "kind": "user_requested",
+        "reason": "Explicitly selected by the archive owner."
+      },
+      "pages": [
+        {
+          "pageNumber": 1,
+          "originalFilename": "013-19441223-L01-01.jpg",
+          "checksumSha256": "a3b47366a694c2a8d9b9226bea0cd16007aeb37e0a93e7bbb668c74b9ee08d06",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "exif-orientation"
+          ]
+        },
+        {
+          "pageNumber": 2,
+          "originalFilename": "013-19441223-L01-02.jpg",
+          "checksumSha256": "df4d5ecdbe44189644fbc510c173b19635cffda896e0f79b509b845642fb5f30",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "exif-orientation"
+          ]
+        },
+        {
+          "pageNumber": 3,
+          "originalFilename": "013-19441223-L01-03.jpg",
+          "checksumSha256": "3a814609203b6875220689c657f415f34930418f49e37f8633fe4329381ba7c2",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "exif-orientation"
+          ]
+        },
+        {
+          "pageNumber": 4,
+          "originalFilename": "013-19441223-L01-04.jpg",
+          "checksumSha256": "f740232a5aba7d031165c8cb75cd5351e0fda3ea7211f670c6dc00012f9d525e",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "exif-orientation"
+          ]
+        },
+        {
+          "pageNumber": 5,
+          "originalFilename": "013-19441223-L01-05.jpg",
+          "checksumSha256": "d612045d4dc66329b905981b2b10b7d1c239e482442adf6da1803b2e72cbc949",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "exif-orientation"
+          ]
+        },
+        {
+          "pageNumber": 6,
+          "originalFilename": "013-19441223-L01-06.jpg",
+          "checksumSha256": "6fc59470d9904ed507647f703dd7b21321119a03f9166bc0a2863e5fbfc28092",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "exif-orientation"
+          ]
+        },
+        {
+          "pageNumber": 7,
+          "originalFilename": "013-19441223-L01-07.jpg",
+          "checksumSha256": "47d792dc71e74e6dabf7e72ce45c87cfb86d0066003f6259f188144fea37f27b",
+          "width": 4000,
+          "height": 3000,
+          "challengeTags": [
+            "exif-orientation"
+          ]
+        }
+      ]
+    },
+    {
+      "identity": {
+        "collectionCode": "014",
+        "dateRaw": "18780127",
+        "type": "L",
+        "typeSequence": 1
+      },
+      "selection": {
+        "kind": "user_requested",
+        "reason": "Explicitly selected by the archive owner; includes neighboring-page contamination and 90-degree marginal notes."
+      },
+      "pages": [
+        {
+          "pageNumber": 1,
+          "originalFilename": "014-18780127-L01-01.jpg",
+          "checksumSha256": "a832951e6c3f25d0ab963bc9e666090652ae8ca8e5fb9b578fb9a9f97f90fdbd",
+          "width": 1200,
+          "height": 1600,
+          "challengeTags": [
+            "background-clutter",
+            "dense-handwriting",
+            "low-resolution",
+            "marginalia",
+            "sideways-text"
+          ]
+        },
+        {
+          "pageNumber": 2,
+          "originalFilename": "014-18780127-L01-02.jpg",
+          "checksumSha256": "af8f2a4e9582d2e4fe052dc4665a0816b1198f756c2d157014cf245ec17ec42d",
+          "width": 1200,
+          "height": 1600,
+          "challengeTags": [
+            "adjacent-page-text",
+            "background-clutter",
+            "cropped-text",
+            "dense-handwriting",
+            "low-resolution"
+          ]
+        },
+        {
+          "pageNumber": 3,
+          "originalFilename": "014-18780127-L01-03.jpg",
+          "checksumSha256": "1ac198ce711cf57c1525d1a7d08182ee253f2dcf43c4b9b10d30840ff9ad6af6",
+          "width": 1200,
+          "height": 1600,
+          "challengeTags": [
+            "adjacent-page-text",
+            "background-clutter",
+            "cropped-text",
+            "dense-handwriting",
+            "low-resolution"
+          ]
+        },
+        {
+          "pageNumber": 4,
+          "originalFilename": "014-18780127-L01-04.jpg",
+          "checksumSha256": "a52f9665c362880699636c45bd6533767c8ff46df996affd6cfca856ed2b2d69",
+          "width": 1200,
+          "height": 1600,
+          "challengeTags": [
+            "background-clutter",
+            "dense-handwriting",
+            "low-resolution",
+            "marginalia",
+            "sideways-text",
+            "strikeovers"
+          ]
+        }
+      ]
+    }
+  ]
+}

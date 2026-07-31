@@ -3,10 +3,12 @@ import {
   addNote,
   confirmTranscript,
   generateReadingView,
+  getPageGeometry,
   processLetter,
   regenerateEntities,
   regenerateMetadata,
   reExtractLetter,
+  savePageLineSegments,
   unverifyMetadata,
   unverifyTranscript,
   updateNoteStatus,
@@ -211,6 +213,96 @@ describe('admin letter verification api', () => {
         body: JSON.stringify({
           primarySourceRevision: 7,
           status: 'dismissed',
+        }),
+      }),
+    );
+  });
+});
+
+describe('page geometry api contract', () => {
+  const geometryChecksum = 'a'.repeat(64);
+  const projectionChecksum = 'b'.repeat(64);
+  const segment = {
+    id: 'segment-1',
+    line: 1,
+    baseline: [[10, 20], [110, 20]] as [number, number][],
+    bbox: [10, 10, 110, 30] as [number, number, number, number],
+    ocrText: 'Dear Sadie',
+    geometryProvenance: {
+      source: 'machine' as const,
+      operation: 'detected' as const,
+      parentSegmentIds: [],
+    },
+  };
+  const envelope = {
+    lineSegments: [segment],
+    geometryRevision: 3,
+    geometryChecksumSha256: geometryChecksum,
+    lineSegmentsChecksumSha256: projectionChecksum,
+    reviewState: {
+      trustState: 'unverified' as const,
+      approvedGeometryRevision: null,
+      approvedGeometryChecksumSha256: null,
+      approvedBy: null,
+      approvedAt: null,
+    },
+  };
+
+  it('requires the complete projection identity when loading geometry', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+      ...envelope,
+      lineSegmentsChecksumSha256: undefined,
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+
+    await expect(getPageGeometry('page-1')).rejects.toThrow(
+      'The page geometry response was incomplete',
+    );
+  });
+
+  it('rejects a trusted response without its exact approval receipt', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+      ...envelope,
+      reviewState: {
+        ...envelope.reviewState,
+        trustState: 'trusted',
+      },
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+
+    await expect(getPageGeometry('page-1')).rejects.toThrow(
+      'The page geometry response was incomplete',
+    );
+  });
+
+  it('sends both geometry and full-projection expectations when saving', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(envelope), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+
+    await expect(savePageLineSegments('page-1', [segment], {
+      primarySourceRevision: 7,
+      sourceChecksum: 'c'.repeat(64),
+      expectedGeometryRevision: 2,
+      expectedLineSegmentsChecksumSha256: 'd'.repeat(64),
+    })).resolves.toEqual(envelope);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:3002/admin/letters/pages/page-1/line-segments',
+      expect.objectContaining({
+        method: 'PATCH',
+        credentials: 'include',
+        body: JSON.stringify({
+          lineSegments: [segment],
+          primarySourceRevision: 7,
+          sourceChecksum: 'c'.repeat(64),
+          expectedGeometryRevision: 2,
+          expectedLineSegmentsChecksumSha256: 'd'.repeat(64),
         }),
       }),
     );

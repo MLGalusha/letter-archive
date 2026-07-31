@@ -19,6 +19,7 @@ import {
 } from './metadata-job.js';
 import { hasIdleTranscriptionDownstream } from '../processing-eligibility.js';
 import { activeWorkerExecutionCondition } from '../worker-state.js';
+import { assertPersistableTranscription } from '../../ai/openai/transcription-stub.js';
 
 const log = createLogger({ module: 'transcription-job' });
 const LEASE_EXPIRED_ERROR = 'Transcription lease expired before the attempt completed';
@@ -57,6 +58,11 @@ export interface TranscriptionStateSource {
 
 export interface TranscriptionClaim {
   runId: string;
+}
+
+export interface TranscriptionCompletion {
+  isStub: boolean;
+  text: string | null;
 }
 
 export type TranscriptionHeartbeat = LeaseHeartbeat;
@@ -297,9 +303,11 @@ export async function withTranscriptionHeartbeat<T>(
 export async function completeTranscription(
   letterId: string,
   runId: string,
-  transcriptionText: string | null,
+  completion: TranscriptionCompletion,
   expectedPrimarySourceRevision?: number,
 ): Promise<boolean> {
+  assertPersistableTranscription(completion);
+  const transcriptionText = completion.text;
   const updated = await db
     .update(letters)
     .set({

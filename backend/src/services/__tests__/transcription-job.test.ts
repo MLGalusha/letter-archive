@@ -59,6 +59,10 @@ import {
   withTranscriptionHeartbeat,
   type ObservedTranscriptionState,
 } from '../letter/transcription-job.js';
+import {
+  DEVELOPMENT_STUB_PERSISTENCE_ERROR,
+  DEVELOPMENT_STUB_TRANSCRIPTION_TEXT,
+} from '../../ai/openai/transcription-stub.js';
 
 interface TranscriptionRow {
   id: string;
@@ -364,7 +368,12 @@ describe('transcription job lifecycle', () => {
     row.primarySourceRevision = 5;
 
     await expect(
-      completeTranscription(row.id, 'run-a', 'Stale transcript', 4),
+      completeTranscription(
+        row.id,
+        'run-a',
+        { text: 'Stale transcript', isStub: false },
+        4,
+      ),
     ).resolves.toBe(false);
     expect(row.transcriptionText).toBeNull();
     expect(row.transcriptionStatus).toBe('RUNNING');
@@ -380,7 +389,11 @@ describe('transcription job lifecycle', () => {
     row.transcriptConfirmedBy = 'reviewer-1';
     row.transcriptPublished = true;
 
-    await expect(completeTranscription(row.id, 'run-a', 'Dear family')).resolves.toBe(true);
+    await expect(completeTranscription(
+      row.id,
+      'run-a',
+      { text: 'Dear family', isStub: false },
+    )).resolves.toBe(true);
     expect(row).toMatchObject({
       workflow: 'TRANSCRIBED',
       transcriptionStatus: 'SUCCESS',
@@ -407,6 +420,26 @@ describe('transcription job lifecycle', () => {
     expect(row.transcriptionRunId).toBe('run-b');
   });
 
+  it('refuses stub provenance and the known legacy stub before any database write', async () => {
+    await expect(completeTranscription(
+      row.id,
+      'run-a',
+      { text: 'Development preview', isStub: true },
+    )).rejects.toThrow(DEVELOPMENT_STUB_PERSISTENCE_ERROR);
+    await expect(completeTranscription(
+      row.id,
+      'run-a',
+      { text: DEVELOPMENT_STUB_TRANSCRIPTION_TEXT, isStub: false },
+    )).rejects.toThrow(DEVELOPMENT_STUB_PERSISTENCE_ERROR);
+
+    expect(dbUpdateMock).not.toHaveBeenCalled();
+    expect(row).toMatchObject({
+      transcriptionStatus: 'PENDING',
+      transcriptionText: null,
+      transcriptStatus: 'EMPTY',
+    });
+  });
+
   it('prevents a cancelled attempt from publishing into a retried run', async () => {
     randomUUIDMock.mockReturnValueOnce('run-a').mockReturnValueOnce('run-b');
     const firstClaim = await claimQueuedTranscription(row.id, observed());
@@ -422,14 +455,22 @@ describe('transcription job lifecycle', () => {
     const secondClaim = await claimQueuedTranscription(row.id, observed());
     expect(secondClaim).toEqual({ runId: 'run-b' });
 
-    await expect(completeTranscription(row.id, 'run-a', 'Old content')).resolves.toBe(false);
+    await expect(completeTranscription(
+      row.id,
+      'run-a',
+      { text: 'Old content', isStub: false },
+    )).resolves.toBe(false);
     expect(row).toMatchObject({
       transcriptionStatus: 'RUNNING',
       transcriptionRunId: 'run-b',
       transcriptionText: null,
     });
 
-    await expect(completeTranscription(row.id, 'run-b', null)).resolves.toBe(true);
+    await expect(completeTranscription(
+      row.id,
+      'run-b',
+      { text: null, isStub: false },
+    )).resolves.toBe(true);
     expect(row).toMatchObject({
       transcriptionStatus: 'SUCCESS',
       transcriptionRunId: null,
@@ -449,7 +490,11 @@ describe('transcription job lifecycle', () => {
     row.transcriptionLeaseRunId = 'run-a';
     row.transcriptionClaimKind = 'QUEUED';
 
-    await expect(completeTranscription(row.id, 'run-a', 'Too late')).resolves.toBe(false);
+    await expect(completeTranscription(
+      row.id,
+      'run-a',
+      { text: 'Too late', isStub: false },
+    )).resolves.toBe(false);
     await expect(failTranscription(row.id, 'run-a', 'Too late')).resolves.toBe(false);
     await expect(cancelTranscriptionAttempt(row.id, 'run-a')).resolves.toBe(true);
 
@@ -504,7 +549,11 @@ describe('transcription job lifecycle', () => {
 
     await expect(renewTranscriptionLease(row.id, 'replacement-run')).resolves.toBe(false);
     await expect(
-      completeTranscription(row.id, 'replacement-run', 'Inherited lease publication'),
+      completeTranscription(
+        row.id,
+        'replacement-run',
+        { text: 'Inherited lease publication', isStub: false },
+      ),
     ).resolves.toBe(false);
     await expect(
       failTranscription(row.id, 'replacement-run', 'Inherited lease failure'),

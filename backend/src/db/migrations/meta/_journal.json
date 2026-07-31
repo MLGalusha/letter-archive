@@ -400,6 +400,48 @@
       "when": 1777459200000,
       "tag": "0056_repair_extra_content_job_ownership",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1785196800000,
+      "tag": "0057_add_page_layout_v2",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1785369600000,
+      "tag": "0058_add_page_geometry_revisions",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1785419400000,
+      "tag": "0059_allow_page_geometry_revision_zero",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1785423000000,
+      "tag": "0060_add_transcript_identity",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1785426600000,
+      "tag": "0061_add_page_recognition_artifacts",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1785430200000,
+      "tag": "0062_version_page_recognition_evidence",
+      "breakpoints": true
     }
   ]
 }

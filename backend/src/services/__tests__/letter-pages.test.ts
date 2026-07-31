@@ -683,6 +683,8 @@ describe('letter pages service', () => {
       storagePath: 'storage/old.jpg',
       originalFilename: '009-19470810-L01-01.jpg',
       checksumSha256: 'checksum-old',
+      pageLayout: { schemaVersion: 2 },
+      pageLayoutChecksumSha256: 'a'.repeat(64),
       lineSegments: [{ line: 1 }],
       segmentTrustState: 'trusted',
       width: 100,
@@ -703,8 +705,16 @@ describe('letter pages service', () => {
       originalFilename: '009-19470810-L01-01.png',
       width: null,
       height: null,
+      pageLayout: null,
+      pageLayoutChecksumSha256: null,
       lineSegments: null,
+      geometryRevision: 0,
+      geometryChecksumSha256: null,
       segmentTrustState: 'unverified',
+      approvedGeometryRevision: null,
+      approvedGeometryChecksumSha256: null,
+      geometryApprovedBy: null,
+      geometryApprovedAt: null,
       updatedAt: expect.any(Date),
     });
     expect(invalidatePrimaryLetterSourceMock).toHaveBeenCalledWith(
@@ -749,6 +759,10 @@ describe('letter pages service', () => {
       checksumSha256: 'checksum-a',
     }));
     expect(updateSetMock.mock.calls[0]?.[0]).not.toHaveProperty('lineSegments');
+    expect(updateSetMock.mock.calls[0]?.[0]).not.toHaveProperty('pageLayout');
+    expect(updateSetMock.mock.calls[0]?.[0]).not.toHaveProperty(
+      'pageLayoutChecksumSha256',
+    );
     expect(invalidatePrimaryLetterSourceMock).not.toHaveBeenCalled();
   });
 

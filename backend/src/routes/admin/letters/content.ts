@@ -2,10 +2,19 @@ import { Router } from 'express';
 import { and, eq } from 'drizzle-orm';
 import { db, canonicalPersons, letterPages, letterPersons, letters } from '../../../db/index.js';
 import {
+  getPageGeometryEnvelope,
   savePageLineSegments,
   updateLetterSegmentTrust,
   updatePageSegmentTrust,
+  type PageGeometryMutationResult,
 } from '../../../services/line-segments.js';
+import {
+  adaptKrakenNativePageLayoutV2,
+} from '../../../services/kraken-page-layout-adapter.js';
+import {
+  savePageLayoutV2,
+} from '../../../services/page-layout.js';
+import { validateStoredPageLayout } from '../../../services/stored-page-layout.js';
 import {
   createVersion,
   describePhoto,
@@ -60,6 +69,7 @@ import {
   replaceAiNotesSchema,
   restoreVersionBodySchema,
   retagMetadataSchema,
+  saveKrakenPageLayoutSchema,
   saveLineSegmentsSchema,
   toggleFlagSchema,
   updateLetterSegmentTrustSchema,
@@ -114,6 +124,81 @@ function requirePageSourceExpectation(body: unknown, message: string): void {
   }
 }
 
+const GEOMETRY_REVISION_CHANGED_ERROR_CODE = 'GEOMETRY_REVISION_CHANGED';
+const LINE_SEGMENTS_CHANGED_ERROR_CODE = 'LINE_SEGMENTS_CHANGED';
+
+function geometryRevisionChanged(message: string): AppError {
+  return new AppError(
+    409,
+    message,
+    undefined,
+    GEOMETRY_REVISION_CHANGED_ERROR_CODE,
+  );
+}
+
+function lineSegmentsChanged(message: string): AppError {
+  return new AppError(
+    409,
+    message,
+    undefined,
+    LINE_SEGMENTS_CHANGED_ERROR_CODE,
+  );
+}
+
+function requireGeometryExpectation(
+  body: unknown,
+  options: { checksum: boolean },
+): void {
+  if (
+    !hasOwnField(body, 'expectedGeometryRevision')
+    || (
+      options.checksum
+      && !hasOwnField(body, 'expectedGeometryChecksumSha256')
+    )
+  ) {
+    throw geometryRevisionChanged(
+      'Page geometry version is missing; reload before continuing',
+    );
+  }
+}
+
+function requireLineSegmentsExpectation(body: unknown): void {
+  if (!hasOwnField(body, 'expectedLineSegmentsChecksumSha256')) {
+    throw lineSegmentsChanged(
+      'Page line-segment data version is missing; reload before continuing',
+    );
+  }
+}
+
+function requireSavedGeometry(
+  result: PageGeometryMutationResult,
+  sourceMessage: string,
+): Extract<PageGeometryMutationResult, { kind: 'saved' }> {
+  if (result.kind === 'saved') return result;
+  if (result.kind === 'not-found') {
+    throw new NotFoundError('Page not found');
+  }
+  if (result.kind === 'source-conflict') {
+    throw sourceRevisionChanged(sourceMessage);
+  }
+  if (result.kind === 'invalid-transition') {
+    throw new AppError(
+      400,
+      'Geometry provenance does not match the submitted shape change',
+      result.issues,
+      'GEOMETRY_PROVENANCE_INVALID',
+    );
+  }
+  if (result.kind === 'projection-conflict') {
+    throw lineSegmentsChanged(
+      'Page line-segment data changed in another editor; reload the page before retrying',
+    );
+  }
+  throw geometryRevisionChanged(
+    'Page geometry changed in another editor; reload the page geometry and retry',
+  );
+}
+
 function requireLetterPageSourceExpectations(body: unknown): void {
   const pages = typeof body === 'object' && body !== null
     ? (body as { pages?: unknown }).pages
@@ -123,7 +208,11 @@ function requireLetterPageSourceExpectations(body: unknown): void {
     || !hasOwnField(body, 'pages')
     || (
       Array.isArray(pages)
-      && pages.some((page) => !hasOwnField(page, 'sourceChecksum'))
+      && pages.some((page) => (
+        !hasOwnField(page, 'sourceChecksum')
+        || !hasOwnField(page, 'expectedGeometryRevision')
+        || !hasOwnField(page, 'expectedGeometryChecksumSha256')
+      ))
     )
   ) {
     throw sourceRevisionChanged(
@@ -1110,36 +1199,148 @@ router.delete('/:letterId', async (req, res, next) => {
   }
 });
 
-// Save manually edited line segments for a page
-router.patch('/pages/:pageId/line-segments', async (req, res, next) => {
+// Persist Kraken's native PageLayout envelope without flattening baselines,
+// regions, reading order, or provider provenance into editor rectangles.
+router.patch('/pages/:pageId/page-layout/kraken', async (req, res, next) => {
   try {
     const page = await db.query.letterPages.findFirst({
       where: eq(letterPages.id, req.params.pageId),
+      columns: { id: true },
     });
     if (!page) throw new NotFoundError('Page not found');
 
     requirePageSourceExpectation(
       req.body,
+      'Page source version is missing; reload before saving detected layout',
+    );
+    const body = parseOrThrow(
+      saveKrakenPageLayoutSchema,
+      req.body,
+      'Invalid Kraken page-layout update',
+    );
+    const sourceChecksum = body.sourceChecksum.toLowerCase();
+
+    if (
+      body.nativePageLayout.source.original.sha256
+      !== sourceChecksum
+    ) {
+      throw sourceRevisionChanged(
+        'Detected layout belongs to a different page source; reload before retrying',
+      );
+    }
+    const layout = adaptKrakenNativePageLayoutV2(body.nativePageLayout, {
+      pageId: req.params.pageId,
+      expectedSourceChecksumSha256: sourceChecksum,
+      runId: body.runId,
+    });
+
+    const result = await savePageLayoutV2(
+      req.params.pageId,
+      layout,
+      {
+        primarySourceRevision: body.primarySourceRevision,
+        sourceChecksum,
+      },
+    );
+    if (!result.saved) {
+      throw new AppError(
+        409,
+        'Page source changed or native layout evidence already exists; reload before saving detected layout',
+        undefined,
+        'PAGE_LAYOUT_WRITE_CONFLICT',
+      );
+    }
+
+    req.log.info({
+      pageId: req.params.pageId,
+      layoutId: layout.layoutId,
+      runId: layout.runId,
+      lineCount: result.lineCount,
+      projectionAction: result.projectionAction,
+      modelChecksumSha256: layout.provenance.model.checksumSha256,
+    }, 'Native Kraken page layout saved');
+    res.json({
+      ok: true,
+      layoutId: layout.layoutId,
+      pageLayoutChecksumSha256: result.checksumSha256,
+      lineCount: result.lineCount,
+      projectionAction: result.projectionAction,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/pages/:pageId/page-layout', async (req, res, next) => {
+  try {
+    const page = await db.query.letterPages.findFirst({
+      where: eq(letterPages.id, req.params.pageId),
+      columns: {
+        id: true,
+        checksumSha256: true,
+        pageLayout: true,
+        pageLayoutChecksumSha256: true,
+      },
+    });
+    if (!page) throw new NotFoundError('Page not found');
+
+    const validation = validateStoredPageLayout(page);
+    if (validation.status === 'absent') {
+      res.json({
+        pageLayout: null,
+        pageLayoutChecksumSha256: null,
+      });
+      return;
+    }
+
+    if (validation.status === 'invalid') {
+      throw new AppError(
+        500,
+        `Stored page layout failed validation: ${validation.reason}`,
+      );
+    }
+
+    res.json({
+      pageLayout: validation.layout,
+      pageLayoutChecksumSha256: validation.checksumSha256,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Save manually edited line segments for a page
+router.patch('/pages/:pageId/line-segments', async (req, res, next) => {
+  try {
+    requirePageSourceExpectation(
+      req.body,
       'Page source version is missing; reload before saving line segments',
     );
+    requireGeometryExpectation(req.body, { checksum: false });
+    requireLineSegmentsExpectation(req.body);
     const body = parseOrThrow(
       saveLineSegmentsSchema,
       req.body,
       'Invalid page line-segment update',
     );
-    const saved = await savePageLineSegments(
+    const result = await savePageLineSegments(
       req.params.pageId,
       body.lineSegments as Parameters<typeof savePageLineSegments>[1],
       {
         primarySourceRevision: body.primarySourceRevision,
         sourceChecksum: body.sourceChecksum,
+        expectedGeometryRevision: body.expectedGeometryRevision,
+        expectedLineSegmentsChecksumSha256:
+          body.expectedLineSegmentsChecksumSha256,
       },
+      getUserId(req),
     );
-    if (!saved) {
-      throw sourceRevisionChanged('Page source changed; reload before saving line segments');
-    }
+    const saved = requireSavedGeometry(
+      result,
+      'Page source changed; reload before saving line segments',
+    );
     req.log.info({ pageId: req.params.pageId, segmentCount: body.lineSegments.length }, 'Line segments updated manually');
-    res.json({ ok: true });
+    res.json(saved.envelope);
   } catch (error) {
     next(error);
   }
@@ -1147,14 +1348,19 @@ router.patch('/pages/:pageId/line-segments', async (req, res, next) => {
 
 router.get('/pages/:pageId/line-segments', async (req, res, next) => {
   try {
-    const page = await db.query.letterPages.findFirst({
-      where: eq(letterPages.id, req.params.pageId),
-      columns: { lineSegments: true },
-    });
-
-    if (!page) throw new NotFoundError('Page not found');
-
-    res.json({ lineSegments: Array.isArray(page.lineSegments) ? page.lineSegments : [] });
+    let envelope;
+    try {
+      envelope = await getPageGeometryEnvelope(req.params.pageId);
+    } catch (error) {
+      throw new AppError(
+        500,
+        'Stored line segments failed schema validation',
+        error,
+        'STORED_LINE_SEGMENTS_INVALID',
+      );
+    }
+    if (!envelope) throw new NotFoundError('Page not found');
+    res.json(envelope);
   } catch (error) {
     next(error);
   }
@@ -1163,34 +1369,35 @@ router.get('/pages/:pageId/line-segments', async (req, res, next) => {
 // Update segment trust state for a page
 router.patch('/pages/:pageId/segment-trust', async (req, res, next) => {
   try {
-    const page = await db.query.letterPages.findFirst({
-      where: eq(letterPages.id, req.params.pageId),
-    });
-    if (!page) throw new NotFoundError('Page not found');
-
     requirePageSourceExpectation(
       req.body,
       'Page source version is missing; reload before updating segment trust',
     );
+    requireGeometryExpectation(req.body, { checksum: true });
     const body = parseOrThrow(
       updatePageSegmentTrustSchema,
       req.body,
       'Invalid page segment-trust update',
     );
-    const updated = await updatePageSegmentTrust(
+    const result = await updatePageSegmentTrust(
       req.params.pageId,
       body.trustState,
       {
         primarySourceRevision: body.primarySourceRevision,
         sourceChecksum: body.sourceChecksum,
+        expectedGeometryRevision: body.expectedGeometryRevision,
+        expectedGeometryChecksumSha256:
+          body.expectedGeometryChecksumSha256,
       },
+      getUserId(req),
     );
-    if (!updated) {
-      throw sourceRevisionChanged('Page source changed; reload before updating segment trust');
-    }
+    const updated = requireSavedGeometry(
+      result,
+      'Page source changed; reload before updating segment trust',
+    );
 
     req.log.info({ pageId: req.params.pageId, trustState: body.trustState }, 'Segment trust state updated');
-    res.json({ ok: true, trustState: body.trustState });
+    res.json(updated.envelope);
   } catch (error) {
     next(error);
   }
@@ -1217,6 +1424,7 @@ router.patch('/:letterId/segment-trust', async (req, res, next) => {
       body.trustState,
       body.primarySourceRevision,
       body.pages,
+      getUserId(req),
     );
     if (!updated) {
       throw sourceRevisionChanged('Letter page sources changed; reload before updating segment trust');

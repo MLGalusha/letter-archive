@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "engineId": "eynollah",
+  "adapter": "eynollah-pagexml",
+  "adapterVersion": "2",
+  "package": {
+    "name": "eynollah",
+    "version": "0.9.0",
+    "wheelSha256": "c3680a1c9047ff344500e8f585927876d01d4234b73abd1b1e64fd5f4735e97c"
+  },
+  "execution": {
+    "kind": "docker",
+    "image": "letter-archive-layout-eynollah:0.9.0-cpu",
+    "dockerfile": "benchmarks/layout/engine-configs/eynollah.Dockerfile",
+    "platform": "native",
+    "timeoutSeconds": 3600
+  },
+  "measurementSemantics": {
+    "isolation": "fresh-container-per-page",
+    "latency": "cold-start-per-page",
+    "residentBatchThroughputMeasured": false,
+    "providerTimingSplit": "unavailable-without-upstream-instrumentation"
+  },
+  "models": {
+    "directory": "python/layout_benchmark/.runtime/eynollah/models",
+    "archive": "python/layout_benchmark/.runtime/eynollah/models_inference_layout_v0_9_0.zip",
+    "downloadUrl": "https://zenodo.org/api/records/21362927/files/models_inference_layout_v0_9_0.zip/content",
+    "publishedSizeBytes": 1572255489,
+    "publishedMd5": "eed686c4765237629227218954217035"
+  },
+  "resourceRequirements": {
+    "mode": "full-layout",
+    "modelWorkerLimitBytes": 6337593344,
+    "minimumContainerMemoryBytes": 8589934592,
+    "recommendedHostMemoryBytes": 17179869184,
+    "rationale": "Full layout loads five persistent predictors. Their upstream worker limits total about 6.0 GiB before Python, OpenCV, image, and output overhead. Non-full mode still loads four predictors totaling about 4.2 GiB and changes the region-class semantics under evaluation."
+  },
+  "parameters": {
+    "device": "CPU",
+    "inferenceRuntime": "onnxruntime-cpu",
+    "upstreamSupport": "experimental-cpu-dependency-substitution",
+    "fullLayout": true,
+    "curvedTextLines": true,
+    "tableDetection": false,
+    "scaling": false,
+    "enhancement": false,
+    "binarization": false
+  }
+}

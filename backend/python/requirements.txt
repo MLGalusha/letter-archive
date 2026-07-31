@@ -1,2 +1,4 @@
-kraken
-Pillow>=10.0.0
+# Production/local line finder. Candidate models and plugins remain isolated
+# from this environment; the core runtime is deliberately pinned.
+kraken==7.0.3
+Pillow==12.3.0

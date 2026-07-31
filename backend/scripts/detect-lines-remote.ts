@@ -1,11 +1,13 @@
 /**
- * Kraken Line Detection CLI
+ * Kraken Native Layout Detection CLI
  *
- * Interactive terminal tool that fetches pages needing line segments from
- * the hosted API, runs Kraken locally, and uploads results.
+ * Interactive terminal tool that fetches pages needing native layout from the
+ * hosted API, runs Kraken locally, and uploads provider-preserving results.
  *
  * Usage:
- *   npm run detect-lines -- --url https://voicesthatremain.com --email admin@example.com --password secret
+ *   npm run detect-lines -- --url https://voicesthatremain.com --email admin@example.com --password secret --limit 5
+ *   npm run detect-lines -- --url https://voicesthatremain.com --email admin@example.com --password secret --page-id <PAGE_ID>
+ *   npm run detect-lines -- --url https://voicesthatremain.com --email admin@example.com --password secret --dry-run
  *
  * Or with env vars:
  *   REMOTE_URL=https://voicesthatremain.com ADMIN_EMAIL=... ADMIN_PASSWORD=... npm run detect-lines
@@ -18,47 +20,44 @@
  */
 
 import 'dotenv/config';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
+import { randomUUID } from 'node:crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import readline from 'readline';
 import { fileURLToPath } from 'url';
+import {
+  krakenNativePageLayoutV2Schema,
+  type KrakenNativePageLayoutV2,
+} from '../src/services/kraken-page-layout-adapter.js';
+import {
+  isUnboundedDetectionRun,
+  parseDetectLinesCliOptions,
+} from '../src/services/detect-lines-cli-options.js';
+import { KrakenNativeWorker } from '../src/services/kraken-native-worker.js';
 
-const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
 
-function parseArgs() {
-  const args = process.argv.slice(2);
-  const flags: Record<string, string> = {};
-  const boolFlags = new Set<string>();
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--debug') {
-      boolFlags.add('debug');
-    } else if (args[i].startsWith('--') && i + 1 < args.length) {
-      flags[args[i].slice(2)] = args[++i];
-    }
-  }
-  return {
-    url: (flags.url || process.env.REMOTE_URL || '').replace(/\/$/, ''),
-    email: flags.email || process.env.ADMIN_EMAIL || '',
-    password: flags.password || process.env.ADMIN_PASSWORD || '',
-    debug: boolFlags.has('debug'),
-  };
+let config: ReturnType<typeof parseDetectLinesCliOptions>;
+try {
+  config = parseDetectLinesCliOptions(process.argv.slice(2), process.env);
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
+  console.error('Use --limit <N>, --page-id <PAGE_ID>, or --dry-run to bound or inspect a run.');
+  process.exit(1);
 }
 
-const config = parseArgs();
-
 if (!config.url || !config.email || !config.password) {
-  console.error('Usage: npm run detect-lines -- --url <API_URL> --email <EMAIL> --password <PASSWORD>');
+  console.error('Usage: npm run detect-lines -- --url <API_URL> --email <EMAIL> --password <PASSWORD> [--limit <N> | --page-id <PAGE_ID> | --dry-run]');
   console.error('  Or set REMOTE_URL, ADMIN_EMAIL, ADMIN_PASSWORD env vars.');
   process.exit(1);
 }
+
+const detectorRunId = `run-${randomUUID()}`;
 
 // Python paths
 const venvPath = path.resolve(__dirname, '..', 'python', 'venv');
@@ -141,6 +140,7 @@ interface HistoryFile {
 }
 
 interface RunSummary {
+  runId?: string;
   startedAt: string;
   completedAt: string;
   target: string;
@@ -205,6 +205,7 @@ function printHistorySummary(history: HistoryFile) {
 // ---------------------------------------------------------------------------
 
 let token = '';
+let imageSessionCookie = '';
 
 async function api(method: string, endpoint: string, body?: unknown): Promise<unknown> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -225,11 +226,29 @@ async function api(method: string, endpoint: string, body?: unknown): Promise<un
 }
 
 async function login() {
-  const result = await api('POST', '/auth/login', {
-    email: config.email,
-    password: config.password,
-  }) as { token: string };
+  const response = await fetch(`${config.url}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: config.email,
+      password: config.password,
+    }),
+  });
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`API POST /auth/login -> ${response.status}: ${text}`);
+  }
+  const result = await response.json() as { token: string };
   token = result.token;
+
+  // Hidden archive images intentionally accept only the purpose-scoped image
+  // session cookie, not the API bearer token or a token in the query string.
+  // Node fetch has no cookie jar, so carry the login cookie explicitly.
+  const setCookie = response.headers.get('set-cookie');
+  imageSessionCookie = setCookie?.split(';', 1)[0] ?? '';
+  if (!imageSessionCookie) {
+    throw new Error('Login did not establish the required image session');
+  }
 }
 
 interface QueuePage {
@@ -237,64 +256,119 @@ interface QueuePage {
   letterId: string;
   pageNumber: number;
   dateRaw: string;
+  primarySourceRevision: number;
+  sourceChecksum: string;
 }
 
 async function fetchQueue(): Promise<{ pages: QueuePage[]; total: number }> {
-  return api('GET', '/admin/processing/line-detection-queue') as Promise<{ pages: QueuePage[]; total: number }>;
+  return api('GET', '/admin/layout-processing/queue') as Promise<{
+    pages: QueuePage[];
+    total: number;
+  }>;
+}
+
+function selectQueuePages(pages: QueuePage[]): QueuePage[] {
+  let selected = pages;
+  if (config.pageId) {
+    selected = selected.filter((page) => page.pageId === config.pageId);
+    if (selected.length === 0) {
+      throw new Error(`Page ${config.pageId} is not eligible for native layout detection`);
+    }
+  }
+  if (config.limit !== undefined) {
+    selected = selected.slice(0, config.limit);
+  }
+  return selected;
+}
+
+async function confirmUnboundedRun(pageCount: number): Promise<boolean> {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    writeln(
+      `${RED}Refusing an unbounded non-interactive run.${RESET} `
+      + 'Pass --limit <N> or --page-id <PAGE_ID>.',
+    );
+    process.exitCode = 2;
+    return false;
+  }
+
+  const expected = `process ${pageCount}`;
+  const prompt = (
+    `${YELLOW}This unbounded run can write native layout for ${pageCount} pages.${RESET}\n`
+    + `Type ${BOLD}${expected}${RESET} to continue: `
+  );
+  const answer = await new Promise<string>((resolve) => {
+    const question = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+    question.question(prompt, (response) => {
+      question.close();
+      resolve(response);
+    });
+  });
+
+  if (answer.trim() !== expected) {
+    writeln(`${DIM}Confirmation did not match. Nothing was processed.${RESET}`);
+    return false;
+  }
+  return true;
 }
 
 async function downloadImage(pageId: string, destPath: string): Promise<void> {
-  const res = await fetch(`${config.url}/images/${pageId}?token=${token}`);
+  const res = await fetch(`${config.url}/images/${pageId}`, {
+    headers: { Cookie: imageSessionCookie },
+  });
   if (!res.ok) throw new Error(`Image download failed: ${res.status}`);
   const buffer = Buffer.from(await res.arrayBuffer());
   fs.writeFileSync(destPath, buffer);
 }
 
-interface LineFinderResult {
+interface DebugExtent {
   line: number;
-  top_y: number;
-  bottom_y: number;
-  left_x: number;
-  right_x: number;
-  boundary?: { x: number; y: number }[];
-}
-
-interface LineSegment {
-  line: number;
-  baseline: number[][];
   bbox: [number, number, number, number];
-  ocrText: string;
-  boundary?: { x: number; y: number }[];
 }
 
-async function runKraken(imagePath: string): Promise<LineSegment[]> {
-  const { stdout, stderr } = await execFileAsync(pythonBin, [scriptPath, imagePath, '--json'], {
-    timeout: 120_000,
-    maxBuffer: 10 * 1024 * 1024,
-  });
-
-  if (stderr) {
-    const trimmed = stderr.trim();
-    if (trimmed && !trimmed.includes('UserWarning')) {
-      // Log to history, don't clutter UI
-    }
-  }
-
-  const results: LineFinderResult[] = JSON.parse(stdout);
-  return results.map((r) => ({
-    line: r.line,
-    baseline: [[r.left_x, r.bottom_y], [r.right_x, r.bottom_y]],
-    bbox: [r.left_x, r.top_y, r.right_x, r.bottom_y] as [number, number, number, number],
-    ocrText: '',
-    boundary: r.boundary,
-  }));
+async function runKraken(
+  worker: KrakenNativeWorker,
+  imagePath: string,
+): Promise<KrakenNativePageLayoutV2> {
+  return krakenNativePageLayoutV2Schema.parse(
+    await worker.detect(imagePath),
+  );
 }
 
-async function uploadSegments(pageId: string, lineSegments: LineSegment[]): Promise<void> {
-  await api('PATCH', `/admin/letters/pages/${pageId}/line-segments`, { lineSegments });
+async function uploadPageLayout(
+  page: QueuePage,
+  nativePageLayout: KrakenNativePageLayoutV2,
+): Promise<void> {
+  await api(
+    'PATCH',
+    `/admin/letters/pages/${page.pageId}/page-layout/kraken`,
+    {
+      nativePageLayout,
+      runId: detectorRunId,
+      primarySourceRevision: page.primarySourceRevision,
+      sourceChecksum: page.sourceChecksum,
+    },
+  );
 }
 
-async function saveDebugImage(imagePath: string, segments: LineSegment[], label: string): Promise<string> {
+function debugExtents(layout: KrakenNativePageLayoutV2): DebugExtent[] {
+  return layout.segmentation.lines.flatMap((line, index) => (
+    line.displayExtent.bbox
+      ? [{
+        line: index + 1,
+        bbox: line.displayExtent.bbox,
+      }]
+      : []
+  ));
+}
+
+async function saveDebugImage(
+  imagePath: string,
+  extents: DebugExtent[],
+  label: string,
+): Promise<string> {
   const sharp = (await import('sharp')).default;
   const img = sharp(imagePath);
   const meta = await img.metadata();
@@ -303,11 +377,11 @@ async function saveDebugImage(imagePath: string, segments: LineSegment[], label:
 
   // Build SVG overlay with colored bounding boxes and line numbers
   const colors = ['#ff3333', '#33cc33', '#3366ff', '#ff9900', '#cc33ff', '#00cccc', '#ff6699', '#99cc00'];
-  const rects = segments.map((seg, i) => {
-    const [x1, y1, x2, y2] = seg.bbox;
+  const rects = extents.map((extent, i) => {
+    const [x1, y1, x2, y2] = extent.bbox;
     const color = colors[i % colors.length];
     return `<rect x="${x1}" y="${y1}" width="${x2 - x1}" height="${y2 - y1}" fill="none" stroke="${color}" stroke-width="3" opacity="0.8"/>` +
-      `<text x="${x1 + 4}" y="${y1 + 16}" font-size="14" font-weight="bold" fill="${color}" font-family="sans-serif">${seg.line}</text>`;
+      `<text x="${x1 + 4}" y="${y1 + 16}" font-size="14" font-weight="bold" fill="${color}" font-family="sans-serif">${extent.line}</text>`;
   }).join('\n');
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">${rects}</svg>`;
@@ -330,8 +404,16 @@ async function saveDebugImage(imagePath: string, segments: LineSegment[], label:
 type ProcessState = 'idle' | 'running' | 'paused' | 'stopping';
 
 let processState: ProcessState = 'idle';
+let activeKrakenWorker: KrakenNativeWorker | null = null;
 let spinnerFrame = 0;
 let spinnerInterval: ReturnType<typeof setInterval> | null = null;
+
+function currentProcessState(): ProcessState {
+  // Keyboard events mutate processState between awaits. Reading through a
+  // function prevents TypeScript from incorrectly treating the initial
+  // "running" assignment as immutable for the whole async loop.
+  return processState;
+}
 
 function startSpinner(label: string) {
   spinnerFrame = 0;
@@ -349,7 +431,7 @@ function stopSpinner() {
   }
 }
 
-async function processPages() {
+async function processPages(): Promise<boolean> {
   const history = loadHistory();
   const runStart = Date.now();
   const runStartIso = new Date().toISOString();
@@ -364,29 +446,62 @@ async function processPages() {
     writeln(`${CLEAR_LINE}${GREEN}Authenticated.${RESET}`);
 
     write(`${CYAN}Fetching queue...${RESET}`);
-    const { pages, total } = await fetchQueue();
-    writeln(`${CLEAR_LINE}${BOLD}${total}${RESET} pages need line detection.\n`);
+    const queue = await fetchQueue();
+    const pages = selectQueuePages(queue.pages);
+    const total = pages.length;
+    writeln(
+      `${CLEAR_LINE}${BOLD}${queue.total}${RESET} pages need line detection; `
+      + `${BOLD}${total}${RESET} selected.\n`,
+    );
 
     if (total === 0) {
       processState = 'idle';
-      return;
+      return false;
     }
 
+    if (config.dryRun) {
+      writeln(`${BOLD}Dry run — no images will be downloaded and no layouts will be uploaded.${RESET}`);
+      for (const page of pages) {
+        writeln(`  ${page.pageId}  ${page.dateRaw} p${page.pageNumber}`);
+      }
+      writeln('');
+      return false;
+    }
+
+    if (
+      isUnboundedDetectionRun(config)
+      && !(await confirmUnboundedRun(total))
+    ) {
+      return false;
+    }
+
+    setupKeyboard();
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kraken-'));
 
     try {
+      startSpinner('Loading Kraken 7 model once for this run');
+      activeKrakenWorker = await KrakenNativeWorker.start({
+        executablePath: pythonBin,
+        scriptPath,
+        startupTimeoutMs: 120_000,
+        requestTimeoutMs: 120_000,
+        shutdownTimeoutMs: 10_000,
+      });
+      stopSpinner();
+      writeln(`${GREEN}Kraken 7 worker ready.${RESET}`);
+
       for (let i = 0; i < pages.length; i++) {
         // Check state
-        if (processState === 'stopping') {
+        if (currentProcessState() === 'stopping') {
           writeln(`\n${YELLOW}Stopped by user.${RESET}`);
           break;
         }
 
         // Handle pause
-        while (processState === 'paused') {
+        while (currentProcessState() === 'paused') {
           await new Promise(resolve => setTimeout(resolve, 200));
         }
-        if (processState === 'stopping') {
+        if (currentProcessState() === 'stopping') {
           writeln(`\n${YELLOW}Stopped by user.${RESET}`);
           break;
         }
@@ -409,22 +524,32 @@ async function processPages() {
           stopSpinner();
           startSpinner(`${counter} ${label} — detecting lines (${fileSizeKb}KB image)`);
           const detectStart = Date.now();
-          const segments = await runKraken(tmpFile);
+          const nativePageLayout = await runKraken(
+            activeKrakenWorker,
+            tmpFile,
+          );
+          const lineCount = nativePageLayout.segmentation.lines.length;
           const detectMs = Date.now() - detectStart;
 
           // Upload
           stopSpinner();
-          startSpinner(`${counter} ${label} — uploading ${segments.length} lines`);
+          startSpinner(`${counter} ${label} — uploading ${lineCount} lines`);
           const uploadStart = Date.now();
-          await uploadSegments(page.pageId, segments);
+          await uploadPageLayout(page, nativePageLayout);
           const uploadMs = Date.now() - uploadStart;
 
-          // Debug: save image with segment overlay
+          // Debug overlays use provider display extents only. They do not
+          // manufacture or mutate canonical line geometry.
           let debugPath: string | undefined;
-          if (config.debug && segments.length > 0) {
+          const extents = debugExtents(nativePageLayout);
+          if (config.debug && extents.length > 0) {
             stopSpinner();
             startSpinner(`${counter} ${label} — saving debug image`);
-            debugPath = await saveDebugImage(tmpFile, segments, `${page.dateRaw}-p${page.pageNumber}`);
+            debugPath = await saveDebugImage(
+              tmpFile,
+              extents,
+              `${page.dateRaw}-p${page.pageNumber}`,
+            );
           }
 
           stopSpinner();
@@ -433,7 +558,7 @@ async function processPages() {
 
           writeln(
             `  ${GREEN}\u2713${RESET} ${counter} ${BOLD}${label}${RESET}` +
-            `  ${segments.length} lines` +
+            `  ${lineCount} lines` +
             `  ${DIM}dl:${formatMs(dlMs)} det:${formatMs(detectMs)} up:${formatMs(uploadMs)} total:${formatMs(totalMs)}${RESET}` +
             (debugPath ? `\n    ${DIM}debug: ${debugPath}${RESET}` : '')
           );
@@ -444,7 +569,7 @@ async function processPages() {
             dateRaw: page.dateRaw,
             pageNumber: page.pageNumber,
             status: 'success',
-            linesDetected: segments.length,
+            linesDetected: lineCount,
             downloadMs: dlMs,
             detectMs: detectMs,
             uploadMs: uploadMs,
@@ -476,12 +601,20 @@ async function processPages() {
         }
       }
     } finally {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
+      try {
+        if (activeKrakenWorker) {
+          await activeKrakenWorker.close();
+          activeKrakenWorker = null;
+        }
+      } finally {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
     }
 
     // Run summary
     const totalMs = Date.now() - runStart;
     history.runs.push({
+      runId: detectorRunId,
       startedAt: runStartIso,
       completedAt: new Date().toISOString(),
       target: config.url,
@@ -506,11 +639,17 @@ async function processPages() {
       );
       writeln(`  Avg detection: ${formatMs(avgMs)}/page`);
     }
+    if (failed > 0) {
+      process.exitCode = 1;
+    }
     writeln('');
+    return true;
   } catch (err) {
     stopSpinner();
     const msg = err instanceof Error ? err.message : String(err);
     writeln(`\n${RED}Fatal error: ${msg}${RESET}\n`);
+    process.exitCode = 1;
+    return false;
   } finally {
     processState = 'idle';
   }
@@ -533,6 +672,7 @@ function setupKeyboard() {
     if (key.ctrl && key.name === 'c') {
       stopSpinner();
       writeln(`\n${DIM}Bye.${RESET}`);
+      activeKrakenWorker?.abort();
       process.exit(0);
     }
 
@@ -558,6 +698,7 @@ function setupKeyboard() {
       case 'q':
         stopSpinner();
         writeln(`\n${DIM}Bye.${RESET}`);
+        activeKrakenWorker?.abort();
         process.exit(0);
         break;
 
@@ -576,10 +717,14 @@ function setupKeyboard() {
 
 async function main() {
   writeln('');
-  writeln(`${BOLD}Kraken Line Detection${RESET}`);
+  writeln(`${BOLD}Kraken Native Layout Detection${RESET}`);
   writeln(`${DIM}Target: ${config.url}${RESET}`);
+  writeln(`${DIM}Run: ${detectorRunId}${RESET}`);
   writeln(`${DIM}History: ${HISTORY_FILE}${RESET}`);
   if (config.debug) writeln(`${YELLOW}Debug mode: saving overlay images to ${DEBUG_DIR}${RESET}`);
+  if (config.dryRun) writeln(`${YELLOW}Dry-run mode: read-only queue inspection${RESET}`);
+  if (config.pageId) writeln(`${DIM}Page: ${config.pageId}${RESET}`);
+  if (config.limit !== undefined) writeln(`${DIM}Limit: ${config.limit}${RESET}`);
   writeln('');
 
   // Show previous history
@@ -590,16 +735,19 @@ async function main() {
     writeln('');
   }
 
-  writeln(`${DIM}Controls: ${BOLD}p${RESET}${DIM}=pause  ${BOLD}s${RESET}${DIM}=stop  ${BOLD}q${RESET}${DIM}=quit  ${BOLD}h${RESET}${DIM}=history${RESET}`);
-  writeln('');
+  if (process.stdin.isTTY && !config.dryRun) {
+    writeln(`${DIM}Controls: ${BOLD}p${RESET}${DIM}=pause  ${BOLD}s${RESET}${DIM}=stop  ${BOLD}q${RESET}${DIM}=quit  ${BOLD}h${RESET}${DIM}=history${RESET}`);
+    writeln('');
+  }
 
-  setupKeyboard();
-  await processPages();
+  const keepOpen = await processPages();
 
-  writeln(`${DIM}Press ${BOLD}q${RESET}${DIM} to quit or ${BOLD}Ctrl+C${RESET}${DIM} to exit.${RESET}`);
-
-  // Keep alive for keyboard input
-  await new Promise(() => {});
+  if (keepOpen && process.stdin.isTTY) {
+    writeln(`${DIM}Press ${BOLD}q${RESET}${DIM} to quit or ${BOLD}Ctrl+C${RESET}${DIM} to exit.${RESET}`);
+    // Keep the completed interactive session open so the history shortcut
+    // remains available. Non-interactive and dry-run invocations always exit.
+    await new Promise(() => {});
+  }
 }
 
 main().catch((err) => {

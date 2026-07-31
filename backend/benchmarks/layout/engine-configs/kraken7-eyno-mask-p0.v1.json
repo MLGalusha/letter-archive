@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "engineId": "kraken7-eyno-mask-p0",
+  "adapter": "kraken",
+  "adapterVersion": "4",
+  "api": "segmentation-task",
+  "provider": "kraken-blla-eynollah-page-mask",
+  "package": {
+    "name": "kraken",
+    "version": "7.0.3",
+    "wheelSha256": "74f108479f386fb73b270ba7562535e16cdb5e08807981d59a42c13dde741963"
+  },
+  "execution": {
+    "kind": "venv",
+    "python": "python/layout_benchmark/.runtime/kraken7/bin/python",
+    "pythonVersion": "3.12.12",
+    "bootstrap": {
+      "tool": "uv",
+      "packageRequirement": "kraken==7.0.3",
+      "wheelUrl": "https://files.pythonhosted.org/packages/60/1f/89ac3709b94dd10bd5c7823cf6a1b735386d7049d3c7d91b462d228f4b77/kraken-7.0.3-py3-none-any.whl",
+      "wheelSha256": "74f108479f386fb73b270ba7562535e16cdb5e08807981d59a42c13dde741963",
+      "wheelSizeBytes": 5043423
+    },
+    "timeoutSeconds": 1200
+  },
+  "measurementSemantics": {
+    "isolation": "fresh-process-per-page",
+    "latency": "source-verification-plus-mask-build-plus-cold-start-per-page",
+    "residentBatchThroughputMeasured": false,
+    "providerTimingSplit": "input-stage-model-load-and-inference"
+  },
+  "model": {
+    "kind": "package-resource",
+    "package": "kraken",
+    "resource": "blla.mlmodel",
+    "expectedSha256": "77a638a83c9e535620827a09e410ed36391e9e8e8126d5796a0f15b978186056"
+  },
+  "sourceRuns": {
+    "lineGeometry": {
+      "role": "line-geometry",
+      "runId": "kraken7-blla-v2-full-20260728",
+      "expectedEngineId": "kraken7",
+      "manifestSha256": "a7a6b87d4b006479e0aedb08ca45e8b560f43866c3f5c2aeca7e3c44fadb017c"
+    },
+    "pageBoundary": {
+      "role": "page-boundary",
+      "runId": "eynollah-v091-full-no-cl-cloud-20260728",
+      "expectedEngineId": "eynollah-v091",
+      "manifestSha256": "43b53de12cf5a1406788ff68d52f50c2948bb6d5a97393a9757f9328f519cc0e"
+    }
+  },
+  "inputStage": {
+    "type": "eynollah-page-mask",
+    "paddingPixels": 0,
+    "paddingMetric": "chebyshev",
+    "controlProjection": {
+      "geometryPreference": [
+        "native-baseline",
+        "native-boundary"
+      ],
+      "sampleSpacingPixels": 4,
+      "insideRatioThresholdExclusive": 0.5,
+      "pointOnBoundaryCountsInside": true,
+      "coordinateTransform": "identity"
+    }
+  },
+  "parameters": {
+    "textDirection": "horizontal-lr",
+    "device": "cpu",
+    "precision": "32-true",
+    "batchSize": 1,
+    "numThreads": 1,
+    "inputPadding": 0,
+    "raiseOnError": true
+  },
+  "diagnostic": {
+    "equivalentToDefaultProfile": false,
+    "rankable": false,
+    "unmaskedControlRunId": "kraken7-blla-v2-full-20260728",
+    "reason": "Runs the same pinned Kraken 7 BLLA model on an identity-sized image with pixels outside the exact immutable Eynollah page boundary filled white. Zero padding measures the strict boundary effect. The unmasked Kraken control, Eynollah boundary layout, mask, masked input, and source bindings remain raw evidence."
+  }
+}

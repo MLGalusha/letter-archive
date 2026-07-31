@@ -1,4 +1,8 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+  DEVELOPMENT_STUB_TRANSCRIPTION_TEXT,
+  isDevelopmentStubTranscription,
+} from '../transcription-stub.js';
 
 vi.mock('../../../config/env.js', () => ({
   env: {
@@ -26,7 +30,8 @@ describe('OpenAI modules stub mode', () => {
     });
 
     expect(result.isStub).toBe(true);
-    expect(result.text).toBeTruthy();
+    expect(result.text).toBe(DEVELOPMENT_STUB_TRANSCRIPTION_TEXT);
+    expect(isDevelopmentStubTranscription(result.text)).toBe(true);
   });
 
   it('returns stub metadata for v2 extraction', async () => {

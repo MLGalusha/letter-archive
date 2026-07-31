@@ -17,6 +17,19 @@ import type {
   EmotionalTone,
   RelationshipType,
 } from '../db/index.js';
+import {
+  lineSegmentsSchema,
+  type LineSegment,
+} from '../schemas/line-segment.js';
+import {
+  type PageLayoutV2,
+} from '../schemas/page-layout-v2.js';
+import {
+  normalizeLineSegments,
+  pageGeometryChecksum,
+  pageLineSegmentsChecksum,
+} from '../schemas/page-geometry.js';
+import { validateStoredPageLayout } from '../services/stored-page-layout.js';
 
 // ============================================================================
 // FRONTEND-COMPATIBLE TYPES (mirror frontend/src/types/Letter.ts)
@@ -32,25 +45,9 @@ export type FrontendLetterStatus =
 
 export type FrontendLetterImageType = 'letter' | 'photo' | 'ephemera' | 'voice' | 'article' | 'diary' | 'cover' | 'card' | 'telegram';
 
-export interface FrontendLineSegmentWord {
-  text: string;
-  bbox: [number, number, number, number];
-}
-
-export type FrontendSegmentClass = 'body' | 'continuation' | 'addition' | 'ignore';
-
-export interface FrontendLineSegment {
-  line: number;
-  baseline: number[][];
-  bbox: [number, number, number, number];
-  ocrText: string;
-  words?: FrontendLineSegmentWord[];
-  boundary?: { x: number; y: number }[];
-  excluded?: boolean;
-  segmentClass?: FrontendSegmentClass;
-  isMapped?: boolean;
-  mappedText?: string;
-}
+export type FrontendLineSegment = LineSegment;
+export type FrontendLineSegmentWord = NonNullable<LineSegment['words']>[number];
+export type FrontendSegmentClass = NonNullable<LineSegment['segmentClass']>;
 
 export type FrontendSegmentTrustState = 'unverified' | 'trusted';
 
@@ -64,6 +61,11 @@ export interface FrontendLetterImage {
   width?: number;
   height?: number;
   lineSegments?: FrontendLineSegment[];
+  geometryRevision?: number;
+  geometryChecksumSha256?: string;
+  lineSegmentsChecksumSha256?: string;
+  pageLayout?: PageLayoutV2;
+  pageLayoutChecksumSha256?: string;
   segmentTrustState?: FrontendSegmentTrustState;
 }
 
@@ -182,6 +184,8 @@ export interface FrontendLetter {
   transcriptPublished: boolean;
   metadataPublished: boolean;
   primarySourceRevision: number;
+  transcriptRevision: number;
+  transcriptChecksumSha256: string;
   // Two-track content status system
   transcriptStatus: ContentStatus;
   metadataContentStatus: ContentStatus;
@@ -450,6 +454,55 @@ function extractNotableQuotes(letter: Letter): FrontendNotableQuote[] | undefine
   }));
 }
 
+function parseStoredLineSegments(
+  value: unknown,
+): FrontendLineSegment[] | undefined {
+  const parsed = lineSegmentsSchema.safeParse(value);
+  return parsed.success ? normalizeLineSegments(parsed.data) : undefined;
+}
+
+function parseStoredPageLayout(
+  page: Pick<
+    LetterPage,
+    'id' | 'checksumSha256' | 'pageLayout' | 'pageLayoutChecksumSha256'
+  >,
+): Pick<
+  FrontendLetterImage,
+  'pageLayout' | 'pageLayoutChecksumSha256'
+> {
+  const validation = validateStoredPageLayout(page);
+  return validation.status === 'valid'
+    ? {
+      pageLayout: validation.layout,
+      pageLayoutChecksumSha256: validation.checksumSha256,
+    }
+    : {};
+}
+
+function transformPageToImage(
+  page: LetterPage,
+  type: FrontendLetterImageType,
+): FrontendLetterImage {
+  const lineSegments = parseStoredLineSegments(page.lineSegments);
+  return {
+    id: page.id,
+    type,
+    pageNumber: page.pageNumber,
+    imageUrl: `/images/${page.id}${page.checksumSha256 ? `?v=${page.checksumSha256.slice(0, 8)}` : ''}`,
+    originalFilename: page.originalFilename,
+    sourceChecksum: page.checksumSha256 ?? undefined,
+    width: page.width ?? undefined,
+    height: page.height ?? undefined,
+    lineSegments,
+    geometryRevision: page.geometryRevision ?? 0,
+    geometryChecksumSha256: pageGeometryChecksum(lineSegments ?? []),
+    lineSegmentsChecksumSha256: pageLineSegmentsChecksum(lineSegments ?? []),
+    ...parseStoredPageLayout(page),
+    segmentTrustState: (page.segmentTrustState as FrontendSegmentTrustState)
+      ?? 'unverified',
+  };
+}
+
 // ============================================================================
 // MAIN TRANSFORMER
 // ============================================================================
@@ -482,20 +535,7 @@ export function transformLetterToDTO(letter: LetterWithRelations): FrontendLette
     id: letter.id,
     title: generateTitle(letter, letter.collection),
     collectionCode: letter.collection.collectionCode,
-    images: letter.pages.map((page) => ({
-      id: page.id,
-      type: imageType,
-      pageNumber: page.pageNumber,
-      imageUrl: `/images/${page.id}${page.checksumSha256 ? `?v=${page.checksumSha256.slice(0, 8)}` : ''}`,
-      originalFilename: page.originalFilename,
-      sourceChecksum: page.checksumSha256 ?? undefined,
-      width: page.width ?? undefined,
-      height: page.height ?? undefined,
-      lineSegments: Array.isArray(page.lineSegments)
-        ? page.lineSegments as FrontendLineSegment[]
-        : undefined,
-      segmentTrustState: (page.segmentTrustState as FrontendSegmentTrustState) ?? 'unverified',
-    })),
+    images: letter.pages.map((page) => transformPageToImage(page, imageType)),
     transcript: {
       pages: letter.transcriptionText
         ? letter.pages.map((page, index) => ({
@@ -542,6 +582,8 @@ export function transformLetterToDTO(letter: LetterWithRelations): FrontendLette
     transcriptPublished: letter.transcriptPublished,
     metadataPublished: letter.metadataPublished,
     primarySourceRevision: letter.primarySourceRevision,
+    transcriptRevision: letter.transcriptRevision,
+    transcriptChecksumSha256: letter.transcriptChecksumSha256,
     // Two-track content status
     transcriptStatus: letter.transcriptStatus,
     metadataContentStatus: letter.metadataContentStatus,
@@ -675,16 +717,7 @@ export function transformLetterWithRelatedToDTO(
   for (const item of others) {
     const imageType = mapTypeToImageType(item.type);
     for (const page of item.pages) {
-      additionalImages.push({
-        id: page.id,
-        type: imageType,
-        pageNumber: page.pageNumber,
-        imageUrl: `/images/${page.id}${page.checksumSha256 ? `?v=${page.checksumSha256.slice(0, 8)}` : ''}`,
-        originalFilename: page.originalFilename,
-        lineSegments: Array.isArray(page.lineSegments)
-          ? page.lineSegments as FrontendLineSegment[]
-          : undefined,
-      });
+      additionalImages.push(transformPageToImage(page, imageType));
     }
   }
 
@@ -692,16 +725,7 @@ export function transformLetterWithRelatedToDTO(
   for (const cover of covers) {
     const imageType = mapTypeToImageType(cover.type);
     for (const page of cover.pages) {
-      additionalImages.push({
-        id: page.id,
-        type: imageType,
-        pageNumber: page.pageNumber,
-        imageUrl: `/images/${page.id}${page.checksumSha256 ? `?v=${page.checksumSha256.slice(0, 8)}` : ''}`,
-        originalFilename: page.originalFilename,
-        lineSegments: Array.isArray(page.lineSegments)
-          ? page.lineSegments as FrontendLineSegment[]
-          : undefined,
-      });
+      additionalImages.push(transformPageToImage(page, imageType));
     }
   }
 

@@ -79,12 +79,10 @@ describe('Line Review workspace ownership', () => {
     expect(workspace).toContain('LineReviewModeHandle');
     expect(workspace).toContain('visit.isActive()');
     expect(workspace).toContain(
-      'current.entry.owner === mappingOwner',
+      'current.entry.owner === entryOwner',
     );
-    expect(workspace).toContain(
-      'mappingOwner.isCurrentRefresh(refresh)',
-    );
-    expect(workspace).toContain('tryAdoptLetter(updated');
+    expect(workspace).not.toContain('mappingOwner');
+    expect(workspace).not.toContain('tryAdoptLetter(updated');
     expect(workspace).toContain('addEventListener("selectionchange"');
   });
 });

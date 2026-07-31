@@ -1,11 +1,17 @@
 import { Suspense, lazy, useCallback } from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import {
+  createBrowserRouter,
+  Route,
+  RouterProvider,
+  Routes,
+} from "react-router-dom";
 import Header from "./components/Header/Header";
 import ScrollToTop from "./components/ScrollToTop";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { HeaderDockProvider } from "./contexts/HeaderDockContext";
 import PageSwipeLayer from "./components/SwipeNavigation/PageSwipeLayer";
 import { setAppScrollElement } from "./utils/appScroll";
+import { layoutBenchmarkEnabled } from "./config/features";
 import "./App.css";
 
 const HomePage = lazy(() => import("./pages/HomePage"));
@@ -25,6 +31,8 @@ const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const UploadLetterPage = lazy(() => import("./pages/admin/UploadLetterPage"));
 const LetterReviewPage = lazy(() => import("./pages/admin/LetterReviewPage"));
 const ProcessingQueuePage = lazy(() => import("./pages/admin/ProcessingQueuePage"));
+const LayoutBenchmarkPage = lazy(() => import("./pages/admin/LayoutBenchmarkPage"));
+const TranscriptAlignmentPage = lazy(() => import("./pages/admin/TranscriptAlignmentPage"));
 const SettingsPage = lazy(() => import("./pages/admin/SettingsPage"));
 const UsagePage = lazy(() => import("./pages/admin/UsagePage"));
 const NotificationsPage = lazy(() => import("./pages/admin/NotificationsPage"));
@@ -42,7 +50,7 @@ function RouteLoading() {
   );
 }
 
-function App() {
+function AppRoutes() {
   // Registers the public-site scroll container with the appScroll helper
   // module. See utils/appScroll.ts and the scroll-container refactor (#35)
   // for background on why scroll lives on a child div instead of window.
@@ -51,8 +59,7 @@ function App() {
   }, []);
 
   return (
-    <ErrorBoundary>
-    <Router>
+    <>
       <ScrollToTop />
       <Suspense fallback={<RouteLoading />}>
         <Routes>
@@ -64,6 +71,15 @@ function App() {
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/admin/upload" element={<UploadLetterPage />} />
           <Route path="/admin/processing" element={<ProcessingQueuePage />} />
+          {layoutBenchmarkEnabled && (
+            <>
+              <Route path="/admin/layout-benchmark" element={<LayoutBenchmarkPage />} />
+              <Route
+                path="/admin/layout-benchmark/alignment"
+                element={<TranscriptAlignmentPage />}
+              />
+            </>
+          )}
           <Route path="/admin/letters/:letterId" element={<LetterReviewPage />} />
           <Route path="/admin/notes" element={<NotesPage />} />
           <Route path="/admin/content" element={<ContentPage />} />
@@ -107,9 +123,23 @@ function App() {
           />
         </Routes>
       </Suspense>
-    </Router>
-    </ErrorBoundary>
+    </>
   );
+}
+
+const router = createBrowserRouter([
+  {
+    path: "*",
+    element: (
+      <ErrorBoundary>
+        <AppRoutes />
+      </ErrorBoundary>
+    ),
+  },
+]);
+
+function App() {
+  return <RouterProvider router={router} />;
 }
 
 export default App;

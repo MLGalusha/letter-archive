@@ -42,6 +42,79 @@ export interface PageSourceExpectation {
   sourceChecksum: string | null;
 }
 
+export interface PageGeometryExpectation extends PageSourceExpectation {
+  expectedGeometryRevision: number;
+  expectedLineSegmentsChecksumSha256: string;
+}
+
+export interface PageGeometryApprovalExpectation extends PageSourceExpectation {
+  expectedGeometryRevision: number;
+  expectedGeometryChecksumSha256: string;
+}
+
+export interface PageGeometryReviewState {
+  trustState: SegmentTrustState;
+  approvedGeometryRevision: number | null;
+  approvedGeometryChecksumSha256: string | null;
+  approvedBy: string | null;
+  approvedAt: string | null;
+}
+
+export interface PageGeometryEnvelope {
+  lineSegments: LineSegment[];
+  geometryRevision: number;
+  geometryChecksumSha256: string;
+  lineSegmentsChecksumSha256: string;
+  reviewState: PageGeometryReviewState;
+}
+
+const SHA256_PATTERN = /^[0-9a-f]{64}$/;
+
+function isPageGeometryReviewState(
+  value: unknown,
+): value is PageGeometryReviewState {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+  const review = value as Partial<PageGeometryReviewState>;
+  if (review.trustState === 'unverified') {
+    return (
+      review.approvedGeometryRevision === null
+      && review.approvedGeometryChecksumSha256 === null
+      && review.approvedBy === null
+      && review.approvedAt === null
+    );
+  }
+  return (
+    review.trustState === 'trusted'
+    && Number.isInteger(review.approvedGeometryRevision)
+    && (review.approvedGeometryRevision ?? -1) >= 0
+    && SHA256_PATTERN.test(review.approvedGeometryChecksumSha256 ?? '')
+    && typeof review.approvedBy === 'string'
+    && review.approvedBy.length > 0
+    && typeof review.approvedAt === 'string'
+    && Number.isFinite(Date.parse(review.approvedAt))
+  );
+}
+
+function requirePageGeometryEnvelope(value: unknown): PageGeometryEnvelope {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('The page geometry response was invalid');
+  }
+  const result = value as Partial<PageGeometryEnvelope>;
+  if (
+    !Array.isArray(result.lineSegments)
+    || !Number.isInteger(result.geometryRevision)
+    || (result.geometryRevision ?? -1) < 0
+    || !SHA256_PATTERN.test(result.geometryChecksumSha256 ?? '')
+    || !SHA256_PATTERN.test(result.lineSegmentsChecksumSha256 ?? '')
+    || !isPageGeometryReviewState(result.reviewState)
+  ) {
+    throw new Error('The page geometry response was incomplete');
+  }
+  return result as PageGeometryEnvelope;
+}
+
 export type MetadataDisposition =
   | 'queued'
   | 'already_running'
@@ -185,18 +258,26 @@ export async function unverifyMetadata(
 export async function savePageLineSegments(
   pageId: string,
   segments: LineSegment[],
-  expected: PageSourceExpectation,
-): Promise<void> {
-  await apiPatch(`/admin/letters/pages/${pageId}/line-segments`, {
+  expected: PageGeometryExpectation,
+): Promise<PageGeometryEnvelope> {
+  const result = await apiPatch<unknown>(`/admin/letters/pages/${pageId}/line-segments`, {
     lineSegments: segments,
     ...expected,
   });
+  return requirePageGeometryEnvelope(result);
+}
+
+/** Fetch the current editable geometry together with its immutable revision identity. */
+export async function getPageGeometry(pageId: string): Promise<PageGeometryEnvelope> {
+  const result = await apiGet<unknown>(
+    `/admin/letters/pages/${pageId}/line-segments`,
+  );
+  return requirePageGeometryEnvelope(result);
 }
 
 /** Fetch existing line segments from the database for a page. */
 export async function getPageLineSegments(pageId: string): Promise<LineSegment[]> {
-  const result = await apiGet<{ lineSegments: LineSegment[] }>(`/admin/letters/pages/${pageId}/line-segments`);
-  return result.lineSegments ?? [];
+  return (await getPageGeometry(pageId)).lineSegments;
 }
 
 export async function reExtractLetter(
@@ -263,12 +344,13 @@ export async function addNote(
 export async function updatePageSegmentTrust(
   pageId: string,
   trustState: SegmentTrustState,
-  expected: PageSourceExpectation,
-): Promise<void> {
-  await apiPatch(`/admin/letters/pages/${pageId}/segment-trust`, {
+  expected: PageGeometryApprovalExpectation,
+): Promise<PageGeometryEnvelope> {
+  const result = await apiPatch<unknown>(`/admin/letters/pages/${pageId}/segment-trust`, {
     trustState,
     ...expected,
   });
+  return requirePageGeometryEnvelope(result);
 }
 
 /** Update segment trust state for all pages of a letter. */
@@ -276,7 +358,12 @@ export async function updateLetterSegmentTrust(
   letterId: string,
   trustState: SegmentTrustState,
   primarySourceRevision: number,
-  pages: Array<{ pageId: string; sourceChecksum: string | null }>,
+  pages: Array<{
+    pageId: string;
+    sourceChecksum: string | null;
+    expectedGeometryRevision: number;
+    expectedGeometryChecksumSha256: string;
+  }>,
 ): Promise<void> {
   await apiPatch(`/admin/letters/${letterId}/segment-trust`, {
     trustState,

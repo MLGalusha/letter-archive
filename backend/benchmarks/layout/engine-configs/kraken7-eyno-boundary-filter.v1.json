@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "engineId": "kraken7-eyno-boundary-filter",
+  "adapter": "layout-run-boundary-filter",
+  "adapterVersion": "1",
+  "provider": "letter-archive-layout-composition",
+  "package": {
+    "name": "letter-archive-layout-composition",
+    "version": "1"
+  },
+  "execution": {
+    "kind": "host",
+    "timeoutSeconds": 300
+  },
+  "measurementSemantics": {
+    "isolation": "orchestrator-process-pure-geometry",
+    "latency": "source-artifact-verification-plus-geometry-projection",
+    "residentBatchThroughputMeasured": false,
+    "providerTimingSplit": "not-applicable-no-model-inference"
+  },
+  "sourceRuns": {
+    "lineGeometry": {
+      "role": "line-geometry",
+      "runId": "kraken7-blla-v2-full-20260728",
+      "expectedEngineId": "kraken7",
+      "manifestSha256": "a7a6b87d4b006479e0aedb08ca45e8b560f43866c3f5c2aeca7e3c44fadb017c"
+    },
+    "pageBoundary": {
+      "role": "page-boundary",
+      "runId": "eynollah-v091-full-no-cl-cloud-20260728",
+      "expectedEngineId": "eynollah-v091",
+      "manifestSha256": "43b53de12cf5a1406788ff68d52f50c2948bb6d5a97393a9757f9328f519cc0e"
+    }
+  },
+  "parameters": {
+    "geometryPreference": [
+      "native-baseline",
+      "native-boundary"
+    ],
+    "sampleSpacingPixels": 4,
+    "insideRatioThresholdExclusive": 0.5,
+    "pointOnBoundaryCountsInside": true,
+    "projection": "included-lines-and-owning-regions-only",
+    "pageBoundary": "exact-provider-predicted-boundary",
+    "coordinateTransform": "identity",
+    "sourceEvidence": "exact-source-layouts-and-per-line-decisions-in-raw-json",
+    "sourceSnapshot": "source-manifests-normalized-layouts-and-source-page-errors"
+  },
+  "diagnostic": {
+    "equivalentToDefaultProfile": false,
+    "rankable": false,
+    "contractEnforcement": "adapter-enforced-v2",
+    "contractLimitation": "The immutable v2 manifest schema verifies all snapshotted bytes and standard artifacts but does not independently type or cross-validate derived-run source roles. The snapshotted adapter and raw evidence enforce those semantics for this experiment.",
+    "reason": "This is a reversible display projection over two immutable historical runs. It performs no model inference, is not ground truth, and must not be ranked as an independent detector or written as production PageLayoutV2."
+  }
+}

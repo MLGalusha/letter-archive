@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "engineId": "kraken7-orli-cpu",
+  "adapter": "kraken",
+  "adapterVersion": "2",
+  "api": "segmentation-task",
+  "inferenceConfig": "orli",
+  "provider": "kraken-orli-cpu",
+  "diagnostic": {
+    "purpose": "Distinguish Apple MPS numerical behavior from Orli model quality by changing only the device while retaining the required bfloat16 precision.",
+    "equivalentToDefaultProfile": false,
+    "comparisonProfile": "kraken7-orli"
+  },
+  "runtimeConstraint": {
+    "requiredPrecision": "bf16-mixed",
+    "sourceUrl": "https://github.com/mittagessen/orli#model",
+    "hardwareSpecificResults": true,
+    "invalidPriorPrecision": "32-true"
+  },
+  "package": {
+    "name": "kraken",
+    "version": "7.0.3",
+    "wheelSha256": "74f108479f386fb73b270ba7562535e16cdb5e08807981d59a42c13dde741963"
+  },
+  "plugins": [
+    {
+      "name": "orli",
+      "version": "0.0.2",
+      "wheelSha256": "39ba08f802926133145ed1a822052771ad4c34f67381114827880556e7de86b0",
+      "sourceCommit": "f45c756cce1a6d059521909b4fe316a34ca21817"
+    }
+  ],
+  "execution": {
+    "kind": "venv",
+    "python": "python/layout_benchmark/.runtime/kraken7-orli/bin/python",
+    "pythonVersion": "3.12.12",
+    "bootstrap": {
+      "tool": "uv",
+      "wheels": [
+        {
+          "packageRequirement": "kraken==7.0.3",
+          "wheelUrl": "https://files.pythonhosted.org/packages/60/1f/89ac3709b94dd10bd5c7823cf6a1b735386d7049d3c7d91b462d228f4b77/kraken-7.0.3-py3-none-any.whl",
+          "wheelSha256": "74f108479f386fb73b270ba7562535e16cdb5e08807981d59a42c13dde741963",
+          "wheelSizeBytes": 5043423
+        },
+        {
+          "packageRequirement": "orli==0.0.2",
+          "wheelUrl": "https://files.pythonhosted.org/packages/a1/6c/79f7d1c878b9a9776c30fa925b7f0be40b9d80232a97ecc6ff055cc26eec/orli-0.0.2-py3-none-any.whl",
+          "wheelSha256": "39ba08f802926133145ed1a822052771ad4c34f67381114827880556e7de86b0",
+          "wheelSizeBytes": 84602
+        }
+      ]
+    },
+    "timeoutSeconds": 3600
+  },
+  "measurementSemantics": {
+    "isolation": "fresh-process-per-page",
+    "latency": "cold-start-per-page",
+    "residentBatchThroughputMeasured": false,
+    "providerTimingSplit": "model-load-and-inference"
+  },
+  "model": {
+    "kind": "download",
+    "recordDoi": "10.5281/zenodo.20558179",
+    "recordId": 20558179,
+    "filename": "orli_base.safetensors",
+    "path": "python/layout_benchmark/.runtime/kraken7-orli/models/orli_base.safetensors",
+    "downloadUrl": "https://zenodo.org/api/records/20558179/files/orli_base.safetensors/content",
+    "publishedSizeBytes": 594442756,
+    "publishedMd5": "a9a6b0caf497203e758dbd4fc624af10",
+    "expectedSha256": "ef2b2e365d5fd2d3755f328eba014b1f4e2b8974162dcbb7653631d694f8b221"
+  },
+  "parameters": {
+    "textDirection": "horizontal-lr",
+    "device": "cpu",
+    "precision": "bf16-mixed",
+    "batchSize": 1,
+    "numThreads": 1,
+    "inputPadding": 0,
+    "raiseOnError": true,
+    "polygonize": false,
+    "maxPredictedLines": 768
+  }
+}

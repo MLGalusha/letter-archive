@@ -1,0 +1,17 @@
+# Reproducibility constraints for the inference-sensitive Kraken 7 stack.
+#
+# This is intentionally not presented as a universal hashed lockfile: PyTorch
+# and several numerical packages resolve platform-specific wheels on macOS and
+# Linux. pip still selects the wheel for the active Python 3.12/platform,
+# while these constraints keep the versions that affect model execution fixed.
+coremltools==9.0
+lightning==2.6.1
+numpy==2.4.6
+safetensors==0.7.0
+scikit-image==0.25.2
+scikit-learn==1.7.2
+scipy==1.15.3
+shapely==2.1.2
+torch==2.12.0
+torchmetrics==1.9.0
+torchvision==0.27.0

@@ -15,7 +15,26 @@ interface MockLetterImage {
   originalFilename?: string;
   sourceChecksum?: string;
   lineSegments?: unknown[];
+  geometryRevision?: number;
+  geometryChecksumSha256?: string | null;
+  lineSegmentsChecksumSha256?: string | null;
   segmentTrustState?: 'trusted' | 'unverified';
+}
+
+interface MockPageGeometryReviewState {
+  trustState: 'trusted' | 'unverified';
+  approvedGeometryRevision: number | null;
+  approvedGeometryChecksumSha256: string | null;
+  approvedBy: string | null;
+  approvedAt: string | null;
+}
+
+interface MockPageGeometryEnvelope {
+  lineSegments: unknown[];
+  geometryRevision: number;
+  geometryChecksumSha256: string;
+  lineSegmentsChecksumSha256: string;
+  reviewState: MockPageGeometryReviewState;
 }
 
 interface MockStructuredNote {
@@ -35,6 +54,8 @@ interface MockLetterReviewLetter {
   title: string;
   collectionCode?: string;
   primarySourceRevision: number;
+  transcriptRevision: number;
+  transcriptChecksumSha256: string;
   images: MockLetterImage[];
   transcript: {
     pages: Array<{ pageNumber: number; text: string }>;
@@ -109,6 +130,8 @@ interface MockPageLineSegmentsRequest {
     lineSegments?: unknown[];
     primarySourceRevision?: number;
     sourceChecksum?: string | null;
+    expectedGeometryRevision?: number;
+    expectedLineSegmentsChecksumSha256?: string;
   };
 }
 
@@ -119,6 +142,8 @@ interface MockPageSegmentTrustRequest {
     trustState?: 'trusted' | 'unverified';
     primarySourceRevision?: number;
     sourceChecksum?: string | null;
+    expectedGeometryRevision?: number;
+    expectedGeometryChecksumSha256?: string;
   };
 }
 
@@ -130,6 +155,8 @@ interface MockLetterSegmentTrustRequest {
     pages?: Array<{
       pageId?: string;
       sourceChecksum?: string | null;
+      expectedGeometryRevision?: number;
+      expectedGeometryChecksumSha256?: string;
     }>;
   };
 }
@@ -207,7 +234,10 @@ interface MockApiFailure {
   requestId?: string;
 }
 
-type MockLetterReviewOverrides = Partial<MockLetterReviewLetter> & {
+type MockLetterReviewOverrides = Omit<
+  Partial<MockLetterReviewLetter>,
+  'transcript' | 'metadata'
+> & {
   transcript?: Partial<MockLetterReviewLetter['transcript']>;
   metadata?: Partial<MockLetterReviewLetter['metadata']>;
 };
@@ -304,12 +334,19 @@ function createLineSegment(
   bbox: [number, number, number, number],
 ) {
   return {
+    id: `mock-line-${line}-${bbox[0]}`,
     line,
+    geometryType: 'baseline',
     bbox,
     baseline: [
       [bbox[0], bbox[3] - 6],
       [bbox[2], bbox[3] - 6],
     ],
+    geometryProvenance: {
+      source: 'machine',
+      operation: 'detected',
+      parentSegmentIds: [],
+    },
     ocrText: '',
   };
 }
@@ -327,7 +364,7 @@ const defaultDetectLinesByPageId = {
       createLineSegment(2, [190, 315, 1505, 385]),
     ],
   },
-} as const;
+};
 
 export function createMockDetectLinesByPageId() {
   return clone(defaultDetectLinesByPageId) as Record<
@@ -343,6 +380,11 @@ const baseLetter: MockLetterReviewLetter = {
   title: 'Review Letter One',
   collectionCode: '009',
   primarySourceRevision: 4,
+  transcriptRevision: 2,
+  transcriptChecksumSha256: transcriptChecksum(buildFullTranscript([
+    ['My dear mother,', 'I arrived safely in Boston.'],
+    ['The weather has been kind.', 'Love, Alice'],
+  ])),
   images: collection009ImageFixtures.map(({ filePath: _filePath, ...image }) => image),
   transcript: {
     pages: [
@@ -393,6 +435,206 @@ function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+function geometryChecksum(lineSegments: unknown[]): string {
+  const geometry = lineSegments.map((segment) => {
+    if (!segment || typeof segment !== 'object' || Array.isArray(segment)) {
+      return segment;
+    }
+    const value = segment as Record<string, unknown>;
+    const words = Array.isArray(value.words)
+      ? value.words.map((word) => (
+          word && typeof word === 'object' && !Array.isArray(word)
+            ? { bbox: (word as Record<string, unknown>).bbox }
+            : word
+        ))
+      : undefined;
+    return {
+      id: value.id,
+      line: value.line,
+      geometryType: value.geometryType,
+      providerTextDirection: value.providerTextDirection,
+      baseline: value.baseline,
+      bbox: value.bbox,
+      boundary: value.boundary,
+      words,
+      geometryProvenance: value.geometryProvenance,
+    };
+  });
+  return createHash('sha256')
+    .update(JSON.stringify(geometry), 'utf8')
+    .digest('hex');
+}
+
+function lineSegmentsChecksum(lineSegments: unknown[]): string {
+  return createHash('sha256')
+    .update(JSON.stringify(lineSegments), 'utf8')
+    .digest('hex');
+}
+
+function transcriptChecksum(transcript: string): string {
+  return createHash('sha256')
+    .update(transcript, 'utf8')
+    .digest('hex');
+}
+
+function unverifiedGeometryReviewState(): MockPageGeometryReviewState {
+  return {
+    trustState: 'unverified',
+    approvedGeometryRevision: null,
+    approvedGeometryChecksumSha256: null,
+    approvedBy: null,
+    approvedAt: null,
+  };
+}
+
+function cloneGeometryEnvelope(
+  envelope: MockPageGeometryEnvelope,
+): MockPageGeometryEnvelope {
+  return clone(envelope);
+}
+
+function buildMockProductionTranscriptAlignment(
+  letter: MockLetterReviewLetter,
+  pageGeometryByPageId: Record<string, MockPageGeometryEnvelope>,
+) {
+  const physicalLines = letter.transcript.fullText.split('\n');
+  let physicalSearchStart = 0;
+  const pages = letter.images
+    .filter((image) => image.type === 'letter')
+    .map((image, pageIndex) => {
+      const geometry = pageGeometryByPageId[image.id] ?? {
+        lineSegments: [],
+        geometryRevision: 0,
+        geometryChecksumSha256: geometryChecksum([]),
+        lineSegmentsChecksumSha256: lineSegmentsChecksum([]),
+        reviewState: unverifiedGeometryReviewState(),
+      };
+      const pageNumber = image.pageNumber ?? pageIndex + 1;
+      const pageText = letter.transcript.pages.find(
+        (page) => page.pageNumber === pageNumber,
+      )?.text ?? '';
+      const transcriptLines = pageText
+        .split('\n')
+        .filter((line) => line.trim().length > 0)
+        .map((text, transcriptLineIndex) => {
+          let physicalIndex = physicalLines.findIndex(
+            (line, index) => index >= physicalSearchStart && line === text,
+          );
+          if (physicalIndex < 0) {
+            physicalIndex = physicalLines.findIndex((line) => line === text);
+          }
+          if (physicalIndex >= 0) {
+            physicalSearchStart = physicalIndex + 1;
+          }
+          return {
+            id: `mock-transcript-${pageNumber}-${transcriptLineIndex}`,
+            transcriptLineIndex,
+            sourceLineNumber: physicalIndex >= 0
+              ? physicalIndex + 1
+              : transcriptLineIndex + 1,
+            text,
+          };
+        });
+      const segmentIds = geometry.lineSegments.flatMap((segment) => {
+        if (!segment || typeof segment !== 'object' || Array.isArray(segment)) {
+          return [];
+        }
+        const id = (segment as Record<string, unknown>).id;
+        return typeof id === 'string' && id.length > 0 ? [id] : [];
+      });
+      const usedSegmentIds = new Set<string>();
+      const mappings = transcriptLines.map((line, transcriptLineIndex) => {
+        const segmentId = segmentIds[transcriptLineIndex];
+        if (segmentId) usedSegmentIds.add(segmentId);
+        return {
+          id: `mock-mapping-${pageNumber}-${transcriptLineIndex}`,
+          transcriptId: line.id,
+          transcriptLineIndex: line.transcriptLineIndex,
+          sourceLineNumber: line.sourceLineNumber,
+          transcriptText: line.text,
+          segmentIds: segmentId ? [segmentId] : [],
+          operation: segmentId ? 'match' : 'unlocated-transcript',
+          similarity: segmentId ? 0.95 : 0,
+          confidence: segmentId ? 0.95 : 0,
+          status: segmentId ? 'accepted' : 'unlocated',
+          evidence: segmentId ? 'geometry-only' : 'unlocated',
+          alternatives: [],
+        };
+      });
+      const recognitionArtifactChecksum = createHash('sha256')
+        .update(
+          [
+            image.id,
+            geometry.geometryRevision,
+            geometry.geometryChecksumSha256,
+            geometry.lineSegmentsChecksumSha256,
+          ].join(':'),
+          'utf8',
+        )
+        .digest('hex');
+
+      return {
+        pageId: image.id,
+        pageNumber,
+        sourceChecksumSha256: image.sourceChecksum ?? null,
+        geometry: cloneGeometryEnvelope(geometry),
+        recognition: {
+          status: segmentIds.length > 0 ? 'ready' : 'missing',
+          profileChecksumSha256: createHash('sha256')
+            .update('mock-line-review-recognition-profile', 'utf8')
+            .digest('hex'),
+          exactArtifactChecksumSha256:
+            segmentIds.length > 0 ? recognitionArtifactChecksum : null,
+          sourceArtifactChecksumsSha256:
+            segmentIds.length > 0 ? [recognitionArtifactChecksum] : [],
+          evidenceChecksumSha256:
+            segmentIds.length > 0 ? recognitionArtifactChecksum : null,
+          validRecordCount: segmentIds.length,
+          alignableSegmentCount: segmentIds.length,
+        },
+        inputFingerprintSha256: createHash('sha256')
+          .update(JSON.stringify({
+            transcriptRevision: letter.transcriptRevision,
+            transcriptChecksumSha256: letter.transcriptChecksumSha256,
+            pageId: image.id,
+            geometryRevision: geometry.geometryRevision,
+            geometryChecksumSha256: geometry.geometryChecksumSha256,
+          }), 'utf8')
+          .digest('hex'),
+        status: segmentIds.length > 0 ? 'ready' : 'geometry-missing',
+        statusMessage:
+          segmentIds.length > 0 ? null : 'Mock page geometry is unavailable',
+        transcriptLines,
+        mappings,
+        unassignedSegments: segmentIds
+          .filter((segmentId) => !usedSegmentIds.has(segmentId))
+          .map((segmentId) => ({
+            segmentId,
+            reason: 'non-transcribed-text',
+          })),
+        deferredSegmentIds: [],
+      };
+    });
+
+  return {
+    schemaVersion: 1,
+    algorithm: {
+      name: 'content-aware-transcript-alignment',
+      version: 'mock-e2e-v1',
+      configChecksumSha256: createHash('sha256')
+        .update('mock-e2e-alignment-config', 'utf8')
+        .digest('hex'),
+    },
+    source: {
+      letterId: letter.id,
+      primarySourceRevision: letter.primarySourceRevision,
+      transcriptRevision: letter.transcriptRevision,
+      transcriptChecksumSha256: letter.transcriptChecksumSha256,
+    },
+    pages,
+  };
+}
+
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -412,7 +654,7 @@ export function createMockLetterReviewLetter(
 ): MockLetterReviewLetter {
   const letter = clone(baseLetter);
 
-  return {
+  const result = {
     ...letter,
     ...overrides,
     transcript: {
@@ -427,6 +669,15 @@ export function createMockLetterReviewLetter(
     linkedPersons: overrides.linkedPersons ? clone(overrides.linkedPersons) : letter.linkedPersons,
     linkedPlaces: overrides.linkedPlaces ? clone(overrides.linkedPlaces) : letter.linkedPlaces,
   };
+  if (
+    overrides.transcript?.fullText !== undefined
+    && overrides.transcriptChecksumSha256 === undefined
+  ) {
+    result.transcriptChecksumSha256 = transcriptChecksum(
+      result.transcript.fullText,
+    );
+  }
+  return result;
 }
 
 export interface MockLetterReviewContext {
@@ -448,6 +699,7 @@ export interface MockLetterReviewContext {
   saveLineSegmentRequests: MockPageLineSegmentsRequest[];
   pageSegmentTrustRequests: MockPageSegmentTrustRequest[];
   letterSegmentTrustRequests: MockLetterSegmentTrustRequest[];
+  pageGeometryByPageId: Record<string, MockPageGeometryEnvelope>;
   updateLetterRequests: MockUpdateLetterRequest[];
   versionRequests: MockVersionRequest[];
   transcribeLetterRequests: Array<{
@@ -551,6 +803,39 @@ export async function installMockLetterReviewApi(
     : createMockDetectLinesByPageId();
   const detectLinesFailuresByPageId = clone(options.detectLinesFailuresByPageId ?? {});
   const routeFailures = clone(options.routeFailures ?? {});
+  const pageGeometryByPageId: Record<string, MockPageGeometryEnvelope> = {};
+
+  for (const image of letter.images.filter((candidate) => candidate.type === 'letter')) {
+    const configuredSegments = Array.isArray(image.lineSegments)
+      ? image.lineSegments
+      : (detectLinesByPageId[image.id]?.lineSegments ?? []);
+    const lineSegments = clone(configuredSegments);
+    const geometryRevision = image.geometryRevision
+      ?? (lineSegments.length > 0 ? 1 : 0);
+    const geometryChecksumSha256 = geometryChecksum(lineSegments);
+    const reviewState = image.segmentTrustState === 'trusted'
+      ? {
+          trustState: 'trusted' as const,
+          approvedGeometryRevision: geometryRevision,
+          approvedGeometryChecksumSha256: geometryChecksumSha256,
+          approvedBy: 'mock-admin',
+          approvedAt: '2026-07-30T08:00:00.000Z',
+        }
+      : unverifiedGeometryReviewState();
+
+    pageGeometryByPageId[image.id] = {
+      lineSegments,
+      geometryRevision,
+      geometryChecksumSha256,
+      lineSegmentsChecksumSha256: lineSegmentsChecksum(lineSegments),
+      reviewState,
+    };
+    image.geometryRevision = geometryRevision;
+    image.geometryChecksumSha256 = geometryChecksumSha256;
+    image.lineSegmentsChecksumSha256 =
+      pageGeometryByPageId[image.id].lineSegmentsChecksumSha256;
+    image.segmentTrustState = reviewState.trustState;
+  }
 
   const fulfillFailure = async (route: Route, failure: MockApiFailure) => {
     await route.fulfill({
@@ -569,6 +854,20 @@ export async function installMockLetterReviewApi(
     localStorage.setItem('adminToken', 'mock-token');
     localStorage.removeItem('letterViewerState');
   });
+
+  await page.route(
+    new RegExp(`${escapeRegex(letterPath)}/transcript-alignment$`),
+    async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(buildMockProductionTranscriptAlignment(
+          letter,
+          pageGeometryByPageId,
+        )),
+      });
+    },
+  );
 
   await page.route(new RegExp(`${escapeRegex(API_BASE_URL)}/mock-assets/collection-009/.*$`), async (route) => {
     const requestUrl = new URL(route.request().url());
@@ -629,6 +928,12 @@ export async function installMockLetterReviewApi(
           text,
         }));
 
+        if (transcriptChanged) {
+          letter.transcriptRevision += 1;
+          letter.transcriptChecksumSha256 = transcriptChecksum(
+            body.transcriptionText,
+          );
+        }
         if (transcriptChanged && letter.transcriptStatus === 'VERIFIED') {
           clearTranscriptVerification(letter);
         } else if (transcriptChanged && letter.transcriptStatus !== 'EDITED') {
@@ -1352,6 +1657,7 @@ export async function installMockLetterReviewApi(
   await page.route(new RegExp(`${escapeRegex(API_BASE_URL)}/admin/letters/pages/[^/]+/line-segments$`), async (route) => {
     const pageId = route.request().url().split('/').slice(-2)[0];
     const image = letter.images.find((candidate) => candidate.id === pageId);
+    const geometry = pageGeometryByPageId[pageId];
 
     if (route.request().method() === 'PATCH') {
       const body = route.request().postDataJSON() as MockPageLineSegmentsRequest['body'];
@@ -1362,12 +1668,33 @@ export async function installMockLetterReviewApi(
       });
       if (
         !image ||
+        !geometry ||
         body.primarySourceRevision !== letter.primarySourceRevision ||
         body.sourceChecksum !== (image.sourceChecksum ?? null)
       ) {
         await fulfillFailure(route, {
           status: 409,
           error: 'Page source changed; reload before saving segments',
+          code: 'SOURCE_REVISION_CHANGED',
+        });
+        return;
+      }
+      if (body.expectedGeometryRevision !== geometry.geometryRevision) {
+        await fulfillFailure(route, {
+          status: 409,
+          error: 'Page geometry changed; reload before saving segments',
+          code: 'GEOMETRY_REVISION_CHANGED',
+        });
+        return;
+      }
+      if (
+        body.expectedLineSegmentsChecksumSha256
+          !== geometry.lineSegmentsChecksumSha256
+      ) {
+        await fulfillFailure(route, {
+          status: 409,
+          error: 'Page segments changed; reload before saving segments',
+          code: 'LINE_SEGMENTS_CHANGED',
         });
         return;
       }
@@ -1379,11 +1706,26 @@ export async function installMockLetterReviewApi(
         return;
       }
 
-      image.lineSegments = clone(body.lineSegments);
+      const lineSegments = clone(body.lineSegments);
+      const nextChecksum = geometryChecksum(lineSegments);
+      if (nextChecksum !== geometry.geometryChecksumSha256) {
+        geometry.geometryRevision += 1;
+        geometry.geometryChecksumSha256 = nextChecksum;
+        geometry.reviewState = unverifiedGeometryReviewState();
+      }
+      geometry.lineSegments = lineSegments;
+      geometry.lineSegmentsChecksumSha256 =
+        lineSegmentsChecksum(lineSegments);
+      image.lineSegments = clone(lineSegments);
+      image.geometryRevision = geometry.geometryRevision;
+      image.geometryChecksumSha256 = geometry.geometryChecksumSha256;
+      image.lineSegmentsChecksumSha256 =
+        geometry.lineSegmentsChecksumSha256;
+      image.segmentTrustState = geometry.reviewState.trustState;
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ lineSegments: image.lineSegments }),
+        body: JSON.stringify(cloneGeometryEnvelope(geometry)),
       });
       return;
     }
@@ -1404,14 +1746,20 @@ export async function installMockLetterReviewApi(
       return;
     }
 
-    const result = detectLinesByPageId[pageId];
+    const result = pageGeometryByPageId[pageId];
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(
-        result ?? {
-          lineSegments: [],
-        },
+        result
+          ? cloneGeometryEnvelope(result)
+          : {
+              lineSegments: [],
+              geometryRevision: 0,
+              geometryChecksumSha256: geometryChecksum([]),
+              lineSegmentsChecksumSha256: lineSegmentsChecksum([]),
+              reviewState: unverifiedGeometryReviewState(),
+            },
       ),
     });
   });
@@ -1419,6 +1767,7 @@ export async function installMockLetterReviewApi(
   await page.route(new RegExp(`${escapeRegex(API_BASE_URL)}/admin/letters/pages/[^/]+/segment-trust$`), async (route) => {
     const pageId = route.request().url().split('/').slice(-2)[0];
     const image = letter.images.find((candidate) => candidate.id === pageId);
+    const geometry = pageGeometryByPageId[pageId];
     const body = route.request().postDataJSON() as MockPageSegmentTrustRequest['body'];
     pageSegmentTrustRequests.push({
       url: route.request().url(),
@@ -1428,12 +1777,26 @@ export async function installMockLetterReviewApi(
 
     if (
       !image ||
+      !geometry ||
       body.primarySourceRevision !== letter.primarySourceRevision ||
       body.sourceChecksum !== (image.sourceChecksum ?? null)
     ) {
       await fulfillFailure(route, {
         status: 409,
         error: 'Page source changed; reload before changing segment trust',
+        code: 'SOURCE_REVISION_CHANGED',
+      });
+      return;
+    }
+    if (
+      body.expectedGeometryRevision !== geometry.geometryRevision
+      || body.expectedGeometryChecksumSha256
+        !== geometry.geometryChecksumSha256
+    ) {
+      await fulfillFailure(route, {
+        status: 409,
+        error: 'Page geometry changed; reload before changing segment trust',
+        code: 'GEOMETRY_REVISION_CHANGED',
       });
       return;
     }
@@ -1445,11 +1808,26 @@ export async function installMockLetterReviewApi(
       return;
     }
 
-    image.segmentTrustState = body.trustState;
+    geometry.reviewState = body.trustState === 'trusted'
+      ? {
+          trustState: 'trusted',
+          approvedGeometryRevision: geometry.geometryRevision,
+          approvedGeometryChecksumSha256:
+            geometry.geometryChecksumSha256,
+          approvedBy: 'mock-admin',
+          approvedAt: '2026-07-30T08:00:00.000Z',
+        }
+      : unverifiedGeometryReviewState();
+    image.segmentTrustState = geometry.reviewState.trustState;
+    image.geometryRevision = geometry.geometryRevision;
+    image.geometryChecksumSha256 = geometry.geometryChecksumSha256;
+    image.lineSegmentsChecksumSha256 =
+      geometry.lineSegmentsChecksumSha256;
+    image.lineSegments = clone(geometry.lineSegments);
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ success: true }),
+      body: JSON.stringify(cloneGeometryEnvelope(geometry)),
     });
   });
 
@@ -1464,9 +1842,19 @@ export async function installMockLetterReviewApi(
     const hasExactPageSources =
       expectedPages.length === letterPages.length &&
       letterPages.every((image) => expectedPages.some(
-        (pageExpectation) =>
-          pageExpectation.pageId === image.id &&
-          pageExpectation.sourceChecksum === (image.sourceChecksum ?? null),
+        (pageExpectation) => {
+          const geometry = pageGeometryByPageId[image.id];
+          return (
+            geometry
+            && pageExpectation.pageId === image.id
+            && pageExpectation.sourceChecksum
+              === (image.sourceChecksum ?? null)
+            && pageExpectation.expectedGeometryRevision
+              === geometry.geometryRevision
+            && pageExpectation.expectedGeometryChecksumSha256
+              === geometry.geometryChecksumSha256
+          );
+        },
       ));
 
     if (
@@ -1488,7 +1876,19 @@ export async function installMockLetterReviewApi(
     }
 
     for (const image of letterPages) {
-      image.segmentTrustState = body.trustState;
+      const geometry = pageGeometryByPageId[image.id];
+      if (!geometry) continue;
+      geometry.reviewState = body.trustState === 'trusted'
+        ? {
+            trustState: 'trusted',
+            approvedGeometryRevision: geometry.geometryRevision,
+            approvedGeometryChecksumSha256:
+              geometry.geometryChecksumSha256,
+            approvedBy: 'mock-admin',
+            approvedAt: '2026-07-30T08:00:00.000Z',
+          }
+        : unverifiedGeometryReviewState();
+      image.segmentTrustState = geometry.reviewState.trustState;
     }
     await route.fulfill({
       status: 200,
@@ -1516,6 +1916,7 @@ export async function installMockLetterReviewApi(
     saveLineSegmentRequests,
     pageSegmentTrustRequests,
     letterSegmentTrustRequests,
+    pageGeometryByPageId,
     updateLetterRequests,
     versionRequests,
     transcribeLetterRequests,

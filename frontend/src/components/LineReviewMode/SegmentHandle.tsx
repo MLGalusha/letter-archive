@@ -1,4 +1,5 @@
 import { useCallback, useRef } from 'react';
+import { clientPointToSource } from './svgCoordinates';
 
 interface SegmentHandleProps {
   /** Bounding box in display (scaled) coordinates */
@@ -27,7 +28,6 @@ function getHandlePositions(
 export default function SegmentHandle({ bbox, scaleFactor, onResize, onResizeStart }: SegmentHandleProps) {
   const dragRef = useRef<{
     handle: HandlePosition;
-    startX: number;
     startY: number;
     origBbox: [number, number, number, number];
   } | null>(null);
@@ -46,23 +46,38 @@ export default function SegmentHandle({ bbox, scaleFactor, onResize, onResizeSta
       e.stopPropagation();
       e.preventDefault();
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      const svg = (e.currentTarget as SVGGraphicsElement).ownerSVGElement;
+      if (!svg) return;
+      const start = clientPointToSource(
+        svg,
+        e.clientX,
+        e.clientY,
+        scaleFactor,
+      );
       dragRef.current = {
         handle: pos,
-        startX: e.clientX,
-        startY: e.clientY,
+        startY: start.y,
         origBbox: [...bbox],
       };
       onResizeStart?.();
     },
-    [bbox, onResizeStart],
+    [bbox, onResizeStart, scaleFactor],
   );
 
   const handlePointerMove = useCallback(
     (e: React.PointerEvent) => {
       if (!dragRef.current) return;
       e.stopPropagation();
+      const svg = (e.currentTarget as SVGGraphicsElement).ownerSVGElement;
+      if (!svg) return;
       const { handle, startY, origBbox } = dragRef.current;
-      const dy = (e.clientY - startY) / scaleFactor;
+      const current = clientPointToSource(
+        svg,
+        e.clientX,
+        e.clientY,
+        scaleFactor,
+      );
+      const dy = current.y - startY;
 
       const newBbox: [number, number, number, number] = [...origBbox];
 

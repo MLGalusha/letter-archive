@@ -15,6 +15,7 @@ import { logIfSlow, TIMING_THRESHOLDS } from '../../utils/logger.js';
 import { log, openai } from './client.js';
 import { logApiUsage } from '../../services/usage-tracking.js';
 import { notifyApiError } from '../../services/notifications.js';
+import { DEVELOPMENT_STUB_TRANSCRIPTION_TEXT } from './transcription-stub.js';
 
 /** Max width for images sent to OpenAI — preserve fine handwriting detail while keeping payloads bounded */
 const AI_IMAGE_MAX_WIDTH = 4000;
@@ -155,24 +156,7 @@ export async function transcribeImage(
 }
 
 function generateStubTranscription(): TranscribeImageResult {
-  const text = `                              September 12, 1943
-
-Dear [recipient],
-
-I hope this letter finds you well.
-[illegible] the weather has been quite
-pleasant this [unclear: week/month].
-
-The family sends their regards, and
-we look forward to hearing from you
-soon.
-
-                    With warm regards,
-                    [sender]
-
-P.S. Tell everyone hello`;
-
-  return { text, isStub: true };
+  return { text: DEVELOPMENT_STUB_TRANSCRIPTION_TEXT, isStub: true };
 }
 
 export interface CheckExtraContentParams {

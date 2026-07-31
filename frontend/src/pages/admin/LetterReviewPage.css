@@ -2587,7 +2587,7 @@ body.dark .re-extract-btn-primary:has(.icon-check) {
 }
 
 /* Unmapped special segment warning */
-.unmapped-segment-warning {
+.special-segment-warning {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2600,12 +2600,12 @@ body.dark .re-extract-btn-primary:has(.icon-check) {
   color: var(--text-secondary);
 }
 
-.unmapped-segment-icon {
+.special-segment-icon {
   font-size: 14px;
   flex-shrink: 0;
 }
 
-.unmapped-segment-map-btn {
+.repair-text-location-btn {
   margin-left: auto;
   background: rgba(139, 92, 246, 0.12);
   border: 1px solid rgba(139, 92, 246, 0.4);
@@ -2618,12 +2618,12 @@ body.dark .re-extract-btn-primary:has(.icon-check) {
   transition: background 0.15s, color 0.15s;
 }
 
-.unmapped-segment-map-btn:hover {
+.repair-text-location-btn:hover {
   background: rgba(139, 92, 246, 0.2);
   color: rgba(139, 92, 246, 1);
 }
 
-.unmapped-segment-review-btn {
+.review-special-segments-btn {
   background: none;
   border: 1px solid rgba(245, 158, 11, 0.4);
   border-radius: var(--radius-sm);
@@ -2634,7 +2634,7 @@ body.dark .re-extract-btn-primary:has(.icon-check) {
   transition: background 0.15s, color 0.15s;
 }
 
-.unmapped-segment-review-btn:hover {
+.review-special-segments-btn:hover {
   background: rgba(245, 158, 11, 0.12);
   color: var(--text);
 }

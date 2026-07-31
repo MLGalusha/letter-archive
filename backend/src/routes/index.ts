@@ -15,11 +15,13 @@ import contentPagesRouter from './content-pages.js';
 import personsRouter from './persons.js';
 import placesRouter from './places.js';
 import relationshipsRouter from './relationships.js';
+import layoutBenchmarkImagesRouter from './admin/layout-benchmark-images.js';
 
 const router = Router();
 
 router.use(healthRouter);
 router.use(sitemapRouter);
+router.use('/images/layout-benchmark', layoutBenchmarkImagesRouter);
 router.use(lettersRouter);
 router.use(imagePerformanceRouter);
 router.use(imagesRouter);

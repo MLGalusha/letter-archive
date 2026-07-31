@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "selectionId": "layout-smoke-v1",
+  "pages": [
+    {
+      "pageKey": "002-19001113-L01-01",
+      "reason": "EXIF Orientation 6 verifies that every engine receives the same normalized coordinate space."
+    },
+    {
+      "pageKey": "003-18880810-L01-03",
+      "reason": "Folded landscape page with perpendicular marginal writing."
+    },
+    {
+      "pageKey": "005-19150813-L01-01",
+      "reason": "Dense curved handwriting, corrections, marginalia, and fragment risk; source uses the legacy filename without a page suffix."
+    },
+    {
+      "pageKey": "006-19270418-L01-01",
+      "reason": "Printed multilingual letterhead, bleed-through, and mixed image/text content."
+    },
+    {
+      "pageKey": "010-19460119-L01-01",
+      "reason": "Relatively clean ordinary horizontal handwriting control."
+    },
+    {
+      "pageKey": "014-18780127-L01-01",
+      "reason": "Genuine 90-degree marginalia on the target physical page."
+    },
+    {
+      "pageKey": "014-18780127-L01-02",
+      "reason": "Adjacent-page text contamination that must not be confused with target-page content."
+    }
+  ]
+}

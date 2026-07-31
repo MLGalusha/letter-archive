@@ -4,6 +4,7 @@ import {
   useEffect,
   useRef,
   useCallback,
+  useMemo,
 } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { isAuthenticated } from "../../api/auth";
@@ -52,7 +53,12 @@ import { usePhotoDescriptionWorkspace } from "./LetterReview/usePhotoDescription
 import { useExtraContentWorkspace } from "./LetterReview/useExtraContentWorkspace";
 import { useReadingViewWorkspace } from "./LetterReview/useReadingViewWorkspace";
 import { useLetterTranscriptionWorkspace } from "./LetterReview/useLetterTranscriptionWorkspace";
-import { useLineReviewWorkspace } from "./LetterReview/useLineReviewWorkspace";
+import {
+  lineReviewRepairIntentFromSearch,
+  searchAfterLineReviewRepairConsumption,
+  useLineReviewWorkspace,
+} from "./LetterReview/useLineReviewWorkspace";
+import { useLineReviewNavigationGuard } from "./LetterReview/useLineReviewNavigationGuard";
 import { useAnalysisRegenerationWorkspace } from "./LetterReview/useAnalysisRegenerationWorkspace";
 import { useTranscriptConfirmationWorkspace } from "./LetterReview/useTranscriptConfirmationWorkspace";
 import TranscriptionRegenerationDialog from "./LetterReview/TranscriptionRegenerationDialog";
@@ -68,6 +74,26 @@ export default function LetterReviewPage() {
   const visit = useLetterReviewVisit(letterId);
   const navigate = useNavigate();
   const routeLocation = useLocation();
+  const lineReviewRepairIntent = useMemo(
+    () => lineReviewRepairIntentFromSearch(routeLocation.search),
+    [routeLocation.search],
+  );
+  const consumeLineReviewRepairIntent = useCallback((token: string) => {
+    const nextSearch = searchAfterLineReviewRepairConsumption(
+      routeLocation.search,
+      token,
+    );
+    if (nextSearch === null) return;
+    navigate(
+      `${routeLocation.pathname}${nextSearch ? `?${nextSearch}` : ''}${routeLocation.hash}`,
+      { replace: true },
+    );
+  }, [
+    navigate,
+    routeLocation.hash,
+    routeLocation.pathname,
+    routeLocation.search,
+  ]);
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const {
@@ -126,6 +152,7 @@ export default function LetterReviewPage() {
   const {
     autoSaveStatus,
     flushPendingSaves,
+    hasPendingSaves,
     identityUpdateSecondsRemaining,
     identityUpdateState,
     retagState,
@@ -242,9 +269,10 @@ export default function LetterReviewPage() {
     active: lineReviewActive,
     currentFilename: lineReviewCurrentFilename,
     headerControls: lineReviewHeaderControls,
-    mappingControls: lineReviewMappingControls,
+    repairControls: lineReviewRepairControls,
     modeProps: lineReviewModeProps,
     modeRef: lineReviewModeRef,
+    navigationControls: lineReviewNavigationControls,
     selectedText: lineReviewSelectedText,
     viewerProps: lineReviewViewerProps,
   } = useLineReviewWorkspace({
@@ -253,9 +281,33 @@ export default function LetterReviewPage() {
     editorRef,
     isTranscriptEditing,
     lineReviewBlocked: extraContentWorkspace.lineReviewBlocked,
-    tryAdoptLetter,
+    repairIntent: lineReviewRepairIntent,
+    onRepairIntentConsumed: consumeLineReviewRepairIntent,
     onTranscriptChange: setTranscript,
     onAutoSave: triggerAutoSave,
+  });
+  const flushLineReviewPendingChanges = useCallback(async () => {
+    if (!(await lineReviewNavigationControls.flushPendingChanges())) {
+      return false;
+    }
+    return flushPendingSaves();
+  }, [
+    flushPendingSaves,
+    lineReviewNavigationControls,
+  ]);
+  const hasPendingLineReviewChanges = useCallback(() => (
+    lineReviewNavigationControls.hasPendingChanges()
+    || hasPendingSaves()
+  ), [
+    hasPendingSaves,
+    lineReviewNavigationControls,
+  ]);
+  const {
+    navigationPending: lineReviewNavigationPending,
+  } = useLineReviewNavigationGuard({
+    active: lineReviewActive,
+    hasPendingChanges: hasPendingLineReviewChanges,
+    flushPendingChanges: flushLineReviewPendingChanges,
   });
   const readingViewWorkspace = useReadingViewWorkspace({
     visit,
@@ -556,6 +608,7 @@ export default function LetterReviewPage() {
             transcript={transcript}
             handleMutationError={handleMutationError}
             mutationsBlocked={mutationsBlocked}
+            navigationPending={lineReviewNavigationPending}
             {...lineReviewModeProps}
           />
         ) : (
@@ -682,36 +735,40 @@ export default function LetterReviewPage() {
               )}
             </div>
 
-            {/* Unmapped special segment warning */}
+            {/* Special geometry review. Text placement is backend-owned. */}
             {(() => {
               const letterImages = letter.images.filter((img) => img.type === 'letter');
-              const unmappedCount = letterImages.reduce((sum, img) => {
+              const specialSegmentCount = letterImages.reduce((sum, img) => {
                 if (!img.lineSegments) return sum;
                 return sum + img.lineSegments.filter(
                   (s) =>
-                    (s.segmentClass === 'continuation' || s.segmentClass === 'addition') &&
-                    !s.isMapped,
+                    s.segmentClass === 'continuation'
+                    || s.segmentClass === 'addition',
                 ).length;
               }, 0);
-              if (unmappedCount === 0) return null;
+              if (specialSegmentCount === 0) return null;
               return (
-                <div className="unmapped-segment-warning">
-                  <span className="unmapped-segment-icon">⚠</span>
-                  <span>{unmappedCount} unmapped special segment{unmappedCount !== 1 ? 's' : ''}</span>
+                <div className="special-segment-warning">
+                  <span className="special-segment-icon">⚠</span>
+                  <span>
+                    {specialSegmentCount} special outline
+                    {specialSegmentCount !== 1 ? 's' : ''}. Text placement
+                    updates automatically after geometry is saved.
+                  </span>
                   {lineReviewSelectedText.length > 0 && (
                     <button
-                      className="unmapped-segment-map-btn"
+                      className="repair-text-location-btn"
                       onClick={
-                        lineReviewMappingControls.mapSelectedText
+                        lineReviewRepairControls.repairSelectedText
                       }
                     >
-                      Map to Segment
+                      Repair Text Location
                     </button>
                   )}
                   <button
-                    className="unmapped-segment-review-btn"
+                    className="review-special-segments-btn"
                     onClick={
-                      lineReviewMappingControls.reviewSegments
+                      lineReviewRepairControls.reviewSegments
                     }
                   >
                     Review

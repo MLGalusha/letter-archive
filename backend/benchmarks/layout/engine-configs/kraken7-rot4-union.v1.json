@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "engineId": "kraken7-rot4-union",
+  "adapter": "kraken",
+  "adapterVersion": "6",
+  "api": "segmentation-task",
+  "provider": "kraken-blla-rotation-ensemble",
+  "rotationEvidenceContract": "native-and-source-projected-v2",
+  "package": {
+    "name": "kraken",
+    "version": "7.0.3",
+    "wheelSha256": "74f108479f386fb73b270ba7562535e16cdb5e08807981d59a42c13dde741963"
+  },
+  "execution": {
+    "kind": "venv",
+    "python": "python/layout_benchmark/.runtime/kraken7/bin/python",
+    "pythonVersion": "3.12.12",
+    "bootstrap": {
+      "tool": "uv",
+      "packageRequirement": "kraken==7.0.3",
+      "wheelUrl": "https://files.pythonhosted.org/packages/60/1f/89ac3709b94dd10bd5c7823cf6a1b735386d7049d3c7d91b462d228f4b77/kraken-7.0.3-py3-none-any.whl",
+      "wheelSha256": "74f108479f386fb73b270ba7562535e16cdb5e08807981d59a42c13dde741963",
+      "wheelSizeBytes": 5043423
+    },
+    "timeoutSeconds": 2400
+  },
+  "measurementSemantics": {
+    "isolation": "fresh-process-per-page",
+    "latency": "cold-start-plus-four-passes-per-page",
+    "residentBatchThroughputMeasured": false,
+    "providerTimingSplit": "model-load-and-per-rotation-inference"
+  },
+  "model": {
+    "kind": "package-resource",
+    "package": "kraken",
+    "resource": "blla.mlmodel",
+    "expectedSha256": "77a638a83c9e535620827a09e410ed36391e9e8e8126d5796a0f15b978186056"
+  },
+  "parameters": {
+    "textDirection": "horizontal-lr",
+    "device": "cpu",
+    "precision": "32-true",
+    "batchSize": 1,
+    "numThreads": 1,
+    "inputPadding": 0,
+    "raiseOnError": true,
+    "rotationFallbackRaiseOnErrorFalse": true,
+    "rotationsDegrees": [0, 90, 180, 270],
+    "rotationMergePolicy": "evidence-union"
+  },
+  "diagnostic": {
+    "equivalentToDefaultProfile": false,
+    "reason": "Exploratory union retains every unique cluster from fully successful rotation passes so humans can see both added recall and added false positives before selecting a production merge rule. Partial and failed pass geometry remains raw evidence only."
+  }
+}

@@ -19,6 +19,12 @@
 | [filenames.md](filenames.md) | Filename parsing conventions |
 | [sync.md](sync.md) | Frontend/backend value sync |
 
+## Future Research and Design Ideas
+
+| Doc | Purpose |
+|-----|---------|
+| [design/archive-htr-and-contextual-transcription-future-ideas.md](design/archive-htr-and-contextual-transcription-future-ideas.md) | Archive-specific HTR, contextual LLM crops, image enhancement, training-data flywheel, and evaluation roadmap |
+
 ## Keeping Docs Updated
 
 When modifying documented code, update the relevant doc. Keep docs concise—Claude already knows general patterns.

@@ -313,45 +313,43 @@ async function handleWakeProcessingWorker() {
 }
 
 // ---------------------------------------------------------------------------
-// Command handlers — Line Detection
+// Command handlers — Native Layout Detection
 // ---------------------------------------------------------------------------
 
 async function handleLineDetectionQueue() {
-  startSpinner('Fetching line detection queue...');
+  startSpinner('Fetching native layout queue...');
   try {
-    const result = await api<{ pages: { pageId: string; letterId: string; pageNumber: number; dateRaw: string }[]; total: number }>(
-      'GET', '/admin/processing/line-detection-queue'
+    const result = await api<{
+      pages: {
+        pageId: string;
+        letterId: string;
+        pageNumber: number;
+        dateRaw: string;
+        primarySourceRevision: number;
+        sourceChecksum: string;
+      }[];
+      total: number;
+    }>(
+      'GET', '/admin/layout-processing/queue'
     );
     stopSpinner();
 
-    writeln(`\n  ${BOLD}${result.total}${RESET} pages need line detection\n`);
+    writeln(`\n  ${BOLD}${result.total}${RESET} pages need native layout detection\n`);
 
     if (result.pages.length > 0) {
       const rows = result.pages.slice(0, 20).map(p => [
         `${DIM}${p.pageId.slice(0, 8)}${RESET}`,
         p.dateRaw || '—',
         `p${p.pageNumber}`,
+        `r${p.primarySourceRevision}`,
+        `${DIM}${p.sourceChecksum.slice(0, 10)}${RESET}`,
         `${DIM}${p.letterId.slice(0, 8)}${RESET}`,
       ]);
-      table(['Page ID', 'Date', 'Page', 'Letter ID'], rows);
+      table(['Page ID', 'Date', 'Page', 'Source', 'Checksum', 'Letter ID'], rows);
       if (result.total > 20) {
         writeln(`\n  ${DIM}Showing 20 of ${result.total}${RESET}`);
       }
     }
-  } catch (err) {
-    stopSpinner();
-    writeln(`  ${RED}Error: ${err instanceof Error ? err.message : String(err)}${RESET}`);
-  }
-}
-
-async function handleResetLineSegments() {
-  if (!await confirmDestructive('This will clear ALL line segments from letter-type pages.')) return;
-
-  startSpinner('Resetting line segments...');
-  try {
-    const result = await api<{ reset: number }>('POST', '/admin/processing/reset-line-segments');
-    stopSpinner();
-    writeln(`  ${GREEN}Reset ${result.reset} pages${RESET}`);
   } catch (err) {
     stopSpinner();
     writeln(`  ${RED}Error: ${err instanceof Error ? err.message : String(err)}${RESET}`);
@@ -709,12 +707,11 @@ const categories: MenuCategory[] = [
   },
   {
     key: '2',
-    title: 'Line Detection',
-    description: 'Queue info, reset segments, run Kraken',
+    title: 'Layout Detection',
+    description: 'Inspect the native-layout queue and run Kraken',
     items: [
-      { key: '1', label: 'View queue', description: 'Pages needing line detection', handler: handleLineDetectionQueue },
-      { key: '2', label: 'Reset all segments', description: 'Clear all line segments (destructive)', handler: handleResetLineSegments },
-      { key: '3', label: 'Run detection', description: 'Launch Kraken line detection CLI', handler: handleRunLineDetection },
+      { key: '1', label: 'View queue', description: 'Pages needing native layout', handler: handleLineDetectionQueue },
+      { key: '2', label: 'Run detection', description: 'Launch Kraken layout detection CLI', handler: handleRunLineDetection },
     ],
   },
   {

@@ -188,6 +188,34 @@ describe('PageLayoutV2 storage projection', () => {
     }]);
   });
 
+  it('keeps unresolved rotation evidence unassigned instead of inventing order', () => {
+    const value = layout();
+    value.lines[1].rotationEvidence = {
+      evidenceContract: 'native-and-source-projected-v2',
+      mergePolicy: 'baseline-plus-nonoverlapping-vertical-zones',
+      clusterIndex: 4,
+      supportCount: 1,
+      sourceRotationsDegrees: [90],
+      sourcePassStatuses: ['succeeded'],
+      representativeRotationDegrees: 90,
+      representativeProviderOrdinal: 7,
+      memberProviderIds: ['rot90:provider-sideways'],
+      readingOrderSource: 'unresolved-rotated-proposal',
+    };
+
+    const [segment] = pageLayoutToLineSegments(value);
+    expect(segment).toMatchObject({
+      id: 'line-sideways',
+      line: -1,
+      providerTextDirection: 'vertical-lr',
+      rotationEvidence: {
+        representativeRotationDegrees: 90,
+        readingOrderSource: 'unresolved-rotated-proposal',
+      },
+    });
+    expect(segment).not.toHaveProperty('providerOrdinal');
+  });
+
   it('atomically persists the validated document, digest, and review projection', async () => {
     const value = layout();
     const expected = {

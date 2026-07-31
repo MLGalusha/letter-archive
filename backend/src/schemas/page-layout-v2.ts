@@ -99,6 +99,126 @@ export const pageLayoutTextDirectionSchema = z.enum([
   'vertical-rl',
 ]);
 
+export const pageLayoutRotationDegreeSchema = z.union([
+  z.literal(0),
+  z.literal(90),
+  z.literal(180),
+  z.literal(270),
+]);
+
+export const pageLayoutRotationEvidenceContractSchema = z.literal(
+  'native-and-source-projected-v2',
+);
+
+export const pageLayoutRotationMergePolicySchema = z.literal(
+  'baseline-plus-nonoverlapping-vertical-zones',
+);
+
+/**
+ * The first production rotation profile is intentionally pinned. Changing a
+ * threshold creates a different experiment and must therefore introduce a
+ * new named profile instead of silently changing stored detector evidence.
+ */
+export const pageLayoutRotationProfileSchema = z.object({
+  name: z.literal('sideways-recovery-v1'),
+  evidenceContract: pageLayoutRotationEvidenceContractSchema,
+  rotationsDegrees: z.tuple([
+    z.literal(0),
+    z.literal(90),
+    z.literal(270),
+  ]),
+  mergePolicy: pageLayoutRotationMergePolicySchema,
+  coordinateTransform: z.literal('pil-pixel-centers-to-source-v1'),
+  selectionParameters: z.object({
+    verticalAxisToleranceDegrees: z.literal(15),
+    strongBaselineLongEdgeRatio: z.literal(0.025),
+    zoneJoinPaddingLongEdgeRatio: z.literal(0.06),
+    zoneMemberPaddingLongEdgeRatio: z.literal(0.02),
+    minimumStrongProposalClustersPerZone: z.literal(2),
+    minimumProposalClustersPerZone: z.literal(3),
+    baselineInterferencePaddingLongEdgeRatio: z.literal(0),
+    baselineInterferenceHorizontalAxisToleranceDegrees: z.literal(20),
+    maximumHorizontalBaselineCentroidRatioPerZone: z.literal(0.1),
+    minimumHorizontalBaselineCentroidAllowancePerZone: z.literal(2),
+  }).strict(),
+  selectionSummary: z.object({
+    rawInputLineCount: z.number().int().nonnegative(),
+    inputLineCount: z.number().int().nonnegative(),
+    clusterCount: z.number().int().nonnegative(),
+    includedClusterCount: z.number().int().nonnegative(),
+    rejectedClusterCount: z.number().int().nonnegative(),
+    appendedRotatedLineCount: z.number().int().nonnegative(),
+  }).strict(),
+}).strict();
+
+export const pageLayoutRotationEvidenceSchema = z.object({
+  evidenceContract: pageLayoutRotationEvidenceContractSchema,
+  mergePolicy: pageLayoutRotationMergePolicySchema,
+  clusterIndex: z.number().int().nonnegative(),
+  supportCount: z.number().int().positive(),
+  sourceRotationsDegrees: z.array(pageLayoutRotationDegreeSchema).min(1),
+  sourcePassStatuses: z.array(z.literal('succeeded')).min(1),
+  representativeRotationDegrees: pageLayoutRotationDegreeSchema,
+  representativeProviderOrdinal: z.number().int().nonnegative(),
+  memberProviderIds: z.array(providerIdSchema).min(1),
+  readingOrderSource: z.enum([
+    'provider-unrotated',
+    'unresolved-rotated-proposal',
+  ]),
+}).strict().superRefine((evidence, context) => {
+  if (
+    new Set(evidence.sourceRotationsDegrees).size
+    !== evidence.sourceRotationsDegrees.length
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['sourceRotationsDegrees'],
+      message: 'Rotation evidence may reference each source pass only once',
+    });
+  }
+  if (
+    evidence.supportCount !== evidence.sourceRotationsDegrees.length
+    || evidence.supportCount !== evidence.sourcePassStatuses.length
+    || evidence.supportCount !== evidence.memberProviderIds.length
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Rotation support count must match every member evidence list',
+    });
+  }
+  if (
+    !evidence.sourceRotationsDegrees.includes(
+      evidence.representativeRotationDegrees,
+    )
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['representativeRotationDegrees'],
+      message: 'Representative rotation must be one of the supporting passes',
+    });
+  }
+  if (
+    evidence.readingOrderSource === 'provider-unrotated'
+    && evidence.representativeRotationDegrees !== 0
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['readingOrderSource'],
+      message: 'Provider reading order is only valid for the unrotated pass',
+    });
+  }
+  if (
+    evidence.readingOrderSource === 'unresolved-rotated-proposal'
+    && evidence.representativeRotationDegrees === 0
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['readingOrderSource'],
+      message: 'A rotated proposal must not claim the unrotated reading order',
+    });
+  }
+});
+
 export const pageLayoutJsonValueSchema: z.ZodType<
   null | boolean | number | string | unknown[] | Record<string, unknown>
 > = z.lazy(() => z.union([
@@ -181,6 +301,7 @@ const lineCommonShape = {
   text: z.string().nullable(),
   direction: pageLayoutDirectionSchema,
   providerTextDirection: pageLayoutTextDirectionSchema.optional(),
+  rotationEvidence: pageLayoutRotationEvidenceSchema.optional(),
   baseDirection: z.enum(['L', 'R']).nullable().optional(),
   tags: z.record(pageLayoutJsonValueSchema).nullable().optional(),
   regionIds: z.array(pageLayoutStableIdSchema).optional(),
@@ -509,6 +630,12 @@ export type PageLayoutBoundingBox = z.infer<typeof pageLayoutBoundingBoxSchema>;
 export type PageLayoutDirection = z.infer<typeof pageLayoutDirectionSchema>;
 export type PageLayoutTextDirection = z.infer<
   typeof pageLayoutTextDirectionSchema
+>;
+export type PageLayoutRotationEvidence = z.infer<
+  typeof pageLayoutRotationEvidenceSchema
+>;
+export type PageLayoutRotationProfile = z.infer<
+  typeof pageLayoutRotationProfileSchema
 >;
 export type PageLayoutProvenance = z.infer<typeof pageLayoutProvenanceSchema>;
 export type PageLayoutLine = z.infer<typeof pageLayoutLineSchema>;

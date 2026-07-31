@@ -1,7 +1,10 @@
 import { z } from 'zod';
 import {
+  pageLayoutRotationEvidenceSchema,
+  pageLayoutRotationProfileSchema,
   pageLayoutV2Schema,
   type PageLayoutDirection,
+  type PageLayoutTextDirection,
   type PageLayoutV2,
 } from '../schemas/page-layout-v2.js';
 import { pageLayoutChecksum } from './page-layout-checksum.js';
@@ -102,6 +105,7 @@ const nativeProducerSchema = z.object({
       'vertical-rl',
     ]),
     effective: z.record(jsonValueSchema),
+    rotationProfile: pageLayoutRotationProfileSchema.optional(),
   }).strict(),
   runtime: z.object({
     python: z.object({
@@ -156,14 +160,48 @@ const nativeProducerSchema = z.object({
   }).strict(),
 }).strict();
 
+const existingIdentitySource =
+  'derived-source-raster-model-provider-order-geometry-v2';
+const rotatedIdentitySource =
+  'derived-source-raster-model-rotation-provider-geometry-v3';
+const nativeIdentityShape = {
+  identityVersion: z.union([z.literal(1), z.literal(3)]),
+  idSource: z.enum([existingIdentitySource, rotatedIdentitySource]),
+};
+
+function validateNativeIdentity(
+  value: {
+    identityVersion: 1 | 3;
+    idSource: typeof existingIdentitySource | typeof rotatedIdentitySource;
+  },
+  context: z.RefinementCtx,
+): void {
+  const valid = (
+    value.identityVersion === 1
+      ? value.idSource === existingIdentitySource
+      : value.idSource === rotatedIdentitySource
+  );
+  if (!valid) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['idSource'],
+      message: 'Native identity version and source must describe the same contract',
+    });
+  }
+}
+
 const nativeLineCommon = {
   id: z.string().regex(/^line-sha256-[a-f0-9]{64}$/),
   providerId: nullableStringSchema,
-  identityVersion: z.literal(1),
-  idSource: z.literal(
-    'derived-source-raster-model-provider-order-geometry-v2',
-  ),
+  ...nativeIdentityShape,
   providerOrdinal: z.number().int().nonnegative(),
+  providerTextDirection: z.enum([
+    'horizontal-lr',
+    'horizontal-rl',
+    'vertical-lr',
+    'vertical-rl',
+  ]).optional(),
+  rotationEvidence: pageLayoutRotationEvidenceSchema.optional(),
   text: nullableStringSchema,
   baseDirection: z.enum(['L', 'R']).nullable(),
   tags: providerTagsSchema,
@@ -189,7 +227,30 @@ const nativeBaselineLineSchema = z.object({
     ]),
     derived: z.boolean(),
   }).strict(),
-}).strict();
+}).strict().superRefine((line, context) => {
+  validateNativeIdentity(line, context);
+  if (line.identityVersion === 3 && !line.rotationEvidence) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['rotationEvidence'],
+      message: 'Rotation-derived lines require explicit rotation evidence',
+    });
+  }
+  if (line.identityVersion === 3 && !line.providerTextDirection) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['providerTextDirection'],
+      message: 'Rotation-derived baseline lines require an explicit direction',
+    });
+  }
+  if (line.identityVersion === 1 && line.rotationEvidence) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['rotationEvidence'],
+      message: 'Legacy line identity cannot carry rotation-derived evidence',
+    });
+  }
+});
 
 const nativeBboxLineSchema = z.object({
   ...nativeLineCommon,
@@ -208,7 +269,40 @@ const nativeBboxLineSchema = z.object({
     source: z.literal('native-bbox'),
     derived: z.literal(false),
   }).strict(),
-}).strict();
+}).strict().superRefine((line, context) => {
+  validateNativeIdentity(line, context);
+  if (line.identityVersion === 3 && !line.rotationEvidence) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['rotationEvidence'],
+      message: 'Rotation-derived lines require explicit rotation evidence',
+    });
+  }
+  if (line.identityVersion === 3 && !line.providerTextDirection) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['providerTextDirection'],
+      message: 'Rotation-derived bbox lines require an explicit direction',
+    });
+  }
+  if (
+    line.providerTextDirection
+    && line.providerTextDirection !== line.geometry.textDirection
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['providerTextDirection'],
+      message: 'Line and bbox geometry directions must agree',
+    });
+  }
+  if (line.identityVersion === 1 && line.rotationEvidence) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['rotationEvidence'],
+      message: 'Legacy line identity cannot carry rotation-derived evidence',
+    });
+  }
+});
 
 const nativeLineSchema = z.union([
   nativeBaselineLineSchema,
@@ -219,9 +313,7 @@ const nativeRegionSchema = z.object({
   id: z.string().regex(/^region-sha256-[a-f0-9]{64}$/),
   providerId: nullableStringSchema,
   identityVersion: z.literal(1),
-  idSource: z.literal(
-    'derived-source-raster-model-provider-order-geometry-v2',
-  ),
+  idSource: z.literal(existingIdentitySource),
   class: z.string().min(1),
   providerOrdinal: z.number().int().nonnegative(),
   boundary: pointListSchema.min(3),
@@ -259,14 +351,97 @@ export const krakenNativePageLayoutV2Schema = z.object({
     regions: z.array(nativeRegionSchema),
     lines: z.array(nativeLineSchema),
   }).strict(),
-}).strict();
+}).strict().superRefine((layout, context) => {
+  const profile = layout.producer.config.rotationProfile;
+  const rotationLines = layout.segmentation.lines.filter(
+    (line) => line.identityVersion === 3,
+  );
+  if (rotationLines.length > 0 && !profile) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['producer', 'config', 'rotationProfile'],
+      message: 'Rotation-derived lines require a pinned rotation profile',
+    });
+  }
+  if (!profile) return;
+  const configuredRotations = new Set<number>(profile.rotationsDegrees);
+  if (layout.producer.config.textDirection !== 'horizontal-lr') {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['producer', 'config', 'textDirection'],
+      message: 'The pinned sideways recovery profile requires horizontal-lr passes',
+    });
+  }
+
+  const unresolvedCount = rotationLines.filter(
+    (line) => (
+      line.rotationEvidence?.readingOrderSource
+      === 'unresolved-rotated-proposal'
+    ),
+  ).length;
+  if (
+    profile.selectionSummary.appendedRotatedLineCount !== unresolvedCount
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: [
+        'producer',
+        'config',
+        'rotationProfile',
+        'selectionSummary',
+        'appendedRotatedLineCount',
+      ],
+      message: 'Rotation summary must equal the unresolved rotated line count',
+    });
+  }
+
+  layout.segmentation.lines.forEach((line, index) => {
+    const evidence = line.rotationEvidence;
+    if (!evidence) return;
+    if (
+      evidence.evidenceContract !== profile.evidenceContract
+      || evidence.mergePolicy !== profile.mergePolicy
+      || evidence.sourceRotationsDegrees.some(
+        (rotation) => !configuredRotations.has(rotation),
+      )
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['segmentation', 'lines', index, 'rotationEvidence'],
+        message: 'Line rotation evidence must match the pinned run profile',
+      });
+    }
+    const expectedRotatedDirection = (
+      evidence.representativeRotationDegrees === 90
+        ? 'vertical-lr'
+        : evidence.representativeRotationDegrees === 270
+          ? 'vertical-rl'
+          : null
+    );
+    if (
+      expectedRotatedDirection
+      && line.providerTextDirection !== expectedRotatedDirection
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [
+          'segmentation',
+          'lines',
+          index,
+          'providerTextDirection',
+        ],
+        message: 'Rotated line direction must be projected into source space',
+      });
+    }
+  });
+});
 
 export type KrakenNativePageLayoutV2 = z.infer<
   typeof krakenNativePageLayoutV2Schema
 >;
 
 function direction(
-  value: KrakenNativePageLayoutV2['segmentation']['textDirection'],
+  value: PageLayoutTextDirection,
 ): PageLayoutDirection {
   switch (value) {
     case 'horizontal-lr':
@@ -332,18 +507,31 @@ export function adaptKrakenNativePageLayoutV2(
   const layoutDirection = direction(native.segmentation.textDirection);
 
   const lines = native.segmentation.lines.map((line) => {
+    const providerTextDirection = line.providerTextDirection
+      ?? (
+        line.geometry.type === 'bbox'
+          ? line.geometry.textDirection
+          : native.segmentation.textDirection
+      );
+    const hasUnresolvedReadingOrder = (
+      line.rotationEvidence?.readingOrderSource
+      === 'unresolved-rotated-proposal'
+    );
     const common = {
       id: line.id,
       ...(line.providerId ? { providerId: line.providerId } : {}),
-      providerOrdinal: line.providerOrdinal,
-      sourceLineNumber: line.providerOrdinal,
+      ...(!hasUnresolvedReadingOrder
+        ? {
+          providerOrdinal: line.providerOrdinal,
+          sourceLineNumber: line.providerOrdinal,
+        }
+        : {}),
       text: line.text,
-      direction: line.geometry.type === 'bbox'
-        ? direction(line.geometry.textDirection)
-        : layoutDirection,
-      providerTextDirection: line.geometry.type === 'bbox'
-        ? line.geometry.textDirection
-        : native.segmentation.textDirection,
+      direction: direction(providerTextDirection),
+      providerTextDirection,
+      ...(line.rotationEvidence
+        ? { rotationEvidence: line.rotationEvidence }
+        : {}),
       baseDirection: line.baseDirection,
       tags: line.tags,
       regionIds: line.regionIds,

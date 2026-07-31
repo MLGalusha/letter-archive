@@ -155,6 +155,11 @@ export function adaptPageSegmentsForAlignment(input: {
     const orientationDegrees = baselineOrientationDegrees(segment.baseline)
       ?? providerOrientationDegrees(segment.providerTextDirection);
     const isHuman = geometryEvidence === 'human-gap-fill';
+    const hasUnresolvedReadingOrder = (
+      segment.rotationEvidence?.readingOrderSource
+      === 'unresolved-rotated-proposal'
+      || segment.line < 0
+    );
 
     recognizedSegments.push({
       id,
@@ -166,10 +171,10 @@ export function adaptPageSegmentsForAlignment(input: {
       orientationDegrees,
       boundary: segment.boundary ?? bboxBoundary(segment.bbox),
       baseline: baselinePoints(segment.baseline),
-      // Human geometry is append-only in the stored projection. Giving it a
-      // provider ordinal would recreate the Dave-before-Yours bug, so spatial
-      // preparation must place it.
-      readingOrderIndex: isHuman
+      // Human geometry and unresolved rotated proposals are append-only in the
+      // stored projection. Giving either a provider ordinal would shift the
+      // trusted body flow, so spatial preparation must place them.
+      readingOrderIndex: isHuman || hasUnresolvedReadingOrder
         ? null
         : segment.providerOrdinal ?? segment.line,
       flowDirectionSign: (

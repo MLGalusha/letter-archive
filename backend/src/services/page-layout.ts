@@ -92,16 +92,26 @@ export function pageLayoutToLineSegments(layout: PageLayoutV2): LineSegment[] {
       throw new Error(`Reading order references missing line ${lineId}`);
     }
     const extent = displayBox(line);
+    const hasUnresolvedReadingOrder = (
+      line.rotationEvidence?.readingOrderSource
+      === 'unresolved-rotated-proposal'
+    );
     return {
       id: line.id,
-      line: index + 1,
+      // Rotated recovery proposals have source-space geometry but no provider
+      // reading-order position. Preserve the historical unassigned sentinel so
+      // the aligner places them spatially instead of shifting the body flow.
+      line: hasUnresolvedReadingOrder ? -1 : index + 1,
       geometryType: line.kind,
       ...(line.providerId ? { providerId: line.providerId } : {}),
-      ...(line.providerOrdinal !== undefined
+      ...(!hasUnresolvedReadingOrder && line.providerOrdinal !== undefined
         ? { providerOrdinal: line.providerOrdinal }
         : {}),
       ...(line.providerTextDirection
         ? { providerTextDirection: line.providerTextDirection }
+        : {}),
+      ...(line.rotationEvidence
+        ? { rotationEvidence: line.rotationEvidence }
         : {}),
       ...(line.kind === 'baseline'
         ? {

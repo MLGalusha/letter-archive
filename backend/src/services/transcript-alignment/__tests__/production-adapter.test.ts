@@ -124,6 +124,62 @@ describe('production transcript alignment adapter', () => {
     });
   });
 
+  it('leaves unresolved rotated proposals out of provider body order', () => {
+    const first = {
+      ...machineSegment('first', 1, 100),
+      providerOrdinal: 1,
+    };
+    const rotated = {
+      ...machineSegment('rotated-note', 99, 180),
+      providerOrdinal: 99,
+      providerTextDirection: 'vertical-lr' as const,
+      rotationEvidence: {
+        evidenceContract: 'native-and-source-projected-v2' as const,
+        mergePolicy:
+          'baseline-plus-nonoverlapping-vertical-zones' as const,
+        clusterIndex: 4,
+        supportCount: 1,
+        sourceRotationsDegrees: [90] as const,
+        sourcePassStatuses: ['succeeded'] as const,
+        representativeRotationDegrees: 90 as const,
+        representativeProviderOrdinal: 7,
+        memberProviderIds: ['rot90:provider-note'],
+        readingOrderSource: 'unresolved-rotated-proposal' as const,
+      },
+    };
+    const second = {
+      ...machineSegment('second', 2, 300),
+      providerOrdinal: 2,
+    };
+
+    const result = adaptPageSegmentsForAlignment({
+      lineSegments: [first, rotated, second],
+      recognitionRecords: [],
+    });
+
+    expect(result.recognizedSegments.map((segment) => ({
+      id: segment.id,
+      readingOrderIndex: segment.readingOrderIndex,
+    }))).toEqual([
+      { id: 'first', readingOrderIndex: 1 },
+      { id: 'rotated-note', readingOrderIndex: null },
+      { id: 'second', readingOrderIndex: 2 },
+    ]);
+  });
+
+  it('treats the legacy negative unassigned sentinel as spatially ordered', () => {
+    const unassigned = machineSegment('unassigned', -1, 100);
+    const result = adaptPageSegmentsForAlignment({
+      lineSegments: [unassigned],
+      recognitionRecords: [],
+    });
+
+    expect(result.recognizedSegments[0]).toMatchObject({
+      id: 'unassigned',
+      readingOrderIndex: null,
+    });
+  });
+
   it('keeps mutable legacy mapping metadata out of the automatic input checksum', () => {
     const segment = machineSegment('body', 1, 100);
     expect(alignmentSegmentInputChecksum([segment])).toBe(

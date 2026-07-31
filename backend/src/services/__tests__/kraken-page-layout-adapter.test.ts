@@ -243,6 +243,51 @@ function nativeLayout() {
   };
 }
 
+function rotationProfile(appendedRotatedLineCount = 1) {
+  return {
+    name: 'sideways-recovery-v1',
+    evidenceContract: 'native-and-source-projected-v2',
+    rotationsDegrees: [0, 90, 270],
+    mergePolicy: 'baseline-plus-nonoverlapping-vertical-zones',
+    coordinateTransform: 'pil-pixel-centers-to-source-v1',
+    selectionParameters: {
+      verticalAxisToleranceDegrees: 15,
+      strongBaselineLongEdgeRatio: 0.025,
+      zoneJoinPaddingLongEdgeRatio: 0.06,
+      zoneMemberPaddingLongEdgeRatio: 0.02,
+      minimumStrongProposalClustersPerZone: 2,
+      minimumProposalClustersPerZone: 3,
+      baselineInterferencePaddingLongEdgeRatio: 0,
+      baselineInterferenceHorizontalAxisToleranceDegrees: 20,
+      maximumHorizontalBaselineCentroidRatioPerZone: 0.1,
+      minimumHorizontalBaselineCentroidAllowancePerZone: 2,
+    },
+    selectionSummary: {
+      rawInputLineCount: 4,
+      inputLineCount: 4,
+      clusterCount: 3,
+      includedClusterCount: 2,
+      rejectedClusterCount: 1,
+      appendedRotatedLineCount,
+    },
+  };
+}
+
+function rotationEvidence(rotation: 90 | 270) {
+  return {
+    evidenceContract: 'native-and-source-projected-v2',
+    mergePolicy: 'baseline-plus-nonoverlapping-vertical-zones',
+    clusterIndex: 2,
+    supportCount: 1,
+    sourceRotationsDegrees: [rotation],
+    sourcePassStatuses: ['succeeded'],
+    representativeRotationDegrees: rotation,
+    representativeProviderOrdinal: 4,
+    memberProviderIds: [`rot${rotation}:provider-line-two-random`],
+    readingOrderSource: 'unresolved-rotated-proposal',
+  };
+}
+
 describe('Kraken native PageLayout adapter', () => {
   it('validates and preserves native geometry, regions, order, and provenance', () => {
     const native = nativeLayout();
@@ -356,6 +401,77 @@ describe('Kraken native PageLayout adapter', () => {
 
     expect(
       krakenNativePageLayoutV2Schema.safeParse(withoutRuntime).success,
+    ).toBe(false);
+  });
+
+  it.each([
+    [90, 'vertical-lr', 'top-to-bottom'],
+    [270, 'vertical-rl', 'bottom-to-top'],
+  ] as const)(
+    'projects a %s-degree recovery line with explicit source direction and no provider order',
+    (rotation, textDirection, expectedDirection) => {
+      const native: any = nativeLayout();
+      native.producer.config.rotationProfile = rotationProfile();
+      Object.assign(native.segmentation.lines[1], {
+        identityVersion: 3,
+        idSource:
+          'derived-source-raster-model-rotation-provider-geometry-v3',
+        providerTextDirection: textDirection,
+        rotationEvidence: rotationEvidence(rotation),
+      });
+
+      expect(krakenNativePageLayoutV2Schema.safeParse(native).success).toBe(true);
+      const adapted = adaptKrakenNativePageLayoutV2(native, {
+        pageId: 'page-1',
+        expectedSourceChecksumSha256: sha('a'),
+      });
+
+      expect(adapted.lines[1]).toMatchObject({
+        id: lineTwoId,
+        providerTextDirection: textDirection,
+        direction: expectedDirection,
+        rotationEvidence: {
+          representativeRotationDegrees: rotation,
+          readingOrderSource: 'unresolved-rotated-proposal',
+        },
+      });
+      expect(adapted.lines[1]).not.toHaveProperty('providerOrdinal');
+      expect(adapted.lines[1]).not.toHaveProperty('sourceLineNumber');
+    },
+  );
+
+  it('fails closed on mismatched rotated identity, direction, and profile values', () => {
+    const mismatchedIdentity: any = nativeLayout();
+    Object.assign(mismatchedIdentity.segmentation.lines[1], {
+      identityVersion: 3,
+      idSource: 'derived-source-raster-model-provider-order-geometry-v2',
+      providerTextDirection: 'vertical-lr',
+      rotationEvidence: rotationEvidence(90),
+    });
+    mismatchedIdentity.producer.config.rotationProfile = rotationProfile();
+    expect(
+      krakenNativePageLayoutV2Schema.safeParse(mismatchedIdentity).success,
+    ).toBe(false);
+
+    const mismatchedDirection: any = nativeLayout();
+    Object.assign(mismatchedDirection.segmentation.lines[1], {
+      identityVersion: 3,
+      idSource:
+        'derived-source-raster-model-rotation-provider-geometry-v3',
+      providerTextDirection: 'vertical-rl',
+      rotationEvidence: rotationEvidence(90),
+    });
+    mismatchedDirection.producer.config.rotationProfile = rotationProfile();
+    expect(
+      krakenNativePageLayoutV2Schema.safeParse(mismatchedDirection).success,
+    ).toBe(false);
+
+    const driftedProfile: any = nativeLayout();
+    driftedProfile.producer.config.rotationProfile = rotationProfile(0);
+    driftedProfile.producer.config.rotationProfile.selectionParameters
+      .verticalAxisToleranceDegrees = 16;
+    expect(
+      krakenNativePageLayoutV2Schema.safeParse(driftedProfile).success,
     ).toBe(false);
   });
 

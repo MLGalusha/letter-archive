@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { pageLayoutRotationEvidenceSchema } from './page-layout-v2.js';
 
 const coordinateSchema = z.number().finite().nonnegative();
 const pointTupleSchema = z.tuple([coordinateSchema, coordinateSchema]);
@@ -127,6 +128,7 @@ export const lineSegmentSchema = z.object({
     'vertical-lr',
     'vertical-rl',
   ]).optional(),
+  rotationEvidence: pageLayoutRotationEvidenceSchema.optional(),
   baseline: z.array(pointTupleSchema).min(2).optional(),
   bbox: bboxSchema,
   bboxSource: z.string().min(1).max(128).optional(),

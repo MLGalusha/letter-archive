@@ -73,6 +73,100 @@ def build_layout(
     )
 
 
+def rotation_segmentations(prefix: str) -> list[Segmentation]:
+    base = Segmentation(
+        type="baselines",
+        imagename="fixture.png",
+        text_direction="horizontal-lr",
+        script_detection=False,
+        lines=[
+            BaselineLine(
+                id=f"{prefix}-base",
+                baseline=[(100, 700), (900, 700)],
+                boundary=[
+                    (100, 688),
+                    (900, 688),
+                    (900, 712),
+                    (100, 712),
+                    (100, 688),
+                ],
+            )
+        ],
+    )
+    rotated_90 = Segmentation(
+        type="baselines",
+        imagename="fixture.png",
+        text_direction="horizontal-lr",
+        script_detection=False,
+        lines=[
+            BaselineLine(
+                id=f"{prefix}-left-{index}",
+                baseline=[(100, native_y), (220, native_y)],
+                boundary=[
+                    (95, native_y - 9),
+                    (225, native_y - 9),
+                    (225, native_y + 9),
+                    (95, native_y + 9),
+                    (95, native_y - 9),
+                ],
+            )
+            for index, native_y in enumerate((799, 739, 679))
+        ],
+    )
+    rotated_270 = Segmentation(
+        type="baselines",
+        imagename="fixture.png",
+        text_direction="horizontal-lr",
+        script_detection=False,
+        lines=[
+            BaselineLine(
+                id=f"{prefix}-right-{index}",
+                baseline=[(1499, native_y), (1379, native_y)],
+                boundary=[
+                    (1504, native_y - 9),
+                    (1374, native_y - 9),
+                    (1374, native_y + 9),
+                    (1504, native_y + 9),
+                    (1504, native_y - 9),
+                ],
+            )
+            for index, native_y in enumerate((700, 760, 820))
+        ],
+    )
+    return [base, rotated_90, rotated_270]
+
+
+class FakeRotationTaskModel:
+    def __init__(
+        self,
+        segmentations: list[Segmentation],
+        *,
+        fail_on_call: int | None = None,
+    ) -> None:
+        self.segmentations = segmentations
+        self.fail_on_call = fail_on_call
+        self.calls: list[tuple[int, int]] = []
+
+    def predict(self, image, _config):
+        self.calls.append(image.size)
+        call_number = len(self.calls)
+        if self.fail_on_call == call_number:
+            raise RuntimeError(f"rotation pass {call_number} failed")
+        return self.segmentations[call_number - 1]
+
+
+def loaded_rotation_model(task_model: FakeRotationTaskModel) -> line_finder.LoadedModel:
+    return line_finder.LoadedModel(
+        task_model=task_model,
+        provenance={
+            "name": "blla.mlmodel",
+            "kind": "test",
+            "sha256": "d" * 64,
+            "sizeBytes": 99,
+        },
+    )
+
+
 class NativeLayoutContractTests(unittest.TestCase):
     def test_invalid_exif_orientation_is_sanitized_to_null(self) -> None:
         image = Image.new("RGB", (20, 10), "white")
@@ -499,6 +593,229 @@ class NativeLayoutContractTests(unittest.TestCase):
         )
 
 
+class RotationProfileTests(unittest.TestCase):
+    def run_profile(
+        self,
+        prefix: str,
+    ) -> tuple[dict, FakeRotationTaskModel]:
+        model = FakeRotationTaskModel(rotation_segmentations(prefix))
+        image = Image.new("RGB", (1_000, 1_600), "white")
+        with patch.object(
+            line_finder,
+            "load_default_model",
+            return_value=loaded_rotation_model(model),
+        ):
+            layout = line_finder.segment_image(
+                image,
+                source=source_fixture(1_000, 1_600),
+                rotations_degrees=[0, 90, 270],
+            )
+        return layout, model
+
+    def test_default_remains_one_pass_and_rotation_preserves_base_line(self) -> None:
+        default_model = FakeRotationTaskModel(rotation_segmentations("same"))
+        image = Image.new("RGB", (1_000, 1_600), "white")
+        with patch.object(
+            line_finder,
+            "load_default_model",
+            return_value=loaded_rotation_model(default_model),
+        ):
+            default_layout = line_finder.segment_image(
+                image,
+                source=source_fixture(1_000, 1_600),
+            )
+
+        rotated_layout, rotated_model = self.run_profile("same")
+
+        self.assertEqual(default_model.calls, [(1_000, 1_600)])
+        self.assertEqual(
+            rotated_model.calls,
+            [(1_000, 1_600), (1_600, 1_000), (1_600, 1_000)],
+        )
+        self.assertNotIn(
+            "rotationProfile",
+            default_layout["producer"]["config"],
+        )
+        self.assertEqual(
+            rotated_layout["segmentation"]["lines"][0],
+            default_layout["segmentation"]["lines"][0],
+        )
+        self.assertEqual(
+            rotated_layout["segmentation"]["lines"][0]["id"],
+            default_layout["segmentation"]["lines"][0]["id"],
+        )
+
+    def test_rotation_profile_appends_only_selected_directional_proposals(
+        self,
+    ) -> None:
+        layout, _ = self.run_profile("directions")
+        lines = layout["segmentation"]["lines"]
+        appended = lines[1:]
+
+        self.assertEqual(len(lines), 7)
+        self.assertEqual(
+            [line["providerTextDirection"] for line in appended],
+            ["vertical-lr"] * 3 + ["vertical-rl"] * 3,
+        )
+        self.assertTrue(
+            all(line["identityVersion"] == 3 for line in appended)
+        )
+        self.assertTrue(
+            all(
+                line["idSource"]
+                == "derived-source-raster-model-rotation-provider-geometry-v3"
+                for line in appended
+            )
+        )
+        self.assertTrue(
+            all(
+                line["providerRegionIds"] == []
+                and line["regionIds"] == []
+                and line["unresolvedProviderRegionIds"] == []
+                for line in appended
+            )
+        )
+        evidence_keys = {
+            "evidenceContract",
+            "mergePolicy",
+            "clusterIndex",
+            "supportCount",
+            "sourceRotationsDegrees",
+            "sourcePassStatuses",
+            "representativeRotationDegrees",
+            "representativeProviderOrdinal",
+            "memberProviderIds",
+            "readingOrderSource",
+        }
+        self.assertTrue(
+            all(set(line["rotationEvidence"]) == evidence_keys for line in appended)
+        )
+        self.assertTrue(
+            all(
+                line["rotationEvidence"]["readingOrderSource"]
+                == "unresolved-rotated-proposal"
+                for line in appended
+            )
+        )
+        self.assertEqual(
+            layout["segmentation"]["readingOrder"]["lineIds"],
+            [line["id"] for line in lines],
+        )
+        profile = layout["producer"]["config"]["rotationProfile"]
+        self.assertEqual(
+            profile,
+            {
+                "name": "sideways-recovery-v1",
+                "evidenceContract": "native-and-source-projected-v2",
+                "rotationsDegrees": [0, 90, 270],
+                "mergePolicy": (
+                    "baseline-plus-nonoverlapping-vertical-zones"
+                ),
+                "coordinateTransform": "pil-pixel-centers-to-source-v1",
+                "selectionParameters": (
+                    line_finder.ROTATION_PROFILE_SELECTION_PARAMETERS
+                ),
+                "selectionSummary": {
+                    "rawInputLineCount": 7,
+                    "inputLineCount": 7,
+                    "clusterCount": 7,
+                    "includedClusterCount": 7,
+                    "rejectedClusterCount": 0,
+                    "appendedRotatedLineCount": 6,
+                },
+            },
+        )
+
+    def test_rotated_ids_ignore_provider_id_drift(self) -> None:
+        first, _ = self.run_profile("provider-run-a")
+        second, _ = self.run_profile("provider-run-b")
+        first_lines = first["segmentation"]["lines"][1:]
+        second_lines = second["segmentation"]["lines"][1:]
+
+        self.assertEqual(
+            [line["id"] for line in first_lines],
+            [line["id"] for line in second_lines],
+        )
+        self.assertNotEqual(
+            [line["providerId"] for line in first_lines],
+            [line["providerId"] for line in second_lines],
+        )
+
+    def test_any_rotation_pass_failure_aborts_the_page(self) -> None:
+        model = FakeRotationTaskModel(
+            rotation_segmentations("failure"),
+            fail_on_call=3,
+        )
+        image = Image.new("RGB", (1_000, 1_600), "white")
+        with (
+            patch.object(
+                line_finder,
+                "load_default_model",
+                return_value=loaded_rotation_model(model),
+            ),
+            self.assertRaisesRegex(RuntimeError, "rotation pass 3 failed"),
+        ):
+            line_finder.segment_image(
+                image,
+                source=source_fixture(1_000, 1_600),
+                rotations_degrees=[0, 90, 270],
+            )
+        self.assertEqual(len(model.calls), 3)
+
+    def test_rotation_profile_rejects_non_horizontal_page_before_inference(
+        self,
+    ) -> None:
+        model = FakeRotationTaskModel(rotation_segmentations("direction"))
+        with (
+            patch.object(
+                line_finder,
+                "load_default_model",
+                return_value=loaded_rotation_model(model),
+            ),
+            self.assertRaisesRegex(ValueError, "requires horizontal-lr"),
+        ):
+            line_finder.segment_image(
+                Image.new("RGB", (1_000, 1_600), "white"),
+                source=source_fixture(1_000, 1_600),
+                text_direction="vertical-lr",
+                rotations_degrees=[0, 90, 270],
+            )
+        self.assertEqual(model.calls, [])
+
+    def test_cli_passes_the_explicit_rotation_profile(self) -> None:
+        layout = {"schemaVersion": 2, "kind": "PageLayout"}
+        stdout = io.StringIO()
+        with (
+            patch.object(
+                line_finder,
+                "find_lines",
+                return_value=(b"normalized", layout),
+            ) as find_lines,
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "line_finder.py",
+                    "fixture.png",
+                    "--native-json",
+                    "--rotations",
+                    "0",
+                    "90",
+                    "270",
+                ],
+            ),
+            redirect_stdout(stdout),
+        ):
+            line_finder.main()
+
+        self.assertEqual(json.loads(stdout.getvalue()), layout)
+        find_lines.assert_called_once_with(
+            "fixture.png",
+            text_direction="horizontal-lr",
+            rotations_degrees=(0, 90, 270),
+        )
+
+
 class NativeWorkerProtocolTests(unittest.TestCase):
     def test_loads_once_isolates_request_errors_and_shuts_down_cleanly(self) -> None:
         layout = {"schemaVersion": 2, "kind": "PageLayout"}
@@ -518,7 +835,8 @@ class NativeWorkerProtocolTests(unittest.TestCase):
                             "type": "detect",
                             "id": "request-success",
                             "imagePath": "fixture.jpg",
-                            "textDirection": "vertical-lr",
+                            "textDirection": "horizontal-lr",
+                            "rotationsDegrees": [0, 90, 270],
                         }
                     ),
                     json.dumps({"type": "shutdown", "id": "shutdown-1"}),
@@ -566,6 +884,7 @@ class NativeWorkerProtocolTests(unittest.TestCase):
             ["ready", "result", "result", "stopped"],
         )
         self.assertEqual(messages[0]["protocol"], line_finder.WORKER_PROTOCOL)
+        self.assertEqual(messages[0]["version"], 2)
         self.assertFalse(messages[1]["ok"])
         self.assertEqual(messages[1]["id"], "request-failure")
         self.assertEqual(messages[1]["error"]["type"], "FileNotFoundError")
@@ -577,8 +896,9 @@ class NativeWorkerProtocolTests(unittest.TestCase):
         self.assertEqual(
             find_lines.call_args_list[1].kwargs,
             {
-                "text_direction": "vertical-lr",
+                "text_direction": "horizontal-lr",
                 "process_mode": "persistent-worker",
+                "rotations_degrees": (0, 90, 270),
             },
         )
 
@@ -629,6 +949,41 @@ class NativeWorkerProtocolTests(unittest.TestCase):
         self.assertFalse(messages[1]["ok"])
         self.assertIn("unknown fields", messages[1]["error"]["message"])
         self.assertEqual(messages[2]["type"], "stopped")
+
+    def test_rotation_request_parsing_is_strict_and_versioned(self) -> None:
+        self.assertEqual(
+            line_finder._parse_worker_detect_request(
+                {
+                    "type": "detect",
+                    "id": "rotated",
+                    "imagePath": "fixture.jpg",
+                    "rotationsDegrees": [0, 90, 270],
+                }
+            ),
+            (
+                "rotated",
+                "fixture.jpg",
+                "horizontal-lr",
+                (0, 90, 270),
+            ),
+        )
+        self.assertEqual(line_finder.WORKER_PROTOCOL_VERSION, 2)
+        for invalid in (
+            [0, 270, 90],
+            [0, 90],
+            [0, 90, 180, 270],
+            [0, 90, True],
+            "0,90,270",
+        ):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                line_finder._parse_worker_detect_request(
+                    {
+                        "type": "detect",
+                        "id": "invalid",
+                        "imagePath": "fixture.jpg",
+                        "rotationsDegrees": invalid,
+                    }
+                )
 
 
 class ImageNormalizationTests(unittest.TestCase):

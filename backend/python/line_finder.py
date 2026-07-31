@@ -11,13 +11,14 @@ versioned ``--worker-native-json`` protocol so the model is loaded only once.
 """
 
 import argparse
+import copy
 import hashlib
 import io
 import json
 import os
 import platform
 import sys
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from functools import lru_cache
 from importlib import resources
 from importlib.metadata import version
@@ -28,6 +29,13 @@ from typing import Any
 from kraken.configs import SegmentationInferenceConfig
 from kraken.tasks import SegmentationTaskModel
 from PIL import Image, ImageDraw
+from rotation_geometry import (
+    COORDINATE_TRANSFORM_VERSION,
+    ROTATION_EVIDENCE_CONTRACT,
+    merge_rotation_passes,
+    rotate_image,
+    validate_merge_selection_parameters,
+)
 
 
 SCHEMA_VERSION = 2
@@ -36,7 +44,32 @@ IDENTITY_VERSION = 1
 IDENTITY_SOURCE = "derived-source-raster-model-provider-order-geometry-v2"
 RASTER_CHECKSUM_ALGORITHM = "sha256-rgb8-v1"
 WORKER_PROTOCOL = "kraken-native-layout-ndjson"
-WORKER_PROTOCOL_VERSION = 1
+WORKER_PROTOCOL_VERSION = 2
+ROTATION_PROFILE_NAME = "sideways-recovery-v1"
+ROTATION_PROFILE_DEGREES = (0, 90, 270)
+ROTATION_PROFILE_MERGE_POLICY = (
+    "baseline-plus-nonoverlapping-vertical-zones"
+)
+ROTATED_IDENTITY_VERSION = 3
+ROTATED_IDENTITY_SOURCE = (
+    "derived-source-raster-model-rotation-provider-geometry-v3"
+)
+ROTATION_DIRECTION = {
+    90: "vertical-lr",
+    270: "vertical-rl",
+}
+ROTATION_PROFILE_SELECTION_PARAMETERS = {
+    "verticalAxisToleranceDegrees": 15,
+    "strongBaselineLongEdgeRatio": 0.025,
+    "zoneJoinPaddingLongEdgeRatio": 0.06,
+    "zoneMemberPaddingLongEdgeRatio": 0.02,
+    "minimumStrongProposalClustersPerZone": 2,
+    "minimumProposalClustersPerZone": 3,
+    "baselineInterferencePaddingLongEdgeRatio": 0,
+    "baselineInterferenceHorizontalAxisToleranceDegrees": 20,
+    "maximumHorizontalBaselineCentroidRatioPerZone": 0.1,
+    "minimumHorizontalBaselineCentroidAllowancePerZone": 2,
+}
 TEXT_DIRECTIONS = (
     "horizontal-lr",
     "horizontal-rl",
@@ -379,6 +412,246 @@ def _persistent_id(prefix: str, value: dict[str, Any]) -> str:
     return f"{prefix}-sha256-{_sha256_bytes(canonical)}"
 
 
+def _rotation_profile_path() -> Path:
+    return (
+        Path(__file__).resolve().parent.parent
+        / "benchmarks"
+        / "layout"
+        / "engine-configs"
+        / "kraken7-rot3-safe-zones.v1.json"
+    )
+
+
+@lru_cache(maxsize=1)
+def _rotation_profile_config() -> dict[str, Any]:
+    """Load and verify the benchmarked sideways-recovery policy."""
+    path = _rotation_profile_path()
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise RuntimeError(
+            f"Unable to load the pinned rotation profile at {path}: {error}"
+        ) from error
+    parameters = value.get("parameters")
+    if not isinstance(parameters, dict):
+        raise RuntimeError("Pinned rotation profile parameters must be an object")
+    rotations = tuple(parameters.get("sourceRotationsDegrees") or ())
+    if rotations != ROTATION_PROFILE_DEGREES:
+        raise RuntimeError(
+            "Pinned rotation profile drifted from the supported "
+            f"{list(ROTATION_PROFILE_DEGREES)} degree sequence"
+        )
+    merge_policy = parameters.get("rotationMergePolicy")
+    if merge_policy != ROTATION_PROFILE_MERGE_POLICY:
+        raise RuntimeError(
+            "Pinned rotation profile merge policy drifted from "
+            f"{ROTATION_PROFILE_MERGE_POLICY!r}"
+        )
+    if parameters.get("requireSuccessfulBaselinePass") is not True:
+        raise RuntimeError(
+            "Pinned rotation profile must require a successful baseline pass"
+        )
+    selection_parameters = parameters.get("selectionParameters")
+    if not isinstance(selection_parameters, dict):
+        raise RuntimeError(
+            "Pinned rotation profile selectionParameters must be an object"
+        )
+    if selection_parameters != ROTATION_PROFILE_SELECTION_PARAMETERS:
+        raise RuntimeError(
+            "Pinned rotation profile selection thresholds drifted from the "
+            "measured sideways-recovery contract"
+        )
+    validate_merge_selection_parameters(
+        ROTATION_PROFILE_MERGE_POLICY,
+        selection_parameters,
+    )
+    return {
+        "rotationsDegrees": list(ROTATION_PROFILE_DEGREES),
+        "mergePolicy": ROTATION_PROFILE_MERGE_POLICY,
+        "selectionParameters": copy.deepcopy(
+            ROTATION_PROFILE_SELECTION_PARAMETERS
+        ),
+    }
+
+
+def _parse_rotations_degrees(value: Any) -> tuple[int, ...] | None:
+    """Accept only the single measured rotation profile for this milestone."""
+    if value is None:
+        return None
+    if not isinstance(value, (list, tuple)):
+        raise ValueError("rotationsDegrees must be an array")
+    if any(
+        not isinstance(rotation, Integral) or isinstance(rotation, bool)
+        for rotation in value
+    ):
+        raise ValueError("rotationsDegrees values must be integers")
+    rotations = tuple(int(rotation) for rotation in value)
+    if rotations != ROTATION_PROFILE_DEGREES:
+        raise ValueError(
+            "rotationsDegrees must be exactly "
+            f"{list(ROTATION_PROFILE_DEGREES)} for {ROTATION_PROFILE_NAME}"
+        )
+    return rotations
+
+
+def _serialize_segmentation_for_rotation(segmentation: Any) -> dict[str, Any]:
+    """Serialize provider-native geometry for deterministic source projection."""
+    lines = []
+    for ordinal, line in enumerate(getattr(segmentation, "lines", None) or []):
+        value = _json_value(asdict(line))
+        value["providerOrdinal"] = ordinal
+        lines.append(value)
+    regions: dict[str, list[dict[str, Any]]] = {}
+    for region_class, provider_regions in (
+        getattr(segmentation, "regions", None) or {}
+    ).items():
+        serialized_regions = []
+        for ordinal, region in enumerate(provider_regions):
+            value = _json_value(asdict(region))
+            value["providerOrdinal"] = ordinal
+            serialized_regions.append(value)
+        regions[str(region_class)] = serialized_regions
+    return {
+        "type": getattr(segmentation, "type", None),
+        "textDirection": getattr(segmentation, "text_direction", None),
+        "scriptDetection": bool(
+            getattr(segmentation, "script_detection", False)
+        ),
+        "lineOrders": _json_value(
+            getattr(segmentation, "line_orders", None)
+        ) or [],
+        "language": _json_value(getattr(segmentation, "language", None)),
+        "regions": regions,
+        "lines": lines,
+    }
+
+
+def _rotation_source_identity(source: dict[str, Any]) -> dict[str, Any]:
+    normalized = source.get("normalized") or {}
+    return {
+        "normalizedRasterSha256": normalized.get("rasterSha256"),
+        "rasterChecksumAlgorithm": normalized.get("rasterChecksumAlgorithm"),
+    }
+
+
+def _rotated_line_geometry(
+    line: dict[str, Any],
+    provider_text_direction: str,
+) -> tuple[dict[str, Any], list[int] | None, str]:
+    line_type = str(line.get("type", "baselines"))
+    if line_type == "bbox":
+        native_bbox = _bbox(line.get("bbox"))
+        return (
+            {
+                "type": "bbox",
+                "bbox": native_bbox,
+                "textDirection": provider_text_direction,
+            },
+            native_bbox,
+            "native-bbox" if native_bbox is not None else "unavailable",
+        )
+    if line_type not in ("baseline", "baselines"):
+        raise ValueError(f"Unsupported Kraken line type: {line_type}")
+    baseline = _points(line.get("baseline"))
+    boundary = _points(line.get("boundary"))
+    extent = _extent_from_points(boundary)
+    extent_source = "derived-boundary-aabb"
+    if extent is None:
+        extent = _extent_from_points(baseline)
+        extent_source = (
+            "derived-baseline-aabb" if extent is not None else "unavailable"
+        )
+    return (
+        {
+            "type": "baselines",
+            "baseline": baseline,
+            "boundary": boundary,
+        },
+        extent,
+        extent_source,
+    )
+
+
+def _serialize_rotated_addition(
+    line: dict[str, Any],
+    *,
+    source: dict[str, Any],
+    model_sha256: str | None,
+    provider_ordinal: int,
+) -> dict[str, Any]:
+    evidence = line.get("ensembleEvidence")
+    if not isinstance(evidence, dict):
+        raise ValueError("Rotated proposal is missing ensemble evidence")
+    rotation = evidence.get("representativeRotationDegrees")
+    if rotation not in ROTATION_DIRECTION:
+        raise ValueError(
+            f"Rotated proposal has unsupported representative rotation {rotation!r}"
+        )
+    provider_text_direction = ROTATION_DIRECTION[rotation]
+    geometry, extent, extent_source = _rotated_line_geometry(
+        line,
+        provider_text_direction,
+    )
+    source_provider_ordinal = evidence.get("representativeProviderOrdinal")
+    if (
+        not isinstance(source_provider_ordinal, Integral)
+        or isinstance(source_provider_ordinal, bool)
+        or int(source_provider_ordinal) < 0
+    ):
+        raise ValueError(
+            "Rotated proposal is missing a valid representative provider ordinal"
+        )
+    persistent_id = _persistent_id(
+        "line",
+        {
+            "identityVersion": ROTATED_IDENTITY_VERSION,
+            "kind": "line",
+            "sourceRaster": _rotation_source_identity(source),
+            "modelSha256": model_sha256,
+            "representativeRotationDegrees": rotation,
+            "sourceProviderOrdinal": int(source_provider_ordinal),
+            "sourceProjectedGeometry": geometry,
+        },
+    )
+    rotation_evidence = {
+        key: copy.deepcopy(evidence[key])
+        for key in (
+            "evidenceContract",
+            "mergePolicy",
+            "clusterIndex",
+            "supportCount",
+            "sourceRotationsDegrees",
+            "sourcePassStatuses",
+            "representativeRotationDegrees",
+            "representativeProviderOrdinal",
+            "memberProviderIds",
+            "readingOrderSource",
+        )
+    }
+    return {
+        "id": persistent_id,
+        "providerId": str(line.get("id")) if line.get("id") is not None else None,
+        "identityVersion": ROTATED_IDENTITY_VERSION,
+        "idSource": ROTATED_IDENTITY_SOURCE,
+        "providerOrdinal": provider_ordinal,
+        "text": line.get("text"),
+        "baseDirection": line.get("base_dir"),
+        "tags": _json_value(line.get("tags")),
+        "providerRegionIds": [],
+        "regionIds": [],
+        "unresolvedProviderRegionIds": [],
+        "language": _json_value(line.get("language")),
+        "providerTextDirection": provider_text_direction,
+        "rotationEvidence": rotation_evidence,
+        "geometry": geometry,
+        "displayExtent": {
+            "bbox": extent,
+            "source": extent_source,
+            "derived": extent_source.startswith("derived-"),
+        },
+    }
+
+
 def _region_references(
     line: Any,
     provider_region_ids: dict[str, str],
@@ -628,10 +901,19 @@ def segment_image(
     source: dict[str, Any] | None = None,
     text_direction: str = "horizontal-lr",
     process_mode: str = "one-shot",
+    rotations_degrees: tuple[int, ...] | list[int] | None = None,
 ) -> dict[str, Any]:
     """Run the Kraken 7 task API and return the native versioned contract."""
     if text_direction not in TEXT_DIRECTIONS:
         raise ValueError(f"Unsupported text direction: {text_direction}")
+    rotations = _parse_rotations_degrees(rotations_degrees)
+    rotation_profile = None
+    if rotations is not None:
+        if text_direction != "horizontal-lr":
+            raise ValueError(
+                f"{ROTATION_PROFILE_NAME} requires horizontal-lr page text"
+            )
+        rotation_profile = _rotation_profile_config()
     loaded = load_default_model()
     config_values = {
         **DEFAULT_INFERENCE_CONFIG,
@@ -656,7 +938,7 @@ def segment_image(
                 "applied": None,
             },
         }
-    return build_page_layout(
+    layout = build_page_layout(
         segmentation,
         img,
         source=source,
@@ -675,6 +957,80 @@ def segment_image(
         process_mode=process_mode,
         execution_observation=execution_observation,
     )
+    if rotations is None:
+        return layout
+
+    if rotation_profile is None:
+        raise AssertionError("Rotation profile preflight did not run")
+    provider_passes = [_serialize_segmentation_for_rotation(segmentation)]
+    for rotation in rotations[1:]:
+        rotated_segmentation = loaded.task_model.predict(
+            rotate_image(img, rotation),
+            config,
+        )
+        provider_passes.append(
+            _serialize_segmentation_for_rotation(rotated_segmentation)
+        )
+    ensemble = merge_rotation_passes(
+        provider_passes,
+        rotations=rotations,
+        source_width=img.width,
+        source_height=img.height,
+        merge_policy=rotation_profile["mergePolicy"],
+        selection_parameters=rotation_profile["selectionParameters"],
+    )
+    if ensemble.get("qualityError") is not None:
+        raise RuntimeError(str(ensemble["qualityError"]["message"]))
+
+    base_lines = layout["segmentation"]["lines"]
+    appended_lines = []
+    for line in ensemble["segmentation"]["lines"]:
+        evidence = line.get("ensembleEvidence")
+        if (
+            not isinstance(evidence, dict)
+            or evidence.get("representativeRotationDegrees") == 0
+        ):
+            continue
+        appended_lines.append(
+            _serialize_rotated_addition(
+                line,
+                source=layout["source"],
+                model_sha256=loaded.provenance.get("sha256"),
+                provider_ordinal=len(base_lines) + len(appended_lines),
+            )
+        )
+    base_lines.extend(appended_lines)
+    layout["segmentation"]["readingOrder"]["lineIds"].extend(
+        line["id"] for line in appended_lines
+    )
+    if appended_lines:
+        for alternate in layout["segmentation"]["alternateReadingOrders"]:
+            alternate["complete"] = False
+
+    ensemble_summary = ensemble["segmentation"]["rotationEnsemble"]
+    layout["producer"]["config"]["rotationProfile"] = {
+        "name": ROTATION_PROFILE_NAME,
+        "evidenceContract": ROTATION_EVIDENCE_CONTRACT,
+        "rotationsDegrees": list(rotations),
+        "mergePolicy": rotation_profile["mergePolicy"],
+        "coordinateTransform": COORDINATE_TRANSFORM_VERSION,
+        "selectionParameters": copy.deepcopy(
+            rotation_profile["selectionParameters"]
+        ),
+        "selectionSummary": {
+            "rawInputLineCount": ensemble_summary["rawInputLineCount"],
+            "inputLineCount": ensemble_summary["inputLineCount"],
+            "clusterCount": ensemble_summary["clusterCount"],
+            "includedClusterCount": ensemble_summary[
+                "includedClusterCount"
+            ],
+            "rejectedClusterCount": ensemble_summary[
+                "rejectedClusterCount"
+            ],
+            "appendedRotatedLineCount": len(appended_lines),
+        },
+    }
+    return layout
 
 
 def draw_overlay(corrected_bytes: bytes, layout: dict[str, Any]) -> bytes:
@@ -714,6 +1070,7 @@ def process_image_bytes(
     *,
     source_name: str | None = None,
     text_direction: str = "horizontal-lr",
+    rotations_degrees: tuple[int, ...] | list[int] | None = None,
 ) -> tuple[bytes, dict[str, Any]]:
     """Process raw image bytes through the Kraken segmentation pipeline.
 
@@ -747,6 +1104,7 @@ def process_image_bytes(
         img,
         source=source,
         text_direction=text_direction,
+        rotations_degrees=rotations_degrees,
     )
     overlay_bytes = draw_overlay(corrected_bytes, layout)
 
@@ -758,6 +1116,7 @@ def find_lines(
     *,
     text_direction: str = "horizontal-lr",
     process_mode: str = "one-shot",
+    rotations_degrees: tuple[int, ...] | list[int] | None = None,
 ) -> tuple[bytes, dict[str, Any]]:
     """Load an image and return normalized bytes plus native page layout.
 
@@ -791,6 +1150,7 @@ def find_lines(
         source=source,
         text_direction=text_direction,
         process_mode=process_mode,
+        rotations_degrees=rotations_degrees,
     )
     return corrected_bytes, layout
 
@@ -815,10 +1175,18 @@ def _worker_request_id(value: Any) -> str | None:
     return request_id if isinstance(request_id, str) and request_id else None
 
 
-def _parse_worker_detect_request(value: Any) -> tuple[str, str, str]:
+def _parse_worker_detect_request(
+    value: Any,
+) -> tuple[str, str, str, tuple[int, ...] | None]:
     if not isinstance(value, dict):
         raise ValueError("Worker request must be a JSON object")
-    unknown = set(value) - {"type", "id", "imagePath", "textDirection"}
+    unknown = set(value) - {
+        "type",
+        "id",
+        "imagePath",
+        "textDirection",
+        "rotationsDegrees",
+    }
     if unknown:
         raise ValueError(
             f"Worker request contains unknown fields: {sorted(unknown)!r}"
@@ -834,7 +1202,8 @@ def _parse_worker_detect_request(value: Any) -> tuple[str, str, str]:
         raise ValueError("Worker imagePath must be a non-empty string")
     if text_direction not in TEXT_DIRECTIONS:
         raise ValueError(f"Unsupported text direction: {text_direction!r}")
-    return request_id, image_path, text_direction
+    rotations = _parse_rotations_degrees(value.get("rotationsDegrees"))
+    return request_id, image_path, text_direction, rotations
 
 
 def run_native_json_worker() -> int:
@@ -891,14 +1260,16 @@ def run_native_json_worker() -> int:
                 )
                 return 0
 
-            request_id, image_path, text_direction = (
+            request_id, image_path, text_direction, rotations = (
                 _parse_worker_detect_request(request)
             )
-            _, layout = find_lines(
-                image_path,
-                text_direction=text_direction,
-                process_mode="persistent-worker",
-            )
+            find_options: dict[str, Any] = {
+                "text_direction": text_direction,
+                "process_mode": "persistent-worker",
+            }
+            if rotations is not None:
+                find_options["rotations_degrees"] = rotations
+            _, layout = find_lines(image_path, **find_options)
             _write_worker_message(
                 {
                     "type": "result",
@@ -951,19 +1322,37 @@ def main() -> None:
         default="horizontal-lr",
         help="Principal page text direction (default: horizontal-lr)",
     )
+    parser.add_argument(
+        "--rotations",
+        nargs=3,
+        type=int,
+        metavar=("BASE", "LEFT", "RIGHT"),
+        help=(
+            "Enable the measured sideways-recovery profile; values must be "
+            "exactly 0 90 270"
+        ),
+    )
     args = parser.parse_args()
 
     if args.worker_native_json:
         if args.image is not None:
             parser.error("--worker-native-json does not accept an image argument")
+        if args.rotations is not None:
+            parser.error(
+                "--worker-native-json accepts rotationsDegrees per request, "
+                "not --rotations"
+            )
         raise SystemExit(run_native_json_worker())
     if args.image is None:
         parser.error("an image path is required outside worker mode")
 
-    corrected_bytes, layout = find_lines(
-        args.image,
-        text_direction=args.text_direction,
-    )
+    find_options: dict[str, Any] = {
+        "text_direction": args.text_direction,
+    }
+    rotations = _parse_rotations_degrees(args.rotations)
+    if rotations is not None:
+        find_options["rotations_degrees"] = rotations
+    corrected_bytes, layout = find_lines(args.image, **find_options)
 
     if args.native_json:
         print(json.dumps(layout, ensure_ascii=False, sort_keys=True))

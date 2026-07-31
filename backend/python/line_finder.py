@@ -1128,22 +1128,40 @@ def draw_overlay(corrected_bytes: bytes, layout: dict[str, Any]) -> bytes:
 
     for line in layout["segmentation"]["lines"]:
         geometry = line["geometry"]
+        is_rotated_proposal = (
+            line.get("rotationEvidence", {}).get("readingOrderSource")
+            == "unresolved-rotated-proposal"
+        )
+        boundary_color = (
+            (217, 70, 239) if is_rotated_proposal else (79, 110, 247)
+        )
+        baseline_color = (
+            (16, 185, 129) if is_rotated_proposal else (245, 158, 11)
+        )
         if geometry["type"] == "baselines":
             boundary = geometry["boundary"]
             if boundary:
                 points = [(point["x"], point["y"]) for point in boundary]
-                draw.line(points + [points[0]], fill=(79, 110, 247), width=2)
+                draw.line(
+                    points + [points[0]],
+                    fill=boundary_color,
+                    width=3 if is_rotated_proposal else 2,
+                )
             baseline = geometry["baseline"]
             if baseline and len(baseline) >= 2:
                 draw.line(
                     [(point["x"], point["y"]) for point in baseline],
-                    fill=(245, 158, 11),
-                    width=2,
+                    fill=baseline_color,
+                    width=3 if is_rotated_proposal else 2,
                 )
         else:
             bbox = geometry["bbox"]
             if bbox:
-                draw.rectangle(bbox, outline=(79, 110, 247), width=2)
+                draw.rectangle(
+                    bbox,
+                    outline=boundary_color,
+                    width=3 if is_rotated_proposal else 2,
+                )
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")

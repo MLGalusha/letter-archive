@@ -31,7 +31,11 @@ const {
   verifyPhotoDescriptionMock,
   unverifyExtraContentMock,
   unverifyPhotoDescriptionMock,
+  getPageGeometryEnvelopeMock,
   savePageLineSegmentsMock,
+  adaptKrakenNativePageLayoutV2Mock,
+  validateStoredPageLayoutMock,
+  savePageLayoutV2Mock,
   updatePageSegmentTrustMock,
   updateLetterSegmentTrustMock,
 } = vi.hoisted(() => ({
@@ -64,7 +68,11 @@ const {
   verifyPhotoDescriptionMock: vi.fn(),
   unverifyExtraContentMock: vi.fn(),
   unverifyPhotoDescriptionMock: vi.fn(),
+  getPageGeometryEnvelopeMock: vi.fn(),
   savePageLineSegmentsMock: vi.fn(),
+  adaptKrakenNativePageLayoutV2Mock: vi.fn(),
+  validateStoredPageLayoutMock: vi.fn(),
+  savePageLayoutV2Mock: vi.fn(),
   updatePageSegmentTrustMock: vi.fn(),
   updateLetterSegmentTrustMock: vi.fn(),
 }));
@@ -151,9 +159,28 @@ vi.mock('../../../services/letter/correspondence-deletion.js', () => ({
 }));
 
 vi.mock('../../../services/line-segments.js', () => ({
+  getPageGeometryEnvelope: getPageGeometryEnvelopeMock,
   savePageLineSegments: savePageLineSegmentsMock,
   updatePageSegmentTrust: updatePageSegmentTrustMock,
   updateLetterSegmentTrust: updateLetterSegmentTrustMock,
+}));
+
+vi.mock('../../../services/kraken-page-layout-adapter.js', async () => {
+  const actual = await vi.importActual<
+    typeof import('../../../services/kraken-page-layout-adapter.js')
+  >('../../../services/kraken-page-layout-adapter.js');
+  return {
+    ...actual,
+    adaptKrakenNativePageLayoutV2: adaptKrakenNativePageLayoutV2Mock,
+  };
+});
+
+vi.mock('../../../services/page-layout.js', () => ({
+  savePageLayoutV2: savePageLayoutV2Mock,
+}));
+
+vi.mock('../../../services/stored-page-layout.js', () => ({
+  validateStoredPageLayout: validateStoredPageLayoutMock,
 }));
 
 vi.mock('../../../services/letters.js', () => ({
@@ -232,12 +259,218 @@ import { sourceRevisionChanged } from '../../../services/letter/source-revision.
 const LETTER_ID = '11111111-1111-4111-8111-111111111111';
 const PAGE_ID = 'collection-009-page-1';
 const PAGE_UUID = '22222222-2222-4222-8222-222222222222';
+const SOURCE_CHECKSUM = 'a'.repeat(64);
+const DETECTOR_RUN_ID = 'run-11111111-1111-4111-8111-111111111111';
+const NATIVE_LINE_ID = `line-sha256-${'1'.repeat(64)}`;
+
+function createNativePageLayout() {
+  return {
+    schemaVersion: 2,
+    kind: 'PageLayout',
+    source: {
+      name: 'page.jpg',
+      coordinateSpace: 'normalized-image-pixels',
+      original: {
+        sha256: SOURCE_CHECKSUM,
+        width: 200,
+        height: 300,
+        mode: 'RGB',
+        exifOrientation: 1,
+      },
+      normalized: {
+        sha256: 'b'.repeat(64),
+        rasterSha256: 'c'.repeat(64),
+        rasterChecksumAlgorithm: 'sha256-rgb8-v1',
+        width: 200,
+        height: 300,
+        mode: 'RGB',
+        format: 'PNG',
+      },
+      normalization: {
+        operation: 'identity',
+        applied: false,
+        exifReadError: false,
+      },
+    },
+    producer: {
+      engine: 'kraken',
+      engineVersion: '7.0.3',
+      api: 'kraken.tasks.SegmentationTaskModel',
+      model: {
+        name: 'blla.mlmodel',
+        kind: 'kraken-package-resource',
+        sha256: 'c'.repeat(64),
+        sizeBytes: 5_000_000,
+      },
+      config: {
+        accelerator: 'cpu',
+        device: 'auto',
+        precision: '32-true',
+        batchSize: 1,
+        raiseOnError: true,
+        numThreads: 1,
+        inputPadding: 0,
+        textDirection: 'horizontal-lr',
+        effective: {
+          accelerator: 'cpu',
+          baseline_ro_fn: {
+            kind: 'python-callable',
+            module: 'kraken.lib.segmentation',
+            qualname: 'polygonal_reading_order',
+          },
+          batch_size: 1,
+          bbox_line_padding: 0,
+          bbox_ro_fn: {
+            kind: 'python-callable',
+            module: 'kraken.lib.segmentation',
+            qualname: 'reading_order',
+          },
+          compile_config: null,
+          device: 'auto',
+          input_padding: 0,
+          legacy_black_colseps: false,
+          legacy_maxcolseps: 2,
+          legacy_no_hlines: true,
+          legacy_scale: null,
+          num_threads: 1,
+          precision: '32-true',
+          raise_on_error: true,
+          text_direction: 'horizontal-lr',
+        },
+      },
+      runtime: {
+        python: {
+          version: '3.12.11',
+          implementation: 'CPython',
+        },
+        platform: {
+          system: 'Linux',
+          release: '6.1.0',
+          machine: 'x86_64',
+        },
+        packages: {
+          kraken: '7.0.3',
+          torch: '2.12.0',
+          pillow: '12.3.0',
+          numpy: '2.4.6',
+          coremltools: '9.0',
+          lightning: '2.6.1',
+          safetensors: '0.7.0',
+          scikitImage: '0.25.2',
+          scikitLearn: '1.7.2',
+          scipy: '1.15.3',
+          shapely: '2.1.2',
+          torchmetrics: '1.9.0',
+          torchvision: '0.27.0',
+        },
+        artifacts: {
+          adapter: {
+            name: 'letter-archive-kraken-native-layout',
+            contractVersion: 2,
+            sha256: 'e'.repeat(64),
+          },
+          constraints: {
+            name: 'constraints-runtime.txt',
+            sha256: 'f'.repeat(64),
+          },
+        },
+        execution: {
+          processMode: 'persistent-worker',
+          accelerator: 'cpu',
+          configuredDevice: 'auto',
+          resolvedDevice: 'cpu',
+          resolutionSource: 'model-parameters',
+          precision: '32-true',
+          modelParameterDevices: ['cpu'],
+          modelParameterDtypes: ['torch.float32'],
+        },
+      },
+    },
+    segmentation: {
+      type: 'baselines',
+      textDirection: 'horizontal-lr',
+      scriptDetection: false,
+      language: null,
+      readingOrder: {
+        source: 'segmentation.lines',
+        lineIds: [NATIVE_LINE_ID],
+      },
+      alternateReadingOrders: [],
+      regions: [],
+      lines: [{
+        id: NATIVE_LINE_ID,
+        providerId: 'provider-line-id',
+        identityVersion: 1,
+        idSource:
+          'derived-source-raster-model-provider-order-geometry-v2',
+        providerOrdinal: 0,
+        text: null,
+        baseDirection: null,
+        tags: null,
+        providerRegionIds: [],
+        regionIds: [],
+        unresolvedProviderRegionIds: [],
+        language: null,
+        geometry: {
+          type: 'baselines',
+          baseline: [
+            { x: 10, y: 30 },
+            { x: 180, y: 32 },
+          ],
+          boundary: [
+            { x: 8, y: 10 },
+            { x: 185, y: 10 },
+            { x: 185, y: 45 },
+            { x: 8, y: 45 },
+            { x: 8, y: 10 },
+          ],
+        },
+        displayExtent: {
+          bbox: [8, 10, 185, 45],
+          source: 'derived-boundary-aabb',
+          derived: true,
+        },
+      }],
+    },
+  };
+}
+
+function createCanonicalPageLayout() {
+  return {
+    schemaVersion: 2,
+    layoutId: `layout-sha256-${'e'.repeat(64)}`,
+    pageId: PAGE_ID,
+    provenance: {
+      model: { checksumSha256: 'c'.repeat(64) },
+    },
+  };
+}
 
 function createStoredPage(overrides: Record<string, unknown> = {}) {
   return {
     id: PAGE_ID,
     storagePath: 'collections/009/19470810/L01/009-19470810-L01-01.jpg',
     lineSegments: [{ id: 10 }],
+    ...overrides,
+  };
+}
+
+const geometryChecksum = 'e'.repeat(64);
+const lineSegmentsChecksum = 'f'.repeat(64);
+
+function createGeometryEnvelope(overrides: Record<string, unknown> = {}) {
+  return {
+    lineSegments: [],
+    geometryRevision: 2,
+    geometryChecksumSha256: geometryChecksum,
+    lineSegmentsChecksumSha256: lineSegmentsChecksum,
+    reviewState: {
+      trustState: 'unverified',
+      approvedGeometryRevision: null,
+      approvedGeometryChecksumSha256: null,
+      approvedBy: null,
+      approvedAt: null,
+    },
     ...overrides,
   };
 }
@@ -264,14 +497,291 @@ function createVerifiedLetterDto(overrides: Record<string, unknown> = {}) {
 describe('admin letters line review route integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    savePageLineSegmentsMock.mockResolvedValue(true);
+    getPageGeometryEnvelopeMock.mockResolvedValue(createGeometryEnvelope());
+    savePageLineSegmentsMock.mockResolvedValue({
+      kind: 'saved',
+      envelope: createGeometryEnvelope(),
+    });
+    updatePageSegmentTrustMock.mockResolvedValue({
+      kind: 'saved',
+      envelope: createGeometryEnvelope(),
+    });
+    adaptKrakenNativePageLayoutV2Mock.mockReturnValue(createCanonicalPageLayout());
+    validateStoredPageLayoutMock.mockReturnValue({ status: 'absent' });
+    savePageLayoutV2Mock.mockResolvedValue({
+      saved: true,
+      checksumSha256: 'd'.repeat(64),
+      lineCount: 1,
+      projectionAction: 'created',
+    });
     updatePageSegmentTrustMock.mockResolvedValue(true);
     updateLetterSegmentTrustMock.mockResolvedValue(true);
   });
 
+  it('validates and saves native Kraken layout against the queued source identity', async () => {
+    const nativePageLayout = createNativePageLayout();
+    findFirstMock.mockResolvedValueOnce({ id: PAGE_ID });
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'PATCH',
+      url: `/letters/pages/${PAGE_ID}/page-layout/kraken`,
+      path: `/letters/pages/${PAGE_ID}/page-layout/kraken`,
+      body: {
+        nativePageLayout,
+        runId: DETECTOR_RUN_ID,
+        primarySourceRevision: 4,
+        sourceChecksum: SOURCE_CHECKSUM,
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(adaptKrakenNativePageLayoutV2Mock).toHaveBeenCalledWith(
+      nativePageLayout,
+      {
+        pageId: PAGE_ID,
+        expectedSourceChecksumSha256: SOURCE_CHECKSUM,
+        runId: DETECTOR_RUN_ID,
+      },
+    );
+    expect(savePageLayoutV2Mock).toHaveBeenCalledWith(
+      PAGE_ID,
+      createCanonicalPageLayout(),
+      {
+        primarySourceRevision: 4,
+        sourceChecksum: SOURCE_CHECKSUM,
+      },
+    );
+    expect(response.body).toEqual({
+      ok: true,
+      layoutId: `layout-sha256-${'e'.repeat(64)}`,
+      pageLayoutChecksumSha256: 'd'.repeat(64),
+      lineCount: 1,
+      projectionAction: 'created',
+    });
+  });
+
+  it('rejects malformed native Kraken output before persistence', async () => {
+    findFirstMock.mockResolvedValueOnce({ id: PAGE_ID });
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'PATCH',
+      url: `/letters/pages/${PAGE_ID}/page-layout/kraken`,
+      path: `/letters/pages/${PAGE_ID}/page-layout/kraken`,
+      body: {
+        nativePageLayout: {
+          ...createNativePageLayout(),
+          unexpectedFlattenedLines: [],
+        },
+        runId: DETECTOR_RUN_ID,
+        primarySourceRevision: 4,
+        sourceChecksum: SOURCE_CHECKSUM,
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(adaptKrakenNativePageLayoutV2Mock).not.toHaveBeenCalled();
+    expect(savePageLayoutV2Mock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      label: 'revision',
+      body: {
+        nativePageLayout: createNativePageLayout(),
+        runId: DETECTOR_RUN_ID,
+        sourceChecksum: SOURCE_CHECKSUM,
+      },
+    },
+    {
+      label: 'checksum',
+      body: {
+        nativePageLayout: createNativePageLayout(),
+        runId: DETECTOR_RUN_ID,
+        primarySourceRevision: 4,
+      },
+    },
+  ])('requires the exact page source $label for native layout writes', async ({ body }) => {
+    findFirstMock.mockResolvedValueOnce({ id: PAGE_ID });
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'PATCH',
+      url: `/letters/pages/${PAGE_ID}/page-layout/kraken`,
+      path: `/letters/pages/${PAGE_ID}/page-layout/kraken`,
+      body,
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(savePageLayoutV2Mock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a detector envelope produced from different source bytes', async () => {
+    findFirstMock.mockResolvedValueOnce({ id: PAGE_ID });
+    const nativePageLayout = createNativePageLayout();
+    nativePageLayout.source.original.sha256 = 'f'.repeat(64);
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'PATCH',
+      url: `/letters/pages/${PAGE_ID}/page-layout/kraken`,
+      path: `/letters/pages/${PAGE_ID}/page-layout/kraken`,
+      body: {
+        nativePageLayout,
+        runId: DETECTOR_RUN_ID,
+        primarySourceRevision: 4,
+        sourceChecksum: SOURCE_CHECKSUM,
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(adaptKrakenNativePageLayoutV2Mock).not.toHaveBeenCalled();
+    expect(savePageLayoutV2Mock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a native layout write if its atomic source/empty-review fence loses', async () => {
+    findFirstMock.mockResolvedValueOnce({ id: PAGE_ID });
+    savePageLayoutV2Mock.mockResolvedValueOnce({
+      saved: false,
+      checksumSha256: 'd'.repeat(64),
+      lineCount: 1,
+      projectionAction: null,
+    });
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'PATCH',
+      url: `/letters/pages/${PAGE_ID}/page-layout/kraken`,
+      path: `/letters/pages/${PAGE_ID}/page-layout/kraken`,
+      body: {
+        nativePageLayout: createNativePageLayout(),
+        runId: DETECTOR_RUN_ID,
+        primarySourceRevision: 4,
+        sourceChecksum: SOURCE_CHECKSUM,
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+  });
+
+  it('returns a stored PageLayout only after schema and checksum validation', async () => {
+    const stored = { schemaVersion: 2, layoutId: 'stored' };
+    const parsed = createCanonicalPageLayout();
+    findFirstMock.mockResolvedValueOnce({
+      id: PAGE_ID,
+      checksumSha256: SOURCE_CHECKSUM,
+      pageLayout: stored,
+      pageLayoutChecksumSha256: 'd'.repeat(64),
+    });
+    validateStoredPageLayoutMock.mockReturnValueOnce({
+      status: 'valid',
+      layout: parsed,
+      checksumSha256: 'd'.repeat(64),
+    });
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'GET',
+      url: `/letters/pages/${PAGE_ID}/page-layout`,
+      path: `/letters/pages/${PAGE_ID}/page-layout`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(validateStoredPageLayoutMock).toHaveBeenCalledWith({
+      id: PAGE_ID,
+      checksumSha256: SOURCE_CHECKSUM,
+      pageLayout: stored,
+      pageLayoutChecksumSha256: 'd'.repeat(64),
+    });
+    expect(response.body).toEqual({
+      pageLayout: parsed,
+      pageLayoutChecksumSha256: 'd'.repeat(64),
+    });
+  });
+
+  it('fails closed when a stored PageLayout is malformed', async () => {
+    findFirstMock.mockResolvedValueOnce({
+      id: PAGE_ID,
+      checksumSha256: SOURCE_CHECKSUM,
+      pageLayout: { malformed: true },
+      pageLayoutChecksumSha256: 'f'.repeat(64),
+    });
+    validateStoredPageLayoutMock.mockReturnValueOnce({
+      status: 'invalid',
+      reason: 'layout schema validation failed',
+    });
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'GET',
+      url: `/letters/pages/${PAGE_ID}/page-layout`,
+      path: `/letters/pages/${PAGE_ID}/page-layout`,
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.body).toMatchObject({
+      error: expect.stringContaining('schema validation'),
+    });
+  });
+
+  it('fails closed when a valid stored PageLayout does not match its checksum', async () => {
+    findFirstMock.mockResolvedValueOnce({
+      id: PAGE_ID,
+      checksumSha256: SOURCE_CHECKSUM,
+      pageLayout: { schemaVersion: 2, layoutId: 'stored' },
+      pageLayoutChecksumSha256: 'f'.repeat(64),
+    });
+    validateStoredPageLayoutMock.mockReturnValueOnce({
+      status: 'invalid',
+      reason: 'layout integrity checksum mismatch',
+    });
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'GET',
+      url: `/letters/pages/${PAGE_ID}/page-layout`,
+      path: `/letters/pages/${PAGE_ID}/page-layout`,
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.body).toMatchObject({
+      error: expect.stringContaining('integrity'),
+    });
+  });
+
+  it('returns an explicit empty PageLayout response before native detection', async () => {
+    findFirstMock.mockResolvedValueOnce({
+      id: PAGE_ID,
+      checksumSha256: SOURCE_CHECKSUM,
+      pageLayout: null,
+      pageLayoutChecksumSha256: null,
+    });
+    validateStoredPageLayoutMock.mockReturnValueOnce({ status: 'absent' });
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'GET',
+      url: `/letters/pages/${PAGE_ID}/page-layout`,
+      path: `/letters/pages/${PAGE_ID}/page-layout`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual({
+      pageLayout: null,
+      pageLayoutChecksumSha256: null,
+    });
+    expect(validateStoredPageLayoutMock).toHaveBeenCalled();
+  });
+
   it('returns stored line segments for a page', async () => {
-    const segments = [{ id: 999, bbox: [1, 2, 3, 4] }];
-    findFirstMock.mockResolvedValueOnce({ lineSegments: segments });
+    const segments = [{
+      id: 'line-1',
+      line: 1,
+      geometryType: 'baseline',
+      baseline: [[1, 2], [3, 4]],
+      bbox: [1, 2, 3, 4],
+      ocrText: 'line',
+    }];
+    getPageGeometryEnvelopeMock.mockResolvedValueOnce(
+      createGeometryEnvelope({ lineSegments: segments }),
+    );
 
     const response = await invokeRouter(lettersRouter, {
       method: 'GET',
@@ -280,11 +790,13 @@ describe('admin letters line review route integration', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.body).toEqual({ lineSegments: segments });
+    expect(response.body).toEqual(
+      createGeometryEnvelope({ lineSegments: segments }),
+    );
   });
 
   it('returns empty array when page has no line segments', async () => {
-    findFirstMock.mockResolvedValueOnce({ lineSegments: null });
+    getPageGeometryEnvelopeMock.mockResolvedValueOnce(createGeometryEnvelope());
 
     const response = await invokeRouter(lettersRouter, {
       method: 'GET',
@@ -293,7 +805,25 @@ describe('admin letters line review route integration', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.body).toEqual({ lineSegments: [] });
+    expect(response.body).toEqual(createGeometryEnvelope());
+  });
+
+  it('fails closed when stored line segments do not satisfy the geometry contract', async () => {
+    getPageGeometryEnvelopeMock.mockRejectedValueOnce(
+      new Error('invalid stored geometry'),
+    );
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'GET',
+      url: `/letters/pages/${PAGE_ID}/line-segments`,
+      path: `/letters/pages/${PAGE_ID}/line-segments`,
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.body).toMatchObject({
+      error: expect.stringContaining('schema validation'),
+      code: 'STORED_LINE_SEGMENTS_INVALID',
+    });
   });
 
   it('saves line segments only against the source revision and checksum the editor loaded', async () => {
@@ -314,6 +844,8 @@ describe('admin letters line review route integration', () => {
         lineSegments,
         primarySourceRevision: 4,
         sourceChecksum: checksum,
+        expectedGeometryRevision: 2,
+        expectedLineSegmentsChecksumSha256: lineSegmentsChecksum,
       },
       headers: { 'content-type': 'application/json' },
     });
@@ -322,13 +854,21 @@ describe('admin letters line review route integration', () => {
     expect(savePageLineSegmentsMock).toHaveBeenCalledWith(
       PAGE_ID,
       lineSegments,
-      { primarySourceRevision: 4, sourceChecksum: checksum },
+      {
+        primarySourceRevision: 4,
+        sourceChecksum: checksum,
+        expectedGeometryRevision: 2,
+        expectedLineSegmentsChecksumSha256: lineSegmentsChecksum,
+      },
+      'admin',
     );
+    expect(response.body).toEqual(createGeometryEnvelope());
   });
 
   it('rejects a stale line-segment write without restoring old geometry', async () => {
-    findFirstMock.mockResolvedValueOnce(createStoredPage());
-    savePageLineSegmentsMock.mockResolvedValueOnce(false);
+    savePageLineSegmentsMock.mockResolvedValueOnce({
+      kind: 'source-conflict',
+    });
 
     const response = await invokeRouter(lettersRouter, {
       method: 'PATCH',
@@ -338,6 +878,8 @@ describe('admin letters line review route integration', () => {
         lineSegments: [],
         primarySourceRevision: 3,
         sourceChecksum: 'b'.repeat(64),
+        expectedGeometryRevision: 2,
+        expectedLineSegmentsChecksumSha256: lineSegmentsChecksum,
       },
       headers: { 'content-type': 'application/json' },
     });
@@ -345,7 +887,121 @@ describe('admin letters line review route integration', () => {
     expect(response.statusCode).toBe(409);
     expect(response.body).toMatchObject({
       error: expect.stringContaining('Page source changed'),
+      code: 'SOURCE_REVISION_CHANGED',
     });
+  });
+
+  it('distinguishes a same-source geometry race from source replacement', async () => {
+    savePageLineSegmentsMock.mockResolvedValueOnce({
+      kind: 'geometry-conflict',
+    });
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'PATCH',
+      url: `/letters/pages/${PAGE_ID}/line-segments`,
+      path: `/letters/pages/${PAGE_ID}/line-segments`,
+      body: {
+        lineSegments: [],
+        primarySourceRevision: 4,
+        sourceChecksum: 'a'.repeat(64),
+        expectedGeometryRevision: 1,
+        expectedLineSegmentsChecksumSha256: lineSegmentsChecksum,
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({
+      error: expect.stringContaining('another editor'),
+      code: 'GEOMETRY_REVISION_CHANGED',
+    });
+  });
+
+  it('distinguishes a same-geometry projection race from a geometry edit', async () => {
+    savePageLineSegmentsMock.mockResolvedValueOnce({
+      kind: 'projection-conflict',
+    });
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'PATCH',
+      url: `/letters/pages/${PAGE_ID}/line-segments`,
+      path: `/letters/pages/${PAGE_ID}/line-segments`,
+      body: {
+        lineSegments: [],
+        primarySourceRevision: 4,
+        sourceChecksum: 'a'.repeat(64),
+        expectedGeometryRevision: 2,
+        expectedLineSegmentsChecksumSha256: lineSegmentsChecksum,
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({
+      error: expect.stringContaining('line-segment data changed'),
+      code: 'LINE_SEGMENTS_CHANGED',
+    });
+  });
+
+  it('tells an old editor to reload when it omits the geometry revision', async () => {
+    const response = await invokeRouter(lettersRouter, {
+      method: 'PATCH',
+      url: `/letters/pages/${PAGE_ID}/line-segments`,
+      path: `/letters/pages/${PAGE_ID}/line-segments`,
+      body: {
+        lineSegments: [],
+        primarySourceRevision: 4,
+        sourceChecksum: 'a'.repeat(64),
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({
+      code: 'GEOMETRY_REVISION_CHANGED',
+    });
+    expect(savePageLineSegmentsMock).not.toHaveBeenCalled();
+  });
+
+  it('tells an old editor to reload when it omits the full projection checksum', async () => {
+    const response = await invokeRouter(lettersRouter, {
+      method: 'PATCH',
+      url: `/letters/pages/${PAGE_ID}/line-segments`,
+      path: `/letters/pages/${PAGE_ID}/line-segments`,
+      body: {
+        lineSegments: [],
+        primarySourceRevision: 4,
+        sourceChecksum: 'a'.repeat(64),
+        expectedGeometryRevision: 2,
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({
+      code: 'LINE_SEGMENTS_CHANGED',
+    });
+    expect(savePageLineSegmentsMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects client-supplied geometry actor provenance', async () => {
+    const response = await invokeRouter(lettersRouter, {
+      method: 'PATCH',
+      url: `/letters/pages/${PAGE_ID}/line-segments`,
+      path: `/letters/pages/${PAGE_ID}/line-segments`,
+      body: {
+        lineSegments: [],
+        primarySourceRevision: 4,
+        sourceChecksum: 'a'.repeat(64),
+        expectedGeometryRevision: 2,
+        expectedLineSegmentsChecksumSha256: lineSegmentsChecksum,
+        createdBy: 'forged-reviewer',
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(savePageLineSegmentsMock).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -354,6 +1010,8 @@ describe('admin letters line review route integration', () => {
       body: {
         lineSegments: [],
         sourceChecksum: 'b'.repeat(64),
+        expectedGeometryRevision: 2,
+        expectedLineSegmentsChecksumSha256: lineSegmentsChecksum,
       },
     },
     {
@@ -361,6 +1019,8 @@ describe('admin letters line review route integration', () => {
       body: {
         lineSegments: [],
         primarySourceRevision: 3,
+        expectedGeometryRevision: 2,
+        expectedLineSegmentsChecksumSha256: lineSegmentsChecksum,
       },
     },
   ])('tells an old editor to reload when its line-segment request omits the source $label', async ({ body }) => {
@@ -382,8 +1042,6 @@ describe('admin letters line review route integration', () => {
   });
 
   it('keeps malformed supplied line-segment source revisions as validation errors', async () => {
-    findFirstMock.mockResolvedValueOnce(createStoredPage());
-
     const response = await invokeRouter(lettersRouter, {
       method: 'PATCH',
       url: `/letters/pages/${PAGE_ID}/line-segments`,
@@ -392,6 +1050,8 @@ describe('admin letters line review route integration', () => {
         lineSegments: [],
         primarySourceRevision: -1,
         sourceChecksum: 'b'.repeat(64),
+        expectedGeometryRevision: 2,
+        expectedLineSegmentsChecksumSha256: lineSegmentsChecksum,
       },
       headers: { 'content-type': 'application/json' },
     });
@@ -401,8 +1061,9 @@ describe('admin letters line review route integration', () => {
   });
 
   it('rejects stale page trust writes through the same source fence', async () => {
-    findFirstMock.mockResolvedValueOnce(createStoredPage());
-    updatePageSegmentTrustMock.mockResolvedValueOnce(false);
+    updatePageSegmentTrustMock.mockResolvedValueOnce({
+      kind: 'source-conflict',
+    });
 
     const response = await invokeRouter(lettersRouter, {
       method: 'PATCH',
@@ -412,11 +1073,62 @@ describe('admin letters line review route integration', () => {
         trustState: 'trusted',
         primarySourceRevision: 3,
         sourceChecksum: 'c'.repeat(64),
+        expectedGeometryRevision: 2,
+        expectedGeometryChecksumSha256: geometryChecksum,
       },
       headers: { 'content-type': 'application/json' },
     });
 
     expect(response.statusCode).toBe(409);
+  });
+
+  it('binds page trust to the exact loaded geometry and server actor', async () => {
+    updatePageSegmentTrustMock.mockResolvedValueOnce({
+      kind: 'saved',
+      envelope: createGeometryEnvelope({
+        reviewState: {
+          trustState: 'trusted',
+          approvedGeometryRevision: 2,
+          approvedGeometryChecksumSha256: geometryChecksum,
+          approvedBy: 'admin',
+          approvedAt: '2026-07-30T12:00:00.000Z',
+        },
+      }),
+    });
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'PATCH',
+      url: `/letters/pages/${PAGE_ID}/segment-trust`,
+      path: `/letters/pages/${PAGE_ID}/segment-trust`,
+      body: {
+        trustState: 'trusted',
+        primarySourceRevision: 4,
+        sourceChecksum: 'a'.repeat(64),
+        expectedGeometryRevision: 2,
+        expectedGeometryChecksumSha256: geometryChecksum,
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(updatePageSegmentTrustMock).toHaveBeenCalledWith(
+      PAGE_ID,
+      'trusted',
+      {
+        primarySourceRevision: 4,
+        sourceChecksum: 'a'.repeat(64),
+        expectedGeometryRevision: 2,
+        expectedGeometryChecksumSha256: geometryChecksum,
+      },
+      'admin',
+    );
+    expect(response.body).toMatchObject({
+      reviewState: {
+        trustState: 'trusted',
+        approvedGeometryRevision: 2,
+        approvedBy: 'admin',
+      },
+    });
   });
 
   it.each([
@@ -425,6 +1137,8 @@ describe('admin letters line review route integration', () => {
       body: {
         trustState: 'trusted',
         sourceChecksum: 'c'.repeat(64),
+        expectedGeometryRevision: 2,
+        expectedGeometryChecksumSha256: geometryChecksum,
       },
     },
     {
@@ -432,6 +1146,8 @@ describe('admin letters line review route integration', () => {
       body: {
         trustState: 'trusted',
         primarySourceRevision: 3,
+        expectedGeometryRevision: 2,
+        expectedGeometryChecksumSha256: geometryChecksum,
       },
     },
   ])('tells an old editor to reload when its page-trust request omits the source $label', async ({ body }) => {
@@ -462,7 +1178,11 @@ describe('admin letters line review route integration', () => {
       body: {
         trustState: 'trusted',
         primarySourceRevision: 4,
-        pages: [{ pageId: PAGE_ID }],
+        pages: [{
+          pageId: PAGE_ID,
+          expectedGeometryRevision: 2,
+          expectedGeometryChecksumSha256: geometryChecksum,
+        }],
       },
     },
   ])('tells an old editor to reload when bulk page trust omits its $label', async ({ body }) => {
@@ -493,7 +1213,12 @@ describe('admin letters line review route integration', () => {
       body: {
         trustState: 'trusted',
         primarySourceRevision: 4,
-        pages: [{ pageId: PAGE_UUID, sourceChecksum }],
+        pages: [{
+          pageId: PAGE_UUID,
+          sourceChecksum,
+          expectedGeometryRevision: 2,
+          expectedGeometryChecksumSha256: geometryChecksum,
+        }],
       },
       headers: { 'content-type': 'application/json' },
     });
@@ -503,7 +1228,13 @@ describe('admin letters line review route integration', () => {
       LETTER_ID,
       'trusted',
       4,
-      [{ pageId: PAGE_UUID, sourceChecksum }],
+      [{
+        pageId: PAGE_UUID,
+        sourceChecksum,
+        expectedGeometryRevision: 2,
+        expectedGeometryChecksumSha256: geometryChecksum,
+      }],
+      'admin',
     );
   });
 

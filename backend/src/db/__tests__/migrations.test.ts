@@ -265,6 +265,45 @@ describe("migration validation", () => {
     );
   });
 
+  it("adds PageLayoutV2 storage as an expand-only, source-paired envelope", () => {
+    const journal = readJournal();
+    const previous = journal.entries.find(
+      (entry) => entry.tag === "0056_repair_extra_content_job_ownership",
+    );
+    const pageLayout = journal.entries.find(
+      (entry) => entry.tag === "0057_add_page_layout_v2",
+    );
+    const sql = readMigrationSql("0057_add_page_layout_v2");
+
+    expect(pageLayout).toBeDefined();
+    expect(pageLayout!.idx).toBe(previous!.idx + 1);
+    expect(sql).toContain('ADD COLUMN "page_layout" jsonb');
+    expect(sql).toContain(
+      'ADD COLUMN "page_layout_checksum_sha256" text',
+    );
+    expect(sql).toContain('ADD CONSTRAINT "page_layout_v2_envelope"');
+    expect(sql).toMatch(
+      /COALESCE\([\s\S]*?"page_layout"->'schemaVersion' = '2'::jsonb,[\s\S]*?false[\s\S]*?\)/,
+    );
+    expect(sql).toContain('ADD CONSTRAINT "page_layout_checksum_valid"');
+    expect(sql).toContain('ADD CONSTRAINT "page_layout_checksum_presence"');
+    expect(sql).toContain('ADD CONSTRAINT "page_layout_page_id_matches_row"');
+    expect(sql).toContain(
+      'ADD CONSTRAINT "page_layout_source_checksum_matches_row"',
+    );
+    expect(sql).toContain(
+      'VALIDATE CONSTRAINT "page_layout_v2_envelope"',
+    );
+    expect(sql).toContain(
+      'VALIDATE CONSTRAINT "page_layout_page_id_matches_row"',
+    );
+    expect(sql).toContain(
+      'VALIDATE CONSTRAINT "page_layout_source_checksum_matches_row"',
+    );
+    expect(sql).not.toMatch(/\bUPDATE\s+"letter_pages"\b/i);
+    expect(sql).not.toMatch(/\bALTER\s+COLUMN\b/i);
+  });
+
   it("orders entity extraction liveness after the ownership rollout boundaries", () => {
     const journal = readJournal();
     const commitBoundary = journal.entries.find(

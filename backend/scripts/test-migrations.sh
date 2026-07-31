@@ -68,6 +68,20 @@ docker exec -i "$CONTAINER_NAME" \
 
 echo "Transcript confirmation guidance rollout regression passed."
 
+docker exec -i "$CONTAINER_NAME" \
+  psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" \
+  < "src/db/__tests__/transcript-identity.sql" \
+  > /dev/null
+
+echo "Transcript identity trigger regression passed."
+
+docker exec -i "$CONTAINER_NAME" \
+  psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" \
+  < "src/db/__tests__/page-recognition-artifacts.sql" \
+  > /dev/null
+
+echo "Page recognition artifact persistence regression passed."
+
 DATABASE_URL="postgres://$DB_USER:$DB_PASS@localhost:$DB_PORT/$DB_NAME" \
   node scripts/test-page-source-boundary.mjs
 

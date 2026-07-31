@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "engineId": "kraken7-rot3-eyno-mask-p0-safe-zones",
+  "adapter": "layout-run-rotation-projection",
+  "adapterVersion": "2",
+  "provider": "letter-archive-rotation-projection",
+  "package": {
+    "name": "letter-archive-rotation-projection",
+    "version": "1"
+  },
+  "execution": {
+    "kind": "host",
+    "timeoutSeconds": 300
+  },
+  "measurementSemantics": {
+    "isolation": "orchestrator-process-pure-geometry",
+    "latency": "source-artifact-verification-plus-deterministic-reprojection",
+    "residentBatchThroughputMeasured": false,
+    "providerTimingSplit": "not-applicable-no-model-inference"
+  },
+  "sourceRuns": {
+    "rotationEvidence": {
+      "role": "rotation-native-evidence",
+      "runId": "kraken7-rot3-eyno-mask-p0-targeted8-20260728",
+      "expectedEngineId": "kraken7-rot3-eyno-mask-p0",
+      "expectedAdapterVersion": "4",
+      "manifestSha256": "ff53a687f03fd12a8b84001cc2eaabc9f3d846142c7aad8d2e5995ef57c227bd",
+      "expectedRotationsDegrees": [
+        0,
+        90,
+        270
+      ]
+    }
+  },
+  "sourceEvidence": {
+    "pageMaskArtifacts": "copy-and-bind-v1"
+  },
+  "parameters": {
+    "sourceRotationsDegrees": [
+      0,
+      90,
+      270
+    ],
+    "rotationMergePolicy": "baseline-plus-nonoverlapping-vertical-zones",
+    "requireSuccessfulBaselinePass": true,
+    "selectionParameters": {
+      "verticalAxisToleranceDegrees": 15,
+      "strongBaselineLongEdgeRatio": 0.025,
+      "zoneJoinPaddingLongEdgeRatio": 0.06,
+      "zoneMemberPaddingLongEdgeRatio": 0.02,
+      "minimumStrongProposalClustersPerZone": 2,
+      "minimumProposalClustersPerZone": 3,
+      "baselineInterferencePaddingLongEdgeRatio": 0,
+      "baselineInterferenceHorizontalAxisToleranceDegrees": 20,
+      "maximumHorizontalBaselineCentroidRatioPerZone": 0.1,
+      "minimumHorizontalBaselineCentroidAllowancePerZone": 2
+    }
+  },
+  "diagnostic": {
+    "equivalentToDefaultProfile": false,
+    "rankable": false,
+    "contractEnforcement": "adapter-enforced-native-reprojection-v2",
+    "reason": "Replays the exact strict Eynollah-mask 0, 90, and 270 degree passes and applies the already-frozen minimum-three-proposal and horizontal-interference gate. This tests page isolation plus sideways-line recovery without permitting the known typed-page explosion."
+  }
+}

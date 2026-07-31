@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
+import { clientPointToSource } from './svgCoordinates';
 
 interface RotateHandleProps {
   boundary: { x: number; y: number }[];
@@ -37,13 +38,14 @@ export default function RotateHandle({
 
   const getSvgCoords = useCallback(
     (e: React.PointerEvent): { x: number; y: number } => {
-      const svg = (e.target as Element).closest('svg');
+      const svg = (e.currentTarget as SVGGraphicsElement).ownerSVGElement;
       if (!svg) return { x: 0, y: 0 };
-      const rect = svg.getBoundingClientRect();
-      return {
-        x: (e.clientX - rect.left) / scaleFactor,
-        y: (e.clientY - rect.top) / scaleFactor,
-      };
+      return clientPointToSource(
+        svg,
+        e.clientX,
+        e.clientY,
+        scaleFactor,
+      );
     },
     [scaleFactor],
   );

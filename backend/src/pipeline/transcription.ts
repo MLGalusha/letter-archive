@@ -15,6 +15,7 @@ import { getAbsoluteStoragePath } from '../services/storage.js';
 import { createLogger } from '../utils/logger.js';
 import { getDocumentTypeFromCode, isTranscribableType } from '../services/letter/shared.js';
 import { runAutomaticExtraContent } from '../services/letter/extra-content.js';
+import { assertPersistableTranscription } from '../ai/openai/transcription-stub.js';
 
 const log = createLogger({ module: 'transcription-pipeline' });
 
@@ -118,7 +119,7 @@ async function executeClaimedTranscription(
           });
 
           results[batchStart + batchOffset] = { text: result.text };
-          stubMode = result.isStub;
+          stubMode ||= result.isStub;
 
           letterLog.debug(
             {
@@ -160,7 +161,7 @@ async function executeClaimedTranscription(
         if (result.text.trim()) {
           pageTranscriptions.push(result.text.replace(/^\n+|\n+$/g, ''));
         }
-        stubMode = result.isStub;
+        stubMode ||= result.isStub;
 
         letterLog.debug(
           {
@@ -192,10 +193,15 @@ async function executeClaimedTranscription(
     const terminalLeaseLoss = stopIfLeaseLost();
     if (terminalLeaseLoss) return terminalLeaseLoss;
 
+    const completion = {
+      text: combinedTranscription,
+      isStub: stubMode,
+    };
+    assertPersistableTranscription(completion);
     const published = await completeTranscription(
       letterId,
       runId,
-      combinedTranscription,
+      completion,
       expectedPrimarySourceRevision,
     );
     if (!published) {

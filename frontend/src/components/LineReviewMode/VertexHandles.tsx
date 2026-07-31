@@ -1,4 +1,5 @@
 import { useCallback, useRef } from 'react';
+import { clientPointToSource } from './svgCoordinates';
 
 interface VertexHandlesProps {
   boundary: { x: number; y: number }[];
@@ -35,11 +36,14 @@ export default function VertexHandles({
       e.preventDefault();
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
 
-      const svg = (e.target as Element).closest('svg');
+      const svg = (e.currentTarget as SVGGraphicsElement).ownerSVGElement;
       if (!svg) return;
-      const rect = svg.getBoundingClientRect();
-      const px = (e.clientX - rect.left) / scaleFactor;
-      const py = (e.clientY - rect.top) / scaleFactor;
+      const { x: px, y: py } = clientPointToSource(
+        svg,
+        e.clientX,
+        e.clientY,
+        scaleFactor,
+      );
 
       // Find nearest vertex to click point
       let nearestIdx = 0;
@@ -99,11 +103,14 @@ export default function VertexHandles({
       if (!dragRef.current) return;
       e.stopPropagation();
 
-      const svg = (e.target as Element).closest('svg');
+      const svg = (e.currentTarget as SVGGraphicsElement).ownerSVGElement;
       if (!svg) return;
-      const svgRect = svg.getBoundingClientRect();
-      const x = (e.clientX - svgRect.left) / scaleFactor;
-      const y = (e.clientY - svgRect.top) / scaleFactor;
+      const { x, y } = clientPointToSource(
+        svg,
+        e.clientX,
+        e.clientY,
+        scaleFactor,
+      );
 
       const { vertexIndex, startBoundary, perimeterDistances, radius } = dragRef.current;
       const orig = startBoundary[vertexIndex];

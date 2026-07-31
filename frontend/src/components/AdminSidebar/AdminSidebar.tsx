@@ -9,6 +9,7 @@ import {
   type NotificationSeverity,
 } from '../../api/admin/notifications';
 import { useNotificationStream } from '../../hooks/useNotificationStream';
+import { layoutBenchmarkEnabled } from '../../config/features';
 import './AdminSidebar.css';
 
 const SEVERITY_RANK: Record<NotificationSeverity, number> = {
@@ -35,6 +36,9 @@ const NAV_SECTIONS: NavSection[] = [
       { label: 'Dashboard', path: '/admin', icon: 'table' },
       { label: 'Content', path: '/admin/content', icon: 'newspaper' },
       { label: 'Processing', path: '/admin/processing', icon: 'process' },
+      ...(layoutBenchmarkEnabled
+        ? [{ label: 'Layout Lab', path: '/admin/layout-benchmark', icon: 'columns' as const }]
+        : []),
       { label: 'Notes', path: '/admin/notes', icon: 'sticky-note' },
       { label: 'Usage', path: '/admin/usage', icon: 'chart' },
       { label: 'Upload', path: '/admin/upload', icon: 'plus' },
@@ -93,11 +97,16 @@ export default function AdminSidebar({ collapsed = false, onToggle, onNavigate }
   const [streamFallback, setStreamFallback] = useState(false);
 
   useEffect(() => {
-    fetchUnread();
+    const initialFetch = window.setTimeout(() => {
+      void fetchUnread();
+    }, 0);
     // Polling runs as a safety net even when SSE is connected (cheap + fast),
     // but backs off to the full interval. If SSE falls back, we keep polling.
     const interval = setInterval(fetchUnread, POLL_INTERVAL);
-    return () => clearInterval(interval);
+    return () => {
+      window.clearTimeout(initialFetch);
+      clearInterval(interval);
+    };
   }, [fetchUnread, streamFallback]);
 
   useNotificationStream({

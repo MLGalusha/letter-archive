@@ -76,6 +76,20 @@
   z-index: 10;
 }
 
+.line-review-direction-badge {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 4px);
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.88);
+  color: #fff;
+  font: 600 10px/1.4 system-ui, sans-serif;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 .line-review-input-overlay .line-review-editable {
   width: 100%;
   height: 100%;
@@ -98,6 +112,52 @@
 .line-review-input-overlay .line-review-editable:focus {
   border-color: #1565c0;
   box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.3);
+}
+
+.line-review-unlocated-editor {
+  position: fixed;
+  left: 50%;
+  bottom: 52px;
+  z-index: 30;
+  width: min(720px, calc(100vw - 112px));
+  padding: 12px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(251, 191, 36, 0.7);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.96);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4);
+}
+
+.line-review-unlocated-heading {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  margin-bottom: 8px;
+  color: #fef3c7;
+  font: 12px/1.4 system-ui, sans-serif;
+}
+
+.line-review-unlocated-heading strong {
+  flex: 0 0 auto;
+  color: #fbbf24;
+}
+
+.line-review-unlocated-editor .line-review-editable {
+  min-height: 46px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  overflow: auto;
+  border: 2px solid #f59e0b;
+  border-radius: 4px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.98);
+  color: #111827;
+  font: 16px/1.45 Georgia, 'Times New Roman', serif;
+  white-space: pre-wrap;
+}
+
+.line-review-unlocated-editor .line-review-editable:focus {
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35);
 }
 
 /* ── Transcript uncertainty markers in line review ── */
@@ -868,6 +928,57 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.seg-editor-save-state,
+.seg-editor-provenance {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.seg-editor-save-state {
+  color: rgba(255, 255, 255, 0.68);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.seg-editor-save-state.is-dirty,
+.seg-editor-save-state.is-saving {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.12);
+}
+
+.seg-editor-save-state.is-saved {
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.seg-editor-save-state.is-conflict,
+.seg-editor-save-state.is-error {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.14);
+}
+
+.seg-editor-provenance {
+  color: rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.seg-editor-provenance.is-human-created {
+  color: #c4b5fd;
+  border-color: rgba(167, 139, 250, 0.42);
+  background: rgba(139, 92, 246, 0.12);
+}
+
+.seg-editor-provenance.is-human-adjusted {
+  color: #93c5fd;
+  border-color: rgba(96, 165, 250, 0.42);
+  background: rgba(59, 130, 246, 0.12);
+}
+
 .seg-editor-action-btn {
   border: none;
   border-radius: 5px;
@@ -906,6 +1017,11 @@
 .seg-editor-verify-btn:hover {
   background: rgba(59, 130, 246, 0.15);
   color: #60a5fa;
+}
+
+.seg-editor-verify-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .seg-editor-verified-info {
@@ -1174,8 +1290,8 @@
   color: #60a5fa;
 }
 
-/* Mapping mode banner */
-.line-review-mapping-banner {
+/* Geometry repair context. This is guidance only, never a mapping mode. */
+.line-review-repair-banner {
   position: fixed;
   bottom: 60px;
   left: 50%;
@@ -1184,25 +1300,26 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  background: rgba(13, 18, 26, 0.92);
-  border: 1px solid rgba(139, 92, 246, 0.4);
+  background: rgba(13, 18, 26, 0.94);
+  border: 1px solid rgba(45, 212, 191, 0.42);
   border-radius: 8px;
-  padding: 8px 16px;
-  max-width: 600px;
+  padding: 8px 12px;
+  max-width: min(760px, calc(100vw - 96px));
   backdrop-filter: blur(8px);
   user-select: none;
 }
 
-.mapping-banner-label {
-  color: rgba(139, 92, 246, 0.9);
+.repair-banner-label {
+  color: rgba(94, 234, 212, 0.95);
   font-size: 12px;
   font-family: var(--font-mono, monospace);
   white-space: nowrap;
   flex-shrink: 0;
 }
 
-.mapping-banner-text {
-  color: rgba(255, 255, 255, 0.8);
+.repair-banner-text {
+  min-width: 0;
+  color: rgba(255, 255, 255, 0.9);
   font-size: 12px;
   font-style: italic;
   overflow: hidden;
@@ -1210,42 +1327,26 @@
   white-space: nowrap;
 }
 
-.mapping-banner-cancel {
-  background: none;
+.repair-banner-hint {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.repair-banner-dismiss {
+  flex-shrink: 0;
+  padding: 2px 8px;
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 4px;
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 11px;
-  font-family: var(--font-mono, monospace);
-  padding: 2px 8px;
+  color: rgba(255, 255, 255, 0.68);
+  background: none;
+  font: 11px var(--font-mono, monospace);
   cursor: pointer;
-  flex-shrink: 0;
-  transition: color 0.15s, border-color 0.15s;
 }
 
-.mapping-banner-cancel:hover {
-  color: rgba(255, 255, 255, 0.9);
-  border-color: rgba(255, 255, 255, 0.3);
-}
-
-/* Mapping mode segment styles */
-.segment-editor-rect.seg-mappable,
-.segment-editor-poly.seg-mappable {
-  fill: rgba(139, 92, 246, 0.2);
-  stroke: rgba(139, 92, 246, 0.9);
-  stroke-width: 2.5;
-  animation: seg-mappable-pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes seg-mappable-pulse {
-  0%, 100% { fill: rgba(139, 92, 246, 0.15); }
-  50% { fill: rgba(139, 92, 246, 0.3); }
-}
-
-.segment-editor-rect.seg-dimmed,
-.segment-editor-poly.seg-dimmed {
-  opacity: 0.2;
-  pointer-events: none;
+.repair-banner-dismiss:hover {
+  color: rgba(255, 255, 255, 0.95);
+  border-color: rgba(255, 255, 255, 0.32);
 }
 
 /* Reshape mode active toolbar button */

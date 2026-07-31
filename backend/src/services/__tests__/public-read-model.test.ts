@@ -13,6 +13,9 @@ function makeLetter(overrides: Partial<FrontendLetter> = {}): FrontendLetter {
     title: 'Secret title from Alice to Bob',
     collectionCode: '009',
     primarySourceRevision: 0,
+    transcriptRevision: 0,
+    transcriptChecksumSha256:
+      'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
     images: [{
       id: 'page-1',
       type: 'letter',
@@ -25,6 +28,8 @@ function makeLetter(overrides: Partial<FrontendLetter> = {}): FrontendLetter {
         bbox: [0, 0, 1, 1],
         ocrText: 'private OCR',
       }],
+      pageLayout: { schemaVersion: 2 } as never,
+      pageLayoutChecksumSha256: 'a'.repeat(64),
       segmentTrustState: 'trusted',
     }],
     transcript: {
@@ -188,6 +193,8 @@ describe('public letter read model', () => {
     }
     expect(result.images[0]).not.toHaveProperty('originalFilename');
     expect(result.images[0]).not.toHaveProperty('lineSegments');
+    expect(result.images[0]).not.toHaveProperty('pageLayout');
+    expect(result.images[0]).not.toHaveProperty('pageLayoutChecksumSha256');
     expect(result.metadata).not.toHaveProperty('notes');
     expect(result.metadata).not.toHaveProperty('taggedHook');
     expect(result.metadata).not.toHaveProperty('verifiedBy');

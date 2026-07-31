@@ -235,19 +235,17 @@ describe('page source invalidation', () => {
           line: 1,
           bbox: [0, 0, 1, 1],
         }],
-        segmentTrustState: 'unverified',
         updatedAt: expect.any(Date),
       },
+    );
+    expect(updateSetMock.mock.calls[1]?.[0]).not.toHaveProperty(
+      'segmentTrustState',
+    );
+    expect(updateSetMock.mock.calls[1]?.[0]).not.toHaveProperty(
+      'approvedGeometryRevision',
     );
     expect(updateSetMock).toHaveBeenNthCalledWith(
       3,
-      {
-        segmentTrustState: 'unverified',
-        updatedAt: expect.any(Date),
-      },
-    );
-    expect(updateSetMock).toHaveBeenNthCalledWith(
-      4,
       expect.objectContaining({
         visibility: 'HIDDEN',
         reviewedAt: null,
@@ -256,7 +254,7 @@ describe('page source invalidation', () => {
       }),
     );
     expect(updateSetMock).toHaveBeenNthCalledWith(
-      5,
+      4,
       expect.objectContaining({
         profileRevision: expect.objectContaining({ kind: 'sql' }),
         profileStatus: expect.objectContaining({ kind: 'sql' }),

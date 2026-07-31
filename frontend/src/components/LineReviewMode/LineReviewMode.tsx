@@ -7,23 +7,28 @@ import {
   forwardRef,
   useImperativeHandle,
 } from 'react';
-import { getErrorMessage, getImageUrl } from '../../api/client';
+import { ApiError, getErrorMessage, getImageUrl } from '../../api/client';
 import {
-  getPageLineSegments,
+  getPageGeometry,
   savePageLineSegments,
-  updateLetterSegmentTrust,
+  updatePageSegmentTrust,
+  type PageGeometryEnvelope,
+  type PageGeometryReviewState,
 } from '../../api/admin/letters';
 import type { Letter, LineSegment, LineSegmentWord, SpecialArea } from '../../types/Letter';
-import { toLineSegments, useSegmentEditor } from '../../hooks/useSegmentEditor';
+import {
+  lineSegmentsSignature,
+  useSegmentEditor,
+} from '../../hooks/useSegmentEditor';
 import SegmentEditorOverlay from './SegmentEditorOverlay';
 import SegmentContextMenu from './SegmentContextMenu';
-import { constrainedGrouping, eastEdgeY, westEdgeY } from '../../utils/constrainedGrouping';
-import { matchTranscriptToLines, type MatchedLine } from '../../utils/transcriptMatcher';
 import {
-  alignTranscriptToVisualLines,
-  type AlignmentInput,
-  type AlignedLine,
-} from '../../utils/lineAlignment';
+  buildProductionReviewLines,
+  type ProductionReviewLine as AlignedLine,
+} from './productionAlignmentView';
+import {
+  useProductionTranscriptAlignment,
+} from './useProductionTranscriptAlignment';
 import { useToast } from '../../contexts/ToastContext';
 import { highlightTranscriptMarkers } from '../../utils/transcriptHighlight';
 import {
@@ -34,7 +39,6 @@ import {
   measureRenderedTextWidth,
   mergeEditedTextWithOriginalSpacing,
   normalizeReviewLineText,
-  reconstructTranscript,
   splitTranscriptByPage,
 } from './lineReviewUtils';
 import './LineReviewMode.css';
@@ -47,19 +51,20 @@ interface LineReviewModeProps {
   onAutoSave: (data: { transcriptionText: string }) => void;
   handleMutationError: (error: unknown, fallback: string) => boolean;
   mutationsBlocked?: boolean;
+  navigationPending?: boolean;
   debugMode?: boolean;
   onDebugModeChange?: (debugMode: boolean) => void;
   initialPageIndex?: number;
   /** When true, renders as full-viewport takeover (no admin header/sidebar visible). */
   fullViewport?: boolean;
-  /** Text to map to a segment — entering mapping mode. */
-  mappingText?: string;
-  /** Called when a mapping is completed (segment ID + text). */
-  onMappingComplete?: () => void;
+  /** Transcript context for a geometry repair. Does not enter mapping mode. */
+  repairText?: string;
 }
 
 export interface LineReviewModeHandle {
   saveCurrentLine: () => void;
+  flushPendingChanges: () => Promise<boolean>;
+  hasPendingChanges: () => boolean;
   reloadSegments: () => void;
   isLoading: boolean;
 }
@@ -67,9 +72,55 @@ export interface LineReviewModeHandle {
 interface SegmentSaveState {
   page: Letter['images'][number];
   letterPageIndex: number;
-  revision: number;
+  editRevision: number;
   isDirty: boolean;
   getSegmentsForSave: () => LineSegment[];
+}
+
+type GeometrySaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'conflict' | 'error';
+
+interface PageGeometryState {
+  geometryRevision: number;
+  geometryChecksumSha256: string;
+  lineSegmentsChecksumSha256: string;
+  reviewState: PageGeometryReviewState;
+}
+
+function geometryFailureStatus(error: unknown): GeometrySaveStatus {
+  if (
+    error instanceof ApiError
+    && error.code === 'SOURCE_REVISION_CHANGED'
+  ) {
+    return 'error';
+  }
+  if (
+    error instanceof ApiError
+    && (
+      error.status === 409
+      || error.code === 'GEOMETRY_REVISION_CHANGED'
+      || error.code === 'LINE_SEGMENTS_CHANGED'
+    )
+  ) {
+    return 'conflict';
+  }
+  return 'error';
+}
+
+function geometrySaveStatusLabel(status: GeometrySaveStatus): string {
+  switch (status) {
+    case 'dirty':
+      return 'Unsaved changes';
+    case 'saving':
+      return 'Saving…';
+    case 'saved':
+      return 'Saved';
+    case 'conflict':
+      return 'Newer edits exist — reload';
+    case 'error':
+      return 'Save failed';
+    default:
+      return 'Ready';
+  }
 }
 
 /**
@@ -186,16 +237,18 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   onAutoSave,
   handleMutationError,
   mutationsBlocked = false,
+  navigationPending = false,
   debugMode: debugLines = false,
   onDebugModeChange,
   initialPageIndex,
   fullViewport = false,
-  mappingText,
-  onMappingComplete,
+  repairText,
 }: LineReviewModeProps, ref) {
   const { showToast } = useToast();
   const mutationsBlockedRef = useRef(mutationsBlocked);
+  const navigationPendingRef = useRef(navigationPending);
   mutationsBlockedRef.current = mutationsBlocked;
+  navigationPendingRef.current = navigationPending;
 
   // All images (letter + extra content) for page navigation
   const allPages = useMemo(() => letter.images, [letter.images]);
@@ -243,8 +296,8 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   // AI-detected line segments per page (cached across page switches)
   // Keyed by letter-page index (not allPages index)
   // undefined = not attempted, null = in progress, LineSegment[] = done
-  const [aiSegmentsMap, setAiSegmentsMap] = useState<Record<number, AlignmentInput[] | null | undefined>>(() => {
-    const initial: Record<number, AlignmentInput[] | null | undefined> = {};
+  const [aiSegmentsMap, setAiSegmentsMap] = useState<Record<number, LineSegment[] | null | undefined>>(() => {
+    const initial: Record<number, LineSegment[] | null | undefined> = {};
     letterPages.forEach((page, index) => {
       if (Array.isArray(page.lineSegments)) {
         initial[index] = page.lineSegments;
@@ -266,8 +319,6 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
   // Debug overlay layer toggles
   const [showKrakenLines, setShowKrakenLines] = useState(true);
-  const [showGroupedLines, setShowGroupedLines] = useState(true);
-  const [showUnifiedLines, setShowUnifiedLines] = useState(false);
   const [showExcludedContent, setShowExcludedContent] = useState(false);
 
   // Raw Kraken line segments per page (for debug overlay, never reconciled)
@@ -281,12 +332,96 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     return initial;
   });
 
+  const [geometryStateMap, setGeometryStateMap] = useState<Record<string, PageGeometryState>>(() => {
+    const initial: Record<string, PageGeometryState> = {};
+    for (const page of letterPages) {
+      initial[page.id] = {
+        geometryRevision: page.geometryRevision ?? 0,
+        geometryChecksumSha256: page.geometryChecksumSha256 ?? '',
+        lineSegmentsChecksumSha256:
+          page.lineSegmentsChecksumSha256 ?? '',
+        reviewState: {
+          trustState: page.segmentTrustState ?? 'unverified',
+          approvedGeometryRevision: page.segmentTrustState === 'trusted'
+            ? page.geometryRevision ?? 0
+            : null,
+          approvedGeometryChecksumSha256: page.segmentTrustState === 'trusted'
+            ? page.geometryChecksumSha256 ?? null
+            : null,
+          approvedBy: null,
+          approvedAt: null,
+        },
+      };
+    }
+    return initial;
+  });
+  const geometryStateRef = useRef(geometryStateMap);
+  geometryStateRef.current = geometryStateMap;
+  const alignmentGeometryExpectations = useMemo(
+    () => letterPages.map((page) => {
+      const geometry = geometryStateMap[page.id];
+      return {
+        pageId: page.id,
+        geometryRevision: geometry?.geometryRevision ?? 0,
+        geometryChecksumSha256:
+          geometry?.geometryChecksumSha256 ?? '',
+        lineSegmentsChecksumSha256:
+          geometry?.lineSegmentsChecksumSha256 ?? '',
+      };
+    }),
+    [geometryStateMap, letterPages],
+  );
+  const {
+    envelope: productionAlignment,
+    status: productionAlignmentStatus,
+    error: productionAlignmentError,
+    refresh: refreshProductionAlignment,
+  } = useProductionTranscriptAlignment(
+    letter.id,
+    primarySourceRevision,
+    letter.transcriptRevision,
+    letter.transcriptChecksumSha256,
+    alignmentGeometryExpectations,
+  );
+  const [geometrySaveStatusMap, setGeometrySaveStatusMap] = useState<
+    Record<string, GeometrySaveStatus>
+  >({});
+
+  const applyGeometryEnvelope = useCallback((
+    pageId: string,
+    letterPageIndex: number,
+    envelope: PageGeometryEnvelope,
+  ) => {
+    const nextState: PageGeometryState = {
+      geometryRevision: envelope.geometryRevision,
+      geometryChecksumSha256: envelope.geometryChecksumSha256,
+      lineSegmentsChecksumSha256: envelope.lineSegmentsChecksumSha256,
+      reviewState: envelope.reviewState,
+    };
+    geometryStateRef.current = {
+      ...geometryStateRef.current,
+      [pageId]: nextState,
+    };
+    setGeometryStateMap((previous) => ({
+      ...previous,
+      [pageId]: nextState,
+    }));
+    setAiSegmentsMap((previous) => ({
+      ...previous,
+      [letterPageIndex]: envelope.lineSegments,
+    }));
+    setKrakenSegmentsMap((previous) => ({
+      ...previous,
+      [letterPageIndex]: envelope.lineSegments,
+    }));
+  }, []);
+
   // Segment editor — admin controls for editing Kraken segments
   const currentKrakenSegments = useMemo(
     () => (currentLetterPageIndex !== undefined ? krakenSegmentsMap[currentLetterPageIndex] ?? [] : []),
     [krakenSegmentsMap, currentLetterPageIndex],
   );
-  const segmentEditor = useSegmentEditor(currentKrakenSegments);
+  const segmentEditor = useSegmentEditor(currentKrakenSegments, imageNaturalSize);
 
   // Keep a render-current save snapshot outside async callback closures. A
   // slow save may finish after another segment edit, so only the revision it
@@ -294,23 +429,27 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   const segmentEditRevisionRef = useRef(0);
   const previousSegmentEditRef = useRef<{
     pageId: string | null;
-    segments: typeof segmentEditor.editedSegments;
+    projectionSignature: string;
   }>({
     pageId: null,
-    segments: segmentEditor.editedSegments,
+    projectionSignature: '',
   });
   const currentSegmentPage = currentLetterPageIndex === undefined
     ? undefined
     : letterPages[currentLetterPageIndex];
   const currentSegmentPageId = currentSegmentPage?.id ?? null;
+  const currentSegmentProjectionSignature = lineSegmentsSignature(
+    segmentEditor.getSegmentsForSave(),
+  );
   if (
     previousSegmentEditRef.current.pageId !== currentSegmentPageId
-    || previousSegmentEditRef.current.segments !== segmentEditor.editedSegments
+    || previousSegmentEditRef.current.projectionSignature
+      !== currentSegmentProjectionSignature
   ) {
     segmentEditRevisionRef.current += 1;
     previousSegmentEditRef.current = {
       pageId: currentSegmentPageId,
-      segments: segmentEditor.editedSegments,
+      projectionSignature: currentSegmentProjectionSignature,
     };
   }
   const latestSegmentSaveStateRef = useRef<SegmentSaveState | null>(null);
@@ -319,7 +458,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     ? {
         page: currentSegmentPage,
         letterPageIndex: currentLetterPageIndex,
-        revision: segmentEditRevisionRef.current,
+        editRevision: segmentEditRevisionRef.current,
         isDirty: segmentEditor.isDirty,
         getSegmentsForSave: segmentEditor.getSegmentsForSave,
       }
@@ -328,6 +467,14 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     pageId: string;
     promise: Promise<boolean>;
   } | null>(null);
+  const [geometryApprovalPending, setGeometryApprovalPending] = useState(false);
+  const geometryApprovalPendingRef = useRef(false);
+  const geometryApprovalTokenRef = useRef(0);
+  const [segmentReloadPending, setSegmentReloadPending] = useState(false);
+  const segmentReloadPendingRef = useRef(false);
+  const segmentReloadTokenRef = useRef(0);
+  const segmentTransitionPendingRef = useRef(false);
+  const geometryEditingLockedRef = useRef(false);
 
   // Sync segment editor when source segments change (page switch or redetect)
   const lastSourceRef = useRef<LineSegment[] | undefined>(currentKrakenSegments);
@@ -338,14 +485,13 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     }
   }, [currentKrakenSegments, segmentEditor]);
 
-  // Mapping mode: auto-enter segment edit mode when mapping text provided
-  const [mappingActive, setMappingActive] = useState(!!mappingText);
+  const [repairContextVisible, setRepairContextVisible] = useState(!!repairText);
   useEffect(() => {
-    if (mappingText) {
-      setMappingActive(true);
+    setRepairContextVisible(!!repairText);
+    if (repairText) {
       segmentEditor.setSegmentEditMode(true);
     }
-  }, [mappingText]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [repairText]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-enter segment edit mode when opened with unverified segments
   useEffect(() => {
@@ -373,92 +519,16 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     }
   }, [segmentEditor.selectedSegmentId]);
 
-  const handleMappingClick = useCallback(
-    (segId: string) => {
-      if (mutationsBlockedRef.current) return;
-      if (!mappingActive || !mappingText) return;
-      const seg = segmentEditor.editedSegments.find((s) => s._id === segId);
-      if (!seg) return;
-      // Only map to special segments (continuation/addition)
-      const cls = seg.segmentClass;
-      if (cls !== 'continuation' && cls !== 'addition') return;
-
-      if (currentLetterPageIndex === undefined) return;
-      const page = letterPages[currentLetterPageIndex];
-      if (!page) return;
-
-      const segments = toLineSegments(segmentEditor.editedSegments.map((segment) => (
-        segment._id === segId
-          ? { ...segment, isMapped: true, mappedText: mappingText }
-          : segment
-      )));
-      segmentEditor.mapSegment(segId, mappingText);
-
-      void savePageLineSegments(page.id, segments, sourceExpectation(page)).then(() => {
-        segmentEditor.markSaved();
-        setMappingActive(false);
-        onMappingComplete?.();
-      }).catch((error) => {
-        handleMutationError(error, 'Failed to save segment mapping');
-      });
-    },
-    [
-      mappingActive,
-      mappingText,
-      segmentEditor,
-      currentLetterPageIndex,
-      letterPages,
-      onMappingComplete,
-      handleMutationError,
-      sourceExpectation,
-    ],
-  );
-
   // Detection progress steps (shown in loading overlay for current page)
 
-  // Per-page raw text (preserves all whitespace including blank lines)
-  const [pageRawTexts, setPageRawTexts] = useState<string[]>(() => {
-    return splitTranscriptByPage(transcript, letterPages.length);
-  });
-
-  // Non-blank line indices per page — maps aligned line index to raw line index
-  const pageNonBlankMap = useMemo(() => {
-    return pageRawTexts.map((raw) => {
-      const allLines = raw.split('\n');
-      const indices: number[] = [];
-      allLines.forEach((line, i) => {
-        if (line.trim().length > 0) indices.push(i);
-      });
-      return indices;
-    });
-  }, [pageRawTexts]);
-
-  // Non-blank lines per page (for alignment and display)
-  const pageLineTexts = useMemo(() => {
-    return pageRawTexts.map((raw) =>
-      raw.split('\n').filter((l) => l.trim().length > 0),
-    );
-  }, [pageRawTexts]);
-
-  // Unified pipeline: attach words, constrained grouping, transcript matching
-  // Only runs for letter pages (non-letter pages have no detection data)
-  const pipelineResult = useMemo(() => {
-    if (currentLetterPageIndex === undefined) return null;
-    const rawSegments = krakenSegmentsMap[currentLetterPageIndex] ?? [];
-
-    // Filter out excluded segments before grouping
-    const activeSegments = rawSegments.filter(s => !s.excluded);
-    if (activeSegments.length === 0) return null;
-
-    // Phase 1: Constrained grouping
-    const { lines: groupedLines, marginalSegments } = constrainedGrouping(activeSegments);
-
-    // Phase 2: Match transcript to grouped lines
-    const transcriptLines = pageLineTexts[currentLetterPageIndex] ?? [];
-    const matchResult = matchTranscriptToLines(transcriptLines, groupedLines);
-
-    return { groupedLines, marginalSegments, matchResult };
-  }, [krakenSegmentsMap, currentLetterPageIndex, pageLineTexts]);
+  // Keep the exact full transcript because backend sourceLineNumber addresses
+  // physical lines in this authoritative string, including page markers,
+  // decorative numbers, and blank lines.
+  const [workingTranscript, setWorkingTranscript] = useState(transcript);
+  const pageRawTexts = useMemo(
+    () => splitTranscriptByPage(workingTranscript, letterPages.length),
+    [workingTranscript, letterPages.length],
+  );
 
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -468,15 +538,122 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   const [liveFontSize, setLiveFontSize] = useState<number | null>(null);
 
   const currentPage = allPages[currentPageIndex];
+  const productionPageById = useMemo(
+    () => new Map(
+      (productionAlignment?.pages ?? []).map((page) => [page.pageId, page]),
+    ),
+    [productionAlignment],
+  );
+  const currentProductionPage = currentPage
+    ? productionPageById.get(currentPage.id)
+    : undefined;
 
-  // Local trust state tracking (mirrors server, updated on verify/unverify)
-  const [trustOverrides, setTrustOverrides] = useState<Record<string, 'trusted' | 'unverified'>>({});
-  // Letter-level trust: treat verified if ANY page in the letter is trusted (verify is a letter-level action)
-  const currentPageTrusted = letterPages.length > 0 && letterPages.some(p => {
-    const override = trustOverrides[p.id];
-    if (override !== undefined) return override === 'trusted';
-    return p.segmentTrustState === 'trusted';
-  });
+  // The production envelope carries the same revision-bound geometry used by
+  // its mappings. Adopt it for the editor only when there is no local draft;
+  // an alignment response can never erase unsaved human work.
+  useEffect(() => {
+    if (productionAlignmentStatus !== 'ready' || !productionAlignment) return;
+    productionAlignment.pages.forEach((alignmentPage) => {
+      const letterPageIndex = letterPages.findIndex(
+        (page) => page.id === alignmentPage.pageId,
+      );
+      if (letterPageIndex < 0) return;
+      const activeDraft = latestSegmentSaveStateRef.current;
+      if (
+        activeDraft?.page.id === alignmentPage.pageId
+        && activeDraft.isDirty
+      ) {
+        return;
+      }
+      const existingSegments = krakenSegmentsMap[letterPageIndex];
+      const existingGeometry = geometryStateRef.current[alignmentPage.pageId];
+      if (
+        existingGeometry
+        && (
+          alignmentPage.geometry.geometryRevision
+            < existingGeometry.geometryRevision
+          || (
+            alignmentPage.geometry.geometryRevision
+              === existingGeometry.geometryRevision
+            && (
+              (
+                existingGeometry.geometryChecksumSha256.length > 0
+                && alignmentPage.geometry.geometryChecksumSha256
+                  !== existingGeometry.geometryChecksumSha256
+              )
+              || (
+                existingGeometry.lineSegmentsChecksumSha256.length > 0
+                && alignmentPage.geometry.lineSegmentsChecksumSha256
+                  !== existingGeometry.lineSegmentsChecksumSha256
+              )
+            )
+          )
+        )
+      ) {
+        return;
+      }
+      if (
+        existingSegments !== undefined
+        && existingGeometry?.geometryRevision
+          === alignmentPage.geometry.geometryRevision
+        && existingGeometry.lineSegmentsChecksumSha256
+          === alignmentPage.geometry.lineSegmentsChecksumSha256
+      ) {
+        return;
+      }
+      applyGeometryEnvelope(
+        alignmentPage.pageId,
+        letterPageIndex,
+        alignmentPage.geometry,
+      );
+    });
+  }, [
+    productionAlignment,
+    productionAlignmentStatus,
+    letterPages,
+    krakenSegmentsMap,
+    applyGeometryEnvelope,
+  ]);
+
+  const currentGeometryState = currentPage
+    ? geometryStateMap[currentPage.id]
+    : undefined;
+  const currentPageTrusted = Boolean(
+    currentGeometryState
+    && !segmentEditor.isDirty
+    && currentGeometryState.reviewState.trustState === 'trusted'
+    && currentGeometryState.reviewState.approvedGeometryRevision
+      === currentGeometryState.geometryRevision
+    && currentGeometryState.reviewState.approvedGeometryChecksumSha256
+      === currentGeometryState.geometryChecksumSha256,
+  );
+  const geometryEditingLocked = (
+    currentPageTrusted
+    || geometryApprovalPending
+    || segmentReloadPending
+    || navigationPending
+  );
+  geometryEditingLockedRef.current = geometryEditingLocked;
+  const currentGeometrySaveStatus: GeometrySaveStatus = currentPage
+    ? geometrySaveStatusMap[currentPage.id] ?? (segmentEditor.isDirty ? 'dirty' : 'idle')
+    : 'idle';
+  const selectedGeometryProvenance = segmentEditor.editedSegments.find(
+    (segment) => segment._id === segmentEditor.selectedSegmentId,
+  )?.geometryProvenance;
+  const selectedGeometryLabel = selectedGeometryProvenance?.source === 'human-created'
+    ? 'Human-created'
+    : selectedGeometryProvenance?.source === 'human-adjusted'
+      ? 'Human-adjusted'
+      : 'Machine outline';
+
+  useEffect(() => {
+    if (!currentSegmentPageId || !segmentEditor.isDirty) return;
+    setGeometrySaveStatusMap((previous) => (
+      previous[currentSegmentPageId] === 'dirty'
+        ? previous
+        : { ...previous, [currentSegmentPageId]: 'dirty' }
+    ));
+  }, [currentSegmentPageId, segmentEditor.isDirty, segmentEditor.editedSegments]);
 
   // Reset image sizes and zoom when switching pages so overlay doesn't render
   // at stale positions from the previous page's dimensions
@@ -495,21 +672,27 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     if (aiSegmentsMap[lpIdx] !== undefined) return; // already cached
     if (aiSegmentsMap[lpIdx] === null) return; // fetch in progress
 
-    const pageText = pageLineTexts[lpIdx]?.join('\n') || '';
+    const pageText = pageRawTexts[lpIdx] ?? '';
     if (!pageText.trim()) return;
 
     setAiSegmentsMap(prev => ({ ...prev, [lpIdx]: null }));
 
-    getPageLineSegments(currentPage.id)
-      .then(segments => {
-        setAiSegmentsMap(prev => ({ ...prev, [lpIdx]: segments }));
-        setKrakenSegmentsMap(prev => ({ ...prev, [lpIdx]: segments }));
+    getPageGeometry(currentPage.id)
+      .then((envelope) => {
+        applyGeometryEnvelope(currentPage.id, lpIdx, envelope);
       })
       .catch((err) => {
         setAiSegmentsMap(prev => ({ ...prev, [lpIdx]: [] }));
         showToast(getErrorMessage(err, 'Failed to load segments'), 'error');
       });
-  }, [currentPage, currentLetterPageIndex, aiSegmentsMap, pageLineTexts, showToast]);
+  }, [
+    currentPage,
+    currentLetterPageIndex,
+    aiSegmentsMap,
+    pageRawTexts,
+    showToast,
+    applyGeometryEnvelope,
+  ]);
 
   // Background pre-fetch: load segments for upcoming pages.
   useEffect(() => {
@@ -521,16 +704,15 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       const idx = (((currentLetterPageIndex ?? -1) + 1 + i) % letterPages.length);
       if (aiSegmentsMap[idx] !== undefined || aiSegmentsMap[idx] === null) continue;
 
-      const pageText = pageLineTexts[idx]?.join('\n') || '';
+      const pageText = pageRawTexts[idx] ?? '';
       if (!pageText.trim()) continue;
 
       const page = letterPages[idx];
       setAiSegmentsMap(prev => ({ ...prev, [idx]: null }));
 
-      getPageLineSegments(page.id)
-        .then(segments => {
-          setAiSegmentsMap(prev => ({ ...prev, [idx]: segments }));
-          setKrakenSegmentsMap(prev => ({ ...prev, [idx]: segments }));
+      getPageGeometry(page.id)
+        .then((envelope) => {
+          applyGeometryEnvelope(page.id, idx, envelope);
         })
         .catch(() => {
           setAiSegmentsMap(prev => ({ ...prev, [idx]: [] }));
@@ -538,48 +720,90 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
       break;
     }
-  }, [aiSegmentsMap, currentLetterPageIndex, letterPages, pageLineTexts]);
+  }, [
+    aiSegmentsMap,
+    currentLetterPageIndex,
+    letterPages,
+    pageRawTexts,
+    applyGeometryEnvelope,
+  ]);
 
-  // Whether we're still waiting for AI detection for the current letter page
-  const isLoading = currentLetterPageIndex !== undefined && aiSegmentsMap[currentLetterPageIndex] === null;
+  // Geometry and transcript placement have separate owners. Transcript review
+  // waits for both; segment editing may continue to use loaded geometry.
+  const geometryIsLoading = currentLetterPageIndex !== undefined
+    && aiSegmentsMap[currentLetterPageIndex] === null;
+  const alignmentIsLoading = productionAlignmentStatus === 'loading';
+  const isLoading = geometryIsLoading || alignmentIsLoading;
   const imageReady = imageNaturalSize.width > 0;
   const onLetterPage = currentLetterPageIndex !== undefined;
 
-  // Compute aligned lines for current page (empty for non-letter pages)
-  const alignedLines: AlignedLine[] = useMemo(() => {
-    if (!currentPage || !onLetterPage || currentLetterPageIndex === undefined) return [];
-    if (isLoading) return []; // AI detection in progress — show spinner, no lines yet
-    const transcriptLines = pageLineTexts[currentLetterPageIndex] ?? [];
-    const pageText = transcriptLines.join('\n');
-
-    const aiResult = aiSegmentsMap[currentLetterPageIndex];
-    if (aiResult && aiResult.length > 0) {
-      return alignTranscriptToVisualLines(pageText, aiResult);
+  // Backend mappings are the only transcript-placement source. Geometry is
+  // resolved by stable segment IDs; response array order is never trusted.
+  const alignmentView = useMemo<{
+    lines: AlignedLine[];
+    error: Error | null;
+  }>(() => {
+    if (
+      !currentPage
+      || !onLetterPage
+      || currentLetterPageIndex === undefined
+      || productionAlignmentStatus !== 'ready'
+    ) {
+      return { lines: [], error: null };
     }
-
-    // No Kraken segments — don't fall back to pixel detection
-    return [];
-  }, [currentPage, currentLetterPageIndex, onLetterPage, pageLineTexts, aiSegmentsMap, isLoading]);
-  const hasTranscriptLinesOnPage = onLetterPage && currentLetterPageIndex !== undefined
-    && (pageLineTexts[currentLetterPageIndex]?.length ?? 0) > 0;
+    if (!currentProductionPage) {
+      return {
+        lines: [],
+        error: new Error('This letter page is missing from transcript placement'),
+      };
+    }
+    try {
+      return {
+        lines: buildProductionReviewLines(
+          currentProductionPage,
+          currentProductionPage.mappings.reduce<string[]>(
+            (lines, mapping) => {
+              lines[mapping.transcriptLineIndex] =
+                workingTranscript.split('\n')[mapping.sourceLineNumber - 1]
+                ?? mapping.transcriptText;
+              return lines;
+            },
+            [],
+          ),
+        ),
+        error: null,
+      };
+    } catch (error) {
+      return {
+        lines: [],
+        error: error instanceof Error
+          ? error
+          : new Error('Transcript placement could not be displayed'),
+      };
+    }
+  }, [
+    currentPage,
+    currentLetterPageIndex,
+    currentProductionPage,
+    onLetterPage,
+    productionAlignmentStatus,
+    workingTranscript,
+  ]);
+  const alignedLines = alignmentView.lines;
+  const currentAlignmentError = productionAlignmentError
+    ?? alignmentView.error;
+  const hasTranscriptLinesOnPage = onLetterPage
+    && (currentProductionPage?.mappings.length ?? 0) > 0;
 
   // Only expose currentLine when the image for this page has loaded,
   // so overlays never render at positions scaled from a previous page's dimensions
   const currentLine = imageReady ? alignedLines[currentLineIndex] : undefined;
   // Line counts per letter page (indexed by letter page index)
   const pageLineCounts = useMemo(
-    () => letterPages.map((_page, idx) => {
-      const pageText = pageLineTexts[idx]?.join('\n') || '';
-      const transcriptLineCount = pageText.split('\n').filter((l) => l.trim().length > 0).length;
-      const aiSegs = aiSegmentsMap[idx];
-
-      if (aiSegs && aiSegs.length > 0) {
-        return alignTranscriptToVisualLines(pageText, aiSegs).length;
-      }
-
-      return transcriptLineCount;
-    }),
-    [letterPages, pageLineTexts, aiSegmentsMap],
+    () => letterPages.map((page) => (
+      productionPageById.get(page.id)?.mappings.length ?? 0
+    )),
+    [letterPages, productionPageById],
   );
 
   const totalLines = useMemo(
@@ -707,7 +931,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     return () => container.removeEventListener('wheel', handleWheel);
   }, [fitHeight, clampPan]);
 
-  const canPanZoomedImage = fitHeight && fitZoom > 1 && (!segmentEditor.segmentEditMode || drawTool === 'select');
+  const canPanZoomedImage = fitHeight && fitZoom > 1 && !segmentEditor.segmentEditMode;
 
   // Pan handlers for fit-height zoom
   const handlePanMouseDown = useCallback((e: React.MouseEvent) => {
@@ -768,6 +992,21 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   }, []);
 
   // Save current line text and trigger auto-save (only if user actually edited)
+  const hasPendingCurrentLineChanges = useCallback(() => {
+    if (!inputRef.current || currentLetterPageIndex === undefined) {
+      return false;
+    }
+    const currentAligned = alignedLines[currentLineIndex];
+    if (!currentAligned) return false;
+
+    return normalizeReviewLineText(inputRef.current.textContent || '')
+      !== normalizeReviewLineText(currentAligned.transcriptText);
+  }, [
+    alignedLines,
+    currentLetterPageIndex,
+    currentLineIndex,
+  ]);
+
   const saveCurrentLine = useCallback(() => {
     if (mutationsBlockedRef.current) return;
     if (!inputRef.current || currentLetterPageIndex === undefined) return;
@@ -783,36 +1022,43 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     // intentionally independent from transcript spacing.
     if (newText === originalNormalized) return;
 
-    // Use the tracked transcript line index (not the visual line index)
-    const updated = [...pageRawTexts];
-    const rawLines = updated[currentLetterPageIndex].split('\n');
-    const transcriptIdx = currentAligned.transcriptLineIndex;
-    if (transcriptIdx >= 0) {
-      const rawLineIndex = pageNonBlankMap[currentLetterPageIndex]?.[transcriptIdx];
-      if (rawLineIndex === undefined) return;
-      rawLines[rawLineIndex] = mergeEditedTextWithOriginalSpacing(originalText, newText);
-    } else {
-      const insertionIndex = alignedLines
-        .slice(0, currentLineIndex)
-        .filter((line) => line.transcriptLineIndex >= 0)
-        .length;
-      const rawInsertIndex = pageNonBlankMap[currentLetterPageIndex]?.[insertionIndex] ?? rawLines.length;
-      rawLines.splice(rawInsertIndex, 0, newText);
-    }
-    updated[currentLetterPageIndex] = rawLines.join('\n');
-
-    setPageRawTexts(updated);
+    // sourceLineNumber is the backend's authoritative, one-based physical
+    // line address in the exact full transcript. Never infer it again from
+    // page-local nonblank lines or geometry order.
+    const fullLines = workingTranscript.split('\n');
+    const rawLineIndex = currentAligned.sourceLineNumber - 1;
+    if (rawLineIndex < 0 || rawLineIndex >= fullLines.length) return;
+    fullLines[rawLineIndex] = mergeEditedTextWithOriginalSpacing(
+      fullLines[rawLineIndex],
+      newText,
+    );
+    const fullText = fullLines.join('\n');
+    setWorkingTranscript(fullText);
 
     // Flush parent updates synchronously so exiting review mode does not
     // discard the line edit before the child unmounts.
-    const fullText = reconstructTranscript(updated);
     onTranscriptChange(fullText);
     onAutoSave({ transcriptionText: fullText });
-  }, [currentLetterPageIndex, currentLineIndex, alignedLines, pageNonBlankMap, onTranscriptChange, onAutoSave, pageRawTexts]);
+  }, [
+    currentLetterPageIndex,
+    currentLineIndex,
+    alignedLines,
+    onTranscriptChange,
+    onAutoSave,
+    workingTranscript,
+  ]);
 
-  // Auto-save segment edits (no trust state change)
-  const autoSaveSegments = useCallback((): Promise<boolean> => {
-    if (mutationsBlockedRef.current) return Promise.resolve(false);
+  // Save edits as a new immutable page-geometry revision. The expected
+  // revision prevents a stale browser tab from overwriting another reviewer.
+  const autoSaveSegments = useCallback((
+    failureFallback = 'Failed to save segment edits',
+  ): Promise<boolean> => {
+    if (
+      mutationsBlockedRef.current
+      || geometryApprovalPendingRef.current
+    ) {
+      return Promise.resolve(false);
+    }
     const initialState = latestSegmentSaveStateRef.current;
     if (!initialState) return Promise.resolve(true);
 
@@ -825,10 +1071,32 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     const targetPageId = initialState.page.id;
     const targetLetterPageIndex = initialState.letterPageIndex;
     const targetSourceExpectation = sourceExpectation(initialState.page);
+    let expectedGeometryRevision = geometryStateRef.current[targetPageId]?.geometryRevision;
+    let expectedLineSegmentsChecksumSha256 =
+      geometryStateRef.current[targetPageId]?.lineSegmentsChecksumSha256;
+    if (
+      expectedGeometryRevision === undefined
+      || !expectedLineSegmentsChecksumSha256
+    ) {
+      setGeometrySaveStatusMap((previous) => ({
+        ...previous,
+        [targetPageId]: 'error',
+      }));
+      return Promise.resolve(false);
+    }
 
     const flushPromise = (async () => {
+      setGeometrySaveStatusMap((previous) => ({
+        ...previous,
+        [targetPageId]: 'saving',
+      }));
       while (true) {
-        if (mutationsBlockedRef.current) return false;
+        if (
+          mutationsBlockedRef.current
+          || geometryApprovalPendingRef.current
+        ) {
+          return false;
+        }
         const state = latestSegmentSaveStateRef.current;
         if (
           !state
@@ -838,18 +1106,32 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           return false;
         }
 
-        const savedRevision = state.revision;
+        const savedEditRevision = state.editRevision;
         const segments = state.getSegmentsForSave();
+        let envelope: PageGeometryEnvelope;
         try {
-          await savePageLineSegments(
+          envelope = await savePageLineSegments(
             targetPageId,
             segments,
-            targetSourceExpectation,
+            {
+              ...targetSourceExpectation,
+              expectedGeometryRevision,
+              expectedLineSegmentsChecksumSha256,
+            },
           );
         } catch (err) {
-          handleMutationError(err, 'Failed to save segment edits');
+          setGeometrySaveStatusMap((previous) => ({
+            ...previous,
+            [targetPageId]: geometryFailureStatus(err),
+          }));
+          handleMutationError(err, failureFallback);
           return false;
         }
+        expectedGeometryRevision = envelope.geometryRevision;
+        expectedLineSegmentsChecksumSha256 =
+          envelope.lineSegmentsChecksumSha256;
+        lastSourceRef.current = envelope.lineSegments;
+        applyGeometryEnvelope(targetPageId, targetLetterPageIndex, envelope);
 
         const latestState = latestSegmentSaveStateRef.current;
         if (
@@ -862,26 +1144,26 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
         // Another edit landed while the request was in flight. Persist that
         // newer snapshot before allowing the page or mode to change.
-        if (latestState.revision !== savedRevision) {
+        if (latestState.editRevision !== savedEditRevision) {
+          setGeometrySaveStatusMap((previous) => ({
+            ...previous,
+            [targetPageId]: 'saving',
+          }));
           continue;
         }
 
-        // Update lastSourceRef BEFORE mutating the maps so the sync effect
-        // doesn't treat our own save as an external source replacement.
-        lastSourceRef.current = segments;
-        setKrakenSegmentsMap((prev) => ({
-          ...prev,
-          [targetLetterPageIndex]: segments,
-        }));
-        setAiSegmentsMap((prev) => ({
-          ...prev,
-          [targetLetterPageIndex]: segments,
-        }));
         latestSegmentSaveStateRef.current = {
           ...latestState,
           isDirty: false,
         };
-        segmentEditor.markSaved();
+        segmentEditor.markSaved(envelope.lineSegments);
+        setGeometrySaveStatusMap((previous) => ({
+          ...previous,
+          [targetPageId]: 'saved',
+        }));
+        // A geometry revision changes the aligner's exact input identity.
+        // Wait for its new stable-ID mapping before navigation can resume.
+        await refreshProductionAlignment();
         return true;
       }
     })();
@@ -907,12 +1189,14 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     handleMutationError,
     segmentEditor,
     sourceExpectation,
+    applyGeometryEnvelope,
+    refreshProductionAlignment,
   ]);
 
   // Auto-save on a debounced timer when dirty
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (mutationsBlocked) {
+    if (mutationsBlocked || segmentReloadPending) {
       if (autoSaveTimerRef.current) {
         clearTimeout(autoSaveTimerRef.current);
         autoSaveTimerRef.current = null;
@@ -930,71 +1214,217 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   }, [
     autoSaveSegments,
     mutationsBlocked,
+    segmentReloadPending,
     segmentEditor.editedSegments,
     segmentEditor.isDirty,
   ]);
 
-  // Verify segments — mark ALL letter pages as trusted (letter-level, not per-page)
+  // Approve the exact current revision for this page only.
   const handleVerifySegments = useCallback(async () => {
-    if (mutationsBlockedRef.current) return;
-    // Save any pending changes first
+    if (
+      mutationsBlockedRef.current
+      || geometryApprovalPendingRef.current
+      || segmentReloadPendingRef.current
+      || segmentTransitionPendingRef.current
+    ) {
+      return;
+    }
     if (segmentEditor.isDirty && !(await autoSaveSegments())) return;
-    if (!letterPages.length) return;
-    try {
-      await updateLetterSegmentTrust(
-        letter.id,
-        'trusted',
-        primarySourceRevision,
-        letterPages.map((page) => ({
-          pageId: page.id,
-          sourceChecksum: page.sourceChecksum ?? null,
-        })),
+    // Multiple clicks can wait on the same segment save. Re-check ownership
+    // after the await so only one approval request can acquire the page.
+    if (
+      mutationsBlockedRef.current
+      || geometryApprovalPendingRef.current
+      || segmentReloadPendingRef.current
+      || segmentTransitionPendingRef.current
+      || !currentPage
+      || currentLetterPageIndex === undefined
+    ) {
+      return;
+    }
+    const latestPage = latestSegmentSaveStateRef.current;
+    if (
+      latestPage?.page.id !== currentPage.id
+      || latestPage.letterPageIndex !== currentLetterPageIndex
+    ) {
+      return;
+    }
+    const targetPageId = currentPage.id;
+    const targetLetterPageIndex = currentLetterPageIndex;
+    const geometryState = geometryStateRef.current[targetPageId];
+    if (!geometryState?.geometryChecksumSha256) {
+      handleMutationError(
+        new Error('This page has no saved geometry revision to approve'),
+        'This page has no saved geometry revision to approve',
       );
-      setTrustOverrides(prev => {
-        const next = { ...prev };
-        for (const p of letterPages) next[p.id] = 'trusted';
-        return next;
-      });
+      return;
+    }
+    const token = geometryApprovalTokenRef.current + 1;
+    geometryApprovalTokenRef.current = token;
+    geometryApprovalPendingRef.current = true;
+    setGeometryApprovalPending(true);
+    setContextMenu(null);
+    setGeometrySaveStatusMap((previous) => ({
+      ...previous,
+      [targetPageId]: 'saving',
+    }));
+    try {
+      const envelope = await updatePageSegmentTrust(
+        targetPageId,
+        'trusted',
+        {
+          ...sourceExpectation(currentPage),
+          expectedGeometryRevision: geometryState.geometryRevision,
+          expectedGeometryChecksumSha256: geometryState.geometryChecksumSha256,
+        },
+      );
+      const latestSaveState = latestSegmentSaveStateRef.current;
+      const latestGeometryState = geometryStateRef.current[targetPageId];
+      const responseIsCurrent = (
+        geometryApprovalTokenRef.current === token
+        && geometryApprovalPendingRef.current
+        && !mutationsBlockedRef.current
+        && latestSaveState?.page.id === targetPageId
+        && latestSaveState.letterPageIndex === targetLetterPageIndex
+        && latestGeometryState?.geometryRevision === geometryState.geometryRevision
+        && latestGeometryState.geometryChecksumSha256 === geometryState.geometryChecksumSha256
+        && latestGeometryState.lineSegmentsChecksumSha256
+          === geometryState.lineSegmentsChecksumSha256
+        && envelope.geometryRevision === geometryState.geometryRevision
+        && envelope.geometryChecksumSha256 === geometryState.geometryChecksumSha256
+        && envelope.lineSegmentsChecksumSha256
+          === geometryState.lineSegmentsChecksumSha256
+      );
+      if (responseIsCurrent) {
+        lastSourceRef.current = envelope.lineSegments;
+        applyGeometryEnvelope(
+          targetPageId,
+          targetLetterPageIndex,
+          envelope,
+        );
+        setGeometrySaveStatusMap((previous) => ({
+          ...previous,
+          [targetPageId]: 'saved',
+        }));
+      } else if (geometryApprovalTokenRef.current === token) {
+        setGeometrySaveStatusMap((previous) => ({
+          ...previous,
+          [targetPageId]: 'conflict',
+        }));
+      }
     } catch (err) {
-      handleMutationError(err, 'Failed to verify segments');
+      if (geometryApprovalTokenRef.current === token) {
+        setGeometrySaveStatusMap((previous) => ({
+          ...previous,
+          [targetPageId]: geometryFailureStatus(err),
+        }));
+        handleMutationError(err, 'Failed to verify segments');
+      }
+    } finally {
+      if (geometryApprovalTokenRef.current === token) {
+        geometryApprovalPendingRef.current = false;
+        setGeometryApprovalPending(false);
+      }
     }
   }, [
     segmentEditor,
-    letterPages,
     autoSaveSegments,
     handleMutationError,
-    letter.id,
-    primarySourceRevision,
+    currentPage,
+    currentLetterPageIndex,
+    sourceExpectation,
+    applyGeometryEnvelope,
   ]);
 
-  // Unverify segments — unlock editor for ALL letter pages
+  // Reopen this page for editing while retaining its approved revision in history.
   const handleUnverifySegments = useCallback(async () => {
-    if (mutationsBlockedRef.current) return;
-    if (!letterPages.length) return;
+    if (
+      mutationsBlockedRef.current
+      || geometryApprovalPendingRef.current
+      || segmentReloadPendingRef.current
+      || segmentTransitionPendingRef.current
+    ) {
+      return;
+    }
+    if (!currentPage || currentLetterPageIndex === undefined) return;
+    const targetPageId = currentPage.id;
+    const targetLetterPageIndex = currentLetterPageIndex;
+    const geometryState = geometryStateRef.current[targetPageId];
+    if (!geometryState?.geometryChecksumSha256) return;
+    const token = geometryApprovalTokenRef.current + 1;
+    geometryApprovalTokenRef.current = token;
+    geometryApprovalPendingRef.current = true;
+    setGeometryApprovalPending(true);
+    setContextMenu(null);
+    setGeometrySaveStatusMap((previous) => ({
+      ...previous,
+      [targetPageId]: 'saving',
+    }));
     try {
-      await updateLetterSegmentTrust(
-        letter.id,
+      const envelope = await updatePageSegmentTrust(
+        targetPageId,
         'unverified',
-        primarySourceRevision,
-        letterPages.map((page) => ({
-          pageId: page.id,
-          sourceChecksum: page.sourceChecksum ?? null,
-        })),
+        {
+          ...sourceExpectation(currentPage),
+          expectedGeometryRevision: geometryState.geometryRevision,
+          expectedGeometryChecksumSha256: geometryState.geometryChecksumSha256,
+        },
       );
-      setTrustOverrides(prev => {
-        const next = { ...prev };
-        for (const p of letterPages) next[p.id] = 'unverified';
-        return next;
-      });
-      setLockHintVisible(false);
+      const latestSaveState = latestSegmentSaveStateRef.current;
+      const latestGeometryState = geometryStateRef.current[targetPageId];
+      const responseIsCurrent = (
+        geometryApprovalTokenRef.current === token
+        && geometryApprovalPendingRef.current
+        && !mutationsBlockedRef.current
+        && latestSaveState?.page.id === targetPageId
+        && latestSaveState.letterPageIndex === targetLetterPageIndex
+        && latestGeometryState?.geometryRevision === geometryState.geometryRevision
+        && latestGeometryState.geometryChecksumSha256 === geometryState.geometryChecksumSha256
+        && latestGeometryState.lineSegmentsChecksumSha256
+          === geometryState.lineSegmentsChecksumSha256
+        && envelope.geometryRevision === geometryState.geometryRevision
+        && envelope.geometryChecksumSha256 === geometryState.geometryChecksumSha256
+        && envelope.lineSegmentsChecksumSha256
+          === geometryState.lineSegmentsChecksumSha256
+      );
+      if (responseIsCurrent) {
+        lastSourceRef.current = envelope.lineSegments;
+        applyGeometryEnvelope(
+          targetPageId,
+          targetLetterPageIndex,
+          envelope,
+        );
+        setGeometrySaveStatusMap((previous) => ({
+          ...previous,
+          [targetPageId]: 'saved',
+        }));
+        setLockHintVisible(false);
+      } else if (geometryApprovalTokenRef.current === token) {
+        setGeometrySaveStatusMap((previous) => ({
+          ...previous,
+          [targetPageId]: 'conflict',
+        }));
+      }
     } catch (err) {
-      handleMutationError(err, 'Failed to unverify segments');
+      if (geometryApprovalTokenRef.current === token) {
+        setGeometrySaveStatusMap((previous) => ({
+          ...previous,
+          [targetPageId]: geometryFailureStatus(err),
+        }));
+        handleMutationError(err, 'Failed to unverify segments');
+      }
+    } finally {
+      if (geometryApprovalTokenRef.current === token) {
+        geometryApprovalPendingRef.current = false;
+        setGeometryApprovalPending(false);
+      }
     }
   }, [
     handleMutationError,
-    letterPages,
-    letter.id,
-    primarySourceRevision,
+    currentPage,
+    currentLetterPageIndex,
+    sourceExpectation,
+    applyGeometryEnvelope,
   ]);
 
   // Lock hint for toolbar tooltip when trusted
@@ -1006,18 +1436,24 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     lockHintTimerRef.current = setTimeout(() => setLockHintVisible(false), 2000);
   }, []);
 
-  const segmentTransitionPendingRef = useRef(false);
   const runAfterSegmentFlush = useCallback(async (
     transition: () => void,
     saveTranscriptLine = false,
   ): Promise<boolean> => {
-    if (segmentTransitionPendingRef.current) return false;
+    if (
+      segmentTransitionPendingRef.current
+      || geometryApprovalPendingRef.current
+      || segmentReloadPendingRef.current
+    ) {
+      return false;
+    }
     segmentTransitionPendingRef.current = true;
     try {
       if (saveTranscriptLine) {
         saveCurrentLine();
       }
       if (!(await autoSaveSegments())) return false;
+      if (geometryApprovalPendingRef.current) return false;
       transition();
       return true;
     } finally {
@@ -1026,6 +1462,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   }, [autoSaveSegments, saveCurrentLine]);
 
   const handleExitSegmentEditMode = useCallback(async () => {
+    if (navigationPendingRef.current) return;
     await runAfterSegmentFlush(() => {
       setSubtractMode(false);
       segmentEditor.clearSessionHistory();
@@ -1036,44 +1473,77 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     segmentEditor,
   ]);
 
+  const flushPendingChanges = useCallback(
+    () => runAfterSegmentFlush(() => undefined, true),
+    [runAfterSegmentFlush],
+  );
+
+  const hasPendingChanges = useCallback(() => (
+    (latestSegmentSaveStateRef.current?.isDirty ?? false)
+    || activeSegmentFlushRef.current !== null
+    || hasPendingCurrentLineChanges()
+  ), [hasPendingCurrentLineChanges]);
+
   // Navigate to next line (cross-page: skips to next letter page)
-  const goToNextLine = useCallback(() => {
-    saveCurrentLine();
+  const goToNextLine = useCallback(async () => {
+    if (navigationPendingRef.current) return;
     if (currentLineIndex < alignedLines.length - 1) {
+      saveCurrentLine();
       setCurrentLineIndex(currentLineIndex + 1);
     } else {
-      // Find next letter page in allPages
+      // Crossing a page replaces the segment editor source, so persist the
+      // current draft before leaving it.
       for (let i = currentPageIndex + 1; i < allPages.length; i++) {
         if (letterPageIndices.has(i)) {
-          setCurrentPageIndex(i);
-          setCurrentLineIndex(0);
-          containerRef.current?.scrollTo({ top: 0 });
+          await runAfterSegmentFlush(() => {
+            setCurrentPageIndex(i);
+            setCurrentLineIndex(0);
+            containerRef.current?.scrollTo({ top: 0 });
+          }, true);
           return;
         }
       }
     }
-  }, [saveCurrentLine, currentLineIndex, alignedLines.length, currentPageIndex, allPages.length, letterPageIndices]);
+  }, [
+    saveCurrentLine,
+    currentLineIndex,
+    alignedLines.length,
+    currentPageIndex,
+    allPages.length,
+    letterPageIndices,
+    runAfterSegmentFlush,
+  ]);
 
   // Navigate to previous line (cross-page: skips to prev letter page)
-  const goToPrevLine = useCallback(() => {
-    saveCurrentLine();
+  const goToPrevLine = useCallback(async () => {
+    if (navigationPendingRef.current) return;
     if (currentLineIndex > 0) {
+      saveCurrentLine();
       setCurrentLineIndex(currentLineIndex - 1);
     } else {
       // Find previous letter page in allPages
       for (let i = currentPageIndex - 1; i >= 0; i--) {
         if (letterPageIndices.has(i)) {
-          setCurrentPageIndex(i);
-          // Set to high number — will be clamped in the effect below
-          setCurrentLineIndex(999);
+          await runAfterSegmentFlush(() => {
+            setCurrentPageIndex(i);
+            // Set to high number — will be clamped in the effect below
+            setCurrentLineIndex(999);
+          }, true);
           return;
         }
       }
     }
-  }, [saveCurrentLine, currentLineIndex, currentPageIndex, letterPageIndices]);
+  }, [
+    saveCurrentLine,
+    currentLineIndex,
+    currentPageIndex,
+    letterPageIndices,
+    runAfterSegmentFlush,
+  ]);
 
   // Navigate to next page (any type)
   const goToNextPage = useCallback(async () => {
+    if (navigationPendingRef.current) return;
     if (currentPageIndex >= allPages.length - 1) return;
     await runAfterSegmentFlush(() => {
       setCurrentPageIndex(currentPageIndex + 1);
@@ -1084,6 +1554,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
   // Navigate to previous page (any type)
   const goToPrevPage = useCallback(async () => {
+    if (navigationPendingRef.current) return;
     if (currentPageIndex <= 0) return;
     await runAfterSegmentFlush(() => {
       setCurrentPageIndex(currentPageIndex - 1);
@@ -1101,7 +1572,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
   // Auto-scroll to keep current line visible (highlight + input region)
   useEffect(() => {
-    if (!currentLine || !containerRef.current || fitHeight) return;
+    if (!currentLine?.bbox || !containerRef.current || fitHeight) return;
 
     // Visible region: from highlight top (bbox[1]) to bottom of input
     const lineInputH = computeLineInputHeight(currentLine.bbox, scaleFactor, pageFontSize);
@@ -1149,32 +1620,43 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     if (!inputRef.current) return;
     const line = alignedLines[currentLineIndex];
     if (!line) return;
+    const vertical = line.providerTextDirection === 'vertical-lr'
+      || line.providerTextDirection === 'vertical-rl';
 
-    // Input left must match the overlay left computed at render time.
-    // Use the wider of line bbox and OCR word extent (same logic as inputLeft above).
-    const pad = imageNaturalSize.width * 0.01;
-    let leftX = line.bbox[0];
-    if (line.words && line.words.length > 0) {
-      leftX = Math.min(leftX, ...line.words.map(w => w.bbox[0]));
+    if (!line.bbox || vertical) {
+      inputRef.current.innerHTML = highlightTranscriptMarkers(
+        line.transcriptText.split(/\s+/).filter(Boolean).join(' '),
+      );
+      inputRef.current.style.fontSize = '';
+      inputRef.current.style.wordSpacing = '';
+      inputRef.current.style.textIndent = '';
+    } else {
+      // Input left must match the overlay left computed at render time.
+      // Use the wider of line bbox and OCR word extent (same logic as inputLeft above).
+      const pad = imageNaturalSize.width * 0.01;
+      let leftX = line.bbox[0];
+      if (line.words && line.words.length > 0) {
+        leftX = Math.min(leftX, ...line.words.map(w => w.bbox[0]));
+      }
+      const overlayLeft = Math.max(0, (leftX - pad) * scaleFactor);
+      const contentAreaLeft = overlayLeft + CSS_BORDER_PADDING;
+
+      // Compute max font for this line (matches render-time computation)
+      const displayedImgH = imageDisplaySize.height || (imageNaturalSize.height * scaleFactor);
+      const lineBottom = line.bbox[3] * scaleFactor + 4; // LINE_GAP
+      const maxH = Math.min(displayedImgH - lineBottom, 150);
+      const lineFontMax = computeLineFontSize(line.transcriptText, line.words, line.bbox, scaleFactor, maxH);
+
+      buildWordPositionedContent(
+        inputRef.current,
+        line.transcriptText,
+        line.words,
+        contentAreaLeft,
+        scaleFactor,
+        line.bbox,
+        lineFontMax,
+      );
     }
-    const overlayLeft = Math.max(0, (leftX - pad) * scaleFactor);
-    const contentAreaLeft = overlayLeft + CSS_BORDER_PADDING;
-
-    // Compute max font for this line (matches render-time computation)
-    const displayedImgH = imageDisplaySize.height || (imageNaturalSize.height * scaleFactor);
-    const lineBottom = line.bbox[3] * scaleFactor + 4; // LINE_GAP
-    const maxH = Math.min(displayedImgH - lineBottom, 150);
-    const lineFontMax = computeLineFontSize(line.transcriptText, line.words, line.bbox, scaleFactor, maxH);
-
-    buildWordPositionedContent(
-      inputRef.current,
-      line.transcriptText,
-      line.words,
-      contentAreaLeft,
-      scaleFactor,
-      line.bbox,
-      lineFontMax,
-    );
 
     setLiveFontSize(null); // Reset live override — buildWordPositionedContent set correct styles
     inputRef.current.focus();
@@ -1188,7 +1670,13 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   const handleInputChange = useCallback(() => {
     const div = inputRef.current;
     const line = alignedLines[currentLineIndex];
-    if (!div || !line) return;
+    if (!div || !line?.bbox) return;
+    if (
+      line.providerTextDirection === 'vertical-lr'
+      || line.providerTextDirection === 'vertical-rl'
+    ) {
+      return;
+    }
 
     const editedText = div.textContent || '';
     const words = editedText.split(/\s+/).filter(w => w.length > 0);
@@ -1236,31 +1724,119 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   }, [alignedLines, currentLineIndex, scaleFactor, imageDisplaySize.height, imageNaturalSize.height]);
 
   // Re-fetch line segments from the database for the current page
-  const reloadSegments = useCallback(() => {
-    if (!currentPage || isLoading || currentLetterPageIndex === undefined) return;
+  const reloadSegments = useCallback(async (
+    discardUnsaved = false,
+  ): Promise<boolean> => {
+    if (
+      !currentPage
+      || isLoading
+      || currentLetterPageIndex === undefined
+      || mutationsBlockedRef.current
+      || geometryApprovalPendingRef.current
+      || segmentTransitionPendingRef.current
+      || segmentReloadPendingRef.current
+    ) {
+      return false;
+    }
 
-    const lpIdx = currentLetterPageIndex;
+    const targetPageId = currentPage.id;
+    const targetLetterPageIndex = currentLetterPageIndex;
+    const token = segmentReloadTokenRef.current + 1;
+    segmentReloadTokenRef.current = token;
+    segmentReloadPendingRef.current = true;
+    setSegmentReloadPending(true);
 
-    setAiSegmentsMap(prev => ({ ...prev, [lpIdx]: null }));
-    setKrakenSegmentsMap(prev => ({ ...prev, [lpIdx]: undefined }));
-    setCurrentLineIndex(0);
+    const stillOwnsTarget = () => {
+      const latest = latestSegmentSaveStateRef.current;
+      return (
+        segmentReloadTokenRef.current === token
+        && segmentReloadPendingRef.current
+        && !mutationsBlockedRef.current
+        && latest?.page.id === targetPageId
+        && latest.letterPageIndex === targetLetterPageIndex
+      );
+    };
 
-    getPageLineSegments(currentPage.id)
-      .then(segments => {
-        setAiSegmentsMap(prev => ({ ...prev, [lpIdx]: segments }));
-        setKrakenSegmentsMap(prev => ({ ...prev, [lpIdx]: segments }));
-      })
-      .catch((err) => {
-        setAiSegmentsMap(prev => ({ ...prev, [lpIdx]: [] }));
+    try {
+      if (discardUnsaved) {
+        // A conflict reload is the explicit "take the server copy" action.
+        // Let any request already leaving the browser settle first so its late
+        // response cannot race the replacement below.
+        const activeFlush = activeSegmentFlushRef.current;
+        if (activeFlush?.pageId === targetPageId) {
+          await activeFlush.promise;
+        }
+      } else if (!(await autoSaveSegments(
+        'Failed to save segment edits before reloading',
+      ))) {
+        return false;
+      }
+
+      if (!stillOwnsTarget()) return false;
+      const envelope = await getPageGeometry(targetPageId);
+      if (!stillOwnsTarget()) return false;
+
+      // Keep the local draft mounted until an authoritative replacement is
+      // actually available. A failed or stale reload must never erase work.
+      lastSourceRef.current = envelope.lineSegments;
+      applyGeometryEnvelope(
+        targetPageId,
+        targetLetterPageIndex,
+        envelope,
+      );
+      segmentEditor.resetFromSource(envelope.lineSegments);
+      setCurrentLineIndex(0);
+      setGeometrySaveStatusMap((previous) => ({
+        ...previous,
+        [targetPageId]: 'idle',
+      }));
+      await refreshProductionAlignment();
+      return true;
+    } catch (err) {
+      if (stillOwnsTarget()) {
         showToast(getErrorMessage(err, 'Failed to load segments'), 'error');
-      });
-  }, [currentPage, currentLetterPageIndex, isLoading, showToast]);
-
-  useImperativeHandle(ref, () => ({
-    saveCurrentLine,
-    reloadSegments,
+      }
+      return false;
+    } finally {
+      if (segmentReloadTokenRef.current === token) {
+        segmentReloadPendingRef.current = false;
+        setSegmentReloadPending(false);
+      }
+    }
+  }, [
+    currentPage,
+    currentLetterPageIndex,
     isLoading,
-  }), [saveCurrentLine, reloadSegments, isLoading]);
+    autoSaveSegments,
+    showToast,
+    applyGeometryEnvelope,
+    segmentEditor,
+    refreshProductionAlignment,
+  ]);
+
+  const segmentControlsLoading = isLoading || segmentReloadPending;
+
+  // The workspace stores this handle in parent state so its loading flag can
+  // drive the reload control. Keep the handle stable while loading is
+  // unchanged: callback churn here otherwise creates a parent/child render
+  // loop whenever either command closes over fresh editor state.
+  const saveCurrentLineHandleRef = useRef(saveCurrentLine);
+  const flushPendingChangesHandleRef = useRef(flushPendingChanges);
+  const hasPendingChangesHandleRef = useRef(hasPendingChanges);
+  const reloadSegmentsHandleRef = useRef(reloadSegments);
+  saveCurrentLineHandleRef.current = saveCurrentLine;
+  flushPendingChangesHandleRef.current = flushPendingChanges;
+  hasPendingChangesHandleRef.current = hasPendingChanges;
+  reloadSegmentsHandleRef.current = reloadSegments;
+  useImperativeHandle(ref, () => ({
+    saveCurrentLine: () => saveCurrentLineHandleRef.current(),
+    flushPendingChanges: () => flushPendingChangesHandleRef.current(),
+    hasPendingChanges: () => hasPendingChangesHandleRef.current(),
+    reloadSegments: () => {
+      void reloadSegmentsHandleRef.current();
+    },
+    isLoading: segmentControlsLoading,
+  }), [segmentControlsLoading]);
 
   // Keyboard handler
   useEffect(() => {
@@ -1272,6 +1848,71 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (navigationPendingRef.current) return;
+      if (
+        geometryApprovalPendingRef.current
+        || segmentReloadPendingRef.current
+      ) {
+        const lowerKey = e.key.toLowerCase();
+        if (
+          [
+            'escape',
+            'enter',
+            'arrowdown',
+            'arrowup',
+            'arrowleft',
+            'arrowright',
+            'pagedown',
+            'pageup',
+            'delete',
+            'backspace',
+            's',
+            'b',
+            'p',
+            'd',
+            'r',
+            't',
+            'z',
+          ].includes(lowerKey)
+        ) {
+          e.preventDefault();
+        }
+        return;
+      }
+      if (
+        geometryEditingLockedRef.current
+        && segmentEditor.segmentEditMode
+      ) {
+        if (e.key === 'PageDown') {
+          e.preventDefault();
+          void goToNextPage();
+          return;
+        }
+        if (e.key === 'PageUp') {
+          e.preventDefault();
+          void goToPrevPage();
+          return;
+        }
+
+        const lowerKey = e.key.toLowerCase();
+        const isUndoOrRedo = lowerKey === 'z' && (e.ctrlKey || e.metaKey);
+        if (
+          isUndoOrRedo
+          || [
+            'delete',
+            'backspace',
+            's',
+            'b',
+            'p',
+            'd',
+            'r',
+            't',
+          ].includes(lowerKey)
+        ) {
+          e.preventDefault();
+        }
+        return;
+      }
       // Segment edit mode keyboard handling
       if (segmentEditor.segmentEditMode) {
         if (e.key === 'Escape') {
@@ -1390,48 +2031,62 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   // The overlay must be wide enough for the actual OCR word extent (which can
   // exceed the line bbox), plus border/padding/rendering tolerance.
   const LINE_GAP = 4;
-  const inputTop = currentLine ? currentLine.bbox[3] * scaleFactor + LINE_GAP : 0;
+  const isVerticalLine = currentLine?.providerTextDirection === 'vertical-lr'
+    || currentLine?.providerTextDirection === 'vertical-rl';
+  const isRightToLeftLine = currentLine?.providerTextDirection === 'horizontal-rl';
+  const currentLineBbox = currentLine?.bbox;
+  const horizontalInputTop = currentLineBbox
+    ? currentLineBbox[3] * scaleFactor + LINE_GAP
+    : 0;
   const linePad = imageNaturalSize.width * 0.01;
   const rightExtra = CSS_BORDER_PADDING * 2 + 8; // both-side border+padding + rendering tolerance
 
   // Use the wider of line bbox and OCR word extent so text is never clipped
-  let ocrRightX = currentLine?.bbox[2] ?? 0;
-  let ocrLeftX = currentLine?.bbox[0] ?? 0;
+  let ocrRightX = currentLineBbox?.[2] ?? 0;
+  let ocrLeftX = currentLineBbox?.[0] ?? 0;
   if (currentLine?.words && currentLine.words.length > 0) {
     ocrLeftX = Math.min(ocrLeftX, ...currentLine.words.map(w => w.bbox[0]));
     ocrRightX = Math.max(ocrRightX, ...currentLine.words.map(w => w.bbox[2]));
   }
-  const inputLeft = currentLine ? Math.max(0, (ocrLeftX - linePad) * scaleFactor) : 0;
-  const inputRight = currentLine ? Math.min(imgW, (ocrRightX + linePad) * scaleFactor + rightExtra) : imgW;
-  const inputWidth = inputRight - inputLeft;
+  const horizontalInputLeft = currentLineBbox ? Math.max(0, (ocrLeftX - linePad) * scaleFactor) : 0;
+  const inputRight = currentLineBbox ? Math.min(imgW, (ocrRightX + linePad) * scaleFactor + rightExtra) : imgW;
+  const horizontalInputWidth = inputRight - horizontalInputLeft;
 
   // Per-line font size: scales up for short text, bounded by available height below line
-  const maxInputHeight = Math.min(displayedImageHeight - inputTop, 150);
-  const baseFontSize = currentLine
-    ? computeLineFontSize(currentLine.transcriptText, currentLine.words, currentLine.bbox, scaleFactor, maxInputHeight)
+  const maxInputHeight = Math.min(displayedImageHeight - horizontalInputTop, 150);
+  const baseFontSize = currentLine && currentLineBbox
+    ? isVerticalLine
+      ? Math.max(12, Math.min(pageFontSize, 24))
+      : computeLineFontSize(currentLine.transcriptText, currentLine.words, currentLineBbox, scaleFactor, maxInputHeight)
     : pageFontSize;
   // Use live font size (updated on each keystroke) if available, otherwise use base
   const fontSize = liveFontSize ?? baseFontSize;
-  const INPUT_DISPLAY_HEIGHT = fontSize + CSS_BORDER_PADDING * 2;
-
-  // Build highlight polygon points from Kraken boundary (or bbox fallback).
-  const highlightPoints = useMemo(() => {
-    if (!currentLine) return '';
-
-    if (currentLine.boundary && currentLine.boundary.length > 2) {
-      return currentLine.boundary
-        .map(p => `${p.x * scaleFactor},${p.y * scaleFactor}`)
-        .join(' ');
-    }
-
-    // Fallback: bbox rectangle
-    const [x1, y1, x2, y2] = currentLine.bbox;
-    const sx1 = x1 * scaleFactor, sy1 = y1 * scaleFactor;
-    const sx2 = x2 * scaleFactor, sy2 = y2 * scaleFactor;
-    return `${sx1},${sy1} ${sx2},${sy1} ${sx2},${sy2} ${sx1},${sy2}`;
-  }, [currentLine, scaleFactor]);
+  const inputThickness = fontSize + CSS_BORDER_PADDING * 2;
+  let inputTop = horizontalInputTop;
+  let inputLeft = horizontalInputLeft;
+  let inputWidth = horizontalInputWidth;
+  let inputHeight = inputThickness;
+  if (currentLine && currentLineBbox && isVerticalLine) {
+    inputTop = Math.max(0, currentLineBbox[1] * scaleFactor);
+    inputHeight = Math.max(
+      inputThickness,
+      (currentLineBbox[3] - currentLineBbox[1]) * scaleFactor,
+    );
+    inputWidth = inputThickness;
+    const preferRight = currentLine.providerTextDirection === 'vertical-lr';
+    const preferredLeft = preferRight
+      ? currentLineBbox[2] * scaleFactor + LINE_GAP
+      : currentLineBbox[0] * scaleFactor - inputWidth - LINE_GAP;
+    const fallbackLeft = preferRight
+      ? currentLineBbox[0] * scaleFactor - inputWidth - LINE_GAP
+      : currentLineBbox[2] * scaleFactor + LINE_GAP;
+    inputLeft = preferredLeft >= 0 && preferredLeft + inputWidth <= imgW
+      ? preferredLeft
+      : Math.min(Math.max(fallbackLeft, 0), Math.max(0, imgW - inputWidth));
+  }
 
   const handleFullExit = useCallback(async () => {
+    if (navigationPendingRef.current) return;
     await runAfterSegmentFlush(() => {
       if (segmentEditor.segmentEditMode) {
         setSubtractMode(false);
@@ -1464,6 +2119,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       <button
         className="line-review-close-btn"
         onClick={handleFullExit}
+        disabled={navigationPending}
         aria-label="Exit review mode"
       >
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -1471,21 +2127,22 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
         </svg>
       </button>
 
-      {/* Mapping mode banner — visible when mapping text to a segment */}
-      {mappingActive && mappingText && (
-        <div className="line-review-mapping-banner">
-          <span className="mapping-banner-label">Map to segment:</span>
-          <span className="mapping-banner-text">
-            &ldquo;{mappingText.length > 80 ? `${mappingText.slice(0, 80)}…` : mappingText}&rdquo;
+      {/* Geometry repair context guides the edit without changing segment behavior. */}
+      {repairContextVisible && repairText && (
+        <div className="line-review-repair-banner" role="status">
+          <span className="repair-banner-label">Repair location for:</span>
+          <span className="repair-banner-text">
+            &ldquo;{repairText.length > 80 ? `${repairText.slice(0, 80)}…` : repairText}&rdquo;
+          </span>
+          <span className="repair-banner-hint">
+            Draw or adjust its outline. Saving geometry reruns placement;
+            this text is not assigned directly to a box.
           </span>
           <button
-            className="mapping-banner-cancel"
-            onClick={() => {
-              setMappingActive(false);
-              onMappingComplete?.();
-            }}
+            className="repair-banner-dismiss"
+            onClick={() => setRepairContextVisible(false)}
           >
-            Cancel
+            Dismiss
           </button>
         </div>
       )}
@@ -1514,7 +2171,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
         />
 
         {/* Dimmer with polygon cutout — shadows everything except the active line */}
-        {overlayEnabled && currentLine && imgW > 0 && !segmentEditor.segmentEditMode && (
+        {overlayEnabled && currentLine?.bbox && imgW > 0 && !segmentEditor.segmentEditMode && (
           <svg
             className="line-review-highlight-svg"
             width={imgW}
@@ -1526,8 +2183,56 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
               </filter>
               <mask id="lr-highlight-mask">
                 <rect width={imgW} height={displayedImageHeight} fill="white" />
-                <polygon points={highlightPoints} fill="black" filter="url(#lr-feather)" />
-                <polygon points={highlightPoints} fill="black" />
+                {currentLine.segmentGeometries.map((segment) => (
+                  segment.boundary && segment.boundary.length > 2
+                    ? (
+                        <polygon
+                          key={`feather-${segment.id ?? segment.line}`}
+                          points={segment.boundary
+                            .map((point) => (
+                              `${point.x * scaleFactor},${point.y * scaleFactor}`
+                            ))
+                            .join(' ')}
+                          fill="black"
+                          filter="url(#lr-feather)"
+                        />
+                      )
+                    : (
+                        <rect
+                          key={`feather-${segment.id ?? segment.line}`}
+                          x={segment.bbox[0] * scaleFactor}
+                          y={segment.bbox[1] * scaleFactor}
+                          width={(segment.bbox[2] - segment.bbox[0]) * scaleFactor}
+                          height={(segment.bbox[3] - segment.bbox[1]) * scaleFactor}
+                          fill="black"
+                          filter="url(#lr-feather)"
+                        />
+                      )
+                ))}
+                {currentLine.segmentGeometries.map((segment) => (
+                  segment.boundary && segment.boundary.length > 2
+                    ? (
+                        <polygon
+                          key={`solid-${segment.id ?? segment.line}`}
+                          points={segment.boundary
+                            .map((point) => (
+                              `${point.x * scaleFactor},${point.y * scaleFactor}`
+                            ))
+                            .join(' ')}
+                          fill="black"
+                        />
+                      )
+                    : (
+                        <rect
+                          key={`solid-${segment.id ?? segment.line}`}
+                          x={segment.bbox[0] * scaleFactor}
+                          y={segment.bbox[1] * scaleFactor}
+                          width={(segment.bbox[2] - segment.bbox[0]) * scaleFactor}
+                          height={(segment.bbox[3] - segment.bbox[1]) * scaleFactor}
+                          fill="black"
+                        />
+                      )
+                ))}
               </mask>
             </defs>
             <rect
@@ -1540,7 +2245,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
         )}
 
         {/* Input overlay — positioned below the clear strip, sized to the line */}
-        {overlayEnabled && currentLine && !segmentEditor.segmentEditMode && (() => {
+        {overlayEnabled && currentLine?.bbox && !segmentEditor.segmentEditMode && (() => {
           const lineIdx = currentLine.transcriptLineIndex;
           const currentAreaId = specialAreaInfo && lineIdx >= 0 && lineIdx < specialAreaInfo.lineAreaIds.length
             ? specialAreaInfo.lineAreaIds[lineIdx]
@@ -1549,6 +2254,13 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           const areaBorder = currentArea
             ? `3px solid ${currentArea.type === 'continuation' ? 'rgb(217, 119, 6)' : 'rgb(59, 130, 246)'}`
             : undefined;
+          const directionLabel = currentLine.providerTextDirection === 'vertical-lr'
+            ? 'Vertical L→R'
+            : currentLine.providerTextDirection === 'vertical-rl'
+              ? 'Vertical R→L'
+              : currentLine.providerTextDirection === 'horizontal-rl'
+                ? 'Horizontal R→L'
+                : null;
 
           return (
           <div
@@ -1557,17 +2269,34 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
               top: inputTop,
               left: inputLeft,
               width: inputWidth,
-              height: INPUT_DISPLAY_HEIGHT,
+              height: inputHeight,
               borderLeft: areaBorder,
             }}
           >
+            {directionLabel && (
+              <span
+                className="line-review-direction-badge"
+                title="Direction reported by the native layout detector"
+              >
+                {directionLabel}
+              </span>
+            )}
             <div
               ref={inputRef}
-              contentEditable
+              contentEditable={!navigationPending}
               suppressContentEditableWarning
               className="line-review-editable"
-              style={{ fontSize }}
-              onInput={handleInputChange}
+              dir={isRightToLeftLine ? 'rtl' : 'ltr'}
+              style={{
+                fontSize,
+                writingMode: isVerticalLine ? 'vertical-rl' : undefined,
+                textOrientation: isVerticalLine ? 'mixed' : undefined,
+                textAlign: isRightToLeftLine ? 'right' : undefined,
+              }}
+              onInput={() => {
+                if (navigationPendingRef.current) return;
+                handleInputChange();
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') e.preventDefault();
               }}
@@ -1613,88 +2342,8 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           </svg>
         )}
 
-        {/* Debug overlay — Grouped line boundaries (orange) */}
-        {debugLines && showGroupedLines && imageDisplaySize.width > 0 && pipelineResult && (
-          <svg
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: imageDisplaySize.width,
-              height: displayedImageHeight,
-              pointerEvents: 'none',
-              zIndex: 7,
-            }}
-          >
-            {pipelineResult.groupedLines
-              .filter((gl) => gl.merged)
-              .flatMap((gl, i) =>
-                gl.constituents.map((seg, si) => {
-                  const cls = gl.region === 'margin' ? 'line-review-debug-margin' : 'line-review-debug-merged';
-                  return seg.boundary && seg.boundary.length > 2 ? (
-                    <polygon
-                      key={`grouped-poly-${i}-${si}`}
-                      className={cls}
-                      points={seg.boundary
-                        .map(p => `${p.x * scaleFactor},${p.y * scaleFactor}`)
-                        .join(' ')}
-                    />
-                  ) : (
-                    <rect
-                      key={`grouped-rect-${i}-${si}`}
-                      className={cls}
-                      x={seg.bbox[0] * scaleFactor}
-                      y={seg.bbox[1] * scaleFactor}
-                      width={(seg.bbox[2] - seg.bbox[0]) * scaleFactor}
-                      height={(seg.bbox[3] - seg.bbox[1]) * scaleFactor}
-                    />
-                  );
-                }),
-              )}
-            {/* Merge connectors are drawn in the edge-points overlay below */}
-          </svg>
-        )}
-
-        {/* Debug overlay — Matched/unified transcript lines (gold) */}
-        {debugLines && showUnifiedLines && imageDisplaySize.width > 0 && pipelineResult && (
-          <svg
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: imageDisplaySize.width,
-              height: displayedImageHeight,
-              pointerEvents: 'none',
-              zIndex: 7,
-            }}
-          >
-            {pipelineResult.matchResult.matched
-              .filter((m): m is MatchedLine & { bbox: [number, number, number, number] } => m.bbox !== null)
-              .map((m, i) =>
-                m.boundary && m.boundary.length > 2 ? (
-                  <polygon
-                    key={`unified-poly-${i}`}
-                    className="line-review-debug-unified"
-                    points={m.boundary
-                      .map(p => `${p.x * scaleFactor},${p.y * scaleFactor}`)
-                      .join(' ')}
-                  />
-                ) : (
-                  <rect
-                    key={`unified-rect-${i}`}
-                    className="line-review-debug-unified"
-                    x={m.bbox[0] * scaleFactor}
-                    y={m.bbox[1] * scaleFactor}
-                    width={(m.bbox[2] - m.bbox[0]) * scaleFactor}
-                    height={(m.bbox[3] - m.bbox[1]) * scaleFactor}
-                  />
-                ),
-              )}
-          </svg>
-        )}
-
         {/* Debug overlay — Excluded content (gray dashed) */}
-        {debugLines && showExcludedContent && imageDisplaySize.width > 0 && pipelineResult && (
+        {debugLines && showExcludedContent && imageDisplaySize.width > 0 && (
           <svg
             style={{
               position: 'absolute',
@@ -1706,90 +2355,33 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
               zIndex: 7,
             }}
           >
-            {pipelineResult.matchResult.excludedContent.map((gl, i) => (
+            {(currentLetterPageIndex !== undefined
+              ? krakenSegmentsMap[currentLetterPageIndex] ?? []
+              : [])
+              .filter((segment) => segment.excluded)
+              .map((segment, index) => (
               <rect
-                key={`excluded-${i}`}
+                key={`excluded-${segment.id ?? index}`}
                 className="line-review-debug-excluded"
-                x={gl.bbox[0] * scaleFactor}
-                y={gl.bbox[1] * scaleFactor}
-                width={(gl.bbox[2] - gl.bbox[0]) * scaleFactor}
-                height={(gl.bbox[3] - gl.bbox[1]) * scaleFactor}
+                x={segment.bbox[0] * scaleFactor}
+                y={segment.bbox[1] * scaleFactor}
+                width={(segment.bbox[2] - segment.bbox[0]) * scaleFactor}
+                height={(segment.bbox[3] - segment.bbox[1]) * scaleFactor}
               />
             ))}
-          </svg>
-        )}
-
-        {/* Debug overlay — Edge points (west=blue, east=red) and merge connectors */}
-        {debugLines && showKrakenLines && imageDisplaySize.width > 0 && (
-          <svg
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: imageDisplaySize.width,
-              height: displayedImageHeight,
-              pointerEvents: 'none',
-              zIndex: 8,
-            }}
-          >
-            {(currentLetterPageIndex !== undefined ? krakenSegmentsMap[currentLetterPageIndex] ?? [] : []).map((seg, i) => {
-              const west = westEdgeY(seg);
-              const east = eastEdgeY(seg);
-              const lx = seg.bbox[0] * scaleFactor;
-              const rx = seg.bbox[2] * scaleFactor;
-              return (
-                <g key={`poles-${i}`}>
-                  {/* West (left) edge: top + bottom points with connecting line */}
-                  <circle className="line-review-pole-west" cx={lx} cy={west[0] * scaleFactor} r={3} />
-                  <circle className="line-review-pole-west" cx={lx} cy={west[1] * scaleFactor} r={3} />
-                  <line className="line-review-edge-west" x1={lx} y1={west[0] * scaleFactor} x2={lx} y2={west[1] * scaleFactor} />
-                  {/* East (right) edge: top + bottom points with connecting line */}
-                  <circle className="line-review-pole-east" cx={rx} cy={east[0] * scaleFactor} r={3} />
-                  <circle className="line-review-pole-east" cx={rx} cy={east[1] * scaleFactor} r={3} />
-                  <line className="line-review-edge-east" x1={rx} y1={east[0] * scaleFactor} x2={rx} y2={east[1] * scaleFactor} />
-                </g>
-              );
-            })}
-            {/* Merge connectors: top-right→top-left, bottom-right→bottom-left */}
-            {pipelineResult?.groupedLines
-              .filter((gl) => gl.merged && gl.constituents.length > 1)
-              .map((gl, gi) =>
-                gl.constituents.slice(0, -1).map((seg, si) => {
-                  const next = gl.constituents[si + 1];
-                  const segEast = eastEdgeY(seg);
-                  const nextWest = westEdgeY(next);
-                  const rx = seg.bbox[2] * scaleFactor;
-                  const lx = next.bbox[0] * scaleFactor;
-                  return (
-                    <g key={`conn-${gi}-${si}`}>
-                      <line className="line-review-debug-connector"
-                        x1={rx} y1={segEast[0] * scaleFactor}
-                        x2={lx} y2={nextWest[0] * scaleFactor} />
-                      <line className="line-review-debug-connector"
-                        x1={rx} y1={segEast[1] * scaleFactor}
-                        x2={lx} y2={nextWest[1] * scaleFactor} />
-                    </g>
-                  );
-                }),
-              )}
           </svg>
         )}
 
         {/* Segment editor overlay — interactive segment editing */}
         {overlayEnabled && segmentEditor.segmentEditMode && imageDisplaySize.width > 0 && (
           <SegmentEditorOverlay
+            key={`${drawTool}:${geometryEditingLocked ? 'locked' : 'editable'}`}
             segments={segmentEditor.editedSegments}
             selectedSegmentId={segmentEditor.selectedSegmentId}
             scaleFactor={scaleFactor}
             imageWidth={imageDisplaySize.width}
             imageHeight={displayedImageHeight}
-            onSelect={
-              mappingActive
-                ? (id) => {
-                  if (id) handleMappingClick(id);
-                }
-                : segmentEditor.selectSegment
-            }
+            onSelect={segmentEditor.selectSegment}
             onResize={segmentEditor.resizeSegment}
             onResizeStart={segmentEditor.snapshotForUndo}
             onDelete={segmentEditor.deleteSegment}
@@ -1804,10 +2396,12 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
             rotateMode={editMode === 'rotate'}
             subtractMode={subtractMode}
             onSetBoundary={segmentEditor.setBoundary}
-            mappingMode={mappingActive}
+            onTransformBoundary={segmentEditor.transformBoundary}
             movable={editMode === 'resize'}
+            readOnly={geometryEditingLocked}
             onMoveSegment={segmentEditor.moveSegment}
             onSegmentContextMenu={(cx, cy, segId) => {
+              if (geometryEditingLockedRef.current) return;
               segmentEditor.selectSegment(segId);
               setContextMenu({ x: cx, y: cy, segId });
             }}
@@ -1816,7 +2410,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
 
         {/* Segment context menu */}
-        {contextMenu && (() => {
+        {contextMenu && !geometryEditingLocked && (() => {
           const seg = segmentEditor.editedSegments.find((s) => s._id === contextMenu.segId);
           if (!seg) return null;
           return (
@@ -1840,7 +2434,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           const areaBounds = new Map<number, { minX: number; minY: number; maxX: number; maxY: number }>();
           for (const line of alignedLines) {
             const idx = line.transcriptLineIndex;
-            if (idx < 0 || idx >= specialAreaInfo.lineAreaIds.length) continue;
+            if (!line.bbox || idx < 0 || idx >= specialAreaInfo.lineAreaIds.length) continue;
             const areaId = specialAreaInfo.lineAreaIds[idx];
             if (areaId == null) continue;
             const [x1, y1, x2, y2] = line.bbox;
@@ -1907,23 +2501,89 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           );
         })()}
 
-        {/* Loading segments */}
-        {isLoading && imageNaturalSize.width > 0 && (
+        {/* Loading the revision-bound geometry + transcript placement. */}
+        {onLetterPage && isLoading && imageNaturalSize.width > 0 && (
           <div className="line-review-analyzing">
             <div className="line-review-spinner" />
-            <div className="detection-status">Loading line segments...</div>
+            <div className="detection-status">
+              {alignmentIsLoading
+                ? 'Loading transcript placement...'
+                : 'Loading line segments...'}
+            </div>
           </div>
         )}
 
-        {/* No segments available */}
-        {!isLoading && hasTranscriptLinesOnPage && alignedLines.length === 0 && imageNaturalSize.width > 0 && (
+        {onLetterPage
+          && !isLoading
+          && currentAlignmentError
+          && imageNaturalSize.width > 0
+          && (
           <div className="line-review-analyzing">
-            No line segments for this page.
+            Transcript placement could not be loaded.
             <br />
-            <small>Run <code>npm run detect-lines</code> locally, then press <kbd>Ctrl+Shift+R</kbd> to reload.</small>
+            <small>{currentAlignmentError.message}</small>
+            <br />
+            <button
+              type="button"
+              onClick={() => {
+                void refreshProductionAlignment();
+              }}
+            >
+              Try again
+            </button>
+          </div>
+        )}
+
+        {!isLoading
+          && !currentAlignmentError
+          && hasTranscriptLinesOnPage
+          && alignedLines.length === 0
+          && imageNaturalSize.width > 0
+          && (
+          <div className="line-review-analyzing">
+            {currentProductionPage?.statusMessage
+              ?? 'No transcript placement is available for this page.'}
           </div>
         )}
       </div>
+
+      {overlayEnabled
+        && currentLine?.geometrySource === 'unlocated'
+        && !segmentEditor.segmentEditMode
+        && (
+          <div
+            className="line-review-unlocated-editor"
+            role="group"
+            aria-label="Transcript line without a detected page location"
+          >
+            <div className="line-review-unlocated-heading">
+              <strong>No detected location</strong>
+              <span>
+                {currentLine.pageStatus === 'recognition-missing'
+                  ? (
+                      currentLine.statusMessage
+                      ?? 'The current geometry still needs local handwriting recognition before it can be matched.'
+                    )
+                  : currentLine.pageStatus === 'geometry-missing'
+                    ? 'No line outline exists for this transcript line. Add or adjust a segment in edit mode if needed.'
+                    : 'The aligner could not confidently connect this transcript line to a page outline.'}
+              </span>
+            </div>
+            <div
+              ref={inputRef}
+              contentEditable={!navigationPending}
+              suppressContentEditableWarning
+              className="line-review-editable"
+              onInput={() => {
+                if (navigationPendingRef.current) return;
+                handleInputChange();
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') event.preventDefault();
+              }}
+            />
+          </div>
+        )}
 
       {/* Progress indicator */}
       <div className="line-review-progress">
@@ -1956,20 +2616,6 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
             Kraken Lines
           </button>
           <button
-            className={`debug-legend-toggle${showGroupedLines ? ' debug-legend-toggle-active' : ''}`}
-            onClick={() => setShowGroupedLines(v => !v)}
-          >
-            <span className="debug-legend-swatch debug-legend-merged" />
-            Grouped Lines
-          </button>
-          <button
-            className={`debug-legend-toggle${showUnifiedLines ? ' debug-legend-toggle-active' : ''}`}
-            onClick={() => setShowUnifiedLines(v => !v)}
-          >
-            <span className="debug-legend-swatch debug-legend-unified" />
-            Matched Lines
-          </button>
-          <button
             className={`debug-legend-toggle${showExcludedContent ? ' debug-legend-toggle-active' : ''}`}
             onClick={() => setShowExcludedContent(v => !v)}
           >
@@ -1985,7 +2631,12 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           <button
             className="line-review-page-nav line-review-page-nav-left"
             onClick={goToPrevPage}
-            disabled={currentPageIndex === 0}
+            disabled={
+              currentPageIndex === 0
+              || geometryApprovalPending
+              || segmentReloadPending
+              || navigationPending
+            }
             aria-label="Previous page"
           >
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
@@ -1995,7 +2646,12 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           <button
             className="line-review-page-nav line-review-page-nav-right"
             onClick={goToNextPage}
-            disabled={currentPageIndex === allPages.length - 1}
+            disabled={
+              currentPageIndex === allPages.length - 1
+              || geometryApprovalPending
+              || segmentReloadPending
+              || navigationPending
+            }
             aria-label="Next page"
           >
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
@@ -2042,7 +2698,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
         );
       })()}
 
-      {/* Full-screen lock overlay — greys out everything, double-click anywhere to unverify */}
+      {/* An approved revision is read-only until the reviewer explicitly reopens it. */}
       {overlayEnabled && segmentEditor.segmentEditMode && currentPageTrusted && (
         <div
           className="seg-lock-overlay"
@@ -2055,35 +2711,93 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           }}
         >
           {lockHintVisible && (
-            <span className="seg-lock-overlay-hint">Double-click anywhere to unverify</span>
+            <span className="seg-lock-overlay-hint">This page is approved. Choose Reopen to edit it.</span>
           )}
         </div>
       )}
 
-      {/* Segment editor save/discard bar — top right, outside toolbar */}
+      {/* Compact page-revision controls. Geometry remains the visual focus. */}
       {overlayEnabled && segmentEditor.segmentEditMode && (
-        <div className="seg-editor-actions">
-          {currentPageTrusted ? (
-            <span className="seg-editor-verified-info">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <path d="M3 7.5l2.5 2.5 5.5-5.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              Verified
+        <div
+          className="seg-editor-actions"
+          aria-busy={geometryApprovalPending || segmentReloadPending}
+        >
+          <span
+            className={`seg-editor-save-state is-${currentGeometrySaveStatus}`}
+            role="status"
+          >
+            {geometrySaveStatusLabel(currentGeometrySaveStatus)}
+          </span>
+          {segmentEditor.selectedSegmentId && (
+            <span
+              className={`seg-editor-provenance is-${selectedGeometryProvenance?.source ?? 'machine'}`}
+              title={selectedGeometryProvenance
+                ? `Last geometry action: ${selectedGeometryProvenance.operation}`
+                : 'Original detector geometry'}
+            >
+              {selectedGeometryLabel}
             </span>
+          )}
+          {currentPageTrusted ? (
+            <>
+              <span className="seg-editor-verified-info">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <path d="M3 7.5l2.5 2.5 5.5-5.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Page approved
+              </span>
+              <button
+                className="seg-editor-action-btn"
+                onClick={handleUnverifySegments}
+                disabled={geometryApprovalPending || segmentReloadPending}
+              >
+                Reopen
+              </button>
+            </>
           ) : (
             <button
               className="seg-editor-verify-btn"
               onClick={handleVerifySegments}
+              disabled={
+                currentGeometrySaveStatus === 'saving'
+                || currentGeometrySaveStatus === 'conflict'
+                || geometryApprovalPending
+                || segmentReloadPending
+                || (!currentGeometryState?.geometryChecksumSha256 && !segmentEditor.isDirty)
+              }
             >
-              Verify
+              Approve page
+            </button>
+          )}
+          {currentGeometrySaveStatus === 'conflict' && (
+            <button
+              className="seg-editor-action-btn"
+              onClick={() => {
+                void reloadSegments(true);
+              }}
+              disabled={geometryApprovalPending || segmentReloadPending}
+            >
+              Reload
             </button>
           )}
           <button
             className="seg-editor-action-btn danger"
-            onClick={() => segmentEditor.resetFromSource(currentKrakenSegments, { preserveSelection: true })}
-            disabled={!segmentEditor.isDirty}
+            onClick={() => {
+              if (geometryEditingLockedRef.current) return;
+              segmentEditor.resetFromSource(currentKrakenSegments, { preserveSelection: true });
+              if (currentPage) {
+                setGeometrySaveStatusMap((previous) => ({
+                  ...previous,
+                  [currentPage.id]: 'idle',
+                }));
+              }
+            }}
+            disabled={
+              !segmentEditor.isDirty
+              || geometryEditingLocked
+            }
           >
-            Discard
+            Undo unsaved
           </button>
         </div>
       )}
@@ -2091,13 +2805,19 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
       {/* Segment editor mini-toolbar — shown only in edit mode */}
       {overlayEnabled && segmentEditor.segmentEditMode && (
-        <div className={`segment-editor-toolbar${currentPageTrusted ? ' locked' : ''}${subtractMode ? ' subtract-mode' : ''}`}>
+        <div
+          className={`segment-editor-toolbar${currentPageTrusted ? ' locked' : ''}${subtractMode ? ' subtract-mode' : ''}`}
+          aria-disabled={geometryEditingLocked}
+          style={{
+            pointerEvents: geometryEditingLocked ? 'none' : undefined,
+          }}
+        >
           {/* Undo/Redo */}
           <div className="seg-toolbar-group">
             <button
               className="segment-editor-toolbar-btn segment-editor-toolbar-btn-icon"
               onClick={() => segmentEditor.undo()}
-              disabled={!segmentEditor.canUndo}
+              disabled={geometryEditingLocked || !segmentEditor.canUndo}
               data-hint="Undo (⌘Z)"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -2108,7 +2828,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
             <button
               className="segment-editor-toolbar-btn segment-editor-toolbar-btn-icon"
               onClick={() => segmentEditor.redo()}
-              disabled={!segmentEditor.canRedo}
+              disabled={geometryEditingLocked || !segmentEditor.canRedo}
               data-hint="Redo (⌘⇧Z)"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -2126,6 +2846,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
             <button
               className={`segment-editor-toolbar-btn${drawTool === 'select' ? ' active' : ''} segment-editor-toolbar-btn-icon`}
               onClick={() => setDrawTool('select')}
+              disabled={geometryEditingLocked}
               data-hint="Select (S)"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -2135,6 +2856,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
             <button
               className={`segment-editor-toolbar-btn${drawTool === 'box' ? ' active' : ''} segment-editor-toolbar-btn-icon`}
               onClick={() => setDrawTool('box')}
+              disabled={geometryEditingLocked}
               data-hint="Box (B)"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -2144,6 +2866,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
             <button
               className={`segment-editor-toolbar-btn${drawTool === 'polygon' ? ' active' : ''} segment-editor-toolbar-btn-icon`}
               onClick={() => setDrawTool('polygon')}
+              disabled={geometryEditingLocked}
               data-hint="Polygon (P)"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -2158,6 +2881,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
             <button
               className={`segment-editor-toolbar-btn${drawTool === 'draw' ? ' active' : ''} segment-editor-toolbar-btn-icon`}
               onClick={() => setDrawTool('draw')}
+              disabled={geometryEditingLocked}
               data-hint="Draw (D)"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -2182,6 +2906,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
                   <button
                     className={`segment-editor-toolbar-btn${subtractMode ? ' active subtract-active' : ''} segment-editor-toolbar-btn-icon`}
                     onClick={() => setSubtractMode((v) => !v)}
+                    disabled={geometryEditingLocked}
                     data-hint="Subtract (R)"
                   >
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -2191,6 +2916,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
                   <button
                     className={`segment-editor-toolbar-btn${editMode === 'rotate' ? ' active rotate-active' : ''} segment-editor-toolbar-btn-icon`}
                     onClick={() => {
+                      if (geometryEditingLockedRef.current) return;
                       if (editMode !== 'rotate') {
                         segmentEditor.ensureBoundary(sel._id);
                         setEditMode('rotate');
@@ -2198,6 +2924,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
                         setEditMode('resize');
                       }
                     }}
+                    disabled={geometryEditingLocked}
                     data-hint="Rotate (T)"
                   >
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -2216,13 +2943,14 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
                   <button
                     className={`segment-editor-toolbar-btn seg-class-trigger seg-class-${currentClass}`}
                     onClick={() => setClassDropdownOpen((v) => !v)}
+                    disabled={geometryEditingLocked}
                   >
                     {currentClass}
                     <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ marginLeft: 4 }}>
                       <path d="M2 4l3 3 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </button>
-                  {classDropdownOpen && (
+                  {classDropdownOpen && !geometryEditingLocked && (
                     <div className="seg-class-dropdown">
                       {(['body', 'continuation', 'addition', 'ignore'] as const).map((cls) => (
                         <button
@@ -2246,6 +2974,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
                 <button
                   className="segment-editor-toolbar-btn segment-editor-toolbar-btn-icon seg-toolbar-delete"
                   onClick={() => segmentEditor.deleteSegment(sel._id)}
+                  disabled={geometryEditingLocked}
                   data-hint="Delete (Del)"
                 >
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -2286,6 +3015,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
         {(() => {
           const isSegments = segmentEditor.segmentEditMode;
           const toggle = async () => {
+            if (navigationPendingRef.current) return;
             // Always make sure overlay is on when switching modes
             if (!overlayEnabled) setOverlayEnabled(true);
             if (isSegments) {
@@ -2300,6 +3030,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
             <button
               className="line-review-toolbar-btn"
               onClick={toggle}
+              disabled={navigationPending}
               title={isSegments ? 'Switch to transcript editor' : 'Switch to segment editor'}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">

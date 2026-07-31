@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "engineId": "eynollah-v091",
+  "adapter": "eynollah-pagexml",
+  "adapterVersion": "4",
+  "package": {
+    "name": "eynollah",
+    "version": "0.9.0",
+    "wheelSha256": "c3680a1c9047ff344500e8f585927876d01d4234b73abd1b1e64fd5f4735e97c"
+  },
+  "execution": {
+    "kind": "docker",
+    "image": "letter-archive-layout-eynollah:0.9.0-cpu",
+    "dockerfile": "benchmarks/layout/engine-configs/eynollah.Dockerfile",
+    "platform": "native",
+    "timeoutSeconds": 3600
+  },
+  "measurementSemantics": {
+    "isolation": "fresh-container-per-page",
+    "latency": "cold-start-per-page",
+    "residentBatchThroughputMeasured": false,
+    "providerTimingSplit": "unavailable-without-upstream-instrumentation"
+  },
+  "models": {
+    "bundleVersion": "0.9.1",
+    "directory": "python/layout_benchmark/.runtime/eynollah/models-v0.9.1",
+    "archive": "python/layout_benchmark/.runtime/eynollah/models_inference_layout_v0_9_1.zip",
+    "downloadUrl": "https://zenodo.org/api/records/21381102/files/models_inference_layout_v0_9_1.zip/content",
+    "publishedSizeBytes": 1847700967,
+    "publishedSha256": "d12fc7ca19fb30800314e78a17005af19059af5620019712ae4565f93687408a",
+    "publishedMd5": "e4c23fa7deab88f736c2b7354ce28d5e",
+    "requiredFiles": {
+      "models_eynollah/eynollah-binarization_20210425.onnx": {
+        "sha256": "f86248e7ae1e05ef18a48c9adfd06daacf77ec69ec4ae359634986babc2470b4",
+        "sizeBytes": 152434670
+      },
+      "models_eynollah/eynollah-column-classifier_20210425.onnx": {
+        "sha256": "c9b1ed9fcd608880e2c750c13e557d33a201c3f06436dd9da886d1557ce20c0d",
+        "sizeBytes": 102360983
+      },
+      "models_eynollah/eynollah-enhancement_20210425.onnx": {
+        "sha256": "4e5d1340ac64aecc9a8533bb403b24513e527a47c8611ab5155321a7d2b0a8c5",
+        "sizeBytes": 131463866
+      },
+      "models_eynollah/eynollah-main-regions-aug-rotation_20210425.onnx": {
+        "sha256": "08f59a7c00bbde5728ca35861528ef5b603ac95df31a9f3a2bd8d987d006a314",
+        "sizeBytes": 152434970
+      },
+      "models_eynollah/eynollah-main-regions-aug-scaling_20210425.onnx": {
+        "sha256": "7aaca5189272f4b37eb265b6848386d0b154e37bc55ea3ee94a29048f01f5237",
+        "sizeBytes": 152434970
+      },
+      "models_eynollah/eynollah-main-regions-ensembled_20210425.onnx": {
+        "sha256": "55c22f1526070c67728add6ca381373064f98579dd066f73c5ccddfaaeadd7b6",
+        "sizeBytes": 152434970
+      },
+      "models_eynollah/eynollah-main-regions_20220314.onnx": {
+        "sha256": "838fdc0c1621ccff25cc0fa9cb23c399a157bbe0a8b6a3c9dbaa278490793635",
+        "sizeBytes": 152435102
+      },
+      "models_eynollah/eynollah-main-regions_20231127_672_org_ens_11_13_16_17_18.onnx": {
+        "sha256": "05a0d933209005a6fb4e13135e4f427c0b4ef0e75a7996303d41e70458a38845",
+        "sizeBytes": 149335873
+      },
+      "models_eynollah/model_eynollah_page_extraction_20250915.onnx": {
+        "sha256": "419cf02957258bc38b917776bb9649ef9a8c1e89c6a135aa63b8e3965103e8d5",
+        "sizeBytes": 152433962
+      },
+      "models_eynollah/model_eynollah_reading_order_20250824.onnx": {
+        "sha256": "0383062e519fa1eba5e5b9fe2b404c6dd28abaf5e7394b216197b53033afdad2",
+        "sizeBytes": 106813881
+      },
+      "models_eynollah/modelens_e_l_all_sp_0_1_2_3_4_171024.onnx": {
+        "sha256": "cba9bf1b53dd53b0c537496bf4b834a9edf1f374a117cbc974df2ff4ebf299a4",
+        "sizeBytes": 149848856
+      },
+      "models_eynollah/modelens_full_lay_1__4_3_091124.onnx": {
+        "sha256": "4119c89e6dc0f0139120fa49f3518c03adcab6089081f1cbdcd3e4205f2384f3",
+        "sizeBytes": 149626714
+      },
+      "models_eynollah/modelens_table_0t4_201124.onnx": {
+        "sha256": "e98dc8f50e041ff92e74741311e4fa9820accca1d9877c84e2086f0ce16d3670",
+        "sizeBytes": 149626096
+      },
+      "models_eynollah/modelens_textline_0_1__2_4_16092024.onnx": {
+        "sha256": "bc6575898c41bba852b3c5367c92add6663ba121e45c325fe770e1cc05241e5c",
+        "sizeBytes": 149735395
+      }
+    }
+  },
+  "resourceRequirements": {
+    "mode": "full-layout",
+    "modelWorkerLimitBytes": 6337593344,
+    "minimumContainerMemoryBytes": 8589934592,
+    "recommendedHostMemoryBytes": 17179869184,
+    "rationale": "Full layout loads five persistent predictors. Their upstream worker limits total about 6.0 GiB before Python, OpenCV, image, and output overhead. Non-full mode still loads four predictors totaling about 4.2 GiB and changes the region-class semantics under evaluation."
+  },
+  "parameters": {
+    "device": "CPU",
+    "inferenceRuntime": "onnxruntime-cpu",
+    "upstreamSupport": "experimental-cpu-dependency-substitution",
+    "ignorePageExtraction": false,
+    "pageBoundarySemantics": "provider-predicted",
+    "fullLayout": true,
+    "curvedTextLines": false,
+    "tableDetection": false,
+    "scaling": false,
+    "enhancement": false,
+    "binarization": false
+  }
+}

@@ -57,7 +57,6 @@ async function clearPrimaryPageTranscriptMappings(
     .select({
       id: letterPages.id,
       lineSegments: letterPages.lineSegments,
-      segmentTrustState: letterPages.segmentTrustState,
     })
     .from(letterPages)
     .where(eq(letterPages.letterId, letterId));
@@ -65,12 +64,13 @@ async function clearPrimaryPageTranscriptMappings(
   for (const page of pages) {
     const lineSegments = withoutTranscriptMapping(page.lineSegments);
     const mappingChanged = JSON.stringify(lineSegments) !== JSON.stringify(page.lineSegments);
-    if (!mappingChanged && page.segmentTrustState === 'unverified') continue;
+    if (!mappingChanged) continue;
     await database
       .update(letterPages)
       .set({
-        ...(mappingChanged ? { lineSegments } : {}),
-        segmentTrustState: 'unverified',
+        lineSegments,
+        // Transcript mapping is review metadata, not geometry. Removing stale
+        // mapped text must not revoke approval of an unchanged outline.
         updatedAt: new Date(),
       })
       .where(eq(letterPages.id, page.id));

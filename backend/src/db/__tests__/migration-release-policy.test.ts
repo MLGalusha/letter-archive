@@ -65,6 +65,12 @@ describe('migration release policy', () => {
       '0054_add_page_source_revisions',
       '0055_add_transcript_confirmation_intent',
       '0056_repair_extra_content_job_ownership',
+      '0057_add_page_layout_v2',
+      '0058_add_page_geometry_revisions',
+      '0059_allow_page_geometry_revision_zero',
+      '0060_add_transcript_identity',
+      '0061_add_page_recognition_artifacts',
+      '0062_version_page_recognition_evidence',
     ]);
   });
 
@@ -74,6 +80,79 @@ describe('migration release policy', () => {
       appliedMigrations: appliedPrefix(journal.length),
       mode: 'automatic',
     })).toEqual([]);
+  });
+
+  it('allows the expand-only PageLayoutV2 migration during an automatic release', () => {
+    const pageLayoutIndex = journal.findIndex(
+      ({ tag }) => tag === '0057_add_page_layout_v2',
+    );
+    expect(assertMigrationReleaseAllowed({
+      journal: journal.slice(0, pageLayoutIndex + 1),
+      appliedMigrations: appliedPrefix(baselineIndex + 1),
+      mode: 'automatic',
+    }).map(({ tag }) => tag)).toEqual([
+      '0057_add_page_layout_v2',
+    ]);
+  });
+
+  it('requires maintenance mode for the exact geometry-approval migration', () => {
+    const geometryMigrationIndex = journal.findIndex(
+      ({ tag }) => tag === '0058_add_page_geometry_revisions',
+    );
+    expect(() => assertMigrationReleaseAllowed({
+      journal,
+      appliedMigrations: appliedPrefix(geometryMigrationIndex),
+      mode: 'automatic',
+    })).toThrow(/0058_add_page_geometry_revisions/);
+  });
+
+  it('allows the revision-zero constraint relaxation after geometry tables exist', () => {
+    const revisionZeroIndex = journal.findIndex(
+      ({ tag }) => tag === '0059_allow_page_geometry_revision_zero',
+    );
+    expect(assertMigrationReleaseAllowed({
+      journal: journal.slice(0, revisionZeroIndex + 1),
+      appliedMigrations: appliedPrefix(revisionZeroIndex),
+      mode: 'automatic',
+    }).map(({ tag }) => tag)).toEqual([
+      '0059_allow_page_geometry_revision_zero',
+    ]);
+  });
+
+  it('allows database-owned transcript identity during an automatic release', () => {
+    const transcriptIdentityIndex = journal.findIndex(
+      ({ tag }) => tag === '0060_add_transcript_identity',
+    );
+    expect(assertMigrationReleaseAllowed({
+      journal: journal.slice(0, transcriptIdentityIndex + 1),
+      appliedMigrations: appliedPrefix(transcriptIdentityIndex),
+      mode: 'automatic',
+    }).map(({ tag }) => tag)).toEqual([
+      '0060_add_transcript_identity',
+    ]);
+  });
+
+  it('allows append-only page recognition artifacts during an automatic release', () => {
+    const artifactIndex = journal.findIndex(
+      ({ tag }) => tag === '0061_add_page_recognition_artifacts',
+    );
+    expect(assertMigrationReleaseAllowed({
+      journal: journal.slice(0, artifactIndex + 1),
+      appliedMigrations: appliedPrefix(artifactIndex),
+      mode: 'automatic',
+    }).map(({ tag }) => tag)).toEqual([
+      '0061_add_page_recognition_artifacts',
+    ]);
+  });
+
+  it('allows strict v2 recognition evidence during an automatic release', () => {
+    expect(assertMigrationReleaseAllowed({
+      journal,
+      appliedMigrations: appliedPrefix(journal.length - 1),
+      mode: 'automatic',
+    }).map(({ tag }) => tag)).toEqual([
+      '0062_version_page_recognition_evidence',
+    ]);
   });
 
   it('fails closed when a future migration lacks an automatic policy', () => {

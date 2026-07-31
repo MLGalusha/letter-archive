@@ -50,7 +50,60 @@ A dev admin account (`dev@localhost.test` / `dev`) is auto-seeded when `NODE_ENV
 | `npm run drizzle:migrate` | Apply pending migrations |
 | `npm run logs:query -- --hours 24` | Query recent logs |
 | `npm run logs:errors` | Errors from last 24 hours |
-| `npm run detect-lines` | Run the operator-controlled local Kraken line-segmentation workflow |
+| `npm run detect-lines` | Run the operator-controlled Kraken 7 native-layout workflow |
+
+## Kraken 7 native layout
+
+Kraken is an explicit operator workflow, not part of the API or background
+worker process. Build the pinned Python 3.12 environment and inspect the queue
+before writing anything:
+
+```bash
+bash python/setup.sh --rebuild
+npm run detect-lines -- --url https://example.test --email admin@example.test --password '...' --dry-run
+npm run detect-lines -- --url https://example.test --email admin@example.test --password '...' --page-id <PAGE_ID>
+npm run detect-lines -- --url https://example.test --email admin@example.test --password '...' --limit 5
+```
+
+`--page-id` and `--limit` bound a mutating run. An unbounded interactive run
+requires typing a page-count-specific confirmation; an unbounded non-TTY run
+exits without processing. The server queue includes every source-checksummed
+page that lacks a canonical `PageLayoutV2`, including pages that already have
+mutable review segments. Uploads are fenced to the source revision/checksum
+returned by that queue. When reviewed segments already exist, the canonical
+native layout is added underneath them without replacing their geometry or
+verification state.
+
+[`python/line_finder.py`](python/line_finder.py) is the one supported detector
+entry point. It uses Kraken 7's task API and emits native `PageLayoutV2`;
+curved baselines, bbox-only lines, polygons, regions, direction, provider
+reading order, stable identity, and model/source provenance remain canonical
+instead of being reduced to axis-aligned review boxes. The old independent
+Kraken 6 segmentation/recognition script and its lossy JSON output were
+removed.
+
+The remote CLI starts one versioned NDJSON Python worker for the whole run.
+That worker loads the bundled model once, processes pages sequentially at
+concurrency 1, returns one structured result per request, and remains usable
+when one page fails. Normal completion uses an explicit shutdown handshake.
+`--native-json` remains available for a strict one-shot result.
+
+Each native result records the actual Python, Kraken, Torch, Pillow, and NumPy
+versions plus OS/architecture and resolved execution device. Setup applies
+[`constraints-runtime.txt`](python/constraints-runtime.txt) to the
+inference-sensitive numerical stack. Those constraints pin versions while
+still letting pip select the correct macOS or Linux wheel; they are
+intentionally not described as a universal hashed lockfile. CI runs both
+contract tests and a bounded prediction through Kraken's actual bundled BLLA
+model.
+
+The measured 66-page warm CPU soak peaked at 1,850,490,880 bytes (1.72 GiB)
+RSS and averaged 10.05 seconds per page on an Apple M1. For deployment
+planning, use a dedicated 2-vCPU/8-GiB worker at concurrency 1 as the
+conservative starting point, then verify it with production images and memory
+telemetry before changing concurrency. See the
+[benchmark results](benchmarks/layout/RESULTS-2026-07-28.md) for the exact
+measurement and caveats.
 
 ## API Routes
 

@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "engineId": "kraken6",
+  "adapter": "kraken",
+  "adapterVersion": "2",
+  "package": {
+    "name": "kraken",
+    "version": "6.0.3"
+  },
+  "execution": {
+    "kind": "venv",
+    "python": "python/venv/bin/python",
+    "timeoutSeconds": 1200
+  },
+  "measurementSemantics": {
+    "isolation": "fresh-process-per-page",
+    "latency": "cold-start-per-page",
+    "residentBatchThroughputMeasured": false,
+    "providerTimingSplit": "model-load-and-inference"
+  },
+  "model": {
+    "kind": "package-resource",
+    "package": "kraken",
+    "resource": "blla.mlmodel",
+    "expectedSha256": "77a638a83c9e535620827a09e410ed36391e9e8e8126d5796a0f15b978186056"
+  },
+  "parameters": {
+    "textDirection": "horizontal-lr",
+    "device": "cpu",
+    "autocast": false,
+    "raiseOnError": true
+  }
+}

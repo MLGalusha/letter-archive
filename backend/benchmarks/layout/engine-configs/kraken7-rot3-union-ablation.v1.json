@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "engineId": "kraken7-rot3-union-ablation",
+  "adapter": "layout-run-rotation-projection",
+  "adapterVersion": "1",
+  "provider": "letter-archive-rotation-projection",
+  "package": {
+    "name": "letter-archive-rotation-projection",
+    "version": "1"
+  },
+  "execution": {
+    "kind": "host",
+    "timeoutSeconds": 300
+  },
+  "measurementSemantics": {
+    "isolation": "orchestrator-process-pure-geometry",
+    "latency": "source-artifact-verification-plus-deterministic-reprojection",
+    "residentBatchThroughputMeasured": false,
+    "providerTimingSplit": "not-applicable-no-model-inference"
+  },
+  "sourceRuns": {
+    "rotationEvidence": {
+      "role": "rotation-native-evidence",
+      "runId": "kraken7-rot4-union-targeted8-v2-20260728",
+      "expectedEngineId": "kraken7-rot4-union",
+      "expectedAdapterVersion": "6",
+      "manifestSha256": "3f4f662eb8e66d57125fe84bafa2e9359ec1df7c5e1e14d99ad0ec562d4be0bd",
+      "expectedRotationsDegrees": [
+        0,
+        90,
+        180,
+        270
+      ]
+    }
+  },
+  "parameters": {
+    "sourceRotationsDegrees": [
+      0,
+      90,
+      270
+    ],
+    "rotationMergePolicy": "evidence-union",
+    "requireSuccessfulBaselinePass": true
+  },
+  "diagnostic": {
+    "equivalentToDefaultProfile": false,
+    "rankable": false,
+    "contractEnforcement": "adapter-enforced-native-reprojection-v1",
+    "reason": "Three-pass union ablation projected from the exact frozen four-pass source. This isolates removal of the 180 degree pass without rerunning Kraken. It intentionally preserves every unique cluster from successful 0, 90, and 270 degree passes so recall and false positives remain visible."
+  }
+}

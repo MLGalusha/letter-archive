@@ -101,7 +101,6 @@ test.describe('@mocked Line Review', () => {
                 baseline: [[170, 274], [1480, 274]],
                 ocrText: '',
                 segmentClass: 'continuation',
-                isMapped: false,
               }],
             }
           : {}),
@@ -141,11 +140,13 @@ test.describe('@mocked Line Review', () => {
     await page.locator('.overlay-center .nav-button').nth(1).click();
     await expect(page.locator('.image-counter')).toHaveText('2 / 2');
     await page.locator('.transcript-editor').selectText();
-    const mapButton = page.getByRole('button', { name: 'Map to Segment' });
-    await expect(mapButton).toBeVisible();
-    await mapButton.click();
+    const repairButton = page.getByRole('button', {
+      name: 'Repair Text Location',
+    });
+    await expect(repairButton).toBeVisible();
+    await repairButton.click();
     await expect(page.locator('.line-review-mode')).toBeVisible();
-    await expect(page.locator('.line-review-mapping-banner')).toContainText(
+    await expect(page.locator('.line-review-repair-banner')).toContainText(
       'My dear mother,',
     );
 
@@ -165,7 +166,7 @@ test.describe('@mocked Line Review', () => {
       'Second Letter Sender',
     );
     await expect(page.locator('.line-review-mode')).toHaveCount(0);
-    await expect(page.locator('.line-review-mapping-banner')).toHaveCount(0);
+    await expect(page.locator('.line-review-repair-banner')).toHaveCount(0);
     await expect(page.locator('.viewer-image')).toBeVisible();
     await expect(page.locator('.filename-value')).toHaveText(
       '009-19470811-L02-01.jpg',
@@ -176,7 +177,7 @@ test.describe('@mocked Line Review', () => {
     );
   });
 
-  test('shows no-segments message when line-segments returns empty', async ({
+  test('keeps transcript review available when line-segments returns empty', async ({
     page,
   }) => {
     const detectLinesByPageId = createMockDetectLinesByPageId();
@@ -195,17 +196,31 @@ test.describe('@mocked Line Review', () => {
     await page.locator('.viewer-image').click();
     await page.locator('.line-review-mode').waitFor({ state: 'visible' });
 
-    await expect(page.locator('.line-review-analyzing')).toContainText('No line segments');
+    const unlocatedEditor = page.locator('.line-review-unlocated-editor');
+    await expect(unlocatedEditor).toBeVisible();
+    await expect(unlocatedEditor).toContainText('No detected location');
+    await expect(unlocatedEditor.locator('.line-review-editable')).not.toBeEmpty();
+    await expect(page.locator('.line-review-highlight-svg')).toHaveCount(0);
   });
 
-  test('sends the complete source snapshot when verifying stored segments', async ({
+  test('saves and approves only the current page geometry revision', async ({
     page,
   }) => {
     const initialLetter = createLetterWithStoredLineSegments();
     const mockedApi = await openLineReview(page, initialLetter);
+    const currentPageId = initialLetter.images[0].id;
+    const nextPageId = initialLetter.images[1].id;
+    const initialGeometry =
+      mockedApi.pageGeometryByPageId[currentPageId];
+    const initialGeometryRevision = initialGeometry.geometryRevision;
+    const initialProjectionChecksum =
+      initialGeometry.lineSegmentsChecksumSha256;
 
     await page.getByRole('button', { name: 'Segments', exact: true }).click();
     await expect(page.locator('.seg-editor-actions')).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Approve page' }),
+    ).toBeVisible();
 
     await page.locator('.segment-editor-rect').first().dispatchEvent(
       'pointerdown',
@@ -214,33 +229,57 @@ test.describe('@mocked Line Review', () => {
     await page.locator(
       '.segment-editor-toolbar-btn[data-hint="Delete (Del)"]',
     ).click();
-    await page.locator('.seg-editor-verify-btn').click();
+    await page.getByRole('button', { name: 'Approve page' }).click();
     await expect
-      .poll(() => mockedApi.letterSegmentTrustRequests.length)
+      .poll(() => mockedApi.pageSegmentTrustRequests.length)
       .toBe(1);
+    await expect(page.getByText('Page approved', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Reopen' })).toBeVisible();
 
     expect(mockedApi.saveLineSegmentRequests).toEqual([
       {
-        url: `${API_BASE_URL}/admin/letters/pages/${initialLetter.images[0].id}/line-segments`,
-        pageId: initialLetter.images[0].id,
+        url: `${API_BASE_URL}/admin/letters/pages/${currentPageId}/line-segments`,
+        pageId: currentPageId,
         body: expect.objectContaining({
           lineSegments: expect.any(Array),
           primarySourceRevision: 4,
           sourceChecksum: initialLetter.images[0].sourceChecksum,
+          expectedGeometryRevision: initialGeometryRevision,
+          expectedLineSegmentsChecksumSha256:
+            initialProjectionChecksum,
         }),
       },
     ]);
-    expect(mockedApi.letterSegmentTrustRequests[0]).toEqual({
-      url: `${API_BASE_URL}/admin/letters/${initialLetter.id}/segment-trust`,
+    const savedGeometry = mockedApi.pageGeometryByPageId[currentPageId];
+    expect(savedGeometry.geometryRevision).toBe(initialGeometryRevision + 1);
+    expect(mockedApi.pageSegmentTrustRequests[0]).toEqual({
+      url: `${API_BASE_URL}/admin/letters/pages/${currentPageId}/segment-trust`,
+      pageId: currentPageId,
       body: {
         trustState: 'trusted',
         primarySourceRevision: 4,
-        pages: initialLetter.images.map((image) => ({
-          pageId: image.id,
-          sourceChecksum: image.sourceChecksum,
-        })),
+        sourceChecksum: initialLetter.images[0].sourceChecksum,
+        expectedGeometryRevision: savedGeometry.geometryRevision,
+        expectedGeometryChecksumSha256:
+          savedGeometry.geometryChecksumSha256,
       },
     });
+    expect(mockedApi.letterSegmentTrustRequests).toHaveLength(0);
+    expect(savedGeometry.reviewState).toEqual(expect.objectContaining({
+      trustState: 'trusted',
+      approvedGeometryRevision: savedGeometry.geometryRevision,
+      approvedGeometryChecksumSha256:
+        savedGeometry.geometryChecksumSha256,
+    }));
+    expect(
+      mockedApi.pageGeometryByPageId[nextPageId].reviewState.trustState,
+    ).toBe('unverified');
+
+    await page.getByRole('button', { name: 'Next page' }).click();
+    await expect(
+      page.getByRole('button', { name: 'Approve page' }),
+    ).toBeVisible();
+    await expect(page.getByText('Page approved', { exact: true })).toHaveCount(0);
   });
 
   test('saves edited transcript text and records a transcript version on exit', async ({

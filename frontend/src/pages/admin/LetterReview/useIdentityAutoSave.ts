@@ -615,7 +615,20 @@ export function useIdentityAutoSave({
     visit,
   ]);
 
+  const hasPendingIdentityWork = useCallback(() => (
+    Boolean(
+      targetKey
+      && visit.isActive()
+      && !blockedRef.current
+      && (
+        pendingRetagsByTargetRef.current.get(targetKey)?.length
+        || latestIdentityJobByTargetRef.current.has(targetKey)
+      ),
+    )
+  ), [targetKey, visit]);
+
   return {
+    hasPendingIdentityWork,
     identityUpdateState: state.identityUpdateState,
     identityUpdateSecondsRemaining:
       state.identityUpdateSecondsRemaining,

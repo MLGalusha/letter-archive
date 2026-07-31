@@ -41,6 +41,7 @@ describe("AdminSidebar", () => {
       "Dashboard",
       "Content",
       "Processing",
+      "Layout Lab",
       "Notes",
       "Usage",
       "Upload",

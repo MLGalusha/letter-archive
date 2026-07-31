@@ -471,8 +471,16 @@ async function persistPage(
             originalFilename: params.originalFilename,
             width: params.width ?? null,
             height: params.height ?? null,
+            pageLayout: null,
+            pageLayoutChecksumSha256: null,
             lineSegments: null,
+            geometryRevision: 0,
+            geometryChecksumSha256: null,
             segmentTrustState: 'unverified',
+            approvedGeometryRevision: null,
+            approvedGeometryChecksumSha256: null,
+            geometryApprovedBy: null,
+            geometryApprovedAt: null,
             updatedAt: new Date(),
           }
         : {

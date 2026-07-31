@@ -160,6 +160,56 @@ export interface ExtraContentItem {
 // Segment system types
 export type SegmentTrustState = 'unverified' | 'trusted';
 export type SegmentClass = 'body' | 'continuation' | 'addition' | 'ignore';
+export type LineGeometryType = 'baseline' | 'bbox';
+export type SegmentGeometrySource =
+  | 'machine'
+  | 'human-created'
+  | 'human-adjusted';
+export type SegmentGeometryOperation =
+  | 'detected'
+  | 'create-box'
+  | 'create-polygon'
+  | 'create-freehand'
+  | 'duplicate'
+  | 'resize'
+  | 'move'
+  | 'move-vertex'
+  | 'add-vertex'
+  | 'delete-vertex'
+  | 'reshape'
+  | 'rotate'
+  | 'extend'
+  | 'subtract'
+  | 'delete';
+
+export interface SegmentGeometryProvenance {
+  /** Whether the current outline is detector-owned, newly drawn, or adjusted by a reviewer. */
+  source: SegmentGeometrySource;
+  /** The detector/default state or most recent human geometry operation. */
+  operation: SegmentGeometryOperation;
+  /** Stable source IDs retained across adjustments, duplication, and future composition. */
+  parentSegmentIds: string[];
+}
+
+export type PageLayoutDirection =
+  | 'left-to-right'
+  | 'right-to-left'
+  | 'top-to-bottom'
+  | 'bottom-to-top'
+  | 'mixed'
+  | 'unknown';
+export type PageLayoutTextDirection =
+  | 'horizontal-lr'
+  | 'horizontal-rl'
+  | 'vertical-lr'
+  | 'vertical-rl';
+export type PageLayoutJsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | PageLayoutJsonValue[]
+  | { [key: string]: PageLayoutJsonValue };
 
 export interface LineSegmentWord {
   text: string;
@@ -167,12 +217,26 @@ export interface LineSegmentWord {
 }
 
 export interface LineSegment {
+  /** Stable detector/editor identity. Legacy records may not have one yet. */
+  id?: string;
   line: number;
-  baseline: number[][];
+  /** Undefined for native bbox-only records. */
+  geometryType?: LineGeometryType;
+  providerId?: string;
+  providerOrdinal?: number;
+  providerTextDirection?: PageLayoutTextDirection;
+  baseline?: number[][];
   bbox: [number, number, number, number];
+  /** Records whether bbox is provider geometry or a derived display hitbox. */
+  bboxSource?: string;
+  /** Review ownership and lineage for the persisted geometry. */
+  geometryProvenance?: SegmentGeometryProvenance;
   ocrText: string;
   words?: LineSegmentWord[];
   boundary?: { x: number; y: number }[];
+  /** Kraken 6 compatibility metadata retained until legacy records migrate. */
+  group?: number | null;
+  regionIds?: string[];
   excluded?: boolean;
   segmentClass?: SegmentClass;
   isMapped?: boolean;
@@ -182,6 +246,145 @@ export interface LineSegment {
 export interface MergedLineSegment extends LineSegment {
   merged: boolean;
   constituents: LineSegment[];
+}
+
+export interface PageLayoutPoint {
+  x: number;
+  y: number;
+}
+
+export interface PageLayoutBoundingBox {
+  xMin: number;
+  yMin: number;
+  xMax: number;
+  yMax: number;
+}
+
+export interface PageLayoutWord {
+  id: string;
+  text: string;
+  boundingBox: PageLayoutBoundingBox;
+}
+
+interface PageLayoutLineCommon {
+  id: string;
+  providerId?: string;
+  providerOrdinal?: number;
+  text: string | null;
+  direction: PageLayoutDirection;
+  providerTextDirection?: PageLayoutTextDirection;
+  baseDirection?: 'L' | 'R' | null;
+  tags?: Record<string, PageLayoutJsonValue> | null;
+  regionIds?: string[];
+  unresolvedProviderRegionIds?: PageLayoutJsonValue[];
+  language?: string[] | null;
+  words?: PageLayoutWord[];
+  sourceLineNumber?: number;
+  displayExtent?: {
+    boundingBox: PageLayoutBoundingBox | null;
+    source: string;
+    derived: boolean;
+  };
+}
+
+export interface PageLayoutBaselineLine extends PageLayoutLineCommon {
+  kind: 'baseline';
+  baseline: PageLayoutPoint[];
+  boundary?: PageLayoutPoint[];
+  boundingBox?: PageLayoutBoundingBox;
+}
+
+export interface PageLayoutBboxLine extends PageLayoutLineCommon {
+  kind: 'bbox';
+  boundingBox: PageLayoutBoundingBox;
+}
+
+export type PageLayoutLine = PageLayoutBaselineLine | PageLayoutBboxLine;
+
+export interface PageLayoutRegion {
+  id: string;
+  providerId?: string;
+  providerOrdinal?: number;
+  type: string;
+  boundary: PageLayoutPoint[];
+  lineIds: string[];
+  tags?: Record<string, PageLayoutJsonValue> | null;
+  language?: string[] | null;
+}
+
+export interface PageLayoutReadingOrderPath {
+  id: string;
+  direction: PageLayoutDirection;
+  lineIds: string[];
+  source?: 'provider' | 'geometry' | 'legacy' | 'human';
+  providerOrdinal?: number;
+  providerIndices?: number[];
+  providerMappingComplete?: boolean;
+  complete?: boolean;
+}
+
+export interface PageLayoutV2 {
+  schemaVersion: 2;
+  layoutId: string;
+  runId: string;
+  pageId: string;
+  image: {
+    width: number;
+    height: number;
+    checksumSha256: string;
+    rasterChecksumSha256?: string;
+    rasterChecksumAlgorithm?: 'sha256-rgb8-v1';
+    coordinateSpace: {
+      unit: 'pixel';
+      origin: 'top-left';
+      xAxis: 'right';
+      yAxis: 'down';
+    };
+    source?: {
+      width: number;
+      height: number;
+      checksumSha256: string;
+      mode: string;
+      exifOrientation: number | null;
+    };
+    normalization?: {
+      operation: string;
+      applied: boolean;
+      exifReadError: boolean;
+    };
+  };
+  provenance: {
+    producer: {
+      name: string;
+      version: string;
+      api?: string;
+      providerRunId?: string;
+    };
+    model: {
+      name: string;
+      version: string;
+      checksumSha256: string;
+      kind?: string;
+      sizeBytes?: number;
+    };
+    config: {
+      name: string;
+      version: string;
+      checksumSha256: string;
+      parameters?: Record<string, PageLayoutJsonValue>;
+    };
+  };
+  lineRepresentation: 'baselines' | 'bbox' | 'mixed';
+  textDirection: PageLayoutTextDirection;
+  scriptDetection: boolean;
+  language: string[] | null;
+  pageBoundary?: PageLayoutPoint[];
+  lines: PageLayoutLine[];
+  regions: PageLayoutRegion[];
+  readingOrder: {
+    primary: PageLayoutReadingOrderPath;
+    alternatives: PageLayoutReadingOrderPath[];
+  };
 }
 
 export interface LetterImage {
@@ -194,6 +397,11 @@ export interface LetterImage {
   width?: number;
   height?: number;
   lineSegments?: LineSegment[];
+  geometryRevision?: number;
+  geometryChecksumSha256?: string | null;
+  lineSegmentsChecksumSha256?: string | null;
+  pageLayout?: PageLayoutV2;
+  pageLayoutChecksumSha256?: string;
   segmentTrustState?: SegmentTrustState;
 }
 
@@ -469,6 +677,10 @@ export interface Letter {
   title: string;
   collectionCode?: string;
   primarySourceRevision: number;
+  /** Revision-bound transcript identity returned by the admin detail API. */
+  transcriptRevision?: number;
+  /** SHA-256 of the exact persisted UTF-8 transcript, when supplied. */
+  transcriptChecksumSha256?: string;
   images: LetterImage[];
   transcript: LetterTranscript;
   metadata: LetterMetadata;

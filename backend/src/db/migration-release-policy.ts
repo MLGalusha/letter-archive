@@ -26,7 +26,22 @@ export const automaticMigrationBaselineTag =
  */
 export const migrationReleasePolicies: Readonly<
   Record<string, MigrationReleaseMode>
-> = Object.freeze({});
+> = Object.freeze({
+  '0057_add_page_layout_v2': 'automatic',
+  // Converts the old provenance-free trust bit into exact revision receipts.
+  '0058_add_page_geometry_revisions': 'maintenance',
+  // Expand-only relaxation needed before lazy revision-zero baselines.
+  '0059_allow_page_geometry_revision_zero': 'automatic',
+  // Adds database-owned transcript identity while remaining compatible with
+  // application revisions that only write transcription_text.
+  '0060_add_transcript_identity': 'automatic',
+  // Append-only recognition evidence is additive and ignored by older
+  // application revisions.
+  '0061_add_page_recognition_artifacts': 'automatic',
+  // Strict v2 evidence is additive; retained v1 rows remain readable only as
+  // historical evidence and are excluded from production lookup.
+  '0062_version_page_recognition_evidence': 'automatic',
+});
 
 function assertValidJournal(
   journal: readonly MigrationJournalEntry[],

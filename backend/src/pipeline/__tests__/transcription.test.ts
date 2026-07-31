@@ -77,6 +77,7 @@ vi.mock('../../utils/logger.js', () => ({
 }));
 
 import { runRequestedTranscription, runTranscription } from '../transcription.js';
+import { DEVELOPMENT_STUB_PERSISTENCE_ERROR } from '../../ai/openai/transcription-stub.js';
 
 const updatedAt = new Date('2026-07-17T12:00:00.000Z');
 
@@ -154,7 +155,7 @@ describe('canonical transcription pipeline', () => {
     expect(completeTranscriptionMock).toHaveBeenCalledWith(
       'letter-1',
       'run-a',
-      'Main transcript',
+      { text: 'Main transcript', isStub: false },
       undefined,
     );
     expect(withTranscriptionHeartbeatMock).toHaveBeenCalledWith(
@@ -303,7 +304,12 @@ describe('canonical transcription pipeline', () => {
     });
 
     expect(transcribeExtraContentMock).toHaveBeenCalledTimes(1);
-    expect(completeTranscriptionMock).toHaveBeenCalledWith('letter-1', 'run-a', null, 4);
+    expect(completeTranscriptionMock).toHaveBeenCalledWith(
+      'letter-1',
+      'run-a',
+      { text: null, isStub: false },
+      4,
+    );
   });
 
   it('does not let a late producer failure overwrite a superseding transition', async () => {
@@ -375,7 +381,35 @@ describe('canonical transcription pipeline', () => {
     expect(completeTranscriptionMock).toHaveBeenCalledWith(
       'letter-1',
       'run-a',
-      '--- Page 1 ---\n\nSecond\n\n--- Page 2 ---\n\nFifth',
+      {
+        text: '--- Page 1 ---\n\nSecond\n\n--- Page 2 ---\n\nFifth',
+        isStub: false,
+      },
+      undefined,
+    );
+  });
+
+  it('fails safely without publishing when any page used development stub mode', async () => {
+    getLetterWithPagesMock.mockResolvedValue(letter({
+      pages: [
+        { id: 'page-1', pageNumber: 1, storagePath: 'one.jpg' },
+        { id: 'page-2', pageNumber: 2, storagePath: 'two.jpg' },
+      ],
+    }));
+    transcribeImageMock
+      .mockResolvedValueOnce({ text: 'Development preview', isStub: true })
+      .mockResolvedValueOnce({ text: 'Provider transcript', isStub: false });
+
+    await expect(runTranscription('letter-1')).rejects.toThrow(
+      DEVELOPMENT_STUB_PERSISTENCE_ERROR,
+    );
+
+    expect(completeTranscriptionMock).not.toHaveBeenCalled();
+    expect(runAutomaticExtraContentMock).not.toHaveBeenCalled();
+    expect(failTranscriptionMock).toHaveBeenCalledWith(
+      'letter-1',
+      'run-a',
+      DEVELOPMENT_STUB_PERSISTENCE_ERROR,
       undefined,
     );
   });

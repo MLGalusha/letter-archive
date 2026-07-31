@@ -114,6 +114,10 @@
     display: block;
   }
 
+  .admin-layout.mobile-nav-open .admin-mobile-topbar {
+    z-index: 160;
+  }
+
   .admin-mobile-topbar {
     position: sticky;
     top: 0;

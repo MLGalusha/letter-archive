@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "engineId": "kraken7-rot3-eyno-mask-p16-safe-zones",
+  "adapter": "layout-run-rotation-projection",
+  "adapterVersion": "2",
+  "provider": "letter-archive-rotation-projection",
+  "package": {
+    "name": "letter-archive-rotation-projection",
+    "version": "1"
+  },
+  "execution": {
+    "kind": "host",
+    "timeoutSeconds": 300
+  },
+  "measurementSemantics": {
+    "isolation": "orchestrator-process-pure-geometry",
+    "latency": "source-artifact-verification-plus-deterministic-reprojection",
+    "residentBatchThroughputMeasured": false,
+    "providerTimingSplit": "not-applicable-no-model-inference"
+  },
+  "sourceRuns": {
+    "rotationEvidence": {
+      "role": "rotation-native-evidence",
+      "runId": "kraken7-rot3-eyno-mask-p16-targeted9-20260728",
+      "expectedEngineId": "kraken7-rot3-eyno-mask-p16",
+      "expectedAdapterVersion": "4",
+      "manifestSha256": "5426e01189f63fe3f2e446b567aa64ae0296dbf70c757cc754f6bf0083673aae",
+      "expectedRotationsDegrees": [
+        0,
+        90,
+        270
+      ]
+    }
+  },
+  "sourceEvidence": {
+    "pageMaskArtifacts": "copy-and-bind-v1"
+  },
+  "parameters": {
+    "sourceRotationsDegrees": [
+      0,
+      90,
+      270
+    ],
+    "rotationMergePolicy": "baseline-plus-nonoverlapping-vertical-zones",
+    "requireSuccessfulBaselinePass": true,
+    "selectionParameters": {
+      "verticalAxisToleranceDegrees": 15,
+      "strongBaselineLongEdgeRatio": 0.025,
+      "zoneJoinPaddingLongEdgeRatio": 0.06,
+      "zoneMemberPaddingLongEdgeRatio": 0.02,
+      "minimumStrongProposalClustersPerZone": 2,
+      "minimumProposalClustersPerZone": 3,
+      "baselineInterferencePaddingLongEdgeRatio": 0,
+      "baselineInterferenceHorizontalAxisToleranceDegrees": 20,
+      "maximumHorizontalBaselineCentroidRatioPerZone": 0.1,
+      "minimumHorizontalBaselineCentroidAllowancePerZone": 2
+    }
+  },
+  "diagnostic": {
+    "equivalentToDefaultProfile": false,
+    "rankable": false,
+    "contractEnforcement": "adapter-enforced-native-reprojection-v2",
+    "reason": "This no-inference diagnostic replays the exact immutable 0, 90, and 270 degree passes produced from the p16 Eynollah-masked input. It applies the same explicit minimum-three-proposal and horizontal-interference gate used by the unmasked safe profile. Rejected geometry, source mask provenance, partial or failed passes, and untouched native/source-projected evidence remain in the source-bound raw record."
+  }
+}

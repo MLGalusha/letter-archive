@@ -211,6 +211,13 @@ export const letters = pgTable(
     // Transcription fields
     transcriptionStatus: jobStatusEnum('transcription_status').notNull().default('PENDING'),
     transcriptionText: text('transcription_text'),
+    // Database-owned identity for the exact UTF-8 transcript bytes. The
+    // migration trigger advances the revision and refreshes the checksum for
+    // every writer, including older application revisions and direct SQL.
+    transcriptRevision: integer('transcript_revision').notNull().default(0),
+    transcriptChecksumSha256: text('transcript_checksum_sha256')
+      .notNull()
+      .default('e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'),
     transcriptionJson: jsonb('transcription_json'),
     transcriptionError: text('transcription_error'),
     transcriptionAttemptCount: integer('transcription_attempt_count').notNull().default(0),
@@ -387,6 +394,11 @@ export const letters = pgTable(
     check('metadata_attempt_count_positive', sql`metadata_attempt_count >= 0`),
     check('metadata_revision_nonnegative', sql`metadata_revision >= 0`),
     check('primary_source_revision_nonnegative', sql`${table.primarySourceRevision} >= 0`),
+    check('transcript_revision_nonnegative', sql`${table.transcriptRevision} >= 0`),
+    check(
+      'transcript_checksum_sha256_valid',
+      sql`${table.transcriptChecksumSha256} ~ '^[0-9a-f]{64}$'`,
+    ),
     check(
       'entity_extraction_revision_nonnegative',
       sql`${table.entityExtractionRevision} >= 0`,
@@ -557,8 +569,22 @@ export const letterPages = pgTable(
     storagePath: text('storage_path').notNull(),
     originalFilename: text('original_filename').notNull(),
     checksumSha256: text('checksum_sha256'),
+    // Immutable, versioned detector output. Human review remains in
+    // lineSegments during the PageLayoutV2 rollout so rerunning a detector
+    // cannot silently destroy the original engine evidence.
+    pageLayout: jsonb('page_layout'),
+    pageLayoutChecksumSha256: text('page_layout_checksum_sha256'),
     lineSegments: jsonb('line_segments'),
+    // Monotonic identity for the editable geometry projection. Revision zero
+    // represents detector/legacy geometry; it is lazily snapshotted into the
+    // append-only log before the first human geometry change.
+    geometryRevision: integer('geometry_revision').notNull().default(0),
+    geometryChecksumSha256: text('geometry_checksum_sha256'),
     segmentTrustState: text('segment_trust_state').notNull().default('unverified'),
+    approvedGeometryRevision: integer('approved_geometry_revision'),
+    approvedGeometryChecksumSha256: text('approved_geometry_checksum_sha256'),
+    geometryApprovedBy: text('geometry_approved_by'),
+    geometryApprovedAt: timestamp('geometry_approved_at', { withTimezone: true }),
     width: integer('width'),
     height: integer('height'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -572,7 +598,349 @@ export const letterPages = pgTable(
     index('idx_pages_checksum').on(table.checksumSha256),
     // Check constraint: page_number >= 1
     check('page_number_positive', sql`page_number >= 1`),
+    check(
+      'page_layout_v2_envelope',
+      sql`${table.pageLayout} IS NULL
+        OR (
+          jsonb_typeof(${table.pageLayout}) = 'object'
+          AND COALESCE(
+            ${table.pageLayout}->'schemaVersion' = '2'::jsonb,
+            false
+          )
+        )`,
+    ),
+    check(
+      'page_layout_checksum_valid',
+      sql`${table.pageLayoutChecksumSha256} IS NULL
+        OR ${table.pageLayoutChecksumSha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      'page_layout_checksum_presence',
+      sql`(${table.pageLayout} IS NULL)
+        = (${table.pageLayoutChecksumSha256} IS NULL)`,
+    ),
+    check(
+      'page_layout_page_id_matches_row',
+      sql`${table.pageLayout} IS NULL
+        OR ${table.pageLayout}->>'pageId' = ${table.id}::text`,
+    ),
+    check(
+      'page_layout_source_checksum_matches_row',
+      sql`${table.pageLayout} IS NULL
+        OR (
+          ${table.checksumSha256} IS NOT NULL
+          AND COALESCE(
+            ${table.pageLayout}#>>'{image,source,checksumSha256}',
+            ${table.pageLayout}#>>'{image,checksumSha256}'
+          ) = ${table.checksumSha256}
+        )`,
+    ),
+    check('geometry_revision_nonnegative', sql`${table.geometryRevision} >= 0`),
+    check(
+      'geometry_checksum_valid',
+      sql`${table.geometryChecksumSha256} IS NULL
+        OR ${table.geometryChecksumSha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      'geometry_revision_checksum_presence',
+      sql`${table.geometryRevision} = 0
+        OR ${table.geometryChecksumSha256} IS NOT NULL`,
+    ),
+    check(
+      'geometry_approval_shape',
+      sql`(
+          ${table.approvedGeometryRevision} IS NULL
+          AND ${table.approvedGeometryChecksumSha256} IS NULL
+          AND ${table.geometryApprovedBy} IS NULL
+          AND ${table.geometryApprovedAt} IS NULL
+        )
+        OR (
+          ${table.approvedGeometryRevision} IS NOT NULL
+          AND ${table.approvedGeometryChecksumSha256} IS NOT NULL
+          AND ${table.geometryApprovedBy} IS NOT NULL
+          AND ${table.geometryApprovedAt} IS NOT NULL
+        )`,
+    ),
+    check(
+      'geometry_approval_matches_current',
+      sql`${table.approvedGeometryRevision} IS NULL
+        OR (
+          ${table.approvedGeometryRevision} = ${table.geometryRevision}
+          AND ${table.approvedGeometryChecksumSha256}
+            = ${table.geometryChecksumSha256}
+        )`,
+    ),
+    check(
+      'segment_trust_bound_to_geometry',
+      sql`(
+          ${table.segmentTrustState} = 'unverified'
+          AND ${table.approvedGeometryRevision} IS NULL
+        )
+        OR (
+          ${table.segmentTrustState} = 'trusted'
+          AND ${table.approvedGeometryRevision} IS NOT NULL
+        )`,
+    ),
   ]
+);
+
+/**
+ * Immutable geometry snapshots: a lazy system baseline for revision zero,
+ * followed by each reviewer shape edit.
+ *
+ * The mutable letter_pages.line_segments column remains the fast read
+ * projection. This table is the durable history and intentionally contains
+ * geometry/provenance only; transcript mappings and review classifications do
+ * not manufacture geometry revisions.
+ */
+export const pageGeometryRevisions = pgTable(
+  'page_geometry_revisions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    pageId: uuid('page_id')
+      .notNull()
+      .references(() => letterPages.id, { onDelete: 'cascade' }),
+    revision: integer('revision').notNull(),
+    primarySourceRevision: integer('primary_source_revision').notNull(),
+    sourceChecksumSha256: text('source_checksum_sha256'),
+    basePageLayoutChecksumSha256: text('base_page_layout_checksum_sha256'),
+    geometryChecksumSha256: text('geometry_checksum_sha256').notNull(),
+    geometrySnapshot: jsonb('geometry_snapshot').notNull(),
+    changeSummary: jsonb('change_summary').notNull(),
+    createdBy: text('created_by').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('page_geometry_revisions_page_source_revision_unique')
+      .on(table.pageId, table.primarySourceRevision, table.revision),
+    index('idx_page_geometry_revisions_page_created')
+      .on(table.pageId, table.createdAt),
+    check('page_geometry_revision_nonnegative', sql`${table.revision} >= 0`),
+    check(
+      'page_geometry_revision_source_revision_nonnegative',
+      sql`${table.primarySourceRevision} >= 0`,
+    ),
+    check(
+      'page_geometry_revision_source_checksum_valid',
+      sql`${table.sourceChecksumSha256} IS NULL
+        OR ${table.sourceChecksumSha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      'page_geometry_revision_base_layout_checksum_valid',
+      sql`${table.basePageLayoutChecksumSha256} IS NULL
+        OR ${table.basePageLayoutChecksumSha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      'page_geometry_revision_checksum_valid',
+      sql`${table.geometryChecksumSha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      'page_geometry_revision_snapshot_array',
+      sql`jsonb_typeof(${table.geometrySnapshot}) = 'array'`,
+    ),
+    check(
+      'page_geometry_revision_change_summary_object',
+      sql`jsonb_typeof(${table.changeSummary}) = 'object'`,
+    ),
+  ],
+);
+
+/** Append-only audit history for geometry approval and revocation. */
+export const pageGeometryReviewEvents = pgTable(
+  'page_geometry_review_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    pageId: uuid('page_id')
+      .notNull()
+      .references(() => letterPages.id, { onDelete: 'cascade' }),
+    primarySourceRevision: integer('primary_source_revision').notNull(),
+    sourceChecksumSha256: text('source_checksum_sha256'),
+    geometryRevision: integer('geometry_revision').notNull(),
+    geometryChecksumSha256: text('geometry_checksum_sha256').notNull(),
+    decision: text('decision').notNull(),
+    reviewedBy: text('reviewed_by').notNull(),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('idx_page_geometry_review_events_page_reviewed')
+      .on(table.pageId, table.reviewedAt),
+    check(
+      'page_geometry_review_event_revision_nonnegative',
+      sql`${table.geometryRevision} >= 0`,
+    ),
+    check(
+      'page_geometry_review_event_source_revision_nonnegative',
+      sql`${table.primarySourceRevision} >= 0`,
+    ),
+    check(
+      'page_geometry_review_event_source_checksum_valid',
+      sql`${table.sourceChecksumSha256} IS NULL
+        OR ${table.sourceChecksumSha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      'page_geometry_review_event_checksum_valid',
+      sql`${table.geometryChecksumSha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      'page_geometry_review_event_decision_valid',
+      sql`${table.decision} IN ('trusted', 'unverified')`,
+    ),
+  ],
+);
+
+/**
+ * Immutable OCR/HTR evidence bound to one exact page source, editable
+ * projection, recognition profile, and per-segment geometry.
+ *
+ * The canonical artifact remains intact in JSONB for replay and future model
+ * training. Denormalized identity columns make exact-current reads indexed and
+ * let database constraints reject a mismatched envelope.
+ */
+export const pageRecognitionArtifacts = pgTable(
+  'page_recognition_artifacts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    pageId: uuid('page_id')
+      .notNull()
+      .references(() => letterPages.id, { onDelete: 'cascade' }),
+    artifactChecksumSha256: text('artifact_checksum_sha256').notNull(),
+    schemaVersion: integer('schema_version').notNull(),
+    primarySourceRevision: integer('primary_source_revision').notNull(),
+    sourceChecksumSha256: text('source_checksum_sha256').notNull(),
+    geometryRevision: integer('geometry_revision').notNull(),
+    geometryChecksumSha256: text('geometry_checksum_sha256').notNull(),
+    lineSegmentsChecksumSha256: text('line_segments_checksum_sha256').notNull(),
+    alignmentSegmentInputChecksumSha256: text(
+      'alignment_segment_input_checksum_sha256',
+    ).notNull(),
+    profileChecksumSha256: text('profile_checksum_sha256').notNull(),
+    engine: text('engine').notNull(),
+    engineVersion: text('engine_version').notNull(),
+    modelName: text('model_name').notNull(),
+    modelChecksumSha256: text('model_checksum_sha256').notNull(),
+    configChecksumSha256: text('config_checksum_sha256').notNull(),
+    state: text('state').notNull(),
+    artifact: jsonb('artifact').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    persistedAt: timestamp('persisted_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('page_recognition_artifacts_checksum_unique')
+      .on(table.artifactChecksumSha256),
+    index('idx_page_recognition_artifacts_current_profile').on(
+      table.pageId,
+      table.primarySourceRevision,
+      table.sourceChecksumSha256,
+      table.geometryRevision,
+      table.geometryChecksumSha256,
+      table.lineSegmentsChecksumSha256,
+      table.alignmentSegmentInputChecksumSha256,
+      table.profileChecksumSha256,
+      table.createdAt,
+    ),
+    check(
+      'page_recognition_artifact_checksum_valid',
+      sql`${table.artifactChecksumSha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      'page_recognition_source_revision_nonnegative',
+      sql`${table.primarySourceRevision} >= 0`,
+    ),
+    check(
+      'page_recognition_geometry_revision_nonnegative',
+      sql`${table.geometryRevision} >= 0`,
+    ),
+    check(
+      'page_recognition_source_checksum_valid',
+      sql`${table.sourceChecksumSha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      'page_recognition_geometry_checksum_valid',
+      sql`${table.geometryChecksumSha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      'page_recognition_line_segments_checksum_valid',
+      sql`${table.lineSegmentsChecksumSha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      'page_recognition_alignment_input_checksum_valid',
+      sql`${table.alignmentSegmentInputChecksumSha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      'page_recognition_profile_checksum_valid',
+      sql`${table.profileChecksumSha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      'page_recognition_model_checksum_valid',
+      sql`${table.modelChecksumSha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      'page_recognition_config_checksum_valid',
+      sql`${table.configChecksumSha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      'page_recognition_schema_version_valid',
+      sql`${table.schemaVersion} IN (1, 2)`,
+    ),
+    check(
+      'page_recognition_state_valid',
+      sql`${table.state} IN ('completed', 'partial')`,
+    ),
+    check(
+      'page_recognition_artifact_object',
+      sql`jsonb_typeof(${table.artifact}) = 'object'`,
+    ),
+    check(
+      'page_recognition_artifact_records_array',
+      sql`jsonb_typeof(${table.artifact}->'records') = 'array'`,
+    ),
+    check(
+      'page_recognition_v2_evidence_valid',
+      sql`${table.schemaVersion} <> 2 OR (
+        jsonb_typeof(${table.artifact}->'evidence') = 'object'
+        AND jsonb_typeof(${table.artifact}#>'{evidence,inference}') = 'object'
+        AND jsonb_typeof(${table.artifact}#>'{evidence,raster}') = 'object'
+        AND jsonb_typeof(${table.artifact}#>'{evidence,normalization}')
+          = 'object'
+        AND ${table.artifact}#>>'{evidence,raster,checksumAlgorithm}'
+          = 'sha256-rgb8-v1'
+        AND ${table.artifact}#>>'{evidence,normalization,normalized,mode}'
+          = 'RGB'
+      )`,
+    ),
+    check(
+      'page_recognition_artifact_identity_matches',
+      sql`${table.artifact}->>'kind' = 'page-line-recognition'
+        AND ${table.artifact}->>'pageId' = ${table.pageId}::text
+        AND (${table.artifact}->>'schemaVersion')::integer
+          = ${table.schemaVersion}
+        AND ${table.artifact}#>>'{source,primarySourceRevision}'
+          = ${table.primarySourceRevision}::text
+        AND ${table.artifact}#>>'{source,sourceChecksumSha256}'
+          = ${table.sourceChecksumSha256}
+        AND ${table.artifact}#>>'{source,geometryRevision}'
+          = ${table.geometryRevision}::text
+        AND ${table.artifact}#>>'{source,geometryChecksumSha256}'
+          = ${table.geometryChecksumSha256}
+        AND ${table.artifact}#>>'{source,lineSegmentsChecksumSha256}'
+          = ${table.lineSegmentsChecksumSha256}
+        AND ${table.artifact}#>>'{source,alignmentSegmentInputChecksumSha256}'
+          = ${table.alignmentSegmentInputChecksumSha256}
+        AND ${table.artifact}#>>'{profile,profileChecksumSha256}'
+          = ${table.profileChecksumSha256}
+        AND ${table.artifact}#>>'{profile,engine}' = ${table.engine}
+        AND ${table.artifact}#>>'{profile,engineVersion}'
+          = ${table.engineVersion}
+        AND ${table.artifact}#>>'{profile,modelName}' = ${table.modelName}
+        AND ${table.artifact}#>>'{profile,modelChecksumSha256}'
+          = ${table.modelChecksumSha256}
+        AND ${table.artifact}#>>'{profile,configChecksumSha256}'
+          = ${table.configChecksumSha256}
+        AND ${table.artifact}->>'state' = ${table.state}
+        AND (${table.artifact}->>'createdAt')::timestamptz
+          = ${table.createdAt}`,
+    ),
+  ],
 );
 
 // Letter versions table (for version history)
@@ -1091,12 +1459,45 @@ export const letterViewsRelations = relations(letterViews, ({ one }) => ({
   }),
 }));
 
-export const letterPagesRelations = relations(letterPages, ({ one }) => ({
+export const letterPagesRelations = relations(letterPages, ({ one, many }) => ({
   letter: one(letters, {
     fields: [letterPages.letterId],
     references: [letters.id],
   }),
+  geometryRevisions: many(pageGeometryRevisions),
+  geometryReviewEvents: many(pageGeometryReviewEvents),
+  recognitionArtifacts: many(pageRecognitionArtifacts),
 }));
+
+export const pageGeometryRevisionsRelations = relations(
+  pageGeometryRevisions,
+  ({ one }) => ({
+    page: one(letterPages, {
+      fields: [pageGeometryRevisions.pageId],
+      references: [letterPages.id],
+    }),
+  }),
+);
+
+export const pageGeometryReviewEventsRelations = relations(
+  pageGeometryReviewEvents,
+  ({ one }) => ({
+    page: one(letterPages, {
+      fields: [pageGeometryReviewEvents.pageId],
+      references: [letterPages.id],
+    }),
+  }),
+);
+
+export const pageRecognitionArtifactsRelations = relations(
+  pageRecognitionArtifacts,
+  ({ one }) => ({
+    page: one(letterPages, {
+      fields: [pageRecognitionArtifacts.pageId],
+      references: [letterPages.id],
+    }),
+  }),
+);
 
 export const letterVersionsRelations = relations(letterVersions, ({ one }) => ({
   letter: one(letters, {
@@ -1168,6 +1569,17 @@ export type NewLetter = typeof letters.$inferInsert;
 
 export type LetterPage = typeof letterPages.$inferSelect;
 export type NewLetterPage = typeof letterPages.$inferInsert;
+
+export type PageGeometryRevision = typeof pageGeometryRevisions.$inferSelect;
+export type NewPageGeometryRevision = typeof pageGeometryRevisions.$inferInsert;
+
+export type PageGeometryReviewEvent = typeof pageGeometryReviewEvents.$inferSelect;
+export type NewPageGeometryReviewEvent = typeof pageGeometryReviewEvents.$inferInsert;
+
+export type PageRecognitionArtifactRow =
+  typeof pageRecognitionArtifacts.$inferSelect;
+export type NewPageRecognitionArtifactRow =
+  typeof pageRecognitionArtifacts.$inferInsert;
 
 export type LetterVersion = typeof letterVersions.$inferSelect;
 export type NewLetterVersion = typeof letterVersions.$inferInsert;

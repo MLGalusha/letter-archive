@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "engineId": "kraken7-rot3-safe-zones-ablation",
+  "adapter": "layout-run-rotation-projection",
+  "adapterVersion": "1",
+  "provider": "letter-archive-rotation-projection",
+  "package": {
+    "name": "letter-archive-rotation-projection",
+    "version": "1"
+  },
+  "execution": {
+    "kind": "host",
+    "timeoutSeconds": 300
+  },
+  "measurementSemantics": {
+    "isolation": "orchestrator-process-pure-geometry",
+    "latency": "source-artifact-verification-plus-deterministic-reprojection",
+    "residentBatchThroughputMeasured": false,
+    "providerTimingSplit": "not-applicable-no-model-inference"
+  },
+  "sourceRuns": {
+    "rotationEvidence": {
+      "role": "rotation-native-evidence",
+      "runId": "kraken7-rot4-union-targeted8-v2-20260728",
+      "expectedEngineId": "kraken7-rot4-union",
+      "expectedAdapterVersion": "6",
+      "manifestSha256": "3f4f662eb8e66d57125fe84bafa2e9359ec1df7c5e1e14d99ad0ec562d4be0bd",
+      "expectedRotationsDegrees": [
+        0,
+        90,
+        180,
+        270
+      ]
+    }
+  },
+  "parameters": {
+    "sourceRotationsDegrees": [
+      0,
+      90,
+      270
+    ],
+    "rotationMergePolicy": "baseline-plus-nonoverlapping-vertical-zones",
+    "requireSuccessfulBaselinePass": true,
+    "selectionParameters": {
+      "verticalAxisToleranceDegrees": 15,
+      "strongBaselineLongEdgeRatio": 0.025,
+      "zoneJoinPaddingLongEdgeRatio": 0.06,
+      "zoneMemberPaddingLongEdgeRatio": 0.02,
+      "minimumStrongProposalClustersPerZone": 2,
+      "minimumProposalClustersPerZone": 3,
+      "baselineInterferencePaddingLongEdgeRatio": 0,
+      "baselineInterferenceHorizontalAxisToleranceDegrees": 20,
+      "maximumHorizontalBaselineCentroidRatioPerZone": 0.1,
+      "minimumHorizontalBaselineCentroidAllowancePerZone": 2
+    }
+  },
+  "diagnostic": {
+    "equivalentToDefaultProfile": false,
+    "rankable": false,
+    "contractEnforcement": "adapter-enforced-native-reprojection-v1",
+    "reason": "Three-pass safe-zone ablation projected from the exact frozen four-pass source. The already-frozen vertical-zone and horizontal-interference thresholds are unchanged, while the 180 degree pass is omitted without rerunning Kraken."
+  }
+}

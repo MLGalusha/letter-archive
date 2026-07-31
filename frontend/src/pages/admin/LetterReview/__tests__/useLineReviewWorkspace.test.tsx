@@ -17,7 +17,12 @@ import type {
 } from '../../../../types/Letter';
 import type { AutoSaveData } from '../useAutoSave';
 import type { LetterReviewVisit } from '../useLetterReviewVisit';
-import { useLineReviewWorkspace } from '../useLineReviewWorkspace';
+import {
+  lineReviewRepairIntentFromSearch,
+  searchAfterLineReviewRepairConsumption,
+  type LineReviewRepairIntent,
+  useLineReviewWorkspace,
+} from '../useLineReviewWorkspace';
 
 const { getAdminLetterByIdMock } = vi.hoisted(() => ({
   getAdminLetterByIdMock: vi.fn(),
@@ -100,23 +105,14 @@ function visit(
   };
 }
 
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  let reject!: (error: unknown) => void;
-  const promise = new Promise<T>((next, fail) => {
-    resolve = next;
-    reject = fail;
-  });
-  return { promise, reject, resolve };
-}
-
 interface HookProps {
   currentVisit: LetterReviewVisit;
   letter: Letter | null;
   editorRef: { current: HTMLDivElement | null };
   isTranscriptEditing: boolean;
   lineReviewBlocked: boolean;
-  tryAdoptLetter: (letter: Letter) => boolean;
+  repairIntent?: LineReviewRepairIntent | null;
+  onRepairIntentConsumed?: (token: string) => void;
   onTranscriptChange: (text: string) => void;
   onAutoSave: (data: AutoSaveData) => void;
 }
@@ -127,7 +123,8 @@ const useWorkspace = (props: HookProps) => useLineReviewWorkspace({
   editorRef: props.editorRef,
   isTranscriptEditing: props.isTranscriptEditing,
   lineReviewBlocked: props.lineReviewBlocked,
-  tryAdoptLetter: props.tryAdoptLetter,
+  repairIntent: props.repairIntent,
+  onRepairIntentConsumed: props.onRepairIntentConsumed,
   onTranscriptChange: props.onTranscriptChange,
   onAutoSave: props.onAutoSave,
 });
@@ -142,7 +139,6 @@ function baseProps(
     editorRef: { current: null },
     isTranscriptEditing: false,
     lineReviewBlocked: false,
-    tryAdoptLetter: vi.fn(() => true),
     onTranscriptChange: vi.fn(),
     onAutoSave: vi.fn(),
     ...overrides,
@@ -164,6 +160,48 @@ function selectText(
   document.dispatchEvent(new Event('selectionchange'));
   expect(container.contains(range.commonAncestorContainer)).toBe(true);
 }
+
+describe('line-review repair query contract', () => {
+  it('parses a complete repair handoff and rejects incomplete requests', () => {
+    const params = new URLSearchParams({
+      repairGeometry: '1',
+      repairIntent: 'artifact:page:item',
+      repairPageIndex: '2',
+      repairPageFilename: '005-19150813-L01-01.jpg',
+      repairText: 'My dear Sadie,',
+    });
+
+    expect(lineReviewRepairIntentFromSearch(`?${params}`)).toEqual({
+      token: 'artifact:page:item',
+      pageIndex: 2,
+      originalFilename: '005-19150813-L01-01.jpg',
+      repairText: 'My dear Sadie,',
+    });
+    expect(lineReviewRepairIntentFromSearch(
+      '?repairGeometry=1&repairIntent=missing-page',
+    )).toBeNull();
+  });
+
+  it('removes only the matching one-shot repair request', () => {
+    const search = [
+      'repairGeometry=1',
+      'repairIntent=artifact%3Apage%3Aitem',
+      'repairPageIndex=2',
+      'repairPageFilename=page.jpg',
+      'repairText=My+dear+Sadie',
+      'returnTo=alignment',
+    ].join('&');
+
+    expect(searchAfterLineReviewRepairConsumption(
+      `?${search}`,
+      'artifact:page:item',
+    )).toBe('returnTo=alignment');
+    expect(searchAfterLineReviewRepairConsumption(
+      `?${search}`,
+      'different-item',
+    )).toBeNull();
+  });
+});
 
 describe('useLineReviewWorkspace', () => {
   beforeEach(() => {
@@ -189,7 +227,7 @@ describe('useLineReviewWorkspace', () => {
     const onAutoSave = vi.fn();
     const firstLetter = makeLetter();
     const editor = document.createElement('div');
-    const editorText = document.createTextNode('A mapping intent');
+    const editorText = document.createTextNode('A repair intent');
     editor.append(editorText);
     document.body.append(editor);
     const initialProps = baseProps(visits.firstA, {
@@ -204,7 +242,7 @@ describe('useLineReviewWorkspace', () => {
       pageIndex: number;
       debugMode: boolean;
       selectedText: string;
-      mappingText: string | undefined;
+      repairText: string | undefined;
     }> = [];
     const useObservedWorkspace = (props: HookProps) => {
       const workspace = useWorkspace(props);
@@ -214,7 +252,7 @@ describe('useLineReviewWorkspace', () => {
         pageIndex: workspace.modeProps.initialPageIndex,
         debugMode: workspace.headerControls.debugMode,
         selectedText: workspace.selectedText,
-        mappingText: workspace.modeProps.mappingText,
+        repairText: workspace.modeProps.repairText,
       });
       return workspace;
     };
@@ -228,21 +266,21 @@ describe('useLineReviewWorkspace', () => {
     act(() => {
       selectText(editor, editorText, 2, 9);
     });
-    expect(result.current.selectedText).toBe('mapping');
+    expect(result.current.selectedText).toBe('repair');
     const capturedClosedA = {
       imageClick: result.current.viewerProps.onImageClick,
-      reviewSegments: result.current.mappingControls.reviewSegments,
-      mapSelectedText: result.current.mappingControls.mapSelectedText,
+      reviewSegments: result.current.repairControls.reviewSegments,
+      repairSelectedText: result.current.repairControls.repairSelectedText,
     };
     act(() => {
-      result.current.mappingControls.mapSelectedText();
+      result.current.repairControls.repairSelectedText();
     });
     act(() => {
       result.current.modeProps.onDebugModeChange(true);
     });
     expect(result.current.active).toBe(true);
     expect(result.current.modeProps.fullViewport).toBe(true);
-    expect(result.current.modeProps.mappingText).toBe('mapping');
+    expect(result.current.modeProps.repairText).toBe('repair');
     expect(result.current.modeProps.initialPageIndex).toBe(1);
     expect(result.current.currentFilename).toBe('a-02.jpg');
     expect(result.current.headerControls.debugMode).toBe(true);
@@ -251,6 +289,8 @@ describe('useLineReviewWorkspace', () => {
     act(() => {
       result.current.modeRef({
         saveCurrentLine: vi.fn(),
+        flushPendingChanges: vi.fn(async () => true),
+        hasPendingChanges: vi.fn(() => false),
         reloadSegments: reloadA,
         isLoading: true,
       });
@@ -264,7 +304,6 @@ describe('useLineReviewWorkspace', () => {
       reloadSegments: result.current.headerControls.reloadSegments,
       modeRef: result.current.modeRef,
       pageChange: result.current.viewerProps.onPageChange,
-      mappingComplete: result.current.modeProps.onMappingComplete,
       transcriptChange: result.current.modeProps.onTranscriptChange,
       autoSave: result.current.modeProps.onAutoSave,
     };
@@ -292,12 +331,12 @@ describe('useLineReviewWorkspace', () => {
       pageIndex: 0,
       debugMode: false,
       selectedText: '',
-      mappingText: undefined,
+      repairText: undefined,
     });
     expect(result.current.active).toBe(false);
     expect(result.current.modeProps.initialPageIndex).toBe(0);
     expect(result.current.modeProps.fullViewport).toBe(false);
-    expect(result.current.modeProps.mappingText).toBeUndefined();
+    expect(result.current.modeProps.repairText).toBeUndefined();
     expect(result.current.currentFilename).toBe('b-01.jpg');
     expect(result.current.selectedText).toBe('');
     expect(result.current.headerControls.debugMode).toBe(false);
@@ -316,6 +355,8 @@ describe('useLineReviewWorkspace', () => {
     act(() => {
       result.current.modeRef({
         saveCurrentLine: vi.fn(),
+        flushPendingChanges: vi.fn(async () => true),
+        hasPendingChanges: vi.fn(() => false),
         reloadSegments: reloadB,
         isLoading: false,
       });
@@ -328,14 +369,15 @@ describe('useLineReviewWorkspace', () => {
       capturedA.reloadSegments();
       capturedA.modeRef({
         saveCurrentLine: vi.fn(),
+        flushPendingChanges: vi.fn(async () => true),
+        hasPendingChanges: vi.fn(() => false),
         reloadSegments: vi.fn(),
         isLoading: false,
       });
       capturedA.pageChange(0);
       capturedClosedA.imageClick(0);
       capturedClosedA.reviewSegments();
-      capturedClosedA.mapSelectedText();
-      capturedA.mappingComplete();
+      capturedClosedA.repairSelectedText();
       capturedA.transcriptChange('stale A');
       capturedA.autoSave({ transcriptionText: 'stale A' });
     });
@@ -373,11 +415,11 @@ describe('useLineReviewWorkspace', () => {
     act(() => {
       capturedClosedA.imageClick(1);
       capturedClosedA.reviewSegments();
-      capturedClosedA.mapSelectedText();
+      capturedClosedA.repairSelectedText();
     });
     expect(result.current.active).toBe(false);
     expect(result.current.modeProps.fullViewport).toBe(false);
-    expect(result.current.modeProps.mappingText).toBeUndefined();
+    expect(result.current.modeProps.repairText).toBeUndefined();
     expect(result.current.modeProps.initialPageIndex).toBe(0);
 
     act(() => {
@@ -391,6 +433,8 @@ describe('useLineReviewWorkspace', () => {
     act(() => {
       result.current.modeRef({
         saveCurrentLine: vi.fn(),
+        flushPendingChanges: vi.fn(async () => true),
+        hasPendingChanges: vi.fn(() => false),
         reloadSegments: reloadFreshA,
         isLoading: false,
       });
@@ -403,18 +447,19 @@ describe('useLineReviewWorkspace', () => {
       capturedA.reloadSegments();
       capturedA.modeRef({
         saveCurrentLine: vi.fn(),
+        flushPendingChanges: vi.fn(async () => true),
+        hasPendingChanges: vi.fn(() => false),
         reloadSegments: vi.fn(),
         isLoading: true,
       });
       capturedA.pageChange(0);
-      capturedA.mappingComplete();
       capturedA.transcriptChange('stale fresh A');
       capturedA.autoSave({ transcriptionText: 'stale fresh A' });
     });
 
     expect(result.current.active).toBe(true);
     expect(result.current.modeProps.fullViewport).toBe(false);
-    expect(result.current.modeProps.mappingText).toBeUndefined();
+    expect(result.current.modeProps.repairText).toBeUndefined();
     expect(result.current.modeProps.initialPageIndex).toBe(1);
     expect(result.current.currentFilename).toBe('a-02.jpg');
     expect(result.current.headerControls.debugMode).toBe(true);
@@ -446,7 +491,7 @@ describe('useLineReviewWorkspace', () => {
 
     expect(result.current.active).toBe(false);
     expect(result.current.modeProps.fullViewport).toBe(false);
-    expect(result.current.modeProps.mappingText).toBeUndefined();
+    expect(result.current.modeProps.repairText).toBeUndefined();
 
     rerender({
       ...initialProps,
@@ -454,7 +499,7 @@ describe('useLineReviewWorkspace', () => {
     });
     expect(result.current.active).toBe(false);
     expect(result.current.modeProps.fullViewport).toBe(false);
-    expect(result.current.modeProps.mappingText).toBeUndefined();
+    expect(result.current.modeProps.repairText).toBeUndefined();
 
     rerender({
       ...initialProps,
@@ -465,7 +510,7 @@ describe('useLineReviewWorkspace', () => {
     });
     expect(result.current.active).toBe(false);
     expect(result.current.modeProps.fullViewport).toBe(false);
-    expect(result.current.modeProps.mappingText).toBeUndefined();
+    expect(result.current.modeProps.repairText).toBeUndefined();
 
     firstAActive.current = false;
     freshAActive.current = true;
@@ -476,365 +521,142 @@ describe('useLineReviewWorkspace', () => {
     });
     expect(result.current.active).toBe(false);
     expect(result.current.modeProps.fullViewport).toBe(false);
-    expect(result.current.modeProps.mappingText).toBeUndefined();
+    expect(result.current.modeProps.repairText).toBeUndefined();
 
     act(() => {
       result.current.viewerProps.onImageClick(0);
     });
     expect(result.current.active).toBe(true);
     expect(result.current.modeProps.fullViewport).toBe(false);
-    expect(result.current.modeProps.mappingText).toBeUndefined();
+    expect(result.current.modeProps.repairText).toBeUndefined();
   });
 
-  it('refreshes and adopts the current letter after mapping, and catches refresh failures', async () => {
-    const currentVisit = visit('letter-a', { current: true });
-    const pending = deferred<Letter>();
-    const updated = makeEligibleLetter({
-      primarySourceRevision: 4,
-    });
-    const tryAdoptLetter = vi.fn(() => true);
-    getAdminLetterByIdMock.mockReturnValueOnce(pending.promise);
-    const props = baseProps(currentVisit, { tryAdoptLetter });
+  it('fails closed until the active mode handle can report and flush pending work', async () => {
+    const active = { current: true };
+    const currentVisit = visit('letter-a', active);
     const { result } = renderHook(useWorkspace, {
-      initialProps: props,
+      initialProps: baseProps(currentVisit),
     });
 
     act(() => {
-      result.current.mappingControls.reviewSegments();
+      result.current.viewerProps.onImageClick(0);
     });
-    act(() => {
-      result.current.modeProps.onMappingComplete();
-    });
-
-    expect(getAdminLetterByIdMock).toHaveBeenCalledWith('letter-a');
     expect(result.current.active).toBe(true);
+    expect(
+      result.current.navigationControls.hasPendingChanges(),
+    ).toBe(true);
+    await expect(
+      result.current.navigationControls.flushPendingChanges(),
+    ).resolves.toBe(false);
+
+    const flushPendingChanges = vi.fn(async () => true);
+    act(() => {
+      result.current.modeRef({
+        saveCurrentLine: vi.fn(),
+        flushPendingChanges,
+        hasPendingChanges: vi.fn(() => false),
+        reloadSegments: vi.fn(),
+        isLoading: false,
+      });
+    });
+
+    expect(
+      result.current.navigationControls.hasPendingChanges(),
+    ).toBe(false);
+    await expect(
+      result.current.navigationControls.flushPendingChanges(),
+    ).resolves.toBe(true);
+    expect(flushPendingChanges).toHaveBeenCalledTimes(1);
+  });
+
+  it('consumes a repair intent once and opens segment-first on the exact filename', async () => {
+    const currentVisit = visit('letter-a', { current: true });
+    const onRepairIntentConsumed = vi.fn();
+    const repairIntent: LineReviewRepairIntent = {
+      token: 'artifact:page:item',
+      pageIndex: 0,
+      originalFilename: 'a-02.jpg',
+      repairText: '  My dear Sadie,  ',
+    };
+    const initialProps = baseProps(currentVisit, {
+      letter: null,
+      repairIntent,
+      onRepairIntentConsumed,
+    });
+    const { result, rerender } = renderHook(useWorkspace, {
+      initialProps,
+    });
+
+    expect(result.current.active).toBe(false);
+    expect(onRepairIntentConsumed).not.toHaveBeenCalled();
+
+    rerender({
+      ...initialProps,
+      letter: makeLetter({
+        images: [
+          makeImage('cover', 'cover.jpg', { type: 'cover' }),
+          makeImage('a-page-1', 'a-01.jpg'),
+          makeImage('a-page-2', 'a-02.jpg', { pageNumber: 2 }),
+        ],
+      }),
+    });
+
+    await waitFor(() => {
+      expect(result.current.active).toBe(true);
+    });
+    expect(onRepairIntentConsumed).toHaveBeenCalledOnce();
+    expect(onRepairIntentConsumed).toHaveBeenCalledWith(
+      'artifact:page:item',
+    );
     expect(result.current.modeProps.fullViewport).toBe(true);
-    expect(result.current.modeProps.mappingText).toBeUndefined();
+    expect(result.current.modeProps.initialPageIndex).toBe(2);
+    expect(result.current.currentFilename).toBe('a-02.jpg');
+    expect(result.current.modeProps.repairText).toBe('My dear Sadie,');
 
     act(() => {
       result.current.modeProps.onExit();
     });
     expect(result.current.active).toBe(false);
 
-    await act(async () => {
-      pending.resolve(updated);
-      await pending.promise;
+    rerender({
+      ...initialProps,
+      letter: makeLetter({
+        title: 'Refreshed Letter A',
+        images: [
+          makeImage('cover', 'cover.jpg', { type: 'cover' }),
+          makeImage('a-page-1', 'a-01.jpg'),
+          makeImage('a-page-2', 'a-02.jpg', { pageNumber: 2 }),
+        ],
+      }),
     });
-    expect(tryAdoptLetter).toHaveBeenCalledWith(updated);
-
-    const refreshError = new Error('refresh failed');
-    const consoleError = vi
-      .spyOn(console, 'error')
-      .mockImplementation(() => undefined);
-    getAdminLetterByIdMock.mockRejectedValueOnce(refreshError);
-    act(() => {
-      result.current.mappingControls.reviewSegments();
-    });
-    act(() => {
-      result.current.modeProps.onMappingComplete();
-    });
-
-    await waitFor(() => {
-      expect(consoleError).toHaveBeenCalledWith(
-        'Failed to refresh mapped segments:',
-        refreshError,
-      );
-    });
-    expect(result.current.active).toBe(true);
-    expect(result.current.modeProps.fullViewport).toBe(true);
+    expect(result.current.active).toBe(false);
+    expect(onRepairIntentConsumed).toHaveBeenCalledOnce();
   });
 
-  it('fences same-visit entry callbacks and adopts only the latest mapping refresh', async () => {
+  it('consumes but does not open a repair intent whose filename is no longer exact', async () => {
     const currentVisit = visit('letter-a', { current: true });
-    const editor = document.createElement('div');
-    const editorText = document.createTextNode('First second');
-    editor.append(editorText);
-    document.body.append(editor);
-    const tryAdoptLetter = vi.fn(() => true);
-    const onTranscriptChange = vi.fn();
-    const onAutoSave = vi.fn();
+    const onRepairIntentConsumed = vi.fn();
     const props = baseProps(currentVisit, {
-      editorRef: { current: editor },
-      tryAdoptLetter,
-      onTranscriptChange,
-      onAutoSave,
+      repairIntent: {
+        token: 'stale-artifact-page',
+        pageIndex: 1,
+        originalFilename: 'missing-page.jpg',
+        repairText: 'Do not map this to the wrong scan.',
+      },
+      onRepairIntentConsumed,
     });
     const { result } = renderHook(useWorkspace, {
       initialProps: props,
     });
 
-    act(() => {
-      selectText(editor, editorText, 0, 5);
-    });
-    act(() => {
-      result.current.mappingControls.mapSelectedText();
-    });
-    const reloadFirstEntry = vi.fn();
-    act(() => {
-      result.current.modeRef({
-        saveCurrentLine: vi.fn(),
-        reloadSegments: reloadFirstEntry,
-        isLoading: false,
-      });
-    });
-    const staleEntry = {
-      exit: result.current.modeProps.onExit,
-      setDebug: result.current.modeProps.onDebugModeChange,
-      toggleDebug: result.current.headerControls.toggleDebugMode,
-      reloadSegments: result.current.headerControls.reloadSegments,
-      modeRef: result.current.modeRef,
-      mappingComplete: result.current.modeProps.onMappingComplete,
-      transcriptChange: result.current.modeProps.onTranscriptChange,
-      autoSave: result.current.modeProps.onAutoSave,
-    };
-    const firstEntryRefresh = deferred<Letter>();
-    getAdminLetterByIdMock.mockReturnValueOnce(firstEntryRefresh.promise);
-    act(() => {
-      staleEntry.mappingComplete();
-    });
-    expect(getAdminLetterByIdMock).toHaveBeenCalledOnce();
-
-    act(() => {
-      staleEntry.exit();
+    await waitFor(() => {
+      expect(onRepairIntentConsumed).toHaveBeenCalledWith(
+        'stale-artifact-page',
+      );
     });
     expect(result.current.active).toBe(false);
-    expect(result.current.modeProps.mappingText).toBeUndefined();
-
-    act(() => {
-      selectText(editor, editorText, 6, 12);
-    });
-    act(() => {
-      result.current.mappingControls.mapSelectedText();
-    });
-    act(() => {
-      result.current.modeProps.onDebugModeChange(true);
-    });
-    const reloadSecondEntry = vi.fn();
-    act(() => {
-      result.current.modeRef({
-        saveCurrentLine: vi.fn(),
-        reloadSegments: reloadSecondEntry,
-        isLoading: false,
-      });
-    });
-    expect(result.current.modeProps.mappingText).toBe('second');
-
-    await act(async () => {
-      firstEntryRefresh.resolve(makeLetter({
-        title: 'Superseded first-entry refresh',
-        primarySourceRevision: 4,
-      }));
-      await firstEntryRefresh.promise;
-    });
-    expect(tryAdoptLetter).not.toHaveBeenCalled();
-    expect(result.current.active).toBe(true);
-    expect(result.current.modeProps.mappingText).toBe('second');
-    expect(result.current.headerControls.debugMode).toBe(true);
-    getAdminLetterByIdMock.mockClear();
-
-    act(() => {
-      staleEntry.exit();
-      staleEntry.setDebug(false);
-      staleEntry.toggleDebug();
-      staleEntry.reloadSegments();
-      staleEntry.modeRef({
-        saveCurrentLine: vi.fn(),
-        reloadSegments: vi.fn(),
-        isLoading: true,
-      });
-      staleEntry.modeRef(null);
-      staleEntry.mappingComplete();
-      staleEntry.transcriptChange('stale first entry');
-      staleEntry.autoSave({ transcriptionText: 'stale first entry' });
-    });
-
-    expect(result.current.active).toBe(true);
-    expect(result.current.modeProps.mappingText).toBe('second');
-    expect(result.current.headerControls.debugMode).toBe(true);
-    expect(reloadFirstEntry).not.toHaveBeenCalled();
-    expect(reloadSecondEntry).not.toHaveBeenCalled();
-    expect(onTranscriptChange).not.toHaveBeenCalled();
-    expect(onAutoSave).not.toHaveBeenCalled();
-    expect(getAdminLetterByIdMock).not.toHaveBeenCalled();
-
-    act(() => {
-      result.current.headerControls.reloadSegments();
-    });
-    expect(reloadFirstEntry).not.toHaveBeenCalled();
-    expect(reloadSecondEntry).toHaveBeenCalledOnce();
-
-    const olderRefresh = deferred<Letter>();
-    const newerRefresh = deferred<Letter>();
-    const olderLetter = makeLetter({
-      title: 'Older mapping refresh',
-      primarySourceRevision: 4,
-    });
-    const newerLetter = makeLetter({
-      title: 'Newer mapping refresh',
-      primarySourceRevision: 5,
-    });
-    getAdminLetterByIdMock
-      .mockReturnValueOnce(olderRefresh.promise)
-      .mockReturnValueOnce(newerRefresh.promise);
-    const currentCompletion = result.current.modeProps.onMappingComplete;
-
-    act(() => {
-      currentCompletion();
-      currentCompletion();
-    });
-    expect(getAdminLetterByIdMock).toHaveBeenCalledTimes(2);
-    expect(result.current.modeProps.mappingText).toBeUndefined();
-
-    await act(async () => {
-      newerRefresh.resolve(newerLetter);
-      await newerRefresh.promise;
-    });
-    expect(tryAdoptLetter).toHaveBeenCalledTimes(1);
-    expect(tryAdoptLetter).toHaveBeenLastCalledWith(newerLetter);
-
-    await act(async () => {
-      olderRefresh.resolve(olderLetter);
-      await olderRefresh.promise;
-    });
-    expect(tryAdoptLetter).toHaveBeenCalledTimes(1);
-  });
-
-  it.each([
-    ['viewer image', 'image', false, undefined],
-    ['Review action', 'review', true, undefined],
-    ['mapping action', 'mapping', true, 'second'],
-  ] as const)(
-    'supersedes an exited mapping refresh when reopening through %s',
-    async (
-      _entryName,
-      reopenKind,
-      expectedFullViewport,
-      expectedMappingText,
-    ) => {
-      const currentVisit = visit('letter-a', { current: true });
-      const editor = document.createElement('div');
-      const editorText = document.createTextNode('First second');
-      editor.append(editorText);
-      document.body.append(editor);
-      const pending = deferred<Letter>();
-      const tryAdoptLetter = vi.fn(() => true);
-      getAdminLetterByIdMock.mockReturnValueOnce(pending.promise);
-      const props = baseProps(currentVisit, {
-        editorRef: { current: editor },
-        tryAdoptLetter,
-      });
-      const { result } = renderHook(useWorkspace, {
-        initialProps: props,
-      });
-
-      act(() => {
-        selectText(editor, editorText, 6, 12);
-        result.current.mappingControls.reviewSegments();
-      });
-      act(() => {
-        result.current.modeProps.onMappingComplete();
-        result.current.modeProps.onExit();
-      });
-      expect(getAdminLetterByIdMock).toHaveBeenCalledOnce();
-      expect(result.current.active).toBe(false);
-
-      act(() => {
-        if (reopenKind === 'image') {
-          result.current.viewerProps.onImageClick(1);
-        } else if (reopenKind === 'review') {
-          result.current.mappingControls.reviewSegments();
-        } else {
-          result.current.mappingControls.mapSelectedText();
-        }
-      });
-      expect(result.current.active).toBe(true);
-      expect(result.current.modeProps.fullViewport).toBe(
-        expectedFullViewport,
-      );
-      expect(result.current.modeProps.mappingText).toBe(
-        expectedMappingText,
-      );
-
-      await act(async () => {
-        pending.resolve(makeLetter({
-          title: 'Superseded exited-entry refresh',
-          primarySourceRevision: 99,
-        }));
-        await pending.promise;
-      });
-
-      expect(tryAdoptLetter).not.toHaveBeenCalled();
-      expect(result.current.active).toBe(true);
-      expect(result.current.modeProps.fullViewport).toBe(
-        expectedFullViewport,
-      );
-      expect(result.current.modeProps.mappingText).toBe(
-        expectedMappingText,
-      );
-    },
-  );
-
-  it('keeps a late mapping refresh and an inactive captured completion inert', async () => {
-    const firstAActive = { current: true };
-    const bActive = { current: false };
-    const freshAActive = { current: false };
-    const visits = {
-      firstA: visit('letter-a', firstAActive),
-      b: visit('letter-b', bActive),
-      freshA: visit('letter-a', freshAActive),
-    };
-    const pending = deferred<Letter>();
-    getAdminLetterByIdMock.mockReturnValueOnce(pending.promise);
-    const tryAdoptLetter = vi.fn(() => true);
-    const initialProps = baseProps(visits.firstA, { tryAdoptLetter });
-    const { result, rerender } = renderHook(useWorkspace, {
-      initialProps,
-    });
-
-    act(() => {
-      result.current.mappingControls.reviewSegments();
-    });
-    act(() => {
-      result.current.modeProps.onMappingComplete();
-    });
-    const capturedCompletion = result.current.modeProps.onMappingComplete;
-    expect(getAdminLetterByIdMock).toHaveBeenCalledTimes(1);
-
-    firstAActive.current = false;
-    bActive.current = true;
-    rerender({
-      ...initialProps,
-      currentVisit: visits.b,
-      letter: makeLetter({
-        id: 'letter-b',
-        title: 'Letter B',
-      }),
-    });
-    bActive.current = false;
-    freshAActive.current = true;
-    rerender({
-      ...initialProps,
-      currentVisit: visits.freshA,
-      letter: makeLetter(),
-    });
-
-    act(() => {
-      capturedCompletion();
-    });
-    expect(getAdminLetterByIdMock).toHaveBeenCalledTimes(1);
-    expect(result.current.active).toBe(false);
-
-    await act(async () => {
-      pending.resolve(makeEligibleLetter({
-        primarySourceRevision: 99,
-      }));
-      await pending.promise;
-    });
-
-    expect(tryAdoptLetter).not.toHaveBeenCalled();
-    expect(result.current.active).toBe(false);
+    expect(result.current.modeProps.repairText).toBeUndefined();
     expect(result.current.modeProps.initialPageIndex).toBe(0);
-    expect(result.current.modeProps.mappingText).toBeUndefined();
   });
 
   it('owns transcript selection and maps only current editable editor text', () => {
@@ -861,25 +683,25 @@ describe('useLineReviewWorkspace', () => {
     expect(result.current.selectedText).toBe('beta');
 
     act(() => {
-      result.current.mappingControls.mapSelectedText();
+      result.current.repairControls.repairSelectedText();
     });
     expect(result.current.active).toBe(true);
     expect(result.current.modeProps.fullViewport).toBe(true);
-    expect(result.current.modeProps.mappingText).toBe('beta');
+    expect(result.current.modeProps.repairText).toBe('beta');
 
     act(() => {
       result.current.modeProps.onExit();
     });
     expect(result.current.active).toBe(false);
     expect(result.current.modeProps.fullViewport).toBe(false);
-    expect(result.current.modeProps.mappingText).toBeUndefined();
+    expect(result.current.modeProps.repairText).toBeUndefined();
 
     act(() => {
       result.current.viewerProps.onImageClick(0);
     });
     expect(result.current.active).toBe(true);
     expect(result.current.modeProps.fullViewport).toBe(false);
-    expect(result.current.modeProps.mappingText).toBeUndefined();
+    expect(result.current.modeProps.repairText).toBeUndefined();
 
     act(() => {
       result.current.modeProps.onExit();
@@ -887,7 +709,7 @@ describe('useLineReviewWorkspace', () => {
     });
     expect(result.current.selectedText).toBe('');
     act(() => {
-      result.current.mappingControls.mapSelectedText();
+      result.current.repairControls.repairSelectedText();
     });
     expect(result.current.active).toBe(false);
 
@@ -997,7 +819,7 @@ describe('useLineReviewWorkspace', () => {
       result.current.modeProps.onExit();
     });
     expect(result.current.active).toBe(false);
-    expect(result.current.modeProps.mappingText).toBeUndefined();
+    expect(result.current.modeProps.repairText).toBeUndefined();
     expect(result.current.modeProps.initialPageIndex).toBe(1);
     expect(result.current.headerControls.debugMode).toBe(true);
 

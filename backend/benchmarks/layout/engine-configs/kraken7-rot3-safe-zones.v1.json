@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "engineId": "kraken7-rot3-safe-zones",
+  "adapter": "layout-run-rotation-projection",
+  "adapterVersion": "1",
+  "provider": "letter-archive-rotation-projection",
+  "package": {
+    "name": "letter-archive-rotation-projection",
+    "version": "1"
+  },
+  "execution": {
+    "kind": "host",
+    "timeoutSeconds": 300
+  },
+  "measurementSemantics": {
+    "isolation": "orchestrator-process-pure-geometry",
+    "latency": "source-artifact-verification-plus-deterministic-reprojection",
+    "residentBatchThroughputMeasured": false,
+    "providerTimingSplit": "not-applicable-no-model-inference"
+  },
+  "sourceRuns": {
+    "rotationEvidence": {
+      "role": "rotation-native-evidence",
+      "runId": "kraken7-rot3-zones-full-v2-20260728",
+      "expectedEngineId": "kraken7-rot3-zones",
+      "expectedAdapterVersion": "2",
+      "manifestSha256": "4e4e2913dba57265fca8136e24cf3b1c7992a7e7c8c59429a8cc37c55b65eb7d",
+      "expectedRotationsDegrees": [
+        0,
+        90,
+        270
+      ]
+    }
+  },
+  "parameters": {
+    "sourceRotationsDegrees": [
+      0,
+      90,
+      270
+    ],
+    "rotationMergePolicy": "baseline-plus-nonoverlapping-vertical-zones",
+    "requireSuccessfulBaselinePass": true,
+    "selectionParameters": {
+      "verticalAxisToleranceDegrees": 15,
+      "strongBaselineLongEdgeRatio": 0.025,
+      "zoneJoinPaddingLongEdgeRatio": 0.06,
+      "zoneMemberPaddingLongEdgeRatio": 0.02,
+      "minimumStrongProposalClustersPerZone": 2,
+      "minimumProposalClustersPerZone": 3,
+      "baselineInterferencePaddingLongEdgeRatio": 0,
+      "baselineInterferenceHorizontalAxisToleranceDegrees": 20,
+      "maximumHorizontalBaselineCentroidRatioPerZone": 0.1,
+      "minimumHorizontalBaselineCentroidAllowancePerZone": 2
+    }
+  },
+  "diagnostic": {
+    "equivalentToDefaultProfile": false,
+    "rankable": false,
+    "contractEnforcement": "adapter-enforced-native-reprojection-v1",
+    "reason": "This no-inference diagnostic replays the exact immutable 0, 90, and 270 degree provider-native passes. A proposed vertical zone needs at least three clusters and is rejected when substantially horizontal 0-degree baseline centroids exceed max(2, floor(proposalCount * 0.10)). Every threshold is explicit; rejected zones, partial or failed passes, and untouched native/source-projected evidence remain in raw.json and the frozen source snapshot."
+  }
+}

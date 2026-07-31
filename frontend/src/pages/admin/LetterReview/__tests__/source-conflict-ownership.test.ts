@@ -361,13 +361,12 @@ describe('Letter Review source-conflict ownership', () => {
     expect(page).not.toMatch(
       /getAdminLetterById\(letterId\)\.then[\s\S]*?setLetter\(updated\)/,
     );
-    expect(lineReviewWorkspace).toContain(
+    expect(lineReviewWorkspace).not.toContain(
       'getAdminLetterById(targetLetterId)',
     );
     expect(lineReviewWorkspace).toContain('visit.isActive()');
-    expect(lineReviewWorkspace).toContain(
-      'tryAdoptLetter(updatedLetter)',
-    );
+    expect(lineReviewWorkspace).toContain('repairSelectedText');
+    expect(lineReviewWorkspace).not.toContain('tryAdoptLetter(updated');
     expect(page).toContain('window.location.reload();');
   });
 
@@ -565,14 +564,17 @@ describe('Letter Review source-conflict ownership', () => {
     const lineReview = await readFile(lineReviewPath, 'utf8');
 
     for (const fallback of [
-      'Failed to save segment edits',
       'Failed to verify segments',
       'Failed to unverify segments',
     ]) {
       expect(lineReview).toContain(`handleMutationError(err, '${fallback}')`);
     }
     expect(lineReview).toContain(
-      "handleMutationError(error, 'Failed to save segment mapping')",
+      "failureFallback = 'Failed to save segment edits'",
     );
+    expect(lineReview).toContain('handleMutationError(err, failureFallback)');
+    expect(lineReview).not.toContain('Failed to save segment mapping');
+    expect(lineReview).not.toContain('mappedText');
+    expect(lineReview).not.toContain('isMapped');
   });
 });

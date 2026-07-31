@@ -83,6 +83,7 @@ export function useAutoSave({
   );
   const {
     autoSaveStatus,
+    busyLanes,
     scheduleDebouncedSave,
     flushDebouncedSaves,
     cancelDebouncedSaves: cancelCoordinatorSaves,
@@ -144,6 +145,7 @@ export function useAutoSave({
   }, [syncIdentityMetadata, target?.key, visit]);
 
   const {
+    hasPendingIdentityWork,
     identityUpdateSecondsRemaining,
     identityUpdateState,
     retryPendingIdentityWork,
@@ -340,8 +342,30 @@ export function useAutoSave({
     visit,
   ]);
 
+  const hasPendingSaves = useCallback(() => {
+    const pendingLetterFields = pendingFieldsByVisitRef.current.get(visit);
+    return (
+      busyLanes.size > 0
+      || autoSaveStatus === 'error'
+      || hasPendingIdentityWork()
+      || (
+        pendingLetterFields !== undefined
+        && pendingLetterFields.targetKey === target?.key
+      )
+    );
+  }, [
+    autoSaveStatus,
+    busyLanes,
+    hasPendingIdentityWork,
+    target?.key,
+    visit,
+  ]);
+
   return {
     autoSaveStatus,
+    // Includes a restored letter-fields patch after a failed request, even
+    // when the coordinator lane is no longer technically running.
+    hasPendingSaves,
     identityUpdateSecondsRemaining,
     identityUpdateState,
     retagState,

@@ -7,3 +7,5 @@ export * from "./extras";
 export * from "./photoDescriptions";
 export * from "./transcription";
 export * from "./linked-entities";
+export * from "./transcriptAlignment";
+export * from "./productionTranscriptAlignment";

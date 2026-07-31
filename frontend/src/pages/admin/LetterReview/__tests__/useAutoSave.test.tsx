@@ -8,6 +8,7 @@ import { useLetterSourceConflict } from '../useLetterSourceConflict';
 
 const {
   createVersionMock,
+  hasPendingIdentityWorkMock,
   retryPendingIdentityWorkMock,
   scheduleIdentityUpdateMock,
   trackEditMock,
@@ -15,6 +16,7 @@ const {
   updateLetterMock,
 } = vi.hoisted(() => ({
   createVersionMock: vi.fn(),
+  hasPendingIdentityWorkMock: vi.fn(),
   retryPendingIdentityWorkMock: vi.fn(),
   scheduleIdentityUpdateMock: vi.fn(),
   trackEditMock: vi.fn(),
@@ -124,12 +126,14 @@ describe('useAutoSave', () => {
       createdAt: '2026-07-24T12:00:00.000Z',
     });
     useIdentityAutoSaveMock.mockReturnValue({
+      hasPendingIdentityWork: hasPendingIdentityWorkMock,
       identityUpdateState: 'idle',
       identityUpdateSecondsRemaining: 0,
       retryPendingIdentityWork: retryPendingIdentityWorkMock,
       retagState: 'idle',
       scheduleIdentityUpdate: scheduleIdentityUpdateMock,
     });
+    hasPendingIdentityWorkMock.mockReturnValue(false);
   });
 
   afterEach(() => {
@@ -261,6 +265,8 @@ describe('useAutoSave', () => {
       await vi.advanceTimersByTimeAsync(1_500);
     });
     expect(updateLetterMock).toHaveBeenCalledTimes(1);
+    expect(result.current.autoSaveStatus).toBe('error');
+    expect(result.current.hasPendingSaves()).toBe(true);
 
     act(() => {
       void result.current.triggerAutoSave({
@@ -273,11 +279,73 @@ describe('useAutoSave', () => {
     });
 
     expect(flushed).toBe(true);
+    expect(result.current.hasPendingSaves()).toBe(false);
     expect(updateLetterMock).toHaveBeenNthCalledWith(2, 'letter-1', {
       hook: 'Recovered hook',
       locationWritten: 'Philadelphia',
       primarySourceRevision: 7,
     });
+  });
+
+  it('keeps retained identity work pending and retries it during flush', async () => {
+    const original = makeLetter();
+    hasPendingIdentityWorkMock.mockReturnValue(true);
+    const dependencies: HarnessDependencies = {
+      tryAdoptLetter: vi.fn(() => true),
+      handleMutationError: vi.fn(() => false),
+      syncIdentityMetadata: vi.fn(),
+    };
+    const { result } = renderHook(() =>
+      useSimpleAutoSave(original, false, dependencies),
+    );
+
+    expect(result.current.hasPendingSaves()).toBe(true);
+
+    let flushed = false;
+    await act(async () => {
+      flushed = await result.current.flushPendingSaves();
+    });
+
+    expect(flushed).toBe(true);
+    expect(retryPendingIdentityWorkMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps an unresolved non-replayable lane failure pending', async () => {
+    const original = makeLetter();
+    const failure = new Error('extra content save failed');
+    const dependencies: HarnessDependencies = {
+      tryAdoptLetter: vi.fn(() => true),
+      handleMutationError: vi.fn(() => false),
+      syncIdentityMetadata: vi.fn(),
+    };
+    const { result } = renderHook(() =>
+      useSimpleAutoSave(original, false, dependencies),
+    );
+
+    act(() => {
+      result.current.scheduleDebouncedSave(
+        async () => {
+          throw failure;
+        },
+        {
+          lane: 'extra-content',
+          delayMs: 0,
+          errorMessage: 'Failed to save extra content',
+        },
+      );
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.autoSaveStatus).toBe('error');
+    expect(result.current.hasPendingSaves()).toBe(true);
+
+    let flushed = true;
+    await act(async () => {
+      flushed = await result.current.flushPendingSaves();
+    });
+    expect(flushed).toBe(false);
   });
 
   it('isolates queued writes by source target across A -> B navigation', async () => {

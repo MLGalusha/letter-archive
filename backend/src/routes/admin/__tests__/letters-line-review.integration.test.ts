@@ -36,6 +36,8 @@ const {
   adaptKrakenNativePageLayoutV2Mock,
   validateStoredPageLayoutMock,
   savePageLayoutV2Mock,
+  savePageGeometryProposalMock,
+  getCurrentPageGeometryProposalMock,
   updatePageSegmentTrustMock,
   updateLetterSegmentTrustMock,
 } = vi.hoisted(() => ({
@@ -73,6 +75,8 @@ const {
   adaptKrakenNativePageLayoutV2Mock: vi.fn(),
   validateStoredPageLayoutMock: vi.fn(),
   savePageLayoutV2Mock: vi.fn(),
+  savePageGeometryProposalMock: vi.fn(),
+  getCurrentPageGeometryProposalMock: vi.fn(),
   updatePageSegmentTrustMock: vi.fn(),
   updateLetterSegmentTrustMock: vi.fn(),
 }));
@@ -177,6 +181,13 @@ vi.mock('../../../services/kraken-page-layout-adapter.js', async () => {
 
 vi.mock('../../../services/page-layout.js', () => ({
   savePageLayoutV2: savePageLayoutV2Mock,
+}));
+
+vi.mock('../../../services/page-geometry-proposals.js', () => ({
+  createPageGeometryProposalRepository: vi.fn(() => ({
+    save: savePageGeometryProposalMock,
+    getCurrent: getCurrentPageGeometryProposalMock,
+  })),
 }));
 
 vi.mock('../../../services/stored-page-layout.js', () => ({
@@ -435,6 +446,53 @@ function createNativePageLayout() {
   };
 }
 
+function createRotationNativePageLayout() {
+  const native = createNativePageLayout();
+  return {
+    ...native,
+    producer: {
+      ...native.producer,
+      config: {
+        ...native.producer.config,
+        rotationProfile: {
+          name: 'sideways-recovery-v1',
+          evidenceContract: 'native-and-source-projected-v2',
+          rotationsDegrees: [0, 90, 270],
+          passOutcomes: [
+            { rotationDegrees: 0, status: 'succeeded' },
+            { rotationDegrees: 90, status: 'succeeded' },
+            { rotationDegrees: 270, status: 'succeeded' },
+          ],
+          mergePolicy:
+            'baseline-plus-nonoverlapping-vertical-zones',
+          coordinateTransform:
+            'pil-pixel-centers-to-source-v1',
+          selectionParameters: {
+            verticalAxisToleranceDegrees: 15,
+            strongBaselineLongEdgeRatio: 0.025,
+            zoneJoinPaddingLongEdgeRatio: 0.06,
+            zoneMemberPaddingLongEdgeRatio: 0.02,
+            minimumStrongProposalClustersPerZone: 2,
+            minimumProposalClustersPerZone: 3,
+            baselineInterferencePaddingLongEdgeRatio: 0,
+            baselineInterferenceHorizontalAxisToleranceDegrees: 20,
+            maximumHorizontalBaselineCentroidRatioPerZone: 0.1,
+            minimumHorizontalBaselineCentroidAllowancePerZone: 2,
+          },
+          selectionSummary: {
+            rawInputLineCount: 1,
+            inputLineCount: 1,
+            clusterCount: 0,
+            includedClusterCount: 0,
+            rejectedClusterCount: 0,
+            appendedRotatedLineCount: 0,
+          },
+        },
+      },
+    },
+  };
+}
+
 function createCanonicalPageLayout() {
   return {
     schemaVersion: 2,
@@ -513,6 +571,22 @@ describe('admin letters line review route integration', () => {
       checksumSha256: 'd'.repeat(64),
       lineCount: 1,
       projectionAction: 'created',
+    });
+    savePageGeometryProposalMock.mockResolvedValue({
+      kind: 'saved',
+      value: {
+        id: '33333333-3333-4333-8333-333333333333',
+        artifactChecksumSha256: '9'.repeat(64),
+        artifact: {
+          source: { baseGeometryRevision: 2 },
+          candidates: [{ id: 'rotation-candidate-1' }],
+        },
+        createdBy: 'admin',
+        createdAt: new Date('2026-07-31T14:00:00.000Z'),
+      },
+    });
+    getCurrentPageGeometryProposalMock.mockResolvedValue({
+      kind: 'none',
     });
     updatePageSegmentTrustMock.mockResolvedValue(true);
     updateLetterSegmentTrustMock.mockResolvedValue(true);
@@ -663,6 +737,281 @@ describe('admin letters line review route integration', () => {
     });
 
     expect(response.statusCode).toBe(409);
+  });
+
+  it('stores rotation output as an immutable proposal without mutating canonical geometry', async () => {
+    const nativePageLayout = createRotationNativePageLayout();
+    findFirstMock.mockResolvedValueOnce({ id: PAGE_ID });
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'PATCH',
+      url: `/letters/pages/${PAGE_ID}/geometry-proposals/rotation`,
+      path: `/letters/pages/${PAGE_ID}/geometry-proposals/rotation`,
+      body: {
+        nativePageLayout,
+        runId: DETECTOR_RUN_ID,
+        source: {
+          primarySourceRevision: 4,
+          sourceChecksumSha256: SOURCE_CHECKSUM,
+          baseGeometryRevision: 2,
+          baseGeometryChecksumSha256: geometryChecksum,
+          baseLineSegmentsChecksumSha256: lineSegmentsChecksum,
+        },
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(adaptKrakenNativePageLayoutV2Mock).toHaveBeenCalledWith(
+      nativePageLayout,
+      {
+        pageId: PAGE_ID,
+        expectedSourceChecksumSha256: SOURCE_CHECKSUM,
+        runId: DETECTOR_RUN_ID,
+      },
+    );
+    expect(savePageGeometryProposalMock).toHaveBeenCalledWith({
+      layout: createCanonicalPageLayout(),
+      expected: {
+        primarySourceRevision: 4,
+        sourceChecksumSha256: SOURCE_CHECKSUM,
+        baseGeometryRevision: 2,
+        baseGeometryChecksumSha256: geometryChecksum,
+        baseLineSegmentsChecksumSha256: lineSegmentsChecksum,
+      },
+      actorId: 'admin',
+    });
+    expect(response.body).toEqual({
+      ok: true,
+      status: 'saved',
+      proposalId: '33333333-3333-4333-8333-333333333333',
+      artifactChecksumSha256: '9'.repeat(64),
+      candidateCount: 1,
+      createdAt: '2026-07-31T14:00:00.000Z',
+    });
+    expect(savePageLayoutV2Mock).not.toHaveBeenCalled();
+    expect(savePageLineSegmentsMock).not.toHaveBeenCalled();
+  });
+
+  it('accepts a valid rotation run with no candidates without writing canonical geometry', async () => {
+    findFirstMock.mockResolvedValueOnce({ id: PAGE_ID });
+    savePageGeometryProposalMock.mockResolvedValueOnce({
+      kind: 'no-candidates',
+    });
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'PATCH',
+      url: `/letters/pages/${PAGE_ID}/geometry-proposals/rotation`,
+      path: `/letters/pages/${PAGE_ID}/geometry-proposals/rotation`,
+      body: {
+        nativePageLayout: createRotationNativePageLayout(),
+        runId: DETECTOR_RUN_ID,
+        source: {
+          primarySourceRevision: 4,
+          sourceChecksumSha256: SOURCE_CHECKSUM,
+          baseGeometryRevision: 2,
+          baseGeometryChecksumSha256: geometryChecksum,
+          baseLineSegmentsChecksumSha256: lineSegmentsChecksum,
+        },
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual({
+      ok: true,
+      status: 'no-candidates',
+      candidateCount: 0,
+    });
+    expect(savePageLayoutV2Mock).not.toHaveBeenCalled();
+    expect(savePageLineSegmentsMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects standard detector output on the rotation proposal endpoint', async () => {
+    findFirstMock.mockResolvedValueOnce({ id: PAGE_ID });
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'PATCH',
+      url: `/letters/pages/${PAGE_ID}/geometry-proposals/rotation`,
+      path: `/letters/pages/${PAGE_ID}/geometry-proposals/rotation`,
+      body: {
+        nativePageLayout: createNativePageLayout(),
+        runId: DETECTOR_RUN_ID,
+        source: {
+          primarySourceRevision: 4,
+          sourceChecksumSha256: SOURCE_CHECKSUM,
+          baseGeometryRevision: 2,
+          baseGeometryChecksumSha256: geometryChecksum,
+          baseLineSegmentsChecksumSha256: lineSegmentsChecksum,
+        },
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(adaptKrakenNativePageLayoutV2Mock).not.toHaveBeenCalled();
+    expect(savePageGeometryProposalMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects rotation output produced from different source bytes', async () => {
+    findFirstMock.mockResolvedValueOnce({ id: PAGE_ID });
+    const nativePageLayout = createRotationNativePageLayout();
+    nativePageLayout.source.original.sha256 = '8'.repeat(64);
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'PATCH',
+      url: `/letters/pages/${PAGE_ID}/geometry-proposals/rotation`,
+      path: `/letters/pages/${PAGE_ID}/geometry-proposals/rotation`,
+      body: {
+        nativePageLayout,
+        runId: DETECTOR_RUN_ID,
+        source: {
+          primarySourceRevision: 4,
+          sourceChecksumSha256: SOURCE_CHECKSUM,
+          baseGeometryRevision: 2,
+          baseGeometryChecksumSha256: geometryChecksum,
+          baseLineSegmentsChecksumSha256: lineSegmentsChecksum,
+        },
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(adaptKrakenNativePageLayoutV2Mock).not.toHaveBeenCalled();
+    expect(savePageGeometryProposalMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { kind: 'source-conflict', code: 'SOURCE_REVISION_CHANGED' },
+    { kind: 'geometry-conflict', code: 'GEOMETRY_REVISION_CHANGED' },
+    { kind: 'projection-conflict', code: 'LINE_SEGMENTS_CHANGED' },
+  ])('maps a $kind proposal fence failure without canonical writes', async ({
+    kind,
+    code,
+  }) => {
+    findFirstMock.mockResolvedValueOnce({ id: PAGE_ID });
+    savePageGeometryProposalMock.mockResolvedValueOnce({ kind });
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'PATCH',
+      url: `/letters/pages/${PAGE_ID}/geometry-proposals/rotation`,
+      path: `/letters/pages/${PAGE_ID}/geometry-proposals/rotation`,
+      body: {
+        nativePageLayout: createRotationNativePageLayout(),
+        runId: DETECTOR_RUN_ID,
+        source: {
+          primarySourceRevision: 4,
+          sourceChecksumSha256: SOURCE_CHECKSUM,
+          baseGeometryRevision: 2,
+          baseGeometryChecksumSha256: geometryChecksum,
+          baseLineSegmentsChecksumSha256: lineSegmentsChecksum,
+        },
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({ code });
+    expect(savePageLayoutV2Mock).not.toHaveBeenCalled();
+    expect(savePageLineSegmentsMock).not.toHaveBeenCalled();
+  });
+
+  it('returns only the newest proposal matching current page geometry', async () => {
+    getCurrentPageGeometryProposalMock.mockResolvedValueOnce({
+      kind: 'found',
+      value: {
+        id: '33333333-3333-4333-8333-333333333333',
+        artifactChecksumSha256: '9'.repeat(64),
+        artifact: {
+          schemaVersion: 1,
+          kind: 'rotation-recovery',
+          pageId: PAGE_UUID,
+          candidates: [{ id: 'rotation-candidate-1' }],
+        },
+        createdBy: 'admin',
+        createdAt: new Date('2026-07-31T14:00:00.000Z'),
+      },
+    });
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'GET',
+      url:
+        `/letters/pages/${PAGE_UUID}/geometry-proposals/rotation/current`,
+      path:
+        `/letters/pages/${PAGE_UUID}/geometry-proposals/rotation/current`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(getCurrentPageGeometryProposalMock).toHaveBeenCalledWith(
+      PAGE_UUID,
+    );
+    expect(response.body).toEqual({
+      proposal: {
+        id: '33333333-3333-4333-8333-333333333333',
+        artifactChecksumSha256: '9'.repeat(64),
+        createdBy: 'admin',
+        createdAt: '2026-07-31T14:00:00.000Z',
+        artifact: {
+          schemaVersion: 1,
+          kind: 'rotation-recovery',
+          pageId: PAGE_UUID,
+          candidates: [{ id: 'rotation-candidate-1' }],
+        },
+      },
+    });
+    expect(savePageLayoutV2Mock).not.toHaveBeenCalled();
+    expect(savePageLineSegmentsMock).not.toHaveBeenCalled();
+  });
+
+  it('returns an explicit empty response when no exact-current proposal exists', async () => {
+    const response = await invokeRouter(lettersRouter, {
+      method: 'GET',
+      url:
+        `/letters/pages/${PAGE_UUID}/geometry-proposals/rotation/current`,
+      path:
+        `/letters/pages/${PAGE_UUID}/geometry-proposals/rotation/current`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual({ proposal: null });
+  });
+
+  it('fails closed when current editable geometry is corrupt', async () => {
+    getCurrentPageGeometryProposalMock.mockResolvedValueOnce({
+      kind: 'corrupt-current-geometry',
+    });
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'GET',
+      url:
+        `/letters/pages/${PAGE_UUID}/geometry-proposals/rotation/current`,
+      path:
+        `/letters/pages/${PAGE_UUID}/geometry-proposals/rotation/current`,
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.body).toMatchObject({
+      code: 'CURRENT_PAGE_GEOMETRY_CORRUPT',
+    });
+  });
+
+  it('fails closed when current page source identity is corrupt', async () => {
+    getCurrentPageGeometryProposalMock.mockResolvedValueOnce({
+      kind: 'corrupt-current-source',
+    });
+
+    const response = await invokeRouter(lettersRouter, {
+      method: 'GET',
+      url:
+        `/letters/pages/${PAGE_UUID}/geometry-proposals/rotation/current`,
+      path:
+        `/letters/pages/${PAGE_UUID}/geometry-proposals/rotation/current`,
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.body).toMatchObject({
+      code: 'CURRENT_PAGE_SOURCE_CORRUPT',
+    });
   });
 
   it('returns a stored PageLayout only after schema and checksum validation', async () => {

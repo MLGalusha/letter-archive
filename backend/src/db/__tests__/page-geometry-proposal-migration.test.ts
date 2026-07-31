@@ -12,6 +12,15 @@ const migration = readFileSync(
   ),
   'utf8',
 );
+const boundsFixMigration = readFileSync(
+  join(
+    __dirname,
+    '..',
+    'migrations',
+    '0064_fix_geometry_proposal_baseline_bounds.sql',
+  ),
+  'utf8',
+);
 const journal = JSON.parse(readFileSync(
   join(__dirname, '..', 'migrations', 'meta', '_journal.json'),
   'utf8',
@@ -65,6 +74,32 @@ describe('page geometry proposal migration', () => {
     );
     expect(migration).toContain(
       'CREATE TRIGGER page_geometry_proposal_events_immutable',
+    );
+  });
+
+  it('uses strict point indexing for portrait-page baseline bounds', () => {
+    expect(journal.entries.find(({ tag }) => (
+      tag === '0064_fix_geometry_proposal_baseline_bounds'
+    ))).toMatchObject({
+      idx: 64,
+      tag: '0064_fix_geometry_proposal_baseline_bounds',
+    });
+    expect(
+      migrationReleasePolicies[
+        '0064_fix_geometry_proposal_baseline_bounds'
+      ],
+    ).toBe('automatic');
+    expect(boundsFixMigration).toContain(
+      "'strict $.candidates[*]",
+    );
+    expect(boundsFixMigration).toContain(
+      '? (exists(@.baseline)).baseline[*] ? (',
+    );
+    expect(boundsFixMigration).toContain(
+      'VALIDATE CONSTRAINT "page_geometry_proposal_candidates_in_image_strict"',
+    );
+    expect(boundsFixMigration).toContain(
+      'RENAME CONSTRAINT "page_geometry_proposal_candidates_in_image_strict"',
     );
   });
 });

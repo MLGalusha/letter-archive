@@ -72,6 +72,7 @@ describe('migration release policy', () => {
       '0061_add_page_recognition_artifacts',
       '0062_version_page_recognition_evidence',
       '0063_add_page_geometry_proposals',
+      '0064_fix_geometry_proposal_baseline_bounds',
     ]);
   });
 
@@ -147,12 +148,28 @@ describe('migration release policy', () => {
   });
 
   it('allows append-only geometry proposals during an automatic release', () => {
+    const proposalIndex = journal.findIndex(
+      ({ tag }) => tag === '0063_add_page_geometry_proposals',
+    );
     expect(assertMigrationReleaseAllowed({
-      journal,
-      appliedMigrations: appliedPrefix(journal.length - 1),
+      journal: journal.slice(0, proposalIndex + 1),
+      appliedMigrations: appliedPrefix(proposalIndex),
       mode: 'automatic',
     }).map(({ tag }) => tag)).toEqual([
       '0063_add_page_geometry_proposals',
+    ]);
+  });
+
+  it('allows the strict proposal bounds correction during an automatic release', () => {
+    const boundsFixIndex = journal.findIndex(
+      ({ tag }) => tag === '0064_fix_geometry_proposal_baseline_bounds',
+    );
+    expect(assertMigrationReleaseAllowed({
+      journal: journal.slice(0, boundsFixIndex + 1),
+      appliedMigrations: appliedPrefix(boundsFixIndex),
+      mode: 'automatic',
+    }).map(({ tag }) => tag)).toEqual([
+      '0064_fix_geometry_proposal_baseline_bounds',
     ]);
   });
 

@@ -14,6 +14,11 @@ import {
 import {
   savePageLayoutV2,
 } from '../../../services/page-layout.js';
+import {
+  createPageGeometryProposalRepository,
+  type SavePageGeometryProposalResult,
+  type StoredPageGeometryProposal,
+} from '../../../services/page-geometry-proposals.js';
 import { validateStoredPageLayout } from '../../../services/stored-page-layout.js';
 import {
   createVersion,
@@ -71,6 +76,7 @@ import {
   retagMetadataSchema,
   saveKrakenPageLayoutSchema,
   saveLineSegmentsSchema,
+  saveRotationGeometryProposalSchema,
   toggleFlagSchema,
   updateLetterSegmentTrustSchema,
   updatePageSegmentTrustSchema,
@@ -90,6 +96,8 @@ import {
 } from './helpers.js';
 
 const router = Router();
+const pageGeometryProposalRepository =
+  createPageGeometryProposalRepository();
 
 function requireCompletedMetadataRun(outcome: MetadataRunOutcome): void {
   if (outcome.kind === 'completed') return;
@@ -196,6 +204,39 @@ function requireSavedGeometry(
   }
   throw geometryRevisionChanged(
     'Page geometry changed in another editor; reload the page geometry and retry',
+  );
+}
+
+function requireSavedGeometryProposal(
+  result: SavePageGeometryProposalResult,
+):
+  | {
+    kind: 'saved' | 'already-exists';
+    value: StoredPageGeometryProposal;
+  }
+  | { kind: 'no-candidates' } {
+  if (
+    result.kind === 'saved'
+    || result.kind === 'already-exists'
+  ) {
+    return result;
+  }
+  if (result.kind === 'no-candidates') return { kind: result.kind };
+  if (result.kind === 'not-found') {
+    throw new NotFoundError('Page not found');
+  }
+  if (result.kind === 'source-conflict') {
+    throw sourceRevisionChanged(
+      'Page source changed; reload before saving the rotation proposal',
+    );
+  }
+  if (result.kind === 'geometry-conflict') {
+    throw geometryRevisionChanged(
+      'Page geometry changed; rerun rotation recovery against the current page',
+    );
+  }
+  throw lineSegmentsChanged(
+    'Page line-segment data changed; rerun rotation recovery against the current page',
   );
 }
 
@@ -1270,6 +1311,144 @@ router.patch('/pages/:pageId/page-layout/kraken', async (req, res, next) => {
     next(error);
   }
 });
+
+router.get(
+  '/pages/:pageId/geometry-proposals/rotation/current',
+  async (req, res, next) => {
+    try {
+      const result = await pageGeometryProposalRepository.getCurrent(
+        req.params.pageId,
+      );
+      if (result.kind === 'not-found') {
+        throw new NotFoundError('Page not found');
+      }
+      if (result.kind === 'corrupt-current-geometry') {
+        throw new AppError(
+          500,
+          'Current page geometry failed integrity validation',
+          undefined,
+          'CURRENT_PAGE_GEOMETRY_CORRUPT',
+        );
+      }
+      if (result.kind === 'corrupt-current-source') {
+        throw new AppError(
+          500,
+          'Current page source identity failed integrity validation',
+          undefined,
+          'CURRENT_PAGE_SOURCE_CORRUPT',
+        );
+      }
+      if (result.kind === 'none') {
+        res.json({ proposal: null });
+        return;
+      }
+
+      res.json({
+        proposal: {
+          id: result.value.id,
+          artifactChecksumSha256:
+            result.value.artifactChecksumSha256,
+          createdBy: result.value.createdBy,
+          createdAt: result.value.createdAt.toISOString(),
+          artifact: result.value.artifact,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// Store sideways-text detections as immutable review proposals. This endpoint
+// must never replace PageLayout or the editable line-segment projection.
+router.patch(
+  '/pages/:pageId/geometry-proposals/rotation',
+  async (req, res, next) => {
+    try {
+      const page = await db.query.letterPages.findFirst({
+        where: eq(letterPages.id, req.params.pageId),
+        columns: { id: true },
+      });
+      if (!page) throw new NotFoundError('Page not found');
+
+      const body = parseOrThrow(
+        saveRotationGeometryProposalSchema,
+        req.body,
+        'Invalid rotation geometry proposal',
+      );
+      const sourceChecksumSha256 =
+        body.source.sourceChecksumSha256.toLowerCase();
+      if (
+        body.nativePageLayout.source.original.sha256
+        !== sourceChecksumSha256
+      ) {
+        throw sourceRevisionChanged(
+          'Rotation proposal belongs to a different page source; rerun it against the current image',
+        );
+      }
+
+      const layout = adaptKrakenNativePageLayoutV2(
+        body.nativePageLayout,
+        {
+          pageId: req.params.pageId,
+          expectedSourceChecksumSha256: sourceChecksumSha256,
+          runId: body.runId,
+        },
+      );
+      const result = requireSavedGeometryProposal(
+        await pageGeometryProposalRepository.save({
+          layout,
+          expected: {
+            primarySourceRevision:
+              body.source.primarySourceRevision,
+            sourceChecksumSha256,
+            baseGeometryRevision:
+              body.source.baseGeometryRevision,
+            baseGeometryChecksumSha256:
+              body.source.baseGeometryChecksumSha256,
+            baseLineSegmentsChecksumSha256:
+              body.source.baseLineSegmentsChecksumSha256,
+          },
+          actorId: getUserId(req),
+        }),
+      );
+
+      if (result.kind === 'no-candidates') {
+        req.log.info({
+          pageId: req.params.pageId,
+          runId: body.runId,
+        }, 'Rotation recovery completed without proposal candidates');
+        res.json({
+          ok: true,
+          status: result.kind,
+          candidateCount: 0,
+        });
+        return;
+      }
+
+      req.log.info({
+        pageId: req.params.pageId,
+        proposalId: result.value.id,
+        proposalStatus: result.kind,
+        runId: body.runId,
+        candidateCount: result.value.artifact.candidates.length,
+        baseGeometryRevision:
+          result.value.artifact.source.baseGeometryRevision,
+      }, 'Immutable rotation geometry proposal stored');
+      res.json({
+        ok: true,
+        status: result.kind,
+        proposalId: result.value.id,
+        artifactChecksumSha256:
+          result.value.artifactChecksumSha256,
+        candidateCount: result.value.artifact.candidates.length,
+        createdAt: result.value.createdAt.toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
 router.get('/pages/:pageId/page-layout', async (req, res, next) => {
   try {

@@ -1,7 +1,10 @@
 import { z } from 'zod';
 import { krakenNativePageLayoutV2Schema } from '../../../services/kraken-page-layout-adapter.js';
 import { lineSegmentsSchema } from '../../../schemas/line-segment.js';
-import { pageLayoutStableIdSchema } from '../../../schemas/page-layout-v2.js';
+import {
+  pageLayoutChecksumSchema,
+  pageLayoutStableIdSchema,
+} from '../../../schemas/page-layout-v2.js';
 import {
   EmotionalToneEnum,
   PrimaryTopicEnum,
@@ -160,6 +163,46 @@ export const saveKrakenPageLayoutSchema = z.object({
   // Pages without a checksum are deliberately excluded from the queue.
   sourceChecksum: z.string().regex(/^[0-9a-f]{64}$/i),
 }).strict();
+
+/**
+ * Rotation recovery never writes canonical page layout or editable segments.
+ * The detector submits an immutable proposal bound to the exact source bytes
+ * and exact editable projection it observed when the local run began.
+ */
+export const saveRotationGeometryProposalSchema = z.object({
+  nativePageLayout: krakenNativePageLayoutV2Schema,
+  runId: pageLayoutStableIdSchema,
+  source: z.object({
+    primarySourceRevision: z.number().int().nonnegative(),
+    sourceChecksumSha256: pageLayoutChecksumSchema,
+    baseGeometryRevision: z.number().int().nonnegative(),
+    baseGeometryChecksumSha256: pageLayoutChecksumSchema,
+    baseLineSegmentsChecksumSha256: pageLayoutChecksumSchema,
+  }).strict(),
+}).strict().superRefine((value, context) => {
+  const profile = value.nativePageLayout.producer.config.rotationProfile;
+  if (!profile) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['nativePageLayout', 'producer', 'config', 'rotationProfile'],
+      message: 'Rotation proposal output requires a pinned rotation profile',
+    });
+    return;
+  }
+  if (!profile.rotationsDegrees.some((rotation) => rotation !== 0)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: [
+        'nativePageLayout',
+        'producer',
+        'config',
+        'rotationProfile',
+        'rotationsDegrees',
+      ],
+      message: 'Rotation proposal output requires a nonzero rotation pass',
+    });
+  }
+});
 
 export const updatePageSegmentTrustSchema = z.object({
   trustState: z.enum(['unverified', 'trusted']),

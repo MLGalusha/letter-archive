@@ -44,6 +44,9 @@ export const migrationReleasePolicies: Readonly<
   // Append-only rotation proposals and their review events are additive and
   // ignored by application revisions that predate geometry recovery.
   '0063_add_page_geometry_proposals': 'automatic',
+  // Replaces a lax JSONPath bounds check with its strict equivalent. This
+  // relaxes false rejections without changing the proposal artifact contract.
+  '0064_fix_geometry_proposal_baseline_bounds': 'automatic',
 });
 
 function assertValidJournal(

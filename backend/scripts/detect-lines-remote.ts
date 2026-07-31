@@ -27,6 +27,8 @@ import os from 'os';
 import path from 'path';
 import readline from 'readline';
 import { fileURLToPath } from 'url';
+import { z } from 'zod';
+import { pageLayoutChecksumSchema } from '../src/schemas/page-layout-v2.js';
 import {
   krakenNativePageLayoutV2Schema,
   type KrakenNativePageLayoutV2,
@@ -34,6 +36,7 @@ import {
 import {
   isUnboundedDetectionRun,
   parseDetectLinesCliOptions,
+  type DetectLinesCliOptions,
 } from '../src/services/detect-lines-cli-options.js';
 import { KrakenNativeWorker } from '../src/services/kraken-native-worker.js';
 
@@ -44,19 +47,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // ---------------------------------------------------------------------------
 
 let config: ReturnType<typeof parseDetectLinesCliOptions>;
-try {
-  config = parseDetectLinesCliOptions(process.argv.slice(2), process.env);
-} catch (error) {
-  console.error(error instanceof Error ? error.message : String(error));
-  console.error('Use --limit <N>, --page-id <PAGE_ID>, or --dry-run to bound or inspect a run.');
-  process.exit(1);
-}
-
-if (!config.url || !config.email || !config.password) {
-  console.error('Usage: npm run detect-lines -- --url <API_URL> --email <EMAIL> --password <PASSWORD> [--limit <N> | --page-id <PAGE_ID> | --dry-run] [--rotations 0,90,270]');
-  console.error('  Or set REMOTE_URL, ADMIN_EMAIL, ADMIN_PASSWORD env vars.');
-  process.exit(1);
-}
 
 const detectorRunId = `run-${randomUUID()}`;
 
@@ -65,10 +55,31 @@ const venvPath = path.resolve(__dirname, '..', 'python', 'venv');
 const pythonBin = path.join(venvPath, 'bin', 'python3');
 const scriptPath = path.resolve(__dirname, '..', 'python', 'line_finder.py');
 
-if (!fs.existsSync(pythonBin)) {
-  console.error(`Python venv not found at ${venvPath}`);
-  console.error('Run: cd backend && bash python/setup.sh');
-  process.exit(1);
+function initializeRuntimeConfig(): boolean {
+  try {
+    config = parseDetectLinesCliOptions(process.argv.slice(2), process.env);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    console.error('Use --limit <N>, --page-id <PAGE_ID>, or --dry-run to bound or inspect a run.');
+    process.exitCode = 1;
+    return false;
+  }
+
+  if (!config.url || !config.email || !config.password) {
+    console.error('Usage: npm run detect-lines -- --url <API_URL> --email <EMAIL> --password <PASSWORD> [--limit <N> | --page-id <PAGE_ID> | --dry-run] [--rotations 0,90,270]');
+    console.error('  Or set REMOTE_URL, ADMIN_EMAIL, ADMIN_PASSWORD env vars.');
+    process.exitCode = 1;
+    return false;
+  }
+
+  if (!fs.existsSync(pythonBin)) {
+    console.error(`Python venv not found at ${venvPath}`);
+    console.error('Run: cd backend && bash python/setup.sh');
+    process.exitCode = 1;
+    return false;
+  }
+
+  return true;
 }
 
 // History file
@@ -127,6 +138,9 @@ interface HistoryEntry {
   pageNumber: number;
   status: 'success' | 'failed';
   linesDetected: number;
+  candidatesProposed?: number;
+  proposalStatus?: RotationProposalUploadResponse['status'];
+  proposalId?: string;
   downloadMs: number;
   detectMs: number;
   uploadMs: number;
@@ -252,20 +266,123 @@ async function login() {
   }
 }
 
-interface QueuePage {
+export interface QueuePage {
   pageId: string;
   letterId: string;
   pageNumber: number;
   dateRaw: string;
   primarySourceRevision: number;
   sourceChecksum: string;
+  geometryRevision?: number;
+  geometryChecksumSha256?: string;
+  lineSegmentsChecksumSha256?: string;
+}
+
+export interface RotationQueuePage extends QueuePage {
+  geometryRevision: number;
+  geometryChecksumSha256: string;
+  lineSegmentsChecksumSha256: string;
+}
+
+export interface RotationQueueResponse {
+  pages: RotationQueuePage[];
+  total: number;
+}
+
+const rotationQueuePageSchema = z.object({
+  pageId: z.string().uuid(),
+  letterId: z.string().uuid(),
+  pageNumber: z.number().int().positive(),
+  dateRaw: z.string().trim().min(1).max(128),
+  primarySourceRevision: z.number().int().nonnegative(),
+  sourceChecksum: pageLayoutChecksumSchema,
+  geometryRevision: z.number().int().nonnegative(),
+  geometryChecksumSha256: pageLayoutChecksumSchema,
+  lineSegmentsChecksumSha256: pageLayoutChecksumSchema,
+}).strict();
+
+const rotationQueueResponseSchema = z.object({
+  pages: z.array(rotationQueuePageSchema),
+  total: z.number().int().nonnegative(),
+}).strict().superRefine((response, context) => {
+  if (response.total < response.pages.length) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['total'],
+      message: 'Queue total cannot be smaller than the returned page count',
+    });
+  }
+
+  const pageIds = new Set<string>();
+  response.pages.forEach((page, index) => {
+    if (pageIds.has(page.pageId)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['pages', index, 'pageId'],
+        message: `Rotation queue contains duplicate page ${page.pageId}`,
+      });
+    }
+    pageIds.add(page.pageId);
+  });
+});
+
+export function parseRotationQueueResponse(
+  value: unknown,
+): RotationQueueResponse {
+  const parsed = rotationQueueResponseSchema.safeParse(value);
+  if (!parsed.success) {
+    const firstIssue = parsed.error.issues[0];
+    const location = firstIssue?.path.length
+      ? ` at ${firstIssue.path.join('.')}`
+      : '';
+    throw new Error(
+      `Rotation queue endpoint returned an invalid response${location}`,
+    );
+  }
+  return parsed.data;
+}
+
+type DetectionMode = Pick<DetectLinesCliOptions, 'rotationsDegrees'>;
+type DetectionQueueOptions = Pick<
+  DetectLinesCliOptions,
+  'rotationsDegrees' | 'limit' | 'pageId'
+>;
+
+export function isRotationProposalMode(
+  options: DetectionMode,
+): boolean {
+  return options.rotationsDegrees !== undefined;
+}
+
+export function queueEndpointForDetection(
+  options: DetectionQueueOptions,
+): string {
+  if (!isRotationProposalMode(options)) {
+    return '/admin/layout-processing/queue';
+  }
+
+  const search = new URLSearchParams();
+  if (options.pageId !== undefined) {
+    search.set('pageId', options.pageId);
+  }
+  if (options.limit !== undefined) {
+    search.set('limit', String(options.limit));
+  }
+  const query = search.toString();
+  return `/admin/layout-processing/rotation-queue${
+    query ? `?${query}` : ''
+  }`;
 }
 
 async function fetchQueue(): Promise<{ pages: QueuePage[]; total: number }> {
-  return api('GET', '/admin/layout-processing/queue') as Promise<{
+  const response = await api('GET', queueEndpointForDetection(config));
+  if (isRotationProposalMode(config)) {
+    return parseRotationQueueResponse(response);
+  }
+  return response as {
     pages: QueuePage[];
     total: number;
-  }>;
+  };
 }
 
 function selectQueuePages(pages: QueuePage[]): QueuePage[] {
@@ -273,7 +390,10 @@ function selectQueuePages(pages: QueuePage[]): QueuePage[] {
   if (config.pageId) {
     selected = selected.filter((page) => page.pageId === config.pageId);
     if (selected.length === 0) {
-      throw new Error(`Page ${config.pageId} is not eligible for native layout detection`);
+      const eligibility = isRotationProposalMode(config)
+        ? 'a sideways-text recovery proposal'
+        : 'native layout detection';
+      throw new Error(`Page ${config.pageId} is not eligible for ${eligibility}`);
     }
   }
   if (config.limit !== undefined) {
@@ -293,8 +413,11 @@ async function confirmUnboundedRun(pageCount: number): Promise<boolean> {
   }
 
   const expected = `process ${pageCount}`;
+  const writeDescription = isRotationProposalMode(config)
+    ? `create sideways-text recovery proposals for ${pageCount} pages`
+    : `write native layout for ${pageCount} pages`;
   const prompt = (
-    `${YELLOW}This unbounded run can write native layout for ${pageCount} pages.${RESET}\n`
+    `${YELLOW}This unbounded run can ${writeDescription}.${RESET}\n`
     + `Type ${BOLD}${expected}${RESET} to continue: `
   );
   const answer = await new Promise<string>((resolve) => {
@@ -342,20 +465,155 @@ async function runKraken(
   );
 }
 
-async function uploadPageLayout(
+export interface DetectionUploadRequest {
+  method: 'PATCH';
+  endpoint: string;
+  body: {
+    nativePageLayout: KrakenNativePageLayoutV2;
+    runId: string;
+    primarySourceRevision?: number;
+    sourceChecksum?: string;
+    source?: {
+      primarySourceRevision: number;
+      sourceChecksumSha256: string;
+      baseGeometryRevision: number;
+      baseGeometryChecksumSha256: string;
+      baseLineSegmentsChecksumSha256: string;
+    };
+  };
+}
+
+export type RotationProposalUploadResponse =
+  | {
+    ok: true;
+    status: 'saved' | 'already-exists';
+    candidateCount: number;
+    proposalId: string;
+    artifactChecksumSha256: string;
+    createdAt: string;
+  }
+  | {
+    ok: true;
+    status: 'no-candidates';
+    candidateCount: 0;
+  };
+
+const rotationProposalUploadResponseSchema = z.discriminatedUnion('status', [
+  z.object({
+    ok: z.literal(true),
+    status: z.enum(['saved', 'already-exists']),
+    candidateCount: z.number().int().positive(),
+    proposalId: z.string().uuid(),
+    artifactChecksumSha256: pageLayoutChecksumSchema,
+    createdAt: z.string().datetime({ offset: true }),
+  }).strict(),
+  z.object({
+    ok: z.literal(true),
+    status: z.literal('no-candidates'),
+    candidateCount: z.literal(0),
+  }).strict(),
+]);
+
+export function parseRotationProposalUploadResponse(
+  value: unknown,
+): RotationProposalUploadResponse {
+  const parsed = rotationProposalUploadResponseSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new Error('Rotation proposal endpoint returned an invalid response');
+  }
+  return parsed.data;
+}
+
+function requireRotationFence(
+  page: QueuePage,
+  field:
+    | 'geometryRevision'
+    | 'geometryChecksumSha256'
+    | 'lineSegmentsChecksumSha256',
+): number | string {
+  const value = page[field];
+  if (value === undefined) {
+    throw new Error(
+      `Rotation queue page ${page.pageId} is missing required ${field}`,
+    );
+  }
+  return value;
+}
+
+export function buildDetectionUploadRequest(
   page: QueuePage,
   nativePageLayout: KrakenNativePageLayoutV2,
-): Promise<void> {
-  await api(
-    'PATCH',
-    `/admin/letters/pages/${page.pageId}/page-layout/kraken`,
-    {
+  runId: string,
+  options: DetectionMode,
+): DetectionUploadRequest {
+  if (isRotationProposalMode(options)) {
+    return {
+      method: 'PATCH',
+      endpoint:
+        `/admin/letters/pages/${page.pageId}/geometry-proposals/rotation`,
+      body: {
+        nativePageLayout,
+        runId,
+        source: {
+          primarySourceRevision: page.primarySourceRevision,
+          sourceChecksumSha256: page.sourceChecksum,
+          baseGeometryRevision: requireRotationFence(
+            page,
+            'geometryRevision',
+          ) as number,
+          baseGeometryChecksumSha256: requireRotationFence(
+            page,
+            'geometryChecksumSha256',
+          ) as string,
+          baseLineSegmentsChecksumSha256: requireRotationFence(
+            page,
+            'lineSegmentsChecksumSha256',
+          ) as string,
+        },
+      },
+    };
+  }
+
+  return {
+    method: 'PATCH',
+    endpoint: `/admin/letters/pages/${page.pageId}/page-layout/kraken`,
+    body: {
       nativePageLayout,
-      runId: detectorRunId,
+      runId,
       primarySourceRevision: page.primarySourceRevision,
       sourceChecksum: page.sourceChecksum,
     },
+  };
+}
+
+async function uploadDetectionResult(
+  page: QueuePage,
+  nativePageLayout: KrakenNativePageLayoutV2,
+): Promise<
+  | { mode: 'native-layout' }
+  | {
+    mode: 'rotation-proposal';
+    response: RotationProposalUploadResponse;
+  }
+> {
+  const request = buildDetectionUploadRequest(
+    page,
+    nativePageLayout,
+    detectorRunId,
+    config,
   );
+  const response = await api(
+    request.method,
+    request.endpoint,
+    request.body,
+  );
+  if (!isRotationProposalMode(config)) {
+    return { mode: 'native-layout' };
+  }
+  return {
+    mode: 'rotation-proposal',
+    response: parseRotationProposalUploadResponse(response),
+  };
 }
 
 function debugExtents(layout: KrakenNativePageLayoutV2): DebugExtent[] {
@@ -454,8 +712,11 @@ async function processPages(): Promise<boolean> {
     const queue = await fetchQueue();
     const pages = selectQueuePages(queue.pages);
     const total = pages.length;
+    const queueDescription = isRotationProposalMode(config)
+      ? 'pages are eligible for sideways-text recovery proposals'
+      : 'pages need line detection';
     writeln(
-      `${CLEAR_LINE}${BOLD}${queue.total}${RESET} pages need line detection; `
+      `${CLEAR_LINE}${BOLD}${queue.total}${RESET} ${queueDescription}; `
       + `${BOLD}${total}${RESET} selected.\n`,
     );
 
@@ -465,7 +726,13 @@ async function processPages(): Promise<boolean> {
     }
 
     if (config.dryRun) {
-      writeln(`${BOLD}Dry run — no images will be downloaded and no layouts will be uploaded.${RESET}`);
+      const uploadDescription = isRotationProposalMode(config)
+        ? 'no proposals will be created'
+        : 'no layouts will be uploaded';
+      writeln(
+        `${BOLD}Dry run — no images will be downloaded and `
+        + `${uploadDescription}.${RESET}`,
+      );
       for (const page of pages) {
         writeln(`  ${page.pageId}  ${page.dateRaw} p${page.pageNumber}`);
       }
@@ -538,9 +805,15 @@ async function processPages(): Promise<boolean> {
 
           // Upload
           stopSpinner();
-          startSpinner(`${counter} ${label} — uploading ${lineCount} lines`);
+          const uploadLabel = isRotationProposalMode(config)
+            ? `submitting recovery proposal (${lineCount} detected lines)`
+            : `uploading ${lineCount} lines`;
+          startSpinner(`${counter} ${label} — ${uploadLabel}`);
           const uploadStart = Date.now();
-          await uploadPageLayout(page, nativePageLayout);
+          const uploadResult = await uploadDetectionResult(
+            page,
+            nativePageLayout,
+          );
           const uploadMs = Date.now() - uploadStart;
 
           // Debug overlays use provider display extents only. They do not
@@ -560,11 +833,26 @@ async function processPages(): Promise<boolean> {
           stopSpinner();
           const totalMs = Date.now() - pageStart;
           succeeded++;
+          const proposalResponse = uploadResult.mode
+            === 'rotation-proposal'
+            ? uploadResult.response
+            : undefined;
+          const resultDescription = proposalResponse
+            ? (
+                proposalResponse.status === 'no-candidates'
+                  ? '0 sideways candidates'
+                  : `${proposalResponse.candidateCount} sideways candidates · `
+                    + proposalResponse.status.replace('-', ' ')
+              )
+            : `${lineCount} lines`;
 
           writeln(
             `  ${GREEN}\u2713${RESET} ${counter} ${BOLD}${label}${RESET}` +
-            `  ${lineCount} lines` +
+            `  ${resultDescription}` +
             `  ${DIM}dl:${formatMs(dlMs)} det:${formatMs(detectMs)} up:${formatMs(uploadMs)} total:${formatMs(totalMs)}${RESET}` +
+            (proposalResponse?.proposalId
+              ? `\n    ${DIM}proposal: ${proposalResponse.proposalId}${RESET}`
+              : '') +
             (debugPath ? `\n    ${DIM}debug: ${debugPath}${RESET}` : '')
           );
 
@@ -575,6 +863,16 @@ async function processPages(): Promise<boolean> {
             pageNumber: page.pageNumber,
             status: 'success',
             linesDetected: lineCount,
+            ...(proposalResponse
+              ? {
+                  candidatesProposed:
+                    proposalResponse.candidateCount,
+                  proposalStatus: proposalResponse.status,
+                  ...(proposalResponse.proposalId
+                    ? { proposalId: proposalResponse.proposalId }
+                    : {}),
+                }
+              : {}),
             downloadMs: dlMs,
             detectMs: detectMs,
             uploadMs: uploadMs,
@@ -721,8 +1019,16 @@ function setupKeyboard() {
 // ---------------------------------------------------------------------------
 
 async function main() {
+  if (!initializeRuntimeConfig()) return;
+
   writeln('');
-  writeln(`${BOLD}Kraken Native Layout Detection${RESET}`);
+  writeln(
+    `${BOLD}${
+      isRotationProposalMode(config)
+        ? 'Kraken Sideways-Text Recovery Proposals'
+        : 'Kraken Native Layout Detection'
+    }${RESET}`,
+  );
   writeln(`${DIM}Target: ${config.url}${RESET}`);
   writeln(`${DIM}Run: ${detectorRunId}${RESET}`);
   writeln(`${DIM}History: ${HISTORY_FILE}${RESET}`);
@@ -762,7 +1068,14 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error('Fatal error:', err);
-  process.exit(1);
-});
+const isDirectExecution = (
+  process.argv[1] !== undefined
+  && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+);
+
+if (isDirectExecution) {
+  main().catch((err) => {
+    console.error('Fatal error:', err);
+    process.exit(1);
+  });
+}

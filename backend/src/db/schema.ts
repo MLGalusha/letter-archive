@@ -1121,7 +1121,8 @@ export const pageGeometryProposals = pgTable(
         )
         AND NOT jsonb_path_exists(
           ${table.artifact},
-          '$.candidates[*].baseline[*] ? (
+          'strict $.candidates[*]
+            ? (exists(@.baseline)).baseline[*] ? (
             @[0] < 0 || @[1] < 0 || @[0] > $width || @[1] > $height
           )',
           jsonb_build_object(

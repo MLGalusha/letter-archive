@@ -9,3 +9,4 @@ export * from "./transcription";
 export * from "./linked-entities";
 export * from "./transcriptAlignment";
 export * from "./productionTranscriptAlignment";
+export * from "./pageGeometryProposals";

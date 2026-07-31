@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { createRef } from 'react';
+import { createRef, useState } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import LineReviewMode, { type LineReviewModeHandle } from '../LineReviewMode';
@@ -17,6 +17,10 @@ import {
   type ProductionAlignmentPage,
   type ProductionTranscriptAlignmentEnvelope,
 } from '../../../api/admin/productionTranscriptAlignment';
+import {
+  getCurrentRotationGeometryProposal,
+  type CurrentRotationGeometryProposal,
+} from '../../../api/admin/pageGeometryProposals';
 import type { Letter, LineSegment, SegmentTrustState } from '../../../types/Letter';
 
 const { getImageUrlMock } = vi.hoisted(() => ({
@@ -47,6 +51,10 @@ vi.mock('../../../api/admin/letters', () => ({
 
 vi.mock('../../../api/admin/productionTranscriptAlignment', () => ({
   getProductionTranscriptAlignment: vi.fn(),
+}));
+
+vi.mock('../../../api/admin/pageGeometryProposals', () => ({
+  getCurrentRotationGeometryProposal: vi.fn(),
 }));
 
 
@@ -295,6 +303,139 @@ function makeDefaultSegments(): LineSegment[] {
   ];
 }
 
+const ROTATION_SOURCE_CHECKSUM = 'a'.repeat(64);
+const ROTATION_GEOMETRY_CHECKSUM = 'b'.repeat(64);
+const ROTATION_SEGMENTS_CHECKSUM = 'c'.repeat(64);
+const ROTATION_ARTIFACT_CHECKSUM = 'd'.repeat(64);
+const ROTATION_PAGE_ID = '00000000-0000-4000-8000-000000000001';
+
+function rotationProposal(
+  imageSize = { width: 500, height: 700 },
+): CurrentRotationGeometryProposal {
+  return {
+    id: 'rotation-proposal-1',
+    artifactChecksumSha256: ROTATION_ARTIFACT_CHECKSUM,
+    createdAt: '2026-07-31T12:00:00.000Z',
+    artifact: {
+      schemaVersion: 1,
+      kind: 'rotation-recovery',
+      pageId: ROTATION_PAGE_ID,
+      source: {
+        primarySourceRevision: 4,
+        sourceChecksumSha256: ROTATION_SOURCE_CHECKSUM,
+        baseGeometryRevision: 7,
+        baseGeometryChecksumSha256: ROTATION_GEOMETRY_CHECKSUM,
+        baseLineSegmentsChecksumSha256: ROTATION_SEGMENTS_CHECKSUM,
+        image: {
+          ...imageSize,
+          checksumSha256: ROTATION_SOURCE_CHECKSUM,
+        },
+      },
+      rotationProfile: {
+        name: 'sideways-recovery-v1',
+        evidenceContract: 'native-and-source-projected-v2',
+        rotationsDegrees: [0, 90, 270],
+        passOutcomes: [
+          { rotationDegrees: 0, status: 'succeeded' },
+          { rotationDegrees: 90, status: 'succeeded' },
+          {
+            rotationDegrees: 270,
+            status: 'failed',
+            error: {
+              type: 'DetectorError',
+              message: 'No usable lines',
+            },
+          },
+        ],
+        mergePolicy: 'baseline-plus-nonoverlapping-vertical-zones',
+        coordinateTransform: 'pil-pixel-centers-to-source-v1',
+        selectionSummary: {
+          rawInputLineCount: 4,
+          inputLineCount: 3,
+          clusterCount: 2,
+          includedClusterCount: 1,
+          rejectedClusterCount: 1,
+          appendedRotatedLineCount: 1,
+        },
+      },
+      run: { id: 'rotation-run-1' },
+      candidates: [{
+        id: 'sideways-candidate-1',
+        line: -1,
+        geometryType: 'baseline',
+        providerTextDirection: 'vertical-rl',
+        rotationEvidence: {
+          evidenceContract: 'native-and-source-projected-v2',
+          mergePolicy: 'baseline-plus-nonoverlapping-vertical-zones',
+          clusterIndex: 0,
+          supportCount: 2,
+          sourceRotationsDegrees: [90],
+          sourcePassStatuses: ['succeeded'],
+          representativeRotationDegrees: 90,
+          representativeProviderOrdinal: 0,
+          memberProviderIds: ['provider-sideways-1'],
+          readingOrderSource: 'unresolved-rotated-proposal',
+        },
+        baseline: [[100, 120], [100, 260]],
+        bbox: [90, 110, 120, 270],
+        geometryProvenance: {
+          source: 'machine',
+          operation: 'detected',
+          parentSegmentIds: [],
+        },
+        ocrText: '',
+        boundary: [
+          { x: 90, y: 110 },
+          { x: 120, y: 110 },
+          { x: 120, y: 270 },
+          { x: 90, y: 270 },
+        ],
+      }],
+    },
+  };
+}
+
+function rotationReviewLetter(): Letter {
+  return makeLetter({
+    id: 'test-letter-4',
+    primarySourceRevision: 4,
+    images: [{
+      id: ROTATION_PAGE_ID,
+      type: 'letter',
+      pageNumber: 1,
+      imageUrl: '/images/rotation-page',
+      originalFilename: 'rotation-page.jpg',
+      sourceChecksum: ROTATION_SOURCE_CHECKSUM,
+      geometryRevision: 7,
+      geometryChecksumSha256: ROTATION_GEOMETRY_CHECKSUM,
+      lineSegmentsChecksumSha256: ROTATION_SEGMENTS_CHECKSUM,
+      lineSegments: makeDefaultSegments(),
+    }],
+  });
+}
+
+function rotationProductionAlignment(
+  letter: Letter,
+): ProductionTranscriptAlignmentEnvelope {
+  const page = productionAlignmentPage(
+    ROTATION_PAGE_ID,
+    1,
+    ['Line one', 'Line two', 'Line three'],
+    letter.images[0].lineSegments ?? [],
+  );
+  page.sourceChecksumSha256 = ROTATION_SOURCE_CHECKSUM;
+  page.geometry = {
+    ...geometryEnvelope(letter.images[0].lineSegments ?? [], 7),
+    geometryChecksumSha256: ROTATION_GEOMETRY_CHECKSUM,
+    lineSegmentsChecksumSha256: ROTATION_SEGMENTS_CHECKSUM,
+  };
+  return productionAlignmentEnvelope(
+    letter.id,
+    letter.primarySourceRevision,
+    [page],
+  );
+}
+
 function makeMultiPageLetter(): Letter {
   return makeLetter({
     images: [
@@ -454,6 +595,9 @@ describe('LineReviewMode', () => {
   const getProductionTranscriptAlignmentMock = vi.mocked(
     getProductionTranscriptAlignment,
   );
+  const getCurrentRotationGeometryProposalMock = vi.mocked(
+    getCurrentRotationGeometryProposal,
+  );
   const defaultProps = {
     letter: makeLetter(),
     transcript: 'Line one\nLine two\nLine three',
@@ -491,6 +635,9 @@ describe('LineReviewMode', () => {
         );
       },
     );
+    getCurrentRotationGeometryProposalMock.mockReset().mockResolvedValue({
+      proposal: null,
+    });
     // Reset requestAnimationFrame to run synchronously
     vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
       cb(0);
@@ -853,6 +1000,160 @@ describe('LineReviewMode', () => {
     const input = getEditable(container);
     expect(input).toBeTruthy();
     expect(input?.textContent).toBe('Line one');
+  });
+
+  it('leaves full-screen segment editing before showing candidate comparison', async () => {
+    const letter = rotationReviewLetter();
+    getProductionTranscriptAlignmentMock.mockResolvedValue(
+      rotationProductionAlignment(letter),
+    );
+    getCurrentRotationGeometryProposalMock.mockResolvedValue({
+      proposal: rotationProposal(),
+    });
+    function CandidateReviewHarness() {
+      const [debugMode, setDebugMode] = useState(false);
+      return (
+        <LineReviewMode
+          {...defaultProps}
+          letter={letter}
+          fullViewport
+          debugMode={debugMode}
+          onDebugModeChange={setDebugMode}
+        />
+      );
+    }
+    const { container } = render(
+      <CandidateReviewHarness />,
+    );
+    await simulateImageLoadAsync(container);
+
+    const candidatesButton = screen.getByRole('button', {
+      name: 'Candidates',
+    });
+    expect(candidatesButton).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByTitle('Switch to transcript editor')).toBeTruthy();
+
+    fireEvent.click(candidatesButton);
+
+    expect(await screen.findByTitle('Switch to segment editor')).toBeTruthy();
+    expect(await screen.findByRole('button', {
+      name: 'Sideways candidates · 1',
+    })).toBeTruthy();
+    expect(candidatesButton).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      container.querySelector('.line-review-rotation-proposal-overlay'),
+    ).toBeTruthy();
+  });
+
+  it('renders and toggles exact sideways candidates without changing current geometry', async () => {
+    const letter = rotationReviewLetter();
+    getProductionTranscriptAlignmentMock.mockResolvedValue(
+      rotationProductionAlignment(letter),
+    );
+    getCurrentRotationGeometryProposalMock.mockResolvedValue({
+      proposal: rotationProposal(),
+    });
+    const { container } = render(
+      <LineReviewMode
+        {...defaultProps}
+        letter={letter}
+        debugMode
+      />,
+    );
+    await simulateImageLoadAsync(container);
+
+    const candidateToggle = await screen.findByRole('button', {
+      name: 'Sideways candidates · 1',
+    });
+    expect(candidateToggle).toHaveAttribute(
+      'title',
+      '0° passed · 90° passed · 270° failed: No usable lines',
+    );
+    expect(
+      container.querySelectorAll('.line-review-debug-polygon'),
+    ).toHaveLength(3);
+    expect(
+      container.querySelectorAll('.line-review-rotation-proposal'),
+    ).toHaveLength(1);
+    expect(
+      container.querySelectorAll('.line-review-rotation-baseline'),
+    ).toHaveLength(1);
+    expect(
+      container.querySelector('.line-review-rotation-proposal-overlay'),
+    ).toHaveStyle({ pointerEvents: 'none' });
+
+    fireEvent.click(candidateToggle);
+
+    expect(
+      container.querySelector('.line-review-rotation-proposal-overlay'),
+    ).toBeNull();
+    expect(
+      container.querySelectorAll('.line-review-debug-polygon'),
+    ).toHaveLength(3);
+    expect(
+      screen.getByRole('button', { name: 'Current geometry' }),
+    ).toBeTruthy();
+  });
+
+  it('hides sideways candidates while editing canonical segments', async () => {
+    const letter = rotationReviewLetter();
+    getProductionTranscriptAlignmentMock.mockResolvedValue(
+      rotationProductionAlignment(letter),
+    );
+    getCurrentRotationGeometryProposalMock.mockResolvedValue({
+      proposal: rotationProposal(),
+    });
+    const { container } = render(
+      <LineReviewMode
+        {...defaultProps}
+        letter={letter}
+        debugMode
+      />,
+    );
+    await simulateImageLoadAsync(container);
+    await screen.findByRole('button', {
+      name: 'Sideways candidates · 1',
+    });
+    expect(
+      container.querySelector('.line-review-rotation-proposal-overlay'),
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByTitle('Switch to segment editor'));
+
+    expect(
+      container.querySelector('.line-review-rotation-proposal-overlay'),
+    ).toBeNull();
+    expect(
+      container.querySelectorAll('.segment-editor-poly'),
+    ).toHaveLength(3);
+  });
+
+  it('does not show a proposal whose raster dimensions differ from the page', async () => {
+    const letter = rotationReviewLetter();
+    getProductionTranscriptAlignmentMock.mockResolvedValue(
+      rotationProductionAlignment(letter),
+    );
+    getCurrentRotationGeometryProposalMock.mockResolvedValue({
+      proposal: rotationProposal({ width: 501, height: 700 }),
+    });
+    const { container } = render(
+      <LineReviewMode
+        {...defaultProps}
+        letter={letter}
+        debugMode
+      />,
+    );
+    await simulateImageLoadAsync(container);
+    await waitFor(() => {
+      expect(getCurrentRotationGeometryProposalMock).toHaveBeenCalled();
+    });
+
+    expect(
+      screen.queryByRole('button', { name: /Sideways candidates/ }),
+    ).toBeNull();
+    expect(
+      container.querySelector('.line-review-rotation-proposal-overlay'),
+    ).toBeNull();
   });
 
   it('fails closed when the letter lacks revision-bound transcript identity', async () => {

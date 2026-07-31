@@ -379,9 +379,14 @@
   margin-right: 4px;
 }
 
-.debug-legend-kraken {
+.debug-legend-current {
   background: rgba(0, 200, 80, 0.5);
   border: 1px solid rgba(0, 200, 80, 0.8);
+}
+
+.debug-legend-rotation {
+  background: rgba(236, 72, 153, 0.18);
+  border: 1px dashed rgba(236, 72, 153, 0.95);
 }
 
 .debug-legend-toggle {
@@ -420,11 +425,26 @@
   opacity: 0.4;
 }
 
-/* Debug polygon overlay — Kraken line boundaries (green) */
+/* Debug polygon overlay — current canonical line boundaries (green) */
 .line-review-debug-polygon {
   fill: rgba(0, 200, 80, 0.18);
   stroke: rgba(0, 200, 80, 0.5);
   stroke-width: 1;
+}
+
+/* Immutable sideways-text proposals (magenta). These are review evidence,
+   never interactive or canonical segment geometry. */
+.line-review-rotation-proposal {
+  fill: rgba(236, 72, 153, 0.12);
+  stroke: rgba(236, 72, 153, 0.96);
+  stroke-width: 2;
+  stroke-dasharray: 7 5;
+}
+
+.line-review-rotation-baseline {
+  fill: none;
+  stroke: rgba(236, 72, 153, 0.96);
+  stroke-width: 2;
 }
 
 /* Merged line boundary (orange) */

@@ -22,6 +22,7 @@ import {
 } from '../../hooks/useSegmentEditor';
 import SegmentEditorOverlay from './SegmentEditorOverlay';
 import SegmentContextMenu from './SegmentContextMenu';
+import RotationProposalOverlay from './RotationProposalOverlay';
 import {
   buildProductionReviewLines,
   type ProductionReviewLine as AlignedLine,
@@ -29,6 +30,9 @@ import {
 import {
   useProductionTranscriptAlignment,
 } from './useProductionTranscriptAlignment';
+import {
+  useRotationGeometryProposal,
+} from './useRotationGeometryProposal';
 import { useToast } from '../../contexts/ToastContext';
 import { highlightTranscriptMarkers } from '../../utils/transcriptHighlight';
 import {
@@ -318,10 +322,12 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   const minimapDragRef = useRef<{ pointerId: number; rect: DOMRect } | null>(null);
 
   // Debug overlay layer toggles
-  const [showKrakenLines, setShowKrakenLines] = useState(true);
+  const [showCurrentGeometry, setShowCurrentGeometry] = useState(true);
+  const [showRotationCandidates, setShowRotationCandidates] = useState(true);
   const [showExcludedContent, setShowExcludedContent] = useState(false);
 
-  // Raw Kraken line segments per page (for debug overlay, never reconciled)
+  // Current canonical geometry per page. Rotation proposals never enter this
+  // map; they have a separate read-only request and overlay lane.
   const [krakenSegmentsMap, setKrakenSegmentsMap] = useState<Record<number, LineSegment[] | undefined>>(() => {
     const initial: Record<number, LineSegment[] | undefined> = {};
     letterPages.forEach((page, index) => {
@@ -618,6 +624,49 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   const currentGeometryState = currentPage
     ? geometryStateMap[currentPage.id]
     : undefined;
+  const rotationProposalIdentity = (
+    debugLines
+    && currentPage?.type === 'letter'
+    && currentGeometryState
+    && typeof currentPage.sourceChecksum === 'string'
+  )
+    ? {
+      pageId: currentPage.id,
+      primarySourceRevision,
+      sourceChecksumSha256: currentPage.sourceChecksum,
+      geometryRevision: currentGeometryState.geometryRevision,
+      geometryChecksumSha256:
+        currentGeometryState.geometryChecksumSha256,
+      lineSegmentsChecksumSha256:
+        currentGeometryState.lineSegmentsChecksumSha256,
+    }
+    : null;
+  const {
+    proposal: rotationProposal,
+    status: rotationProposalStatus,
+  } = useRotationGeometryProposal(rotationProposalIdentity);
+  const rotationProposalMatchesImage = Boolean(
+    rotationProposalStatus === 'ready'
+    && rotationProposal
+    && imageNaturalSize.width > 0
+    && imageNaturalSize.height > 0
+    && rotationProposal.artifact.source.image.width
+      === imageNaturalSize.width
+    && rotationProposal.artifact.source.image.height
+      === imageNaturalSize.height,
+  );
+  const currentRotationProposal = rotationProposalMatchesImage
+    ? rotationProposal
+    : null;
+  const rotationProposalPassSummary = currentRotationProposal
+    ? currentRotationProposal.artifact.rotationProfile.passOutcomes
+      .map((outcome) => (
+        outcome.status === 'succeeded'
+          ? `${outcome.rotationDegrees}° passed`
+          : `${outcome.rotationDegrees}° failed: ${outcome.error.message}`
+      ))
+      .join(' · ')
+    : '';
   const currentPageTrusted = Boolean(
     currentGeometryState
     && !segmentEditor.isDirty
@@ -1473,6 +1522,31 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     segmentEditor,
   ]);
 
+  const handleCandidateComparisonToggle = useCallback(async () => {
+    if (!onDebugModeChange || navigationPendingRef.current) return;
+    if (debugLines) {
+      onDebugModeChange(false);
+      return;
+    }
+
+    if (segmentEditor.segmentEditMode) {
+      await runAfterSegmentFlush(() => {
+        setSubtractMode(false);
+        segmentEditor.clearSessionHistory();
+        segmentEditor.setSegmentEditMode(false);
+        onDebugModeChange(true);
+      });
+      return;
+    }
+
+    onDebugModeChange(true);
+  }, [
+    debugLines,
+    onDebugModeChange,
+    runAfterSegmentFlush,
+    segmentEditor,
+  ]);
+
   const flushPendingChanges = useCallback(
     () => runAfterSegmentFlush(() => undefined, true),
     [runAfterSegmentFlush],
@@ -2306,8 +2380,8 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           );
         })()}
 
-        {/* Debug overlay — Kraken polygon boundaries */}
-        {debugLines && showKrakenLines && imageDisplaySize.width > 0 && (
+        {/* Debug overlay — current canonical polygon boundaries */}
+        {debugLines && showCurrentGeometry && imageDisplaySize.width > 0 && (
           <svg
             style={{
               position: 'absolute',
@@ -2341,6 +2415,22 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
             )}
           </svg>
         )}
+
+        {/* Read-only sideways candidates. Never part of canonical geometry. */}
+        {debugLines
+          && showRotationCandidates
+          && currentRotationProposal
+          && !segmentEditor.segmentEditMode
+          && !segmentEditor.isDirty
+          && imageDisplaySize.width > 0
+          && (
+            <RotationProposalOverlay
+              proposal={currentRotationProposal}
+              scaleFactor={scaleFactor}
+              imageWidth={imageDisplaySize.width}
+              imageHeight={displayedImageHeight}
+            />
+          )}
 
         {/* Debug overlay — Excluded content (gray dashed) */}
         {debugLines && showExcludedContent && imageDisplaySize.width > 0 && (
@@ -2609,12 +2699,24 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
         <div className="line-review-debug-legend">
           <span className="debug-legend-title">Detection Layers</span>
           <button
-            className={`debug-legend-toggle${showKrakenLines ? ' debug-legend-toggle-active' : ''}`}
-            onClick={() => setShowKrakenLines(v => !v)}
+            className={`debug-legend-toggle${showCurrentGeometry ? ' debug-legend-toggle-active' : ''}`}
+            onClick={() => setShowCurrentGeometry(v => !v)}
           >
-            <span className="debug-legend-swatch debug-legend-kraken" />
-            Kraken Lines
+            <span className="debug-legend-swatch debug-legend-current" />
+            Current geometry
           </button>
+          {currentRotationProposal && (
+            <button
+              className={`debug-legend-toggle${showRotationCandidates ? ' debug-legend-toggle-active' : ''}`}
+              onClick={() => setShowRotationCandidates(v => !v)}
+              title={rotationProposalPassSummary}
+            >
+              <span className="debug-legend-swatch debug-legend-rotation" />
+              Sideways candidates · {
+                currentRotationProposal.artifact.candidates.length
+              }
+            </button>
+          )}
           <button
             className={`debug-legend-toggle${showExcludedContent ? ' debug-legend-toggle-active' : ''}`}
             onClick={() => setShowExcludedContent(v => !v)}
@@ -3065,6 +3167,34 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           </svg>
           {fitHeight ? 'Scroll' : 'Fit Height'}
         </button>
+        {onDebugModeChange && (
+          <>
+            <span className="line-review-toolbar-divider" />
+            <button
+              className={`line-review-toolbar-btn${debugLines ? ' active' : ''}`}
+              onClick={() => {
+                void handleCandidateComparisonToggle();
+              }}
+              disabled={navigationPending}
+              title={
+                debugLines
+                  ? 'Hide current geometry and sideways candidates'
+                  : 'Compare current geometry with sideways candidates'
+              }
+              aria-pressed={debugLines}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path
+                  d="M2.5 4.5h5v5h-5zM8.5 6.5h5v5h-5z"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              Candidates
+            </button>
+          </>
+        )}
         {fitHeight && fitZoom !== 1 && (
           <>
             <span className="line-review-toolbar-divider" />

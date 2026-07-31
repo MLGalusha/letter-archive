@@ -11,7 +11,7 @@ function send(message) {
 send({
   type: 'ready',
   protocol,
-  version: 1,
+  version: 2,
   model: { name: 'fixture' },
 });
 
@@ -23,7 +23,7 @@ lines.on('line', (line) => {
       type: 'stopped',
       id: request.id,
       protocol,
-      version: 1,
+      version: 2,
     });
     lines.close();
     return;
@@ -43,6 +43,9 @@ lines.on('line', (line) => {
       layout: {
         imagePath: request.imagePath,
         textDirection: request.textDirection,
+        ...(request.rotationsDegrees === undefined
+          ? {}
+          : { rotationsDegrees: request.rotationsDegrees }),
         requestNumber,
         pid: process.pid,
       },
@@ -68,6 +71,9 @@ lines.on('line', (line) => {
     layout: {
       imagePath: request.imagePath,
       textDirection: request.textDirection,
+      ...(request.rotationsDegrees === undefined
+        ? {}
+        : { rotationsDegrees: request.rotationsDegrees }),
       requestNumber,
       pid: process.pid,
     },

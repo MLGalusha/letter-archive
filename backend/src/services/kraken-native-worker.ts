@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { createInterface, type Interface } from 'node:readline';
 
 const PROTOCOL = 'kraken-native-layout-ndjson';
-const PROTOCOL_VERSION = 1;
+const PROTOCOL_VERSION = 2;
 const STDERR_LIMIT = 64 * 1024;
 
 export type KrakenTextDirection =
@@ -14,6 +14,8 @@ export type KrakenTextDirection =
   | 'horizontal-rl'
   | 'vertical-lr'
   | 'vertical-rl';
+
+export type KrakenRotationDegrees = readonly [0, 90, 270];
 
 export interface KrakenNativeWorkerOptions {
   executablePath: string;
@@ -154,6 +156,7 @@ export class KrakenNativeWorker {
   detect(
     imagePath: string,
     textDirection: KrakenTextDirection = 'horizontal-lr',
+    rotationsDegrees?: KrakenRotationDegrees,
   ): Promise<unknown> {
     if (!this.#acceptingRequests) {
       return Promise.reject(new Error(
@@ -161,7 +164,7 @@ export class KrakenNativeWorker {
       ));
     }
     const operation = this.#operationChain.then(() => (
-      this.#detectOne(imagePath, textDirection)
+      this.#detectOne(imagePath, textDirection, rotationsDegrees)
     ));
     this.#operationChain = operation.then(
       () => undefined,
@@ -233,6 +236,7 @@ export class KrakenNativeWorker {
   #detectOne(
     imagePath: string,
     textDirection: KrakenTextDirection,
+    rotationsDegrees?: KrakenRotationDegrees,
   ): Promise<unknown> {
     if (this.#failed) {
       return Promise.reject(this.#failed);
@@ -264,6 +268,9 @@ export class KrakenNativeWorker {
           id,
           imagePath,
           textDirection,
+          ...(rotationsDegrees !== undefined
+            ? { rotationsDegrees: [...rotationsDegrees] }
+            : {}),
         });
       } catch (error) {
         clearTimeout(timeout);

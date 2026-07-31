@@ -7,6 +7,7 @@
  * Usage:
  *   npm run detect-lines -- --url https://voicesthatremain.com --email admin@example.com --password secret --limit 5
  *   npm run detect-lines -- --url https://voicesthatremain.com --email admin@example.com --password secret --page-id <PAGE_ID>
+ *   npm run detect-lines -- --url https://voicesthatremain.com --email admin@example.com --password secret --page-id <PAGE_ID> --rotations 0,90,270
  *   npm run detect-lines -- --url https://voicesthatremain.com --email admin@example.com --password secret --dry-run
  *
  * Or with env vars:
@@ -52,7 +53,7 @@ try {
 }
 
 if (!config.url || !config.email || !config.password) {
-  console.error('Usage: npm run detect-lines -- --url <API_URL> --email <EMAIL> --password <PASSWORD> [--limit <N> | --page-id <PAGE_ID> | --dry-run]');
+  console.error('Usage: npm run detect-lines -- --url <API_URL> --email <EMAIL> --password <PASSWORD> [--limit <N> | --page-id <PAGE_ID> | --dry-run] [--rotations 0,90,270]');
   console.error('  Or set REMOTE_URL, ADMIN_EMAIL, ADMIN_PASSWORD env vars.');
   process.exit(1);
 }
@@ -333,7 +334,11 @@ async function runKraken(
   imagePath: string,
 ): Promise<KrakenNativePageLayoutV2> {
   return krakenNativePageLayoutV2Schema.parse(
-    await worker.detect(imagePath),
+    await worker.detect(
+      imagePath,
+      'horizontal-lr',
+      config.rotationsDegrees,
+    ),
   );
 }
 
@@ -484,7 +489,7 @@ async function processPages(): Promise<boolean> {
         executablePath: pythonBin,
         scriptPath,
         startupTimeoutMs: 120_000,
-        requestTimeoutMs: 120_000,
+        requestTimeoutMs: config.rotationsDegrees ? 420_000 : 120_000,
         shutdownTimeoutMs: 10_000,
       });
       stopSpinner();
@@ -721,6 +726,13 @@ async function main() {
   writeln(`${DIM}Target: ${config.url}${RESET}`);
   writeln(`${DIM}Run: ${detectorRunId}${RESET}`);
   writeln(`${DIM}History: ${HISTORY_FILE}${RESET}`);
+  writeln(
+    `${DIM}Detection profile: ${
+      config.rotationsDegrees
+        ? 'rotated-region recovery (0°, 90°, 270°)'
+        : 'standard single pass (0°)'
+    }${RESET}`,
+  );
   if (config.debug) writeln(`${YELLOW}Debug mode: saving overlay images to ${DEBUG_DIR}${RESET}`);
   if (config.dryRun) writeln(`${YELLOW}Dry-run mode: read-only queue inspection${RESET}`);
   if (config.pageId) writeln(`${DIM}Page: ${config.pageId}${RESET}`);

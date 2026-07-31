@@ -33,6 +33,8 @@ describe('detect-lines CLI options', () => {
       'page-123',
       '--debug',
       '--dry-run',
+      '--rotations',
+      '0,90,270',
     ], {})).toEqual({
       url: 'http://localhost:3002',
       email: 'dev@localhost.test',
@@ -41,6 +43,7 @@ describe('detect-lines CLI options', () => {
       dryRun: true,
       limit: 5,
       pageId: 'page-123',
+      rotationsDegrees: [0, 90, 270],
     });
   });
 
@@ -50,8 +53,32 @@ describe('detect-lines CLI options', () => {
     [['--limit'], 'Option --limit requires a value'],
     [['--unknown'], 'Unknown option: --unknown'],
     [['unexpected'], 'Unexpected positional argument: unexpected'],
+    [['--rotations'], 'Option --rotations requires a value'],
   ])('rejects unsafe or malformed options', (argv, message) => {
     expect(() => parseDetectLinesCliOptions(argv, {})).toThrow(message);
+  });
+
+  it.each([
+    '0,90,90',
+    '90,270',
+    '0,180,270',
+    '0,45,90,270',
+    '90,0,270',
+    '0,90',
+    '0,90,270,360',
+  ])('rejects unsupported rotation profile %s', (profile) => {
+    expect(() => parseDetectLinesCliOptions([
+      '--rotations',
+      profile,
+    ], {})).toThrow(
+      '--rotations must be exactly 0,90,270 in that order',
+    );
+  });
+
+  it('omits rotationsDegrees when the rotation flag is absent', () => {
+    const options = parseDetectLinesCliOptions([], {});
+
+    expect(options).not.toHaveProperty('rotationsDegrees');
   });
 
   it('recognizes only runs without either bound as unbounded', () => {

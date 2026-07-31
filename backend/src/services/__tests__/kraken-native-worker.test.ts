@@ -41,12 +41,27 @@ describe('KrakenNativeWorker', () => {
       textDirection: 'horizontal-lr',
       requestNumber: 1,
     });
+    expect(first).not.toHaveProperty('rotationsDegrees');
     expect(second).toMatchObject({
       imagePath: '/tmp/second.jpg',
       textDirection: 'vertical-lr',
       requestNumber: 2,
     });
     expect(second.pid).toBe(first.pid);
+  });
+
+  it('writes the supported rotation profile only when explicitly requested', async () => {
+    const worker = await startWorker();
+
+    await expect(worker.detect(
+      '/tmp/rotated.jpg',
+      'horizontal-lr',
+      [0, 90, 270],
+    )).resolves.toMatchObject({
+      imagePath: '/tmp/rotated.jpg',
+      textDirection: 'horizontal-lr',
+      rotationsDegrees: [0, 90, 270],
+    });
   });
 
   it('keeps the worker usable after an isolated provider request error', async () => {

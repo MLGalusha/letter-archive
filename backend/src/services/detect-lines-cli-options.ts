@@ -4,9 +4,15 @@ export interface DetectLinesCliOptions {
   password: string;
   debug: boolean;
   dryRun: boolean;
+  rotationsDegrees?: DetectLinesRotationDegrees;
   limit?: number;
   pageId?: string;
 }
+
+export const ROTATED_REGION_RECOVERY_PROFILE = [0, 90, 270] as const;
+
+export type DetectLinesRotationDegrees =
+  typeof ROTATED_REGION_RECOVERY_PROFILE;
 
 const valueFlags = new Set([
   'url',
@@ -14,12 +20,30 @@ const valueFlags = new Set([
   'password',
   'limit',
   'page-id',
+  'rotations',
 ]);
 
 const booleanFlags = new Set([
   'debug',
   'dry-run',
 ]);
+
+function parseRotations(value: string): DetectLinesRotationDegrees {
+  const rotations = value.split(',').map((part) => Number(part.trim()));
+  const matchesSupportedProfile = (
+    rotations.length === ROTATED_REGION_RECOVERY_PROFILE.length
+    && rotations.every(
+      (rotation, index) => rotation === ROTATED_REGION_RECOVERY_PROFILE[index],
+    )
+  );
+  if (!matchesSupportedProfile) {
+    throw new Error(
+      '--rotations must be exactly 0,90,270 in that order '
+      + '(180 and custom profiles are not supported)',
+    );
+  }
+  return ROTATED_REGION_RECOVERY_PROFILE;
+}
 
 export function parseDetectLinesCliOptions(
   argv: string[],
@@ -70,6 +94,9 @@ export function parseDetectLinesCliOptions(
     password: values.password || env.ADMIN_PASSWORD || '',
     debug: booleans.has('debug'),
     dryRun: booleans.has('dry-run'),
+    ...(values.rotations !== undefined
+      ? { rotationsDegrees: parseRotations(values.rotations) }
+      : {}),
     ...(limit !== undefined ? { limit } : {}),
     ...(pageId ? { pageId } : {}),
   };

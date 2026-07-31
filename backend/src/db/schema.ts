@@ -943,6 +943,337 @@ export const pageRecognitionArtifacts = pgTable(
   ],
 );
 
+/**
+ * Immutable machine geometry proposals bound to the exact source and editable
+ * projection that produced them. Candidate segments remain outside
+ * letter_pages.line_segments until a separate reviewed promotion transaction
+ * records its decision. Migration 0063 rejects direct updates/deletes while
+ * allowing lifecycle deletion only through the owning page's FK cascade.
+ */
+export const pageGeometryProposals = pgTable(
+  'page_geometry_proposals',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    pageId: uuid('page_id')
+      .notNull()
+      .references(() => letterPages.id, { onDelete: 'cascade' }),
+    artifactChecksumSha256: text('artifact_checksum_sha256').notNull(),
+    schemaVersion: integer('schema_version').notNull(),
+    kind: text('kind').notNull(),
+    primarySourceRevision: integer('primary_source_revision').notNull(),
+    sourceChecksumSha256: text('source_checksum_sha256').notNull(),
+    baseGeometryRevision: integer('base_geometry_revision').notNull(),
+    baseGeometryChecksumSha256: text(
+      'base_geometry_checksum_sha256',
+    ).notNull(),
+    baseLineSegmentsChecksumSha256: text(
+      'base_line_segments_checksum_sha256',
+    ).notNull(),
+    runId: text('run_id').notNull(),
+    artifact: jsonb('artifact').notNull(),
+    createdBy: text('created_by').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('page_geometry_proposals_artifact_checksum_unique')
+      .on(table.artifactChecksumSha256),
+    index('idx_page_geometry_proposals_current_identity').on(
+      table.pageId,
+      table.primarySourceRevision,
+      table.sourceChecksumSha256,
+      table.baseGeometryRevision,
+      table.baseGeometryChecksumSha256,
+      table.baseLineSegmentsChecksumSha256,
+      table.createdAt,
+    ),
+    check(
+      'page_geometry_proposal_artifact_checksum_valid',
+      sql`${table.artifactChecksumSha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      'page_geometry_proposal_schema_version_valid',
+      sql`${table.schemaVersion} = 1`,
+    ),
+    check(
+      'page_geometry_proposal_kind_valid',
+      sql`${table.kind} = 'rotation-recovery'`,
+    ),
+    check(
+      'page_geometry_proposal_source_revision_nonnegative',
+      sql`${table.primarySourceRevision} >= 0`,
+    ),
+    check(
+      'page_geometry_proposal_base_revision_nonnegative',
+      sql`${table.baseGeometryRevision} >= 0`,
+    ),
+    check(
+      'page_geometry_proposal_source_checksum_valid',
+      sql`${table.sourceChecksumSha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      'page_geometry_proposal_base_geometry_checksum_valid',
+      sql`${table.baseGeometryChecksumSha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      'page_geometry_proposal_base_segments_checksum_valid',
+      sql`${table.baseLineSegmentsChecksumSha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      'page_geometry_proposal_run_id_nonempty',
+      sql`length(btrim(${table.runId})) > 0`,
+    ),
+    check(
+      'page_geometry_proposal_created_by_nonempty',
+      sql`length(btrim(${table.createdBy})) > 0`,
+    ),
+    check(
+      'page_geometry_proposal_artifact_object',
+      sql`jsonb_typeof(${table.artifact}) = 'object'`,
+    ),
+    check(
+      'page_geometry_proposal_candidates_nonempty',
+      sql`(
+        jsonb_typeof(${table.artifact}->'candidates') = 'array'
+        AND jsonb_array_length(${table.artifact}->'candidates') > 0
+      ) IS TRUE`,
+    ),
+    check(
+      'page_geometry_proposal_candidate_count_matches',
+      sql`(
+        ${table.artifact}#>>'{rotationProfile,selectionSummary,appendedRotatedLineCount}'
+          = jsonb_array_length(${table.artifact}->'candidates')::text
+      ) IS TRUE`,
+    ),
+    check(
+      'page_geometry_proposal_candidates_geometry_only',
+      sql`NOT jsonb_path_exists(
+        ${table.artifact},
+        '$.candidates[*] ? (
+          exists(@.excluded)
+          || exists(@.segmentClass)
+          || exists(@.isMapped)
+          || exists(@.mappedText)
+          || exists(@.words)
+          || exists(@.group)
+          || exists(@.regionIds)
+          || exists(@.providerOrdinal)
+          || !exists(@.ocrText)
+          || @.ocrText.type() != "string"
+          || @.ocrText != ""
+        )'
+      )`,
+    ),
+    check(
+      'page_geometry_proposal_candidates_machine_only',
+      sql`NOT jsonb_path_exists(
+        ${table.artifact},
+        '$.candidates[*] ? (
+          !exists(@.id)
+          || @.id.type() != "string"
+          || !exists(@.geometryType)
+          || @.geometryType.type() != "string"
+          || !exists(@.line)
+          || @.line.type() != "number"
+          || @.line != -1
+          || !exists(@.bbox)
+          || @.bbox.type() != "array"
+          || @.bbox.size() != 4
+          || !exists(@.geometryProvenance.source)
+          || @.geometryProvenance.source != "machine"
+          || !exists(@.geometryProvenance.operation)
+          || @.geometryProvenance.operation != "detected"
+          || !exists(@.geometryProvenance.parentSegmentIds)
+          || @.geometryProvenance.parentSegmentIds.type() != "array"
+          || @.geometryProvenance.parentSegmentIds.size() != 0
+          || !exists(@.rotationEvidence.representativeRotationDegrees)
+          || @.rotationEvidence.representativeRotationDegrees == 0
+          || !exists(@.rotationEvidence.readingOrderSource)
+          || @.rotationEvidence.readingOrderSource
+            != "unresolved-rotated-proposal"
+          || !exists(@.providerTextDirection)
+          || (
+            @.providerTextDirection != "vertical-lr"
+            && @.providerTextDirection != "vertical-rl"
+          )
+        )'
+      )`,
+    ),
+    check(
+      'page_geometry_proposal_candidates_in_image',
+      sql`NOT jsonb_path_exists(
+          ${table.artifact},
+          '$.candidates[*] ? (
+            @.bbox[0] < 0
+            || @.bbox[1] < 0
+            || @.bbox[2] <= @.bbox[0]
+            || @.bbox[3] <= @.bbox[1]
+            || @.bbox[2] > $width
+            || @.bbox[3] > $height
+          )',
+          jsonb_build_object(
+            'width',
+            (${table.artifact}#>>'{source,image,width}')::numeric,
+            'height',
+            (${table.artifact}#>>'{source,image,height}')::numeric
+          )
+        )
+        AND NOT jsonb_path_exists(
+          ${table.artifact},
+          '$.candidates[*].baseline[*] ? (
+            @[0] < 0 || @[1] < 0 || @[0] > $width || @[1] > $height
+          )',
+          jsonb_build_object(
+            'width',
+            (${table.artifact}#>>'{source,image,width}')::numeric,
+            'height',
+            (${table.artifact}#>>'{source,image,height}')::numeric
+          )
+        )
+        AND NOT jsonb_path_exists(
+          ${table.artifact},
+          '$.candidates[*].boundary[*] ? (
+            @.x < 0 || @.y < 0 || @.x > $width || @.y > $height
+          )',
+          jsonb_build_object(
+            'width',
+            (${table.artifact}#>>'{source,image,width}')::numeric,
+            'height',
+            (${table.artifact}#>>'{source,image,height}')::numeric
+          )
+        )`,
+    ),
+    check(
+      'page_geometry_proposal_artifact_identity_matches',
+      sql`(
+        ${table.artifact}->>'kind' = ${table.kind}
+        AND ${table.artifact}->>'pageId' = ${table.pageId}::text
+        AND (${table.artifact}->>'schemaVersion')::integer
+          = ${table.schemaVersion}
+        AND ${table.artifact}#>>'{source,primarySourceRevision}'
+          = ${table.primarySourceRevision}::text
+        AND ${table.artifact}#>>'{source,sourceChecksumSha256}'
+          = ${table.sourceChecksumSha256}
+        AND ${table.artifact}#>>'{source,baseGeometryRevision}'
+          = ${table.baseGeometryRevision}::text
+        AND ${table.artifact}#>>'{source,baseGeometryChecksumSha256}'
+          = ${table.baseGeometryChecksumSha256}
+        AND ${table.artifact}#>>'{source,baseLineSegmentsChecksumSha256}'
+          = ${table.baseLineSegmentsChecksumSha256}
+        AND (${table.artifact}#>>'{source,image,width}')::integer > 0
+        AND (${table.artifact}#>>'{source,image,height}')::integer > 0
+        AND ${table.artifact}#>>'{run,id}' = ${table.runId}
+      ) IS TRUE`,
+    ),
+  ],
+);
+
+/**
+ * Append-only reviewer decisions for individual proposal candidates. Rejected
+ * candidates retain the observation identity but never manufacture result
+ * geometry; promoted candidates bind to the exact resulting revision.
+ * Migration 0063 enforces immutability with the proposal-history trigger.
+ */
+export const pageGeometryProposalEvents = pgTable(
+  'page_geometry_proposal_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    proposalId: uuid('proposal_id')
+      .notNull()
+      .references(() => pageGeometryProposals.id, { onDelete: 'cascade' }),
+    batchId: uuid('batch_id').notNull(),
+    proposalSegmentId: text('proposal_segment_id').notNull(),
+    decision: text('decision').notNull(),
+    observedPrimarySourceRevision: integer(
+      'observed_primary_source_revision',
+    ).notNull(),
+    observedSourceChecksumSha256: text(
+      'observed_source_checksum_sha256',
+    ).notNull(),
+    observedGeometryRevision: integer(
+      'observed_geometry_revision',
+    ).notNull(),
+    observedGeometryChecksumSha256: text(
+      'observed_geometry_checksum_sha256',
+    ).notNull(),
+    observedLineSegmentsChecksumSha256: text(
+      'observed_line_segments_checksum_sha256',
+    ).notNull(),
+    resultSegmentId: text('result_segment_id'),
+    resultGeometryRevision: integer('result_geometry_revision'),
+    resultGeometryChecksumSha256: text(
+      'result_geometry_checksum_sha256',
+    ),
+    reviewedBy: text('reviewed_by').notNull(),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    note: text('note'),
+  },
+  (table) => [
+    uniqueIndex('page_geometry_proposal_events_one_promotion_unique')
+      .on(table.proposalId, table.proposalSegmentId)
+      .where(sql`${table.decision} = 'promoted'`),
+    index('idx_page_geometry_proposal_events_proposal_reviewed')
+      .on(table.proposalId, table.reviewedAt),
+    index('idx_page_geometry_proposal_events_batch')
+      .on(table.batchId),
+    check(
+      'page_geometry_proposal_event_segment_id_valid',
+      sql`${table.proposalSegmentId}
+        ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'`,
+    ),
+    check(
+      'page_geometry_proposal_event_decision_valid',
+      sql`${table.decision} IN ('promoted', 'rejected')`,
+    ),
+    check(
+      'page_geometry_proposal_event_source_revision_nonnegative',
+      sql`${table.observedPrimarySourceRevision} >= 0`,
+    ),
+    check(
+      'page_geometry_proposal_event_geometry_revision_nonnegative',
+      sql`${table.observedGeometryRevision} >= 0`,
+    ),
+    check(
+      'page_geometry_proposal_event_source_checksum_valid',
+      sql`${table.observedSourceChecksumSha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      'page_geometry_proposal_event_geometry_checksum_valid',
+      sql`${table.observedGeometryChecksumSha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      'page_geometry_proposal_event_segments_checksum_valid',
+      sql`${table.observedLineSegmentsChecksumSha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      'page_geometry_proposal_event_reviewed_by_nonempty',
+      sql`length(btrim(${table.reviewedBy})) > 0`,
+    ),
+    check(
+      'page_geometry_proposal_event_result_shape',
+      sql`(
+          ${table.decision} = 'promoted'
+          AND ${table.resultSegmentId} IS NOT NULL
+          AND ${table.resultSegmentId}
+            ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
+          AND ${table.resultGeometryRevision} IS NOT NULL
+          AND ${table.resultGeometryRevision} >= 0
+          AND ${table.resultGeometryChecksumSha256} IS NOT NULL
+          AND ${table.resultGeometryChecksumSha256} ~ '^[0-9a-f]{64}$'
+        )
+        OR (
+          ${table.decision} = 'rejected'
+          AND ${table.resultSegmentId} IS NULL
+          AND ${table.resultGeometryRevision} IS NULL
+          AND ${table.resultGeometryChecksumSha256} IS NULL
+        )`,
+    ),
+  ],
+);
+
 // Letter versions table (for version history)
 export const letterVersions = pgTable(
   'letter_versions',
@@ -1467,6 +1798,7 @@ export const letterPagesRelations = relations(letterPages, ({ one, many }) => ({
   geometryRevisions: many(pageGeometryRevisions),
   geometryReviewEvents: many(pageGeometryReviewEvents),
   recognitionArtifacts: many(pageRecognitionArtifacts),
+  geometryProposals: many(pageGeometryProposals),
 }));
 
 export const pageGeometryRevisionsRelations = relations(
@@ -1495,6 +1827,27 @@ export const pageRecognitionArtifactsRelations = relations(
     page: one(letterPages, {
       fields: [pageRecognitionArtifacts.pageId],
       references: [letterPages.id],
+    }),
+  }),
+);
+
+export const pageGeometryProposalsRelations = relations(
+  pageGeometryProposals,
+  ({ one, many }) => ({
+    page: one(letterPages, {
+      fields: [pageGeometryProposals.pageId],
+      references: [letterPages.id],
+    }),
+    events: many(pageGeometryProposalEvents),
+  }),
+);
+
+export const pageGeometryProposalEventsRelations = relations(
+  pageGeometryProposalEvents,
+  ({ one }) => ({
+    proposal: one(pageGeometryProposals, {
+      fields: [pageGeometryProposalEvents.proposalId],
+      references: [pageGeometryProposals.id],
     }),
   }),
 );
@@ -1580,6 +1933,16 @@ export type PageRecognitionArtifactRow =
   typeof pageRecognitionArtifacts.$inferSelect;
 export type NewPageRecognitionArtifactRow =
   typeof pageRecognitionArtifacts.$inferInsert;
+
+export type PageGeometryProposalRow =
+  typeof pageGeometryProposals.$inferSelect;
+export type NewPageGeometryProposalRow =
+  typeof pageGeometryProposals.$inferInsert;
+
+export type PageGeometryProposalEventRow =
+  typeof pageGeometryProposalEvents.$inferSelect;
+export type NewPageGeometryProposalEventRow =
+  typeof pageGeometryProposalEvents.$inferInsert;
 
 export type LetterVersion = typeof letterVersions.$inferSelect;
 export type NewLetterVersion = typeof letterVersions.$inferInsert;

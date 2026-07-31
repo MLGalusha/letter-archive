@@ -41,6 +41,9 @@ export const migrationReleasePolicies: Readonly<
   // Strict v2 evidence is additive; retained v1 rows remain readable only as
   // historical evidence and are excluded from production lookup.
   '0062_version_page_recognition_evidence': 'automatic',
+  // Append-only rotation proposals and their review events are additive and
+  // ignored by application revisions that predate geometry recovery.
+  '0063_add_page_geometry_proposals': 'automatic',
 });
 
 function assertValidJournal(

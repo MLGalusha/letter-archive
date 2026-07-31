@@ -442,6 +442,13 @@
       "when": 1785430200000,
       "tag": "0062_version_page_recognition_evidence",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1785516600000,
+      "tag": "0063_add_page_geometry_proposals",
+      "breakpoints": true
     }
   ]
 }

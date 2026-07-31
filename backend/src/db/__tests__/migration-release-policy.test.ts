@@ -71,6 +71,7 @@ describe('migration release policy', () => {
       '0060_add_transcript_identity',
       '0061_add_page_recognition_artifacts',
       '0062_version_page_recognition_evidence',
+      '0063_add_page_geometry_proposals',
     ]);
   });
 
@@ -145,10 +146,23 @@ describe('migration release policy', () => {
     ]);
   });
 
-  it('allows strict v2 recognition evidence during an automatic release', () => {
+  it('allows append-only geometry proposals during an automatic release', () => {
     expect(assertMigrationReleaseAllowed({
       journal,
       appliedMigrations: appliedPrefix(journal.length - 1),
+      mode: 'automatic',
+    }).map(({ tag }) => tag)).toEqual([
+      '0063_add_page_geometry_proposals',
+    ]);
+  });
+
+  it('allows strict v2 recognition evidence during an automatic release', () => {
+    const evidenceIndex = journal.findIndex(
+      ({ tag }) => tag === '0062_version_page_recognition_evidence',
+    );
+    expect(assertMigrationReleaseAllowed({
+      journal: journal.slice(0, evidenceIndex + 1),
+      appliedMigrations: appliedPrefix(evidenceIndex),
       mode: 'automatic',
     }).map(({ tag }) => tag)).toEqual([
       '0062_version_page_recognition_evidence',

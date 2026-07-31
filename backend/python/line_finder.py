@@ -70,6 +70,8 @@ ROTATION_PROFILE_SELECTION_PARAMETERS = {
     "maximumHorizontalBaselineCentroidRatioPerZone": 0.1,
     "minimumHorizontalBaselineCentroidAllowancePerZone": 2,
 }
+ROTATION_PASS_ERROR_TYPE_MAX_LENGTH = 128
+ROTATION_PASS_ERROR_MESSAGE_MAX_LENGTH = 500
 TEXT_DIRECTIONS = (
     "horizontal-lr",
     "horizontal-rl",
@@ -492,6 +494,54 @@ def _parse_rotations_degrees(value: Any) -> tuple[int, ...] | None:
             f"{list(ROTATION_PROFILE_DEGREES)} for {ROTATION_PROFILE_NAME}"
         )
     return rotations
+
+
+def _sanitize_rotation_pass_error_text(
+    value: Any,
+    *,
+    max_length: int,
+    fallback: str,
+) -> str:
+    """Collapse control characters and bound provider errors for persistence."""
+    try:
+        raw = str(value)
+    except Exception:
+        raw = ""
+    printable = "".join(
+        character if character.isprintable() else " " for character in raw
+    )
+    sanitized = " ".join(printable.split())
+    return (sanitized or fallback)[:max_length]
+
+
+def _rotation_pass_error(error: Exception) -> dict[str, str]:
+    return {
+        "type": _sanitize_rotation_pass_error_text(
+            type(error).__name__,
+            max_length=ROTATION_PASS_ERROR_TYPE_MAX_LENGTH,
+            fallback="Exception",
+        ),
+        "message": _sanitize_rotation_pass_error_text(
+            error,
+            max_length=ROTATION_PASS_ERROR_MESSAGE_MAX_LENGTH,
+            fallback="Rotation pass failed",
+        ),
+    }
+
+
+def _empty_rotation_segmentation(
+    baseline_segmentation: dict[str, Any],
+) -> dict[str, Any]:
+    """Represent a failed strict pass without retaining partial geometry."""
+    return {
+        "type": baseline_segmentation.get("type"),
+        "textDirection": baseline_segmentation.get("textDirection"),
+        "scriptDetection": baseline_segmentation.get("scriptDetection", False),
+        "lineOrders": [],
+        "language": baseline_segmentation.get("language"),
+        "regions": {},
+        "lines": [],
+    }
 
 
 def _serialize_segmentation_for_rotation(segmentation: Any) -> dict[str, Any]:
@@ -962,14 +1012,47 @@ def segment_image(
 
     if rotation_profile is None:
         raise AssertionError("Rotation profile preflight did not run")
-    provider_passes = [_serialize_segmentation_for_rotation(segmentation)]
+    baseline_provider_pass = _serialize_segmentation_for_rotation(segmentation)
+    provider_passes = [baseline_provider_pass]
+    pass_outcomes: list[dict[str, Any]] = [
+        {
+            "rotationDegrees": 0,
+            "status": "succeeded",
+        }
+    ]
+    successful_nonzero_passes = 0
     for rotation in rotations[1:]:
-        rotated_segmentation = loaded.task_model.predict(
-            rotate_image(img, rotation),
-            config,
-        )
+        try:
+            rotated_segmentation = loaded.task_model.predict(
+                rotate_image(img, rotation),
+                config,
+            )
+        except Exception as error:
+            provider_passes.append(
+                _empty_rotation_segmentation(baseline_provider_pass)
+            )
+            pass_outcomes.append(
+                {
+                    "rotationDegrees": rotation,
+                    "status": "failed",
+                    "error": _rotation_pass_error(error),
+                }
+            )
+            continue
         provider_passes.append(
             _serialize_segmentation_for_rotation(rotated_segmentation)
+        )
+        pass_outcomes.append(
+            {
+                "rotationDegrees": rotation,
+                "status": "succeeded",
+            }
+        )
+        successful_nonzero_passes += 1
+    if successful_nonzero_passes == 0:
+        raise RuntimeError(
+            f"{ROTATION_PROFILE_NAME} requires at least one successful "
+            "nonzero rotation pass"
         )
     ensemble = merge_rotation_passes(
         provider_passes,
@@ -977,6 +1060,7 @@ def segment_image(
         source_width=img.width,
         source_height=img.height,
         merge_policy=rotation_profile["mergePolicy"],
+        pass_outcomes=pass_outcomes,
         selection_parameters=rotation_profile["selectionParameters"],
     )
     if ensemble.get("qualityError") is not None:
@@ -1017,6 +1101,7 @@ def segment_image(
         "selectionParameters": copy.deepcopy(
             rotation_profile["selectionParameters"]
         ),
+        "passOutcomes": copy.deepcopy(pass_outcomes),
         "selectionSummary": {
             "rawInputLineCount": ensemble_summary["rawInputLineCount"],
             "inputLineCount": ensemble_summary["inputLineCount"],

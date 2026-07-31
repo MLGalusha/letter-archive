@@ -248,6 +248,11 @@ function rotationProfile(appendedRotatedLineCount = 1) {
     name: 'sideways-recovery-v1',
     evidenceContract: 'native-and-source-projected-v2',
     rotationsDegrees: [0, 90, 270],
+    passOutcomes: [
+      { rotationDegrees: 0, status: 'succeeded' },
+      { rotationDegrees: 90, status: 'succeeded' },
+      { rotationDegrees: 270, status: 'succeeded' },
+    ],
     mergePolicy: 'baseline-plus-nonoverlapping-vertical-zones',
     coordinateTransform: 'pil-pixel-centers-to-source-v1',
     selectionParameters: {
@@ -472,6 +477,56 @@ describe('Kraken native PageLayout adapter', () => {
       .verticalAxisToleranceDegrees = 16;
     expect(
       krakenNativePageLayoutV2Schema.safeParse(driftedProfile).success,
+    ).toBe(false);
+  });
+
+  it('rejects line evidence sourced from a failed rotation pass', () => {
+    const native: any = nativeLayout();
+    native.producer.config.rotationProfile = rotationProfile();
+    native.producer.config.rotationProfile.passOutcomes[1] = {
+      rotationDegrees: 90,
+      status: 'failed',
+      error: {
+        type: 'TopologyException',
+        message: 'The 90-degree provider pass could not build valid polygons',
+      },
+    };
+    Object.assign(native.segmentation.lines[1], {
+      identityVersion: 3,
+      idSource:
+        'derived-source-raster-model-rotation-provider-geometry-v3',
+      providerTextDirection: 'vertical-lr',
+      rotationEvidence: rotationEvidence(90),
+    });
+
+    const result = krakenNativePageLayoutV2Schema.safeParse(native);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(
+        result.error.issues.some(
+          (issue) => /only succeeded passes/i.test(issue.message),
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it('keeps each line evidence member restricted to a succeeded pass status', () => {
+    const native: any = nativeLayout();
+    native.producer.config.rotationProfile = rotationProfile();
+    Object.assign(native.segmentation.lines[1], {
+      identityVersion: 3,
+      idSource:
+        'derived-source-raster-model-rotation-provider-geometry-v3',
+      providerTextDirection: 'vertical-lr',
+      rotationEvidence: {
+        ...rotationEvidence(90),
+        sourcePassStatuses: ['failed'],
+      },
+    });
+
+    expect(
+      krakenNativePageLayoutV2Schema.safeParse(native).success,
     ).toBe(false);
   });
 

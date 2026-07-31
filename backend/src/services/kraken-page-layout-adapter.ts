@@ -365,6 +365,11 @@ export const krakenNativePageLayoutV2Schema = z.object({
   }
   if (!profile) return;
   const configuredRotations = new Set<number>(profile.rotationsDegrees);
+  const succeededRotations = new Set<number>(
+    profile.passOutcomes
+      .filter((outcome) => outcome.status === 'succeeded')
+      .map((outcome) => outcome.rotationDegrees),
+  );
   if (layout.producer.config.textDirection !== 'horizontal-lr') {
     context.addIssue({
       code: z.ZodIssueCode.custom,
@@ -409,6 +414,23 @@ export const krakenNativePageLayoutV2Schema = z.object({
         code: z.ZodIssueCode.custom,
         path: ['segmentation', 'lines', index, 'rotationEvidence'],
         message: 'Line rotation evidence must match the pinned run profile',
+      });
+    }
+    if (
+      evidence.sourceRotationsDegrees.some(
+        (rotation) => !succeededRotations.has(rotation),
+      )
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [
+          'segmentation',
+          'lines',
+          index,
+          'rotationEvidence',
+          'sourceRotationsDegrees',
+        ],
+        message: 'Line rotation evidence may reference only succeeded passes',
       });
     }
     const expectedRotatedDirection = (

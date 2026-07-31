@@ -114,6 +114,66 @@ export const pageLayoutRotationMergePolicySchema = z.literal(
   'baseline-plus-nonoverlapping-vertical-zones',
 );
 
+const pageLayoutConfiguredRotationDegreeSchema = z.union([
+  z.literal(0),
+  z.literal(90),
+  z.literal(270),
+]);
+
+const pageLayoutRotationPassSucceededSchema = z.object({
+  rotationDegrees: pageLayoutConfiguredRotationDegreeSchema,
+  status: z.literal('succeeded'),
+}).strict();
+
+const pageLayoutRotationPassFailedSchema = z.object({
+  rotationDegrees: pageLayoutConfiguredRotationDegreeSchema,
+  status: z.literal('failed'),
+  error: z.object({
+    type: z.string().trim().min(1).max(128),
+    message: z.string().trim().min(1).max(500),
+  }).strict(),
+}).strict();
+
+export const pageLayoutRotationPassOutcomeSchema = z.discriminatedUnion(
+  'status',
+  [
+    pageLayoutRotationPassSucceededSchema,
+    pageLayoutRotationPassFailedSchema,
+  ],
+);
+
+export const pageLayoutRotationPassOutcomesSchema = z.tuple([
+  pageLayoutRotationPassOutcomeSchema,
+  pageLayoutRotationPassOutcomeSchema,
+  pageLayoutRotationPassOutcomeSchema,
+]).superRefine((outcomes, context) => {
+  ([0, 90, 270] as const).forEach((rotationDegrees, index) => {
+    if (outcomes[index].rotationDegrees !== rotationDegrees) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [index, 'rotationDegrees'],
+        message: `Rotation pass ${index} must record the ${rotationDegrees}-degree outcome`,
+      });
+    }
+  });
+  if (outcomes[0].status !== 'succeeded') {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: [0, 'status'],
+      message: 'The unrotated baseline pass must succeed',
+    });
+  }
+  if (
+    outcomes[1].status !== 'succeeded'
+    && outcomes[2].status !== 'succeeded'
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'At least one sideways rotation pass must succeed',
+    });
+  }
+});
+
 /**
  * The first production rotation profile is intentionally pinned. Changing a
  * threshold creates a different experiment and must therefore introduce a
@@ -127,6 +187,7 @@ export const pageLayoutRotationProfileSchema = z.object({
     z.literal(90),
     z.literal(270),
   ]),
+  passOutcomes: pageLayoutRotationPassOutcomesSchema,
   mergePolicy: pageLayoutRotationMergePolicySchema,
   coordinateTransform: z.literal('pil-pixel-centers-to-source-v1'),
   selectionParameters: z.object({

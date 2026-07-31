@@ -142,16 +142,28 @@ class FakeRotationTaskModel:
         segmentations: list[Segmentation],
         *,
         fail_on_call: int | None = None,
+        fail_on_calls: set[int] | None = None,
+        failure_messages: dict[int, str] | None = None,
     ) -> None:
         self.segmentations = segmentations
-        self.fail_on_call = fail_on_call
+        self.fail_on_calls = set(fail_on_calls or ())
+        if fail_on_call is not None:
+            self.fail_on_calls.add(fail_on_call)
+        self.failure_messages = failure_messages or {}
         self.calls: list[tuple[int, int]] = []
+        self.raise_on_error_values: list[bool] = []
 
-    def predict(self, image, _config):
+    def predict(self, image, config):
         self.calls.append(image.size)
+        self.raise_on_error_values.append(config.raise_on_error)
         call_number = len(self.calls)
-        if self.fail_on_call == call_number:
-            raise RuntimeError(f"rotation pass {call_number} failed")
+        if call_number in self.fail_on_calls:
+            raise RuntimeError(
+                self.failure_messages.get(
+                    call_number,
+                    f"rotation pass {call_number} failed",
+                )
+            )
         return self.segmentations[call_number - 1]
 
 
@@ -715,6 +727,20 @@ class RotationProfileTests(unittest.TestCase):
                 "selectionParameters": (
                     line_finder.ROTATION_PROFILE_SELECTION_PARAMETERS
                 ),
+                "passOutcomes": [
+                    {
+                        "rotationDegrees": 0,
+                        "status": "succeeded",
+                    },
+                    {
+                        "rotationDegrees": 90,
+                        "status": "succeeded",
+                    },
+                    {
+                        "rotationDegrees": 270,
+                        "status": "succeeded",
+                    },
+                ],
                 "selectionSummary": {
                     "rawInputLineCount": 7,
                     "inputLineCount": 7,
@@ -741,10 +767,94 @@ class RotationProfileTests(unittest.TestCase):
             [line["providerId"] for line in second_lines],
         )
 
-    def test_any_rotation_pass_failure_aborts_the_page(self) -> None:
+    def test_one_failed_rotation_uses_only_the_other_strict_pass(self) -> None:
         model = FakeRotationTaskModel(
             rotation_segmentations("failure"),
-            fail_on_call=3,
+            fail_on_call=2,
+            failure_messages={
+                2: (
+                    "TopologyException:\n"
+                    + ("side location conflict " * 100)
+                )
+            },
+        )
+        image = Image.new("RGB", (1_000, 1_600), "white")
+        with patch.object(
+            line_finder,
+            "load_default_model",
+            return_value=loaded_rotation_model(model),
+        ):
+            layout = line_finder.segment_image(
+                image,
+                source=source_fixture(1_000, 1_600),
+                rotations_degrees=[0, 90, 270],
+            )
+
+        self.assertEqual(len(model.calls), 3)
+        self.assertEqual(model.raise_on_error_values, [True, True, True])
+        appended = layout["segmentation"]["lines"][1:]
+        self.assertEqual(len(appended), 3)
+        self.assertTrue(
+            all(
+                line["providerTextDirection"] == "vertical-rl"
+                for line in appended
+            )
+        )
+        outcomes = layout["producer"]["config"]["rotationProfile"][
+            "passOutcomes"
+        ]
+        self.assertEqual(
+            outcomes[:1] + outcomes[2:],
+            [
+                {"rotationDegrees": 0, "status": "succeeded"},
+                {"rotationDegrees": 270, "status": "succeeded"},
+            ],
+        )
+        self.assertEqual(outcomes[1]["rotationDegrees"], 90)
+        self.assertEqual(outcomes[1]["status"], "failed")
+        self.assertEqual(outcomes[1]["error"]["type"], "RuntimeError")
+        self.assertNotIn("\n", outcomes[1]["error"]["message"])
+        self.assertLessEqual(
+            len(outcomes[1]["error"]["message"]),
+            line_finder.ROTATION_PASS_ERROR_MESSAGE_MAX_LENGTH,
+        )
+
+    def test_failed_rotation_never_retries_with_partial_geometry(self) -> None:
+        model = FakeRotationTaskModel(
+            rotation_segmentations("strict-only"),
+            fail_on_call=2,
+        )
+        image = Image.new("RGB", (1_000, 1_600), "white")
+        with patch.object(
+            line_finder,
+            "load_default_model",
+            return_value=loaded_rotation_model(model),
+        ):
+            layout = line_finder.segment_image(
+                image,
+                source=source_fixture(1_000, 1_600),
+                rotations_degrees=[0, 90, 270],
+            )
+
+        self.assertEqual(
+            model.calls,
+            [(1_000, 1_600), (1_600, 1_000), (1_600, 1_000)],
+        )
+        self.assertEqual(model.raise_on_error_values, [True, True, True])
+        profile = layout["producer"]["config"]["rotationProfile"]
+        self.assertEqual(
+            profile["selectionSummary"]["rawInputLineCount"],
+            4,
+        )
+        self.assertEqual(
+            profile["selectionSummary"]["inputLineCount"],
+            4,
+        )
+
+    def test_both_nonzero_rotation_failures_abort_the_page(self) -> None:
+        model = FakeRotationTaskModel(
+            rotation_segmentations("both-fail"),
+            fail_on_calls={2, 3},
         )
         image = Image.new("RGB", (1_000, 1_600), "white")
         with (
@@ -753,7 +863,10 @@ class RotationProfileTests(unittest.TestCase):
                 "load_default_model",
                 return_value=loaded_rotation_model(model),
             ),
-            self.assertRaisesRegex(RuntimeError, "rotation pass 3 failed"),
+            self.assertRaisesRegex(
+                RuntimeError,
+                "requires at least one successful nonzero rotation pass",
+            ),
         ):
             line_finder.segment_image(
                 image,
@@ -761,6 +874,29 @@ class RotationProfileTests(unittest.TestCase):
                 rotations_degrees=[0, 90, 270],
             )
         self.assertEqual(len(model.calls), 3)
+        self.assertEqual(model.raise_on_error_values, [True, True, True])
+
+    def test_baseline_failure_aborts_before_rotated_passes(self) -> None:
+        model = FakeRotationTaskModel(
+            rotation_segmentations("baseline-fail"),
+            fail_on_call=1,
+        )
+        image = Image.new("RGB", (1_000, 1_600), "white")
+        with (
+            patch.object(
+                line_finder,
+                "load_default_model",
+                return_value=loaded_rotation_model(model),
+            ),
+            self.assertRaisesRegex(RuntimeError, "rotation pass 1 failed"),
+        ):
+            line_finder.segment_image(
+                image,
+                source=source_fixture(1_000, 1_600),
+                rotations_degrees=[0, 90, 270],
+            )
+        self.assertEqual(model.calls, [(1_000, 1_600)])
+        self.assertEqual(model.raise_on_error_values, [True])
 
     def test_rotation_profile_rejects_non_horizontal_page_before_inference(
         self,

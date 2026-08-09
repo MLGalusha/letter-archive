@@ -1,0 +1,504 @@
+{
+  "schema_version": "handwriting-research-artifact-registry.v1",
+  "scope": "2026-08-08 agent-first word ink ownership iteration",
+  "policy": "Append immutable entries. If a result is superseded, add a successor and preserve the prior entry. primary_record.file_sha256 binds the exact on-disk record; identity_sha256 binds the experiment's own canonical identity when available.",
+  "entries": [
+    {
+      "record_id": "20260808-research-map",
+      "title": "Cross-worktree research map",
+      "evidence_role": "navigation",
+      "decision": "index",
+      "acting_visibility": "not_applicable",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive/docs/research/handwriting-pipeline",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive/docs/research/handwriting-pipeline/RESEARCH-MAP.md",
+        "file_sha256": "6e144cb7230ed16c0aefe5c57c2640ab5a364454a40d36270781b2a56bc088f8"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": [],
+      "summary": "Agent navigation across refs, worktrees, storage roots, technique ordering, evidence boundaries, and negative results."
+    },
+    {
+      "record_id": "20260808-auto-selection-failure-atlas-v1",
+      "title": "Automatic-selection failure atlas",
+      "evidence_role": "post_freeze_mixed",
+      "decision": "diagnostic",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/auto-selection-failure-atlas-v1/007-p02-transcript-margin0",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/auto-selection-failure-atlas-v1/007-p02-transcript-margin0/analysis.json",
+        "file_sha256": "c19a8f3975c85723f311ef1915363f074f08c4b876cceeaedfbed74cc9fb3744"
+      },
+      "identity_sha256": "45de0c5634a6301408dce925d3c01957b4851df969b2b519c7d854a5e9f56aa",
+      "predecessor_ids": [],
+      "summary": "Twelve false easy approvals; nine selected separable foreign components."
+    },
+    {
+      "record_id": "20260808-recovery-conditioning-sweep-v1-invalid",
+      "title": "Recovery-conditioning sweep v1 invalid wiring",
+      "evidence_role": "invalid",
+      "decision": "invalid",
+      "acting_visibility": "not_applicable",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/recovery-conditioning-sweep-v1/007-p02-ten-word-mixed",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/recovery-conditioning-sweep-v1/007-p02-ten-word-mixed/INVALID-FOR-DECISION.md",
+        "file_sha256": "f23dcee1527eb0ff49608107461c7a79987dce7421451281b5cf56f5f80207a4"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": [],
+      "summary": "Preserved interpretation-wiring failure; never use for a decision."
+    },
+    {
+      "record_id": "20260808-recovery-conditioning-sweep-v2",
+      "title": "Ownership-independent recovery-conditioning sweep v2",
+      "evidence_role": "post_freeze_mixed",
+      "decision": "diagnostic",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/recovery-conditioning-sweep-v2/007-p02-ten-word-mixed",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/recovery-conditioning-sweep-v2/007-p02-ten-word-mixed/experiment.json",
+        "file_sha256": "3c8091eaadef134f9876c2c97e3c9c56b2a41ce455023debede975a8f4575853"
+      },
+      "identity_sha256": "a717715d65ee771f34866a3bff0bc059b59651adacaa89136fae27468174a7c7",
+      "predecessor_ids": ["20260808-recovery-conditioning-sweep-v1-invalid"],
+      "summary": "Larger conditioning added much more foreign than target evidence; demand-trigger only."
+    },
+    {
+      "record_id": "20260808-disjoint-component-ownership-v1",
+      "title": "Disjoint component ownership v1",
+      "evidence_role": "post_freeze_mixed",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/disjoint-component-ownership-v1/007-p02-body77",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/disjoint-component-ownership-v1/007-p02-body77/experiment.json",
+        "file_sha256": "394a96ef0273ba9eeb5b198db1a1a83d8ec01362686e8062e5d2d2eca125eff0"
+      },
+      "identity_sha256": "84f39f029e3bef70afa50a76b21434019acfb32fa992f9d0617764fd20c04a78",
+      "predecessor_ids": ["20260808-auto-selection-failure-atlas-v1"],
+      "summary": "Transcript global-exclusive assignment yielded 56/77 high-quality and zero duplicate claims; suggestion only."
+    },
+    {
+      "record_id": "20260808-component-score-weight-sweep-v1",
+      "title": "Component score-weight sweep v1",
+      "evidence_role": "post_freeze_mixed",
+      "decision": "rejected",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/component-score-weight-sweep-v1/007-p02-body77",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/component-score-weight-sweep-v1/007-p02-body77/experiment.json",
+        "file_sha256": "2dbb05ec04d847b84d77f25e4bc4dac59bb93cdf3e45d85adbc739cdf3292e69"
+      },
+      "identity_sha256": "2712be6fc410da927fd69e44a86eeadc32135a6ce94a2c4eb61a4365e6a98ade",
+      "predecessor_ids": ["20260808-disjoint-component-ownership-v1"],
+      "summary": "Fragile one-word gain; line-held-out selection fell to 51/77."
+    },
+    {
+      "record_id": "20260808-cross-line-component-abstention-v1",
+      "title": "Cross-line component abstention v1",
+      "evidence_role": "post_freeze_mixed",
+      "decision": "rejected",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/cross-line-component-abstention-v1/007-p02-body77",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/cross-line-component-abstention-v1/007-p02-body77/experiment.json",
+        "file_sha256": "d9a11c6b3c60650bb78e3f8f6b91ab9899d42fb6f8991d6b22efb2c51f952f3e"
+      },
+      "identity_sha256": "4ccaa7b76cdfb4fc3841eddca8b810381dfb522b73b89ab8e96ba2bd19ee0cab",
+      "predecessor_ids": ["20260808-disjoint-component-ownership-v1"],
+      "summary": "Blanket cross-line penalty corrected one foreign component but caused more misses."
+    },
+    {
+      "record_id": "20260808-global-line-field-v1",
+      "title": "Global acting-only ink line field v1",
+      "evidence_role": "post_freeze_mixed",
+      "decision": "rejected",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/component-line-field-sweep-v1/007-p02-body77",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/component-line-field-sweep-v1/007-p02-body77/experiment.json",
+        "file_sha256": "b55d736c0155ec0cd8f1d97c39bbe9754d49a87a835e6497b83bd22f9f0ae6e4"
+      },
+      "identity_sha256": "26539ffb110e532602768e03323187891522e8db2ab81b5b0064cccbcbd74c5d",
+      "predecessor_ids": ["20260808-cross-line-component-abstention-v1"],
+      "summary": "Acting-only line geometry was coherent, but global blending broke same-line word now."
+    },
+    {
+      "record_id": "20260808-cross-dispute-line-field-v2",
+      "title": "Conservative cross-dispute ink line field v2",
+      "evidence_role": "post_freeze_mixed",
+      "decision": "candidate_heldout",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/component-line-field-cross-dispute-v2/007-p02-body77-min50",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/component-line-field-cross-dispute-v2/007-p02-body77-min50/experiment.json",
+        "file_sha256": "0a79d8b44b066e8d3925bcd563d6de8e92351672e389025822ffcdf3d430741d"
+      },
+      "identity_sha256": "1e50e2968089ad44d0a3260232d76b714bbc513bd62d47a13f2b6bf8127814e8",
+      "predecessor_ids": ["20260808-global-line-field-v1"],
+      "summary": "Fixed conservative guard changed only answer., improving 56 to 57 high-quality; held-out validation required."
+    },
+    {
+      "record_id": "20260808-accuracy-v2-full-run-rev0",
+      "title": "Accuracy-v2 explicit V4 full run revision 0",
+      "evidence_role": "run_state",
+      "decision": "blocked",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/full-page-sequential-ownership-v2/007-p02-accuracy-v2-v4",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/full-page-sequential-ownership-v2/007-p02-accuracy-v2-v4/run-manifest.json",
+        "file_sha256": "a80ddecea68175cdaf9aa5eea0c665f8bdeb40031e1bf396be52d91c6c21dd05"
+      },
+      "identity_sha256": null,
+      "run_id": "007-p02--3099f5674cf0d4e1",
+      "predecessor_ids": ["20260808-disjoint-component-ownership-v1"],
+      "summary": "Correct explicit Clean/High Recall bindings, initialized and unchanged at revision 0."
+    },
+    {
+      "record_id": "20260808-accuracy-v2-sample10-rev0",
+      "title": "Accuracy-v2 isolated ten-word sample revision 0",
+      "evidence_role": "run_state",
+      "decision": "blocked",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/full-page-sequential-ownership-v2/007-p02-accuracy-v2-v4-sample10",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/full-page-sequential-ownership-v2/007-p02-accuracy-v2-v4-sample10/run-manifest.json",
+        "file_sha256": "e3606f2336ce2e09ef1f3854c90e72bdeb2148ba68fd7ae2644d70ebb39ff8be"
+      },
+      "identity_sha256": null,
+      "run_id": "007-p02--8f3566796a3283ca",
+      "predecessor_ids": ["20260808-accuracy-v2-full-run-rev0"],
+      "summary": "Ten canonical difficult/easy words; no model action applied because isolated routes are unavailable."
+    },
+    {
+      "record_id": "20260808-sample10-boundary-validation-r0",
+      "title": "Sample10 acting-packet boundary validation",
+      "evidence_role": "boundary_receipt",
+      "decision": "diagnostic",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/full-page-sequential-ownership-v2/007-p02-accuracy-v2-v4-sample10",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/full-page-sequential-ownership-v2/007-p02-accuracy-v2-v4-sample10/boundary-validation-r000000-u000000-t0000.json",
+        "file_sha256": "b4d0d5570f674cae7faf4838873a5647d3c7eb3104944e5e005ba2dad6de34d9"
+      },
+      "identity_sha256": "842c3d5c70a42ae8e8df2c88fc32f84a92b8079dbe6e4af6b7e467969b832041",
+      "predecessor_ids": ["20260808-accuracy-v2-sample10-rev0"],
+      "summary": "All 12 packet files passed containment, marker, existence, and evidence-hash checks."
+    },
+    {
+      "record_id": "20260808-line-coordinate-v1-memory-invalid",
+      "title": "Line-coordinate ownership v1 incomplete memory run",
+      "evidence_role": "invalid",
+      "decision": "invalid",
+      "acting_visibility": "not_applicable",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v1/007-p02-body77",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v1/007-p02-body77/INCOMPLETE-RUN.md",
+        "file_sha256": "c58e3cb261b8d19dfa9d01711d76863f9509dd6d992caab24666b0f616180a4f"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260808-disjoint-component-ownership-v1"],
+      "summary": "Retained 1,232 page masks and was stopped before freeze; no sealed evaluation opened."
+    },
+    {
+      "record_id": "20260808-line-coordinate-v2-spacing-invalid",
+      "title": "Line-coordinate ownership v2 outer-line spacing failure",
+      "evidence_role": "invalid",
+      "decision": "invalid",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v2/007-p02-body77-bounded-memory",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v2/007-p02-body77-bounded-memory/experiment.json",
+        "file_sha256": "f5a98194752cd1ae3ab3cbd23c50dd26b4b8cac77d2ef33c56756fb7b92588dd"
+      },
+      "identity_sha256": "d2947510d3217d511c10ec1a65acc6301d1a8f9dc6ec703f84026ca67747eb4c",
+      "predecessor_ids": ["20260808-line-coordinate-v1-memory-invalid"],
+      "summary": "Bounded memory succeeded, but outer fitted lines absorbed page number/signature components."
+    },
+    {
+      "record_id": "20260808-line-coordinate-v3-spacing-fixed",
+      "title": "Line-coordinate ownership v3 spacing-fixed sweep",
+      "evidence_role": "post_freeze_mixed",
+      "decision": "diagnostic",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed/experiment.json",
+        "file_sha256": "ea30421d995e79751b664db72b5562b68c1a0825bd8edf1a728278a26f1bcfdd"
+      },
+      "identity_sha256": "ebb8d735d4d32bd97a42b2448af44e9c1b4652506997980e7d3ba143d875feee",
+      "predecessor_ids": ["20260808-line-coordinate-v2-spacing-invalid"],
+      "summary": "Transcript line plus rough span improved 56 to 58 high-quality while reducing foreign and missed pixels."
+    },
+    {
+      "record_id": "20260808-line-choice-cross-locator-oracle-invalid",
+      "title": "First cross-locator line-choice oracle",
+      "evidence_role": "invalid",
+      "decision": "invalid",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed/choice-affordance-analysis.json",
+        "file_sha256": "4aeb36096fc02eee1223119e5186f5ed4094eb1d67511c8281e1e1f57c756716"
+      },
+      "identity_sha256": "f1430dd5f62a563e92c96e6f455323d5137c28f72ccc1b39219ee793fd388459",
+      "predecessor_ids": ["20260808-line-coordinate-v3-spacing-fixed"],
+      "summary": "Invalid 68/77 oracle mixed locator families independently bound to different target words."
+    },
+    {
+      "record_id": "20260808-line-coordinate-canonical-binding-audit",
+      "title": "Canonical-binding line-coordinate reevaluation",
+      "evidence_role": "post_freeze_mixed",
+      "decision": "diagnostic",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed/canonical-binding-reevaluation.json",
+        "file_sha256": "da4aa97a45122303533be86a2df909ebe93070a5a56e3f8325bcd145ab662c4b"
+      },
+      "identity_sha256": "266f6c44007ed1458c9365c198dc9808690e77f1a915eac35927620a85aaa3f0",
+      "predecessor_ids": ["20260808-line-coordinate-v3-spacing-fixed", "20260808-line-choice-cross-locator-oracle-invalid"],
+      "summary": "Recorded 72 mismatch receipts and produced a consistent 64/77 proxy; later physical audit proved the binding is not semantic truth."
+    },
+    {
+      "record_id": "20260808-line-choice-one-toggle-audit",
+      "title": "Canonical line-choice plus one-component-toggle audit",
+      "evidence_role": "post_freeze_mixed",
+      "decision": "diagnostic",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed/canonical-both-one-toggle-affordance-analysis.json",
+        "file_sha256": "0d4703e84ddbd4148b9d65d8ad9c2aeb876fec15c93823edc51186a7a27d7ec5"
+      },
+      "identity_sha256": "82af6c04dd628089828015788810d88bf208853eb8493ed891a3dd86f48aa14a",
+      "predecessor_ids": ["20260808-line-coordinate-canonical-binding-audit"],
+      "summary": "Interaction-capacity proxy only: choice reached 64/77 and one edit 70/77 under an unadjudicated one-to-one target binding."
+    },
+    {
+      "record_id": "20260808-exclusive-component-transfer-audit",
+      "title": "Exclusive same-line component-transfer audit",
+      "evidence_role": "post_freeze_mixed",
+      "decision": "diagnostic",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed/exclusive-component-transfer-audit.json",
+        "file_sha256": "8da3c852c636412c6b628a2e137b384f69138b152b84f4f4a629632a9e719995"
+      },
+      "identity_sha256": "1a025f55a44b419a42c55c14b25f4afbd8b715594b0565f1e948b8a5fb09f247",
+      "predecessor_ids": ["20260808-line-coordinate-canonical-binding-audit"],
+      "summary": "Geometry-proxy transfer audit; direction/gain counts are not semantic evidence until many-to-many target adjudication."
+    },
+    {
+      "record_id": "20260808-line-choice-agent-packets-v1",
+      "title": "Acting-only line-choice and component-toggle packets v1",
+      "evidence_role": "run_state",
+      "decision": "blocked",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-choice-agent-packets-v1/007-p02-acting-only-disagreement8",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-choice-agent-packets-v1/007-p02-acting-only-disagreement8/run-manifest.json",
+        "file_sha256": "e9eaa02426ee8e433821a13e44b1ed16ed8f6d3fdeb581ead3e45d093a70e4be"
+      },
+      "identity_sha256": "e1337c4183ee150a9db50b3749bf9208dcf2800b91d45fbeeb41e0cc01895ba8",
+      "predecessor_ids": ["20260808-line-coordinate-v3-spacing-fixed"],
+      "summary": "Eight software-disagreement packets are frozen; isolated model execution is infrastructure-blocked."
+    },
+    {
+      "record_id": "20260808-line-choice-packet-boundary-summary",
+      "title": "Line-choice packet boundary validation summary",
+      "evidence_role": "boundary_receipt",
+      "decision": "diagnostic",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-choice-agent-packets-v1/007-p02-acting-only-disagreement8",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-choice-agent-packets-v1/007-p02-acting-only-disagreement8/boundary-validation-summary.json",
+        "file_sha256": "2027ada84066f19f8c76808defc52675f62dfb81fb2b38d8e0b69d45c598d50e"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260808-line-choice-agent-packets-v1"],
+      "summary": "All eight packet directories passed structural boundary checks with zero violations."
+    },
+    {
+      "record_id": "20260808-reading-order-binding-invalid",
+      "title": "Contiguous mask-number reading-order binding",
+      "evidence_role": "invalid",
+      "decision": "invalid",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed/reading-order-binding-reevaluation.json",
+        "file_sha256": "c4d838e9ec03693fcd18b050a454e08b5df10e6e1eb4a4d27a1a286d5ce1bb45"
+      },
+      "identity_sha256": "f714c75da4fc423f7ca2b1b2c38137194eb529082f528574db30776f42c59d64",
+      "predecessor_ids": ["20260808-line-coordinate-canonical-binding-audit"],
+      "summary": "Strongly identified masks 23-99 as the body window but failed left-to-right monotonicity on three lines."
+    },
+    {
+      "record_id": "20260808-capacity-line-binding-invalid",
+      "title": "Capacity-constrained fitted-line binding",
+      "evidence_role": "invalid",
+      "decision": "invalid",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed/capacity-line-binding-reevaluation.json",
+        "file_sha256": "5265ca063bd1f9a13b3a9106381b5e07e6ed16a8ee668578a587374921199c5e"
+      },
+      "identity_sha256": "fa1fa4afdd7324c5cd38c240fdc166ecc174300c2edea9bd019bd88494726524",
+      "predecessor_ids": ["20260808-reading-order-binding-invalid"],
+      "summary": "Selected the same body window but exact line capacities forced detached/combined masks into wrong semantic tokens."
+    },
+    {
+      "record_id": "20260808-semantic-binding-adjudication-pending",
+      "title": "Sealed many-to-many semantic binding adjudication",
+      "evidence_role": "run_state",
+      "decision": "blocked",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/semantic-binding-adjudication-v1/007-p02-pending",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/semantic-binding-adjudication-v1/007-p02-pending/run-manifest.json",
+        "file_sha256": "92918491c40deb60360d4b34887050c60d64a7d0c9dcd4858f9bf20761d3d888"
+      },
+      "identity_sha256": "1541e96b953607210f663a2b69b70c41f3804ad777bd7e6389aebe315b30a44a",
+      "predecessor_ids": ["20260808-capacity-line-binding-invalid"],
+      "summary": "Fourteen sealed evaluator boards and a zero-or-more-mask token ledger are ready; adjudication is incomplete."
+    },
+    {
+      "record_id": "20260808-semantic-binding-validation-negative-control",
+      "title": "Semantic binding completion-gate negative control",
+      "evidence_role": "boundary_receipt",
+      "decision": "diagnostic",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/semantic-binding-validation-v1/007-p02-template-negative-control",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/semantic-binding-validation-v1/007-p02-template-negative-control/validation.json",
+        "file_sha256": "383248305322a8aac3395a310d28145b99a624bdba3a5e8246ba92052f254592"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260808-semantic-binding-adjudication-pending"],
+      "summary": "The strict gate correctly rejects the untouched ledger with 92 explicit incompleteness violations."
+    },
+    {
+      "record_id": "20260808-semantic-binding-adjudication-completed",
+      "title": "Completed sealed many-to-many semantic binding ledger",
+      "evidence_role": "post_freeze_mixed",
+      "decision": "diagnostic",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/semantic-binding-adjudication-v1/007-p02-completed-evaluator-v1",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/semantic-binding-adjudication-v1/007-p02-completed-evaluator-v1/adjudicated-ledger.json",
+        "file_sha256": "3c9030c7aaa08c457bc24dfa76ff367429e20d51e6152c1c8776459468f26a5e"
+      },
+      "identity_sha256": "bdfd80d9eafe4568d192d4e426e5f5dd933123ebe4d77d84e0abd5c95bb62c97",
+      "predecessor_ids": ["20260808-semantic-binding-adjudication-pending", "20260808-semantic-binding-validation-negative-control"],
+      "summary": "First sealed evaluator ledger: 71 scorable units, 6 merged-mask exclusions, 77/77 body masks resolved, zero validation violations."
+    },
+    {
+      "record_id": "20260808-semantic-binding-line-candidate-reevaluation",
+      "title": "Many-to-many line-candidate reevaluation",
+      "evidence_role": "post_freeze_mixed",
+      "decision": "diagnostic",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/semantic-binding-reevaluation-v1/007-p02-scorable71",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/semantic-binding-reevaluation-v1/007-p02-scorable71/reevaluation.json",
+        "file_sha256": "70b8030a334e1557a678aab2ca7eb2fb4edec41406c30e47fb7158455916ac9b"
+      },
+      "identity_sha256": "87a3d20c92c4def8e45a90bc481701d3dcf34f61f636bf08c133d98aa0100667",
+      "predecessor_ids": ["20260808-line-coordinate-v3-spacing-fixed", "20260808-semantic-binding-adjudication-completed"],
+      "summary": "Trustworthy scorable-unit results: transcript global 55/71, line strip 57/71, proposal choice 65/71, one toggle 68/71; two toggles add zero."
+    },
+    {
+      "record_id": "20260808-line-component-pool-expansion-frozen",
+      "title": "Acting-safe fitted-line component pool expansion",
+      "evidence_role": "run_state",
+      "decision": "candidate_heldout",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-component-pool-expansion-v1/007-p02-scorable71",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-component-pool-expansion-v1/007-p02-scorable71/frozen-pools.json",
+        "file_sha256": "c6b48709d543623c62ede95864ea1db4705ed4608f108639094f4841ca0072a3"
+      },
+      "identity_sha256": "fb37b590a54803bf6608b9e81f172751483098e56ad157224bc680444e77965c",
+      "predecessor_ids": ["20260808-line-coordinate-v3-spacing-fixed"],
+      "summary": "Human-free fitted-line component pools frozen at six along-line margins before sealed evaluation."
+    },
+    {
+      "record_id": "20260808-line-component-pool-expansion-evaluation",
+      "title": "Sealed fitted-line pool availability and distraction sweep",
+      "evidence_role": "post_freeze_mixed",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-component-pool-expansion-v1/007-p02-scorable71",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-component-pool-expansion-v1/007-p02-scorable71/evaluation.json",
+        "file_sha256": "6b02b77e76b11c395a8a718a1c4b8f89756bacc8a1c32481c20ee2b5a071d096"
+      },
+      "identity_sha256": "2ca2d687f6b54c53096a4f3a92d23f6187a1efaa8477a2f022ff909cc439eecc",
+      "predecessor_ids": ["20260808-line-component-pool-expansion-frozen", "20260808-semantic-binding-adjudication-completed"],
+      "summary": "Promotes staged pools: 0-15% compact default and 45% recovery ceiling; larger pools add distraction without availability gain."
+    },
+    {
+      "record_id": "20260808-semantic-exclusive-component-transfer-audit",
+      "title": "Target-directed semantic exclusive component transfer audit",
+      "evidence_role": "post_freeze_mixed",
+      "decision": "diagnostic",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/semantic-exclusive-component-transfer-v1/007-p02-scorable71",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/semantic-exclusive-component-transfer-v1/007-p02-scorable71/audit.json",
+        "file_sha256": "d0aa2fd577894fed3b1d58bdcd648e99aa3e66d6062f246a50b29d8b1cfd78cc"
+      },
+      "identity_sha256": "27c8e13201bd9e359c339a1ed115b1b366995488a3715fe2247ef453a3014a96",
+      "predecessor_ids": ["20260808-semantic-binding-line-candidate-reevaluation"],
+      "summary": "Beneficial target-directed transfers occur both earlier and later; provisional exclusive ownership is supported, fixed direction is not."
+    },
+    {
+      "record_id": "20260808-semantic-binding-audit",
+      "title": "Completed-page semantic binding audit",
+      "evidence_role": "navigation",
+      "decision": "index",
+      "acting_visibility": "not_applicable",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive/docs/research/handwriting-pipeline",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive/docs/research/handwriting-pipeline/BINDING-AUDIT-2026-08-08.md",
+        "file_sha256": "9d840a5452ae23724bef87702e01036c0cc197fa14db6ddf8281f4842cb645e1"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260808-reading-order-binding-invalid", "20260808-capacity-line-binding-invalid", "20260808-semantic-binding-adjudication-pending", "20260808-semantic-binding-validation-negative-control", "20260808-semantic-binding-adjudication-completed"],
+      "summary": "Quarantines all one-to-one page-007 HQ counts and defines the required sealed many-to-many target contract."
+    },
+    {
+      "record_id": "20260808-line-coordinate-ownership-checkpoint",
+      "title": "Line-coordinate ownership durable checkpoint",
+      "evidence_role": "navigation",
+      "decision": "index",
+      "acting_visibility": "not_applicable",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive/docs/research/handwriting-pipeline",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive/docs/research/handwriting-pipeline/CHECKPOINT-2026-08-08-LINE-COORDINATE-OWNERSHIP.md",
+        "file_sha256": "8fcb58dceafc1f9c5031aeff337d2732259b216d8c03e814015e95cbe70484ae"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260808-line-coordinate-canonical-binding-audit", "20260808-line-choice-one-toggle-audit", "20260808-exclusive-component-transfer-audit", "20260808-line-choice-packet-boundary-summary", "20260808-semantic-binding-audit"],
+      "summary": "Exact failures, proxy metrics, packet hashes, tests, blocker, and a superseding warning that semantic target binding is pending."
+    },
+    {
+      "record_id": "20260808-semantic-binding-line-pools-checkpoint",
+      "title": "Semantic binding and fitted-line pool durable checkpoint",
+      "evidence_role": "navigation",
+      "decision": "index",
+      "acting_visibility": "not_applicable",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive/docs/research/handwriting-pipeline",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive/docs/research/handwriting-pipeline/CHECKPOINT-2026-08-08-SEMANTIC-BINDING-LINE-POOLS.md",
+        "file_sha256": "f297521c513f138f6ac11501806df5f1c5e28e608b6233112d7cfa2b570c4faa"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260808-semantic-binding-adjudication-completed", "20260808-semantic-binding-line-candidate-reevaluation", "20260808-line-component-pool-expansion-evaluation", "20260808-semantic-exclusive-component-transfer-audit"],
+      "summary": "Exact semantic ledger, trustworthy proposal metrics, staged pool tradeoff, corrected order audit, guardrails, and next experiments."
+    }
+  ]
+}

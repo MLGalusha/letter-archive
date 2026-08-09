@@ -1,0 +1,275 @@
+{
+  "schema_version": "faint-ink-classical-challengers.v1",
+  "evidence_visibility": "acting-safe-source-and-software-proxies-only",
+  "sealed_human_evidence_used": false,
+  "frozen_crop": {
+    "bbox_xywh": [
+      2050,
+      2100,
+      600,
+      300
+    ],
+    "label": "enough-tight"
+  },
+  "selection_rule": "All method families and constants fixed before proxy measurement.",
+  "guardrail": "Faint/paper proxies are prior software evidence, not ground truth. Visual structure, contamination, fragmentation, and anchor retention remain independent checks.",
+  "methods": {
+    "su_local_contrast": {
+      "windows": [
+        {
+          "window": 15,
+          "contrast_otsu_threshold": 0.26352942223642384,
+          "pixels": 8972
+        },
+        {
+          "window": 31,
+          "contrast_otsu_threshold": 0.3229804095099954,
+          "pixels": 12275
+        },
+        {
+          "window": 61,
+          "contrast_otsu_threshold": 0.39596744542028384,
+          "pixels": 14086
+        }
+      ],
+      "minimum_votes": 2
+    },
+    "multi_window_sauvola": {
+      "windows": [
+        {
+          "window": 15,
+          "pixels": 7237
+        },
+        {
+          "window": 31,
+          "pixels": 10826
+        },
+        {
+          "window": 61,
+          "pixels": 13901
+        },
+        {
+          "window": 121,
+          "pixels": 16644
+        }
+      ],
+      "k": 0.18,
+      "minimum_votes": 3
+    },
+    "multiscale_blackhat": {
+      "kernels": [
+        {
+          "diameter": 5,
+          "maximum": 105
+        },
+        {
+          "diameter": 9,
+          "maximum": 133
+        },
+        {
+          "diameter": 15,
+          "maximum": 136
+        }
+      ],
+      "otsu": 26,
+      "applied_threshold": 26
+    },
+    "multiscale_retinex_z": {
+      "scales": [
+        {
+          "sigma": 3.0,
+          "q99": 5.242734746932984
+        },
+        {
+          "sigma": 8.0,
+          "q99": 8.77747245788576
+        },
+        {
+          "sigma": 20.0,
+          "q99": 13.354012260437013
+        },
+        {
+          "sigma": 45.0,
+          "q99": 17.14916358947758
+        }
+      ],
+      "z_threshold": 1.35
+    },
+    "conservative_grouping": {
+      "mode": "conservative",
+      "synthetic_grouping_pixels_retained": 0,
+      "temporary_groups": 135,
+      "accepted_touching": 18,
+      "accepted_standalone": 6,
+      "minimum_votes": 3,
+      "minimum_exact_pixels": 5,
+      "minimum_width": 4
+    },
+    "balanced_grouping": {
+      "mode": "balanced",
+      "synthetic_grouping_pixels_retained": 0,
+      "temporary_groups": 222,
+      "accepted_touching": 6,
+      "accepted_standalone": 7,
+      "minimum_votes": 2,
+      "minimum_exact_pixels": 7,
+      "minimum_width": 5
+    }
+  },
+  "metrics": {
+    "full-page Eynollah p0.50": {
+      "pixels": 3176,
+      "components": 19,
+      "faint_proxy_selected": 0,
+      "faint_proxy_recall": 0.0,
+      "paper_proxy_selected": 0,
+      "paper_proxy_rate": 0.0,
+      "anchor_selected": 3176,
+      "anchor_retention": 1.0,
+      "mask_uint8_pixel_sha256": "74d6b9759ed8a8ad7d97d70867e4eabc7bd040cb37a52436035e9744199f15b3"
+    },
+    "source-reconnect Eynollah p0.50": {
+      "pixels": 9529,
+      "components": 38,
+      "faint_proxy_selected": 3428,
+      "faint_proxy_recall": 0.5216861969258865,
+      "paper_proxy_selected": 1,
+      "paper_proxy_rate": 1.631667400916997e-05,
+      "anchor_selected": 3049,
+      "anchor_retention": 0.9600125944584383,
+      "mask_uint8_pixel_sha256": "168291112fc710dbc6468434281ba1b96e9bf8ac4c0908f17403935e7fd99e65"
+    },
+    "prior one-pass composition": {
+      "pixels": 9695,
+      "components": 164,
+      "faint_proxy_selected": 6571,
+      "faint_proxy_recall": 1.0,
+      "paper_proxy_selected": 1,
+      "paper_proxy_rate": 1.631667400916997e-05,
+      "anchor_selected": 2188,
+      "anchor_retention": 0.6889168765743073,
+      "mask_uint8_pixel_sha256": "4a3d2bf2901c7d8f8270756b2805ad8d0a8763cca645440d7a9371a55526bf80"
+    },
+    "Su local contrast": {
+      "pixels": 7970,
+      "components": 258,
+      "faint_proxy_selected": 5229,
+      "faint_proxy_recall": 0.7957692893014762,
+      "paper_proxy_selected": 2,
+      "paper_proxy_rate": 3.263334801833994e-05,
+      "anchor_selected": 1563,
+      "anchor_retention": 0.49212846347607053,
+      "mask_uint8_pixel_sha256": "2905170d4bae5473539747f51008f1e30103f14f98eecb73b8b7fcb3487e340c"
+    },
+    "multi-window Sauvola": {
+      "pixels": 7108,
+      "components": 322,
+      "faint_proxy_selected": 4719,
+      "faint_proxy_recall": 0.7181555318825141,
+      "paper_proxy_selected": 1,
+      "paper_proxy_rate": 1.631667400916997e-05,
+      "anchor_selected": 1383,
+      "anchor_retention": 0.43545340050377834,
+      "mask_uint8_pixel_sha256": "0e2577d8d9c3d2dd16055d858f7ae67b818b28db135f16a57708c49a783cc741"
+    },
+    "multiscale blackhat": {
+      "pixels": 12254,
+      "components": 604,
+      "faint_proxy_selected": 6273,
+      "faint_proxy_recall": 0.954649216253234,
+      "paper_proxy_selected": 43,
+      "paper_proxy_rate": 0.0007016169823943088,
+      "anchor_selected": 1886,
+      "anchor_retention": 0.5938287153652393,
+      "mask_uint8_pixel_sha256": "27508802bc28ff3bf644d8cc1540b4bb6eabacd739210185270f9bb6bcfcbeef"
+    },
+    "multiscale Retinex z": {
+      "pixels": 39175,
+      "components": 2506,
+      "faint_proxy_selected": 6571,
+      "faint_proxy_recall": 1.0,
+      "paper_proxy_selected": 6491,
+      "paper_proxy_rate": 0.10591153099352228,
+      "anchor_selected": 2186,
+      "anchor_retention": 0.6882871536523929,
+      "mask_uint8_pixel_sha256": "080742df000b2bebdae6d9df73c151e5e603da5d6ea44d977cbf574037bf75ea"
+    },
+    "new composed conservative": {
+      "pixels": 12067,
+      "components": 155,
+      "faint_proxy_selected": 5506,
+      "faint_proxy_recall": 0.8379242124486379,
+      "paper_proxy_selected": 3,
+      "paper_proxy_rate": 4.895002202750991e-05,
+      "anchor_selected": 3056,
+      "anchor_retention": 0.9622166246851386,
+      "mask_uint8_pixel_sha256": "eeaf60010d4bff2dfd3b4cb0204e5967a91d3b7b29ddd22c03a025bd49a135d1"
+    },
+    "new composed balanced": {
+      "pixels": 14659,
+      "components": 296,
+      "faint_proxy_selected": 6413,
+      "faint_proxy_recall": 0.9759549535839294,
+      "paper_proxy_selected": 12,
+      "paper_proxy_rate": 0.00019580008811003965,
+      "anchor_selected": 3063,
+      "anchor_retention": 0.9644206549118388,
+      "mask_uint8_pixel_sha256": "fbcaef5f7616d44f8d2fac868d999df36d5d0998cfb0a67c977756ab56d7c1f4"
+    },
+    "original source": {
+      "pixels": 0,
+      "components": 0,
+      "faint_proxy_recall": 0.0,
+      "paper_proxy_selected": 0
+    }
+  },
+  "inputs": {
+    "natural_manifest_sha256": "3a1fa7967c64d156030302a73b103805ab77b1e1fbb9aed34f3ae9bf9af9f703",
+    "full_page_probability_sha256": "d2a6d6ba6f158dcc8f3a8fc710b513295e9f9c5679d23c8457ffc84ac2b74e65",
+    "reconnect_probability_sha256": "52465ac93e2d01f22d2c466da182d022a8ac65078b01373c570f5ca8e169e737",
+    "one_pass_mask_sha256": "8339a929ec47a0693f12410e152e8cf5a11b6d4bc6e7bbb3296d88b24079b84f"
+  },
+  "outputs": {
+    "full-page Eynollah p0.50": {
+      "file": "full-page-eynollah-p050.mask.png",
+      "file_sha256": "f0694589ca0d5f63476a585280d8d55482f4098fae63c28b46f94c4ebfd2a5c5"
+    },
+    "source-reconnect Eynollah p0.50": {
+      "file": "source-reconnect-eynollah-p050.mask.png",
+      "file_sha256": "87cf56f33b24263d2dc82f93c436f8b82a3b1591b49ce9b7073ef693ef31ee85"
+    },
+    "prior one-pass composition": {
+      "file": "prior-one-pass-composition.mask.png",
+      "file_sha256": "f0853427a556a30d77bbb50c630bebb74084b82fcaa695bbd6d6d649c615fe02"
+    },
+    "Su local contrast": {
+      "file": "su-local-contrast.mask.png",
+      "file_sha256": "f721e75774a292c3f058d0d27ccca61ac3dc072eee49bb39fc0f408fbb48b3e3"
+    },
+    "multi-window Sauvola": {
+      "file": "multi-window-sauvola.mask.png",
+      "file_sha256": "89eb3836876587728a0d0f74cdd6d660fc381e636c67ee017b146c360682e090"
+    },
+    "multiscale blackhat": {
+      "file": "multiscale-blackhat.mask.png",
+      "file_sha256": "77fadd11e0f7b9e696e9ac8206e9fc8924d8b24ccdcdcde4522e5958c3482a15"
+    },
+    "multiscale Retinex z": {
+      "file": "multiscale-retinex-z.mask.png",
+      "file_sha256": "6b041efe769e3cde2a0504b35e275bcfcef906ebe0b7f4158f9e783d5bd7c2ea"
+    },
+    "new composed conservative": {
+      "file": "new-composed-conservative.mask.png",
+      "file_sha256": "1a0f3a386d6b7600783d3b5a52097bb0d4398330b0ec38f467b4fb6665e15a85"
+    },
+    "new composed balanced": {
+      "file": "new-composed-balanced.mask.png",
+      "file_sha256": "6ae45200d0d296bfcb79dc2382717c8fa38f11afae7b742f1ecbf7ac0bfb53ee"
+    }
+  },
+  "board": {
+    "file": "faint-ink-classical-challengers.png",
+    "file_sha256": "7e09388b56dee74a50c85b9bd176800d11c100731ca1da14e2f787fb17ce773a"
+  },
+  "runtime_seconds": 1.0386272079995251
+}

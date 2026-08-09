@@ -1,0 +1,302 @@
+{
+  "schema_version": "reference-seeded-grabcut.v1",
+  "evidence_visibility": "acting-safe-source-and-frozen-model-output-only",
+  "sealed_human_evidence_used": false,
+  "hypothesis": "a spatial optimizer can turn fragmented page-specific ink scores into coherent source-pixel regions",
+  "inputs": {
+    "source_sha256": "5be260c09b90a70cc077ae7b5f2f3e545685ac81289afd8c4ff260d22ffc9225",
+    "probability_file_sha256": "2caf0a6e85b671cfdd335c31a3f6cfb1facac2abd120991053eebc6e8ac54646",
+    "reference_manifest_sha256": "e50e1d3fb8bf2693c3b771777e9b3741c8d294e75c7b3b911b6d78c6c3d63668",
+    "reference_score_sha256": "fa704ad1dae14c88f20fd2eb1f6327b6201df07bb79022de7e4f95c3f0523d59",
+    "crop_bbox_xyxy": [
+      180,
+      80,
+      1700,
+      760
+    ]
+  },
+  "seed_counts": {
+    "definite_background": 227400,
+    "probable_background": 730081,
+    "probable_foreground": 24943,
+    "definite_foreground": 51176
+  },
+  "page_detection": {
+    "HSV_saturation_otsu": 38,
+    "closing_kernel": [
+      41,
+      41
+    ],
+    "largest_component_pixels_before_fill": 7796165,
+    "filled_page_pixels": 8509540,
+    "page_mask_uint8_pixel_sha256": "dd96c6bacec0520f07fcfebafcfd1832dd7be3f1251c9c8e1a9f3d3126cd11f8"
+  },
+  "corridor": {
+    "body_band_count": 21,
+    "body_left_edges": [
+      695,
+      701,
+      293,
+      282,
+      276,
+      277,
+      347,
+      445,
+      511,
+      342,
+      340,
+      309,
+      285,
+      288,
+      335,
+      348,
+      331,
+      321,
+      329,
+      327,
+      842
+    ],
+    "inherited_left_x": 282,
+    "affected_band_count": 18,
+    "affected_bands": [
+      {
+        "original_bbox_xyxy": [
+          695,
+          165,
+          2603,
+          312
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          701,
+          284,
+          2320,
+          403
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          293,
+          359,
+          2287,
+          427
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          347,
+          676,
+          2609,
+          834
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          445,
+          794,
+          2507,
+          926
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          511,
+          898,
+          3000,
+          1045
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          342,
+          999,
+          3000,
+          1366
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          340,
+          1315,
+          3000,
+          1458
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          309,
+          1420,
+          2997,
+          1582
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          285,
+          1540,
+          3000,
+          2047
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          288,
+          2014,
+          1720,
+          2154
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          335,
+          2178,
+          2587,
+          2455
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          348,
+          2410,
+          2003,
+          2481
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          331,
+          2432,
+          2599,
+          2564
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          321,
+          2519,
+          3000,
+          3252
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          329,
+          3198,
+          3000,
+          3527
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          327,
+          3478,
+          3000,
+          3611
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          842,
+          3622,
+          2592,
+          3693
+        ],
+        "new_left": 282
+      }
+    ],
+    "added_search_pixels": 252587
+  },
+  "methods": {
+    "grabcut-1": {
+      "pixels": 114210,
+      "components": 279,
+      "components_ge_8px": 139,
+      "Eynollah_anchor_retention": 1.0,
+      "review_addition_pixels": 63034,
+      "addition_by_Eynollah_probability": {
+        "p_0.20_0.50": 13244,
+        "p_0.01_0.20": 19809,
+        "p_lt_0.01": 29981
+      },
+      "mask_uint8_pixel_sha256": "8c4ddb4cb3f25b66e7f136cd8720ee52e632d47d651ef8588d38b11bf798dd6b"
+    },
+    "grabcut-3": {
+      "pixels": 563795,
+      "components": 54,
+      "components_ge_8px": 22,
+      "Eynollah_anchor_retention": 1.0,
+      "review_addition_pixels": 512619,
+      "addition_by_Eynollah_probability": {
+        "p_0.20_0.50": 18418,
+        "p_0.01_0.20": 48128,
+        "p_lt_0.01": 446073
+      },
+      "mask_uint8_pixel_sha256": "631a9b3cbf51a709a50acc26e0c6532e33bf5a58b5439584cddb8b91c6367b67"
+    },
+    "grabcut-5": {
+      "pixels": 758834,
+      "components": 21,
+      "components_ge_8px": 1,
+      "Eynollah_anchor_retention": 1.0,
+      "review_addition_pixels": 707658,
+      "addition_by_Eynollah_probability": {
+        "p_0.20_0.50": 19580,
+        "p_0.01_0.20": 56007,
+        "p_lt_0.01": 632071
+      },
+      "mask_uint8_pixel_sha256": "cef5becf8c1851027c5b39f0bd508561c7da25dd8dfe5b57bea20f90fe0c6f76"
+    }
+  },
+  "final_label_counts": {
+    "grabcut-1": {
+      "0": 227400,
+      "1": 51176,
+      "2": 691990,
+      "3": 63034
+    },
+    "grabcut-3": {
+      "0": 227400,
+      "1": 51176,
+      "2": 242405,
+      "3": 512619
+    },
+    "grabcut-5": {
+      "0": 227400,
+      "1": 51176,
+      "2": 47366,
+      "3": 707658
+    }
+  },
+  "guardrails": [
+    "The Eynollah core is forced to definite foreground and retained in every output.",
+    "Outside-page, boundary, and outside-corridor pixels are definite background.",
+    "GrabCut output is a review proposal, not ground truth.",
+    "Spatial smoothness may erase thin strokes or absorb similarly colored paper regions."
+  ],
+  "outputs": {
+    "grabcut-1.mask.png": "49bce22c376e0777225731f0af1d3a93e11a61cd0d34838d07f1515a996ef805",
+    "grabcut-3.mask.png": "d0122f08a559832520f4f8a55abfce9de2eb9b6455911db2e31f9f903919957b",
+    "grabcut-5.mask.png": "8d7319267573ee85fcce69a90d975ef9d85ecdd499ad7bc929cab0c68012b9c8",
+    "grabcut-initial-seeds.uint8.npy": "ffef41af82440ee491e85733d6ddf0844d00298fc61de3bbca6f7d94b0e70df8",
+    "top-left-reference-seeded-grabcut.png": "37f1236edb220089fb642576ed3c67f5fe2e77c99218e8839c0b62d0cec7bcbc"
+  },
+  "runtime_seconds": 24.507350332998612
+}

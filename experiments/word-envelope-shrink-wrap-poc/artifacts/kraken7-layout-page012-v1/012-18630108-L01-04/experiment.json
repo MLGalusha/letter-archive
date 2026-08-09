@@ -1,0 +1,57 @@
+{
+  "schema_version": "kraken7-layout-page012.v1",
+  "evidence_visibility": "acting-safe-source-and-software-output-only",
+  "sealed_human_evidence_used": false,
+  "page_id": "012-18630108-L01-04",
+  "source": {
+    "path": "/Users/masongalusha/Workspace/projects/letter-archive/backend/storage/collections/012/18630108/L01/012-18630108-L01-04.jpg",
+    "file_sha256": "5be260c09b90a70cc077ae7b5f2f3e545685ac81289afd8c4ff260d22ffc9225",
+    "raw_size_wh": [4000, 3000],
+    "EXIF_orientation": 6
+  },
+  "rejected_unprepared_run": {
+    "reason": "Pillow consumed raw 4000x3000 storage order without applying EXIF orientation, while Eynollah/OpenCV used displayed 3000x4000 coordinates.",
+    "provider_output": "provider-output.json",
+    "provider_output_sha256": "be43c6e72f83cb0a5b418071476e4893e23117c6b09ffab60e7cb4c25bb88851",
+    "input_size_wh": [4000, 3000],
+    "line_count": 116,
+    "model_load_ms": 2211.584,
+    "inference_ms": 13536.288,
+    "decision": "rejected_orientation_control_failure"
+  },
+  "upright_preparation": {
+    "method": "Pillow ImageOps.exif_transpose followed by lossless RGB PNG",
+    "file": "prepared-exif-transposed.png",
+    "file_sha256": "de09e79aa073f8f107a341f3ca8e17bb6d9ead1bb89c3b7dce3332905bfd6841",
+    "size_wh": [3000, 4000],
+    "RGB_pixel_sha256": "8d1809fb5a7de000d474d6d8e04352f879b9c5242a7fcfd3c50fda06d64d4f8b",
+    "OpenCV_RGB_pixel_sha256": "8d1809fb5a7de000d474d6d8e04352f879b9c5242a7fcfd3c50fda06d64d4f8b",
+    "exactly_matches_Eynollah_OpenCV_coordinate_pixels": true
+  },
+  "accepted_upright_run": {
+    "provider": "kraken-blla",
+    "Kraken_version": "7.0.3",
+    "api": "segmentation-task",
+    "model_sha256": "77a638a83c9e535620827a09e410ed36391e9e8e8126d5796a0f15b978186056",
+    "parameters": {
+      "batchSize": 1,
+      "device": "cpu",
+      "inputPadding": 0,
+      "numThreads": 1,
+      "precision": "32-true",
+      "raiseOnError": true,
+      "textDirection": "horizontal-lr"
+    },
+    "provider_output": "provider-output-upright.json",
+    "provider_output_sha256": "e113ed25e7da8593e20cbede8217c7a92ca7a9b5b859c5c9ae7f4cd91c640693",
+    "input_size_wh": [3000, 4000],
+    "line_count": 53,
+    "model_load_ms": 1967.657,
+    "inference_ms": 9827.396
+  },
+  "top_left_observation": {
+    "first_six_main_body_boundary_x_min": [371, 328, 328, 324, 335, 371],
+    "meaning": "Kraken line geometry reaches the faint left line starts that Eynollah omits; use it as search geometry, not ink truth."
+  },
+  "decision": "promote_upright_layout_as_search_geometry_only"
+}

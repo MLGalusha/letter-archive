@@ -1,0 +1,331 @@
+{
+  "schema_version": "eynollah-taught-group-ranking.v1",
+  "evidence_visibility": "acting-safe-source-and-frozen-software-output-only",
+  "sealed_human_evidence_used": false,
+  "hypothesis": "Eynollah-backed groups can act as positive prototypes that focus review of wholly new faint-fragment groups",
+  "inputs": {
+    "source_sha256": "5be260c09b90a70cc077ae7b5f2f3e545685ac81289afd8c4ff260d22ffc9225",
+    "probability_file_sha256": "2caf0a6e85b671cfdd335c31a3f6cfb1facac2abd120991053eebc6e8ac54646",
+    "reference_manifest_sha256": "e50e1d3fb8bf2693c3b771777e9b3741c8d294e75c7b3b911b6d78c6c3d63668",
+    "reference_score_sha256": "fa704ad1dae14c88f20fd2eb1f6327b6201df07bb79022de7e4f95c3f0523d59",
+    "adaptive_group_manifest_sha256": "1bc4d60ec58477e623b38358cde636e0e9d87bc4dabd279a6e1b422ac91b6c1d",
+    "adaptive_group_ids_sha256": "1a7b03b5caa85cfc740fcc95cada09cce2920319e8b9656917ce31f480d07bbd",
+    "crop_bbox_xyxy": [
+      180,
+      80,
+      1700,
+      760
+    ]
+  },
+  "positive_model": {
+    "definition": "diagonal robust one-class prototype fitted only to substantive Eynollah-core-backed groups",
+    "feature_names": [
+      "bbox_density",
+      "exact_pixel_thickness_proxy_2A_over_P",
+      "reference_score_q50",
+      "reference_score_q90",
+      "darkness_residual_q50",
+      "darkness_residual_q90"
+    ],
+    "reference_group_count": 50,
+    "feature_center": [
+      0.16682867345679275,
+      3.2303845020421766,
+      8.716796875,
+      14.138280391693115,
+      0.06666667014360428,
+      0.12745098769664764
+    ],
+    "feature_robust_scale": [
+      0.09870114729751098,
+      0.6289579376328845,
+      1.2741093749999999,
+      2.410965532493591,
+      0.011628240124136208,
+      0.021802939876914024
+    ]
+  },
+  "review_lane_rules": [
+    "anchor-backed: contains any fixed Eynollah core pixel",
+    "needs-context: wholly new and within 12 px of bounded crop edge",
+    "micro-fragment: wholly new and fewer than 8 exact pixels",
+    "elongated-risk: wholly new, width/height >12, and height <20 px",
+    "faint-candidate: remaining substantial wholly new groups"
+  ],
+  "metrics": {
+    "total_groups": 72,
+    "Eynollah_core_backed_groups": 54,
+    "wholly_new_groups": 18,
+    "review_lanes": {
+      "micro-fragment": {
+        "groups": 10,
+        "exact_pixels": 35
+      },
+      "needs-context": {
+        "groups": 2,
+        "exact_pixels": 282
+      },
+      "faint-candidate": {
+        "groups": 5,
+        "exact_pixels": 293
+      },
+      "anchor-backed": {
+        "groups": 54,
+        "exact_pixels": 75199
+      },
+      "elongated-risk": {
+        "groups": 1,
+        "exact_pixels": 13
+      }
+    },
+    "top_wholly_new_by_positive_similarity": [
+      {
+        "group_id": 70,
+        "line_index": 5,
+        "review_lane": "needs-context",
+        "positive_similarity": 0.6804486974605409,
+        "area": 243,
+        "bbox_crop_xyxy": [
+          634,
+          648,
+          659,
+          680
+        ]
+      },
+      {
+        "group_id": 12,
+        "line_index": 0,
+        "review_lane": "elongated-risk",
+        "positive_similarity": 0.4637750331879017,
+        "area": 13,
+        "bbox_crop_xyxy": [
+          214,
+          131,
+          313,
+          136
+        ]
+      },
+      {
+        "group_id": 2,
+        "line_index": 0,
+        "review_lane": "needs-context",
+        "positive_similarity": 0.45768943138958207,
+        "area": 39,
+        "bbox_crop_xyxy": [
+          1461,
+          75,
+          1518,
+          85
+        ]
+      },
+      {
+        "group_id": 32,
+        "line_index": 1,
+        "review_lane": "faint-candidate",
+        "positive_similarity": 0.4510701188638643,
+        "area": 9,
+        "bbox_crop_xyxy": [
+          816,
+          337,
+          825,
+          341
+        ]
+      },
+      {
+        "group_id": 4,
+        "line_index": 0,
+        "review_lane": "faint-candidate",
+        "positive_similarity": 0.4408836675169814,
+        "area": 141,
+        "bbox_crop_xyxy": [
+          822,
+          78,
+          1048,
+          97
+        ]
+      },
+      {
+        "group_id": 39,
+        "line_index": 2,
+        "review_lane": "micro-fragment",
+        "positive_similarity": 0.39137931219074457,
+        "area": 6,
+        "bbox_crop_xyxy": [
+          142,
+          372,
+          166,
+          377
+        ]
+      },
+      {
+        "group_id": 3,
+        "line_index": 0,
+        "review_lane": "faint-candidate",
+        "positive_similarity": 0.3672854016969545,
+        "area": 45,
+        "bbox_crop_xyxy": [
+          1136,
+          76,
+          1238,
+          90
+        ]
+      },
+      {
+        "group_id": 21,
+        "line_index": 0,
+        "review_lane": "micro-fragment",
+        "positive_similarity": 0.35525511426567913,
+        "area": 3,
+        "bbox_crop_xyxy": [
+          263,
+          265,
+          299,
+          266
+        ]
+      },
+      {
+        "group_id": 1,
+        "line_index": 0,
+        "review_lane": "micro-fragment",
+        "positive_similarity": 0.31771974315954177,
+        "area": 5,
+        "bbox_crop_xyxy": [
+          1082,
+          73,
+          1114,
+          78
+        ]
+      },
+      {
+        "group_id": 7,
+        "line_index": 0,
+        "review_lane": "faint-candidate",
+        "positive_similarity": 0.3039060577269107,
+        "area": 42,
+        "bbox_crop_xyxy": [
+          766,
+          108,
+          807,
+          116
+        ]
+      },
+      {
+        "group_id": 13,
+        "line_index": 0,
+        "review_lane": "micro-fragment",
+        "positive_similarity": 0.2956210722684299,
+        "area": 5,
+        "bbox_crop_xyxy": [
+          367,
+          130,
+          369,
+          133
+        ]
+      },
+      {
+        "group_id": 20,
+        "line_index": 0,
+        "review_lane": "faint-candidate",
+        "positive_similarity": 0.2818033237541296,
+        "area": 56,
+        "bbox_crop_xyxy": [
+          420,
+          254,
+          436,
+          264
+        ]
+      },
+      {
+        "group_id": 5,
+        "line_index": 0,
+        "review_lane": "micro-fragment",
+        "positive_similarity": 0.24211810682900256,
+        "area": 3,
+        "bbox_crop_xyxy": [
+          1476,
+          99,
+          1477,
+          102
+        ]
+      },
+      {
+        "group_id": 41,
+        "line_index": 2,
+        "review_lane": "micro-fragment",
+        "positive_similarity": 0.24191209689809273,
+        "area": 2,
+        "bbox_crop_xyxy": [
+          1406,
+          428,
+          1408,
+          429
+        ]
+      },
+      {
+        "group_id": 16,
+        "line_index": 0,
+        "review_lane": "micro-fragment",
+        "positive_similarity": 0.23091623499921035,
+        "area": 3,
+        "bbox_crop_xyxy": [
+          315,
+          178,
+          317,
+          180
+        ]
+      },
+      {
+        "group_id": 6,
+        "line_index": 0,
+        "review_lane": "micro-fragment",
+        "positive_similarity": 0.21128188862378666,
+        "area": 2,
+        "bbox_crop_xyxy": [
+          953,
+          103,
+          954,
+          105
+        ]
+      },
+      {
+        "group_id": 22,
+        "line_index": 1,
+        "review_lane": "micro-fragment",
+        "positive_similarity": 0.20749997357616926,
+        "area": 4,
+        "bbox_crop_xyxy": [
+          150,
+          224,
+          152,
+          226
+        ]
+      },
+      {
+        "group_id": 15,
+        "line_index": 0,
+        "review_lane": "micro-fragment",
+        "positive_similarity": 0.17713759660782055,
+        "area": 2,
+        "bbox_crop_xyxy": [
+          821,
+          151,
+          822,
+          153
+        ]
+      }
+    ],
+    "group_ids_int32_pixel_sha256_unchanged": "3259986f24324df856e11da1821b5c741938bfea0c953d1d527bce2ed0d5540a"
+  },
+  "guardrails": [
+    "This experiment ranks existing exact-pixel groups and does not alter the mask.",
+    "Eynollah core is a precision-oriented pseudo-label, not human ground truth.",
+    "Pixels outside Eynollah core remain unknown rather than automatic background.",
+    "Positive similarity is one-class triage, not calibrated probability.",
+    "Crop-edge and morphology flags route review; they never delete evidence."
+  ],
+  "outputs": {
+    "eynollah-taught-group-ranking.png": "38a5d1a1cd2c8080d7a0004dd534eb151e4aa5887c405af9afa9c9561d835722",
+    "group-records.json": "f2bce9df11e990fff0011cd0b7c89a93d7561ffcb72da6a5262768b8927dae22"
+  },
+  "runtime_seconds": 2.119024375002482
+}

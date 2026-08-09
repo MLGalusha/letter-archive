@@ -1,0 +1,367 @@
+{
+  "schema_version": "eynollah-offset-grid-comparison.v1",
+  "evidence_visibility": "acting-safe-source-and-frozen-model-output-only",
+  "sealed_human_evidence_used": false,
+  "inputs": {
+    "source_sha256": "5be260c09b90a70cc077ae7b5f2f3e545685ac81289afd8c4ff260d22ffc9225",
+    "baseline_probability_sha256": "2caf0a6e85b671cfdd335c31a3f6cfb1facac2abd120991053eebc6e8ac54646",
+    "shifted_probability_sha256": "d7a93e84b1692a7c8e8e71af735d796c9f3a564a25b0acec2bd57023efe69ba6",
+    "anatomy_manifest_sha256": "c0f831a028576c8aaa8836461f4c61f94f711751087f796329a8d4592b5bba6c"
+  },
+  "grid_geometry": {
+    "offset_xy": [
+      180,
+      180
+    ],
+    "baseline_x_boundaries": [
+      404,
+      764,
+      1124,
+      1484,
+      1844,
+      2204,
+      2564,
+      2596
+    ],
+    "baseline_y_boundaries": [
+      404,
+      764,
+      1124,
+      1484,
+      1844,
+      2204,
+      2564,
+      2924,
+      3284,
+      3596
+    ],
+    "shifted_x_boundaries_source_coordinates": [
+      224,
+      584,
+      944,
+      1304,
+      1664,
+      2024,
+      2384,
+      2744,
+      2776
+    ],
+    "shifted_y_boundaries_source_coordinates": [
+      224,
+      584,
+      944,
+      1304,
+      1664,
+      2024,
+      2384,
+      2744,
+      3104,
+      3464,
+      3776
+    ]
+  },
+  "category_recovery": {
+    "selected_source_candidate_p_ge_0.50": {
+      "pixels": 377845,
+      "shifted_p0.50_selected": 362109,
+      "shifted_p0.50_rate": 0.9583532930169779,
+      "shifted_probability_median": 0.9990234375
+    },
+    "uncertain_source_candidate_p_0.20_0.50": {
+      "pixels": 13875,
+      "shifted_p0.50_selected": 5470,
+      "shifted_p0.50_rate": 0.39423423423423426,
+      "shifted_probability_median": 0.40966796875
+    },
+    "missed_source_candidate_p_0.01_0.20": {
+      "pixels": 13173,
+      "shifted_p0.50_selected": 2768,
+      "shifted_p0.50_rate": 0.21012677446291658,
+      "shifted_probability_median": 0.108154296875
+    },
+    "missed_source_candidate_p_lt_0.01": {
+      "pixels": 27814,
+      "shifted_p0.50_selected": 2334,
+      "shifted_p0.50_rate": 0.08391457539368663,
+      "shifted_probability_median": 0.00024265050888061523
+    }
+  },
+  "baseline_missed_recovery": {
+    "pixels": 5102,
+    "within_8px_original_seam": 629,
+    "within_16px_original_seam": 1169,
+    "within_32px_original_seam": 2387,
+    "farther_from_shifted_seam": 2788,
+    "within_8px_original_seam_fraction": 0.12328498627989024,
+    "within_16px_original_seam_fraction": 0.22912583300666406,
+    "within_32px_original_seam_fraction": 0.4678557428459428,
+    "farther_from_shifted_seam_fraction": 0.546452371618973
+  },
+  "method_metrics": {
+    "original-grid": {
+      "pixels": 641883,
+      "components": 2182,
+      "components_ge_8px": 1375,
+      "baseline_retention": 1.0,
+      "shifted_retention": 0.9065557258458123,
+      "gained_vs_baseline": 0,
+      "lost_vs_baseline": 0,
+      "source_candidate_selected": 377845,
+      "source_candidate_recall": 0.873212127374875,
+      "gained_source_candidate": 0,
+      "gained_outside_source_candidate": 0,
+      "gained_within_8px_baseline_seam": 0,
+      "gained_within_16px_baseline_seam": 0,
+      "gained_within_32px_baseline_seam": 0,
+      "mask_uint8_pixel_sha256": "67a2279cfc99642f734f3e9def54098b11a366fed8ae141dae0e74d9c9c42867"
+    },
+    "half-stride-grid": {
+      "pixels": 643346,
+      "components": 2162,
+      "components_ge_8px": 1330,
+      "baseline_retention": 0.9086219762791662,
+      "shifted_retention": 1.0,
+      "gained_vs_baseline": 60117,
+      "lost_vs_baseline": 58654,
+      "source_candidate_selected": 372681,
+      "source_candidate_recall": 0.8612779548285561,
+      "gained_source_candidate": 10572,
+      "gained_outside_source_candidate": 49545,
+      "gained_within_8px_baseline_seam": 5142,
+      "gained_within_16px_baseline_seam": 9750,
+      "gained_within_32px_baseline_seam": 19298,
+      "mask_uint8_pixel_sha256": "420e5c20e8a57613b818f3895eacdd6a10a02a943a50a3791e55e43033fa8cab"
+    },
+    "agreement": {
+      "pixels": 583229,
+      "components": 1980,
+      "components_ge_8px": 1336,
+      "baseline_retention": 0.9086219762791662,
+      "shifted_retention": 0.9065557258458123,
+      "gained_vs_baseline": 0,
+      "lost_vs_baseline": 58654,
+      "source_candidate_selected": 362109,
+      "source_candidate_recall": 0.8368457177720721,
+      "gained_source_candidate": 0,
+      "gained_outside_source_candidate": 0,
+      "gained_within_8px_baseline_seam": 0,
+      "gained_within_16px_baseline_seam": 0,
+      "gained_within_32px_baseline_seam": 0,
+      "mask_uint8_pixel_sha256": "fa47473b4781a91ed1e50ae55f7cbca7d46b28ea5ca9557e4ee799ba403f47f5"
+    },
+    "blind-union": {
+      "pixels": 702000,
+      "components": 2355,
+      "components_ge_8px": 1343,
+      "baseline_retention": 1.0,
+      "shifted_retention": 1.0,
+      "gained_vs_baseline": 60117,
+      "lost_vs_baseline": 0,
+      "source_candidate_selected": 388417,
+      "source_candidate_recall": 0.8976443644313589,
+      "gained_source_candidate": 10572,
+      "gained_outside_source_candidate": 49545,
+      "gained_within_8px_baseline_seam": 5142,
+      "gained_within_16px_baseline_seam": 9750,
+      "gained_within_32px_baseline_seam": 19298,
+      "mask_uint8_pixel_sha256": "68201bf374ddf51885bdb528fc0a3402169231e0214c6c138cb310b327580ab6"
+    },
+    "arithmetic-mean": {
+      "pixels": 626967,
+      "components": 2209,
+      "components_ge_8px": 1338,
+      "baseline_retention": 0.939817692632458,
+      "shifted_retention": 0.9434161399930986,
+      "gained_vs_baseline": 23714,
+      "lost_vs_baseline": 38630,
+      "source_candidate_selected": 373666,
+      "source_candidate_recall": 0.8635543219776893,
+      "gained_source_candidate": 5735,
+      "gained_outside_source_candidate": 17979,
+      "gained_within_8px_baseline_seam": 2052,
+      "gained_within_16px_baseline_seam": 3914,
+      "gained_within_32px_baseline_seam": 7765,
+      "mask_uint8_pixel_sha256": "5f036da2a3da407f97182fbce729c2aa4d69198bc1b749cc1f338486312a064e"
+    },
+    "distance-weighted": {
+      "pixels": 637537,
+      "components": 2100,
+      "components_ge_8px": 1348,
+      "baseline_retention": 0.951771584541108,
+      "shifted_retention": 0.9479191601408884,
+      "gained_vs_baseline": 26611,
+      "lost_vs_baseline": 30957,
+      "source_candidate_selected": 375903,
+      "source_candidate_recall": 0.8687241019904924,
+      "gained_source_candidate": 5894,
+      "gained_outside_source_candidate": 20717,
+      "gained_within_8px_baseline_seam": 4624,
+      "gained_within_16px_baseline_seam": 8269,
+      "gained_within_32px_baseline_seam": 14564,
+      "mask_uint8_pixel_sha256": "c8ec57fe96100283e84fc6750b9c7fd63dfc3d5a3fb9159cfb086866a893e509"
+    },
+    "center-preferred": {
+      "pixels": 643104,
+      "components": 2120,
+      "components_ge_8px": 1347,
+      "baseline_retention": 0.9579736494033959,
+      "shifted_retention": 0.9503843965766477,
+      "gained_vs_baseline": 28197,
+      "lost_vs_baseline": 26976,
+      "source_candidate_selected": 375821,
+      "source_candidate_recall": 0.8685345973141179,
+      "gained_source_candidate": 5399,
+      "gained_outside_source_candidate": 22798,
+      "gained_within_8px_baseline_seam": 4935,
+      "gained_within_16px_baseline_seam": 9093,
+      "gained_within_32px_baseline_seam": 16575,
+      "mask_uint8_pixel_sha256": "d12af34b27fb6f123d8c07135b47ea33b1dc4c660a2be81db1d6d03e870e3322"
+    },
+    "seam-aware-source-recovery": {
+      "pixels": 645491,
+      "components": 2334,
+      "components_ge_8px": 1388,
+      "baseline_retention": 1.0,
+      "shifted_retention": 0.9121639055811336,
+      "gained_vs_baseline": 3608,
+      "lost_vs_baseline": 0,
+      "source_candidate_selected": 381453,
+      "source_candidate_recall": 0.8815503331353549,
+      "gained_source_candidate": 3608,
+      "gained_outside_source_candidate": 0,
+      "gained_within_8px_baseline_seam": 1064,
+      "gained_within_16px_baseline_seam": 1981,
+      "gained_within_32px_baseline_seam": 3608,
+      "mask_uint8_pixel_sha256": "91f9d33283a271b2c011192a8b1d4dd5f7e50dd0676a6627e485d5da3b1730ad"
+    }
+  },
+  "method_guardrails": {
+    "agreement": "precision-oriented diagnostic; expected to lose legitimate alignment-specific ink",
+    "blind-union": "recall upper bound; must not be promoted without contamination evidence",
+    "arithmetic-mean": "requires both probabilities to support a pixel on average",
+    "distance-weighted": "softly favors the alignment farther from a stitch",
+    "center-preferred": "uses the single alignment farther from its nearest stitch",
+    "seam-aware-source-recovery": "keeps baseline and adds only shifted source-consensus pixels near an original seam that moved farther from the shifted seam"
+  },
+  "outputs": {
+    "original-grid": {
+      "file": "original-grid.mask.png",
+      "file_sha256": "abc0432dcb6b2babb599e70fafd1bf2d5162319733770a6287f8b1e19c4c2010"
+    },
+    "half-stride-grid": {
+      "file": "half-stride-grid.mask.png",
+      "file_sha256": "9fccb99ed355bdc9a159452c48f70596570ee3bc2259534136a43fd26f5f93fd"
+    },
+    "agreement": {
+      "file": "agreement.mask.png",
+      "file_sha256": "681cf9c327ee9206033791e22dc5fc1d5a1da94259f1bfb690b9e00aeb255295"
+    },
+    "blind-union": {
+      "file": "blind-union.mask.png",
+      "file_sha256": "d0913b2bdc83cfa5ad39e2bc78fb0095cec43b51ae883a9027c55ecf35d2ee47"
+    },
+    "arithmetic-mean": {
+      "file": "arithmetic-mean.mask.png",
+      "file_sha256": "559711c28dbb2f5f6cba179b7a32223497131a9096b2dde5ff20dab81a6ceeb7"
+    },
+    "distance-weighted": {
+      "file": "distance-weighted.mask.png",
+      "file_sha256": "a61f99809a43535108181367abe9a66ab4289c46294807937c83bf99249eea28"
+    },
+    "center-preferred": {
+      "file": "center-preferred.mask.png",
+      "file_sha256": "8834912f5c4fe110d76902d8159c734851a79532d9bd424c2f8aef48b30bf9a2"
+    },
+    "seam-aware-source-recovery": {
+      "file": "seam-aware-source-recovery.mask.png",
+      "file_sha256": "1c465177ff0a573f2c225759b2e59eb7e7b7b5ad444f6ac298bc228826ebe644"
+    }
+  },
+  "full_page_board": {
+    "file": "full-page-offset-grid-comparison.jpg",
+    "file_sha256": "6c54c3b9ef86ef05567ef401308aa6a369b482d1ae1538162d16da4c9b5eb1bd"
+  },
+  "window_boards": [
+    {
+      "bbox_xyxy": [
+        180,
+        180,
+        700,
+        400
+      ],
+      "file": "window-01-offset-comparison.png",
+      "file_sha256": "69a5cfd77e380e1bb06f4c3625b3b5edac78d373d29b01e84ffb22582a53fe45"
+    },
+    {
+      "bbox_xyxy": [
+        1080,
+        3600,
+        1600,
+        3820
+      ],
+      "file": "window-02-offset-comparison.png",
+      "file_sha256": "93285b542c168c1c6e3d20778842e97b45d552fd150a71609676a7fe9c6e56f7"
+    },
+    {
+      "bbox_xyxy": [
+        360,
+        3600,
+        880,
+        3820
+      ],
+      "file": "window-03-offset-comparison.png",
+      "file_sha256": "c43336678a853a0c6b37b4590757923a788ca68e4ecea9cb00b2ef121cfbc1e7"
+    },
+    {
+      "bbox_xyxy": [
+        1440,
+        3600,
+        1960,
+        3820
+      ],
+      "file": "window-04-offset-comparison.png",
+      "file_sha256": "9e5f363c21cfc3996855226aead6234cf8bc60ddea0bc214b081e3a6cb4b9489"
+    },
+    {
+      "bbox_xyxy": [
+        0,
+        900,
+        520,
+        1120
+      ],
+      "file": "window-05-offset-comparison.png",
+      "file_sha256": "fef115eb1daf24a932468516053004296d08ace65cf302de3a9b4c85afb630d2"
+    },
+    {
+      "bbox_xyxy": [
+        360,
+        360,
+        880,
+        580
+      ],
+      "file": "window-06-offset-comparison.png",
+      "file_sha256": "24b9db7f2ac7a368044733812c2113572ad2174aaaa4150a05185948aeaeeb33"
+    },
+    {
+      "bbox_xyxy": [
+        540,
+        180,
+        1060,
+        400
+      ],
+      "file": "window-07-offset-comparison.png",
+      "file_sha256": "d3ce90dbcf0a7a24d0efebe1e8d4f5b27d744c436d40d84144c683ee60516320"
+    },
+    {
+      "bbox_xyxy": [
+        2340,
+        3420,
+        2860,
+        3640
+      ],
+      "file": "window-08-offset-comparison.png",
+      "file_sha256": "9d645e669d387c971d46939572062f03745a1fa107404ce544f7a37dd38da1cb"
+    }
+  ],
+  "runtime_seconds": 7.3934910419993685
+}

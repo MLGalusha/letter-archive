@@ -1,0 +1,79 @@
+{
+  "schema_version": "handwriting-cloud-seed.v1",
+  "created_at": "2026-08-09",
+  "branch": "handwriting-cloud-handoff",
+  "evidence_visibility": "acting-safe-source-and-frozen-software-output-only",
+  "sealed_human_evidence_included": false,
+  "purpose": "Minimal cloud-portable evidence needed to reproduce the current page-012 checkpoint and start independent replication without transferring the full local artifact archive.",
+  "acting_safe_sources": [
+    {
+      "page_id": "001-18881103-L01-01",
+      "role": "hard-clutter-and-faint independent challenger",
+      "path": "experiments/word-envelope-shrink-wrap-poc/workspaces/word-ink-ground-truth-v1/collections/001/18881103/L01/pages/001-18881103-L01-01/runs/run-cfd4cf589c5c/source/working.png",
+      "file_sha256": "0bf222b2413e0c0f91b3f46519845b2ff32abf8e0f5e91e0f5634acfc8840b6d",
+      "bytes": 10624343
+    },
+    {
+      "page_id": "002-19001113-L01-02",
+      "role": "medium-folded-handwriting independent challenger",
+      "path": "experiments/word-envelope-shrink-wrap-poc/workspaces/word-ink-ground-truth-v1/collections/002/19001113/L01/pages/002-19001113-L01-02/runs/run-6b217db34f1c/source/working.png",
+      "file_sha256": "570a51ae974c545fd9c5d2ac011c282ca0ff4f88fcd58cc713bc56d454b849af",
+      "bytes": 12102030
+    },
+    {
+      "page_id": "003-18860314-L01-01",
+      "role": "extreme-faint-development source",
+      "path": "experiments/word-envelope-shrink-wrap-poc/workspaces/word-ink-ground-truth-v1/collections/003/18860314/L01/pages/003-18860314-L01-01/runs/run-4111a8cd75be/source/working.png",
+      "file_sha256": "ac21aa38dbff33823d08e156b214355d85a55a3c8bbdccc0228738b70e41d027",
+      "bytes": 9116019
+    },
+    {
+      "page_id": "012-18630108-L01-04",
+      "role": "losslessly upright current development source",
+      "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/kraken7-layout-page012-v1/012-18630108-L01-04/prepared-exif-transposed.png",
+      "file_sha256": "de09e79aa073f8f107a341f3ca8e17bb6d9ead1bb89c3b7dce3332905bfd6841",
+      "rgb_pixel_sha256": "8d1809fb5a7de000d474d6d8e04352f879b9c5242a7fcfd3c50fda06d64d4f8b",
+      "bytes": 13773286
+    }
+  ],
+  "current_page_012_records": [
+    {
+      "record_id": "frozen-eynollah-probability",
+      "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/best-ink-pipeline-cohort-v1/probabilities/012-18630108-L01-04/experiment.json",
+      "primary_file": "experiments/word-envelope-shrink-wrap-poc/artifacts/best-ink-pipeline-cohort-v1/probabilities/012-18630108-L01-04/foreground-probability.float16.npy",
+      "primary_file_sha256": "2caf0a6e85b671cfdd335c31a3f6cfb1facac2abd120991053eebc6e8ac54646"
+    },
+    {
+      "record_id": "page-specific-local-ink-reference-v3",
+      "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/page-specific-local-ink-reference-v3/012-18630108-L01-04/top-left/experiment.json",
+      "record_sha256": "e50e1d3fb8bf2693c3b771777e9b3741c8d294e75c7b3b911b6d78c6c3d63668",
+      "score_file_sha256": "fa704ad1dae14c88f20fd2eb1f6327b6201df07bb79022de7e4f95c3f0523d59"
+    },
+    {
+      "record_id": "kraken7-layout-page012-v1",
+      "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/kraken7-layout-page012-v1/012-18630108-L01-04/experiment.json",
+      "record_sha256": "82ddcde07a20d38493e0f33df2bb955336d1f70b02d704856c8a70076cd44344",
+      "upright_provider_sha256": "e113ed25e7da8593e20cbede8217c7a92ca7a9b5b859c5c9ae7f4cd91c640693",
+      "kraken_blla_model_sha256": "77a638a83c9e535620827a09e410ed36391e9e8e8126d5796a0f15b978186056"
+    },
+    {
+      "record_id": "kraken-stroke-adaptive-recovery-v3-m55",
+      "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/Kraken-stroke-adaptive-recovery-v3-m55/012-18630108-L01-04/top-left/experiment.json",
+      "record_sha256": "1bc4d60ec58477e623b38358cde636e0e9d87bc4dabd279a6e1b422ac91b6c1d",
+      "group_ids_file_sha256": "1a7b03b5caa85cfc740fcc95cada09cce2920319e8b9656917ce31f480d07bbd"
+    },
+    {
+      "record_id": "eynollah-taught-group-ranking-v1",
+      "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-taught-group-ranking-v1/012-18630108-L01-04/top-left/experiment.json",
+      "record_sha256": "3c8444c8b34119fa6be010019f4bb2fa7838412eaa2a8eaddafca129c219313e",
+      "board_file_sha256": "38a5d1a1cd2c8080d7a0004dd534eb151e4aa5887c405af9afa9c9561d835722"
+    }
+  ],
+  "excluded": [
+    "completed human pages and sealed evaluation artifacts",
+    "the approximately 1.8 GiB complete local POC artifact tree",
+    "the approximately 1.1 GiB complete local application storage tree",
+    "external model caches, which the cloud setup downloads from pinned sources",
+    "unrelated dirty application changes from the local rotated-region-recovery worktree"
+  ]
+}

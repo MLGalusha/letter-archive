@@ -1,0 +1,258 @@
+{
+  "schema_version": "body-corridor-recovery.v1",
+  "evidence_visibility": "acting-safe-source-and-frozen-model-output-only",
+  "sealed_human_evidence_used": false,
+  "hypothesis": "model-derived per-line x bounds prevent recovery where the model misses an entire line start",
+  "controlled_change": "inherit only the robust left body margin; keep source evidence and thresholds fixed",
+  "inputs": {
+    "source": "/Users/masongalusha/Workspace/projects/letter-archive/backend/storage/collections/012/18630108/L01/012-18630108-L01-04.jpg",
+    "source_sha256": "5be260c09b90a70cc077ae7b5f2f3e545685ac81289afd8c4ff260d22ffc9225",
+    "probability": "experiments/word-envelope-shrink-wrap-poc/artifacts/best-ink-pipeline-cohort-v1/probabilities/012-18630108-L01-04/foreground-probability.float16.npy",
+    "probability_file_sha256": "2caf0a6e85b671cfdd335c31a3f6cfb1facac2abd120991053eebc6e8ac54646",
+    "probability_float32_pixel_sha256": "b40e42cd6470ea029c48698ac3299ee2849ab0933dcecd343d57cc27d1061bf7"
+  },
+  "crop_bbox_xyxy": [
+    180,
+    80,
+    1700,
+    760
+  ],
+  "corridor": {
+    "body_band_count": 21,
+    "body_left_edges": [
+      695,
+      701,
+      293,
+      282,
+      276,
+      277,
+      347,
+      445,
+      511,
+      342,
+      340,
+      309,
+      285,
+      288,
+      335,
+      348,
+      331,
+      321,
+      329,
+      327,
+      842
+    ],
+    "inherited_left_x": 282,
+    "affected_band_count": 18,
+    "affected_bands": [
+      {
+        "original_bbox_xyxy": [
+          695,
+          165,
+          2603,
+          312
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          701,
+          284,
+          2320,
+          403
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          293,
+          359,
+          2287,
+          427
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          347,
+          676,
+          2609,
+          834
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          445,
+          794,
+          2507,
+          926
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          511,
+          898,
+          3000,
+          1045
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          342,
+          999,
+          3000,
+          1366
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          340,
+          1315,
+          3000,
+          1458
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          309,
+          1420,
+          2997,
+          1582
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          285,
+          1540,
+          3000,
+          2047
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          288,
+          2014,
+          1720,
+          2154
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          335,
+          2178,
+          2587,
+          2455
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          348,
+          2410,
+          2003,
+          2481
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          331,
+          2432,
+          2599,
+          2564
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          321,
+          2519,
+          3000,
+          3252
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          329,
+          3198,
+          3000,
+          3527
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          327,
+          3478,
+          3000,
+          3611
+        ],
+        "new_left": 282
+      },
+      {
+        "original_bbox_xyxy": [
+          842,
+          3622,
+          2592,
+          3693
+        ],
+        "new_left": 282
+      }
+    ],
+    "added_search_pixels": 252587
+  },
+  "metrics": {
+    "current": {
+      "pixels": 776517,
+      "fraction": 0.06470975,
+      "components": 1994,
+      "components_ge_3px": 1467,
+      "components_ge_12px": 1109,
+      "median_component_pixels": 21.0,
+      "mask_uint8_pixel_sha256": "4a0a14415b76340e600177a3e4fef9ed7846667ae51426787fbef3ab4ee3c812"
+    },
+    "expanded": {
+      "pixels": 776539,
+      "fraction": 0.06471158333333334,
+      "components": 1997,
+      "components_ge_3px": 1468,
+      "components_ge_12px": 1109,
+      "median_component_pixels": 21.0,
+      "mask_uint8_pixel_sha256": "addbfefd5f454ed7588f1844498f6f634f1ff3745c4c1f5efb293e860392d0d0"
+    },
+    "new_pixels": 22,
+    "new_pixels_in_crop": 0,
+    "new_pixels_by_model_probability": {
+      "p_ge_0.50": 0,
+      "p_0.20_0.50": 22,
+      "p_0.01_0.20": 0,
+      "p_lt_0.01": 0
+    },
+    "new_paper_proxy_pixels": 0,
+    "new_pixels_by_tier": {
+      "model_core": 0,
+      "model_support": 22,
+      "conservative_source_recovery": 0,
+      "exploratory_source_recovery": 0
+    }
+  },
+  "guardrail": "No added pixel is treated as ground truth; visual stroke continuity and contamination must both be assessed.",
+  "outputs": {
+    "original-corridor.mask.png": "e59508c4b1fea769593bbf3b1abf0c3e1d16ee047552d36f0f12b267e3162e85",
+    "inherited-body-corridor.mask.png": "b8e21cb7f367555c44560679da66f506d5fed75d96b7093722697d4733e62108",
+    "old-gated-result.mask.png": "523db6200775c327c43c94ffca19d9addaabeddf968f4afcf060e83f9563db06",
+    "inherited-margin-result.mask.png": "679f68b6b61584c296b1adf0e26e8032e2767592ebe03f6eed2788b7a879399f",
+    "newly-admitted.mask.png": "a1c3fe2ec4dfd653b45b173831d1e193070ed8822c42f8ef2121d1ee05c5f180",
+    "top-left-corridor-ablation.png": "d052844c5f1d5fa2177986fe45065bc1f21b0e7cfa34478b962efa11a91c59cf"
+  },
+  "runtime_seconds": 13.502202750001743
+}

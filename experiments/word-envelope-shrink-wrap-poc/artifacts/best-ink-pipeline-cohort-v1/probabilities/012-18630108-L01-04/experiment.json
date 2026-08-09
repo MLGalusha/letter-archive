@@ -1,0 +1,98 @@
+{
+  "board": {
+    "file": "probability-threshold-board.png",
+    "file_sha256": "18e1ac36bebe8a9500602865c98f9f3c5b58b1d276a560f65505caf83486f26f"
+  },
+  "hard_reference_check": null,
+  "inference": {
+    "probability_dtype": "float16 on disk; float32 during inference and thresholding",
+    "released_decision": "argmax over two softmax channels",
+    "stitching": "released SBB 10%-of-model-width overlap discard"
+  },
+  "input": {
+    "file_sha256": "5be260c09b90a70cc077ae7b5f2f3e545685ac81289afd8c4ff260d22ffc9225",
+    "path": "/Users/masongalusha/Workspace/projects/letter-archive/backend/storage/collections/012/18630108/L01/012-18630108-L01-04.jpg",
+    "size_wh": [
+      3000,
+      4000
+    ]
+  },
+  "model": {
+    "architecture_observed": "ResNet-50 encoder, transformer block, and convolutional upsampling/skip decoder",
+    "foreground_channel": 1,
+    "input_shape": [
+      null,
+      448,
+      448,
+      3
+    ],
+    "label": "SBB/Eynollah hybrid CNN-Transformer binarization",
+    "layer_type_counts": {
+      "Activation": 56,
+      "Add": 32,
+      "BatchNormalization": 60,
+      "Concatenate": 5,
+      "Conv2D": 60,
+      "Dense": 16,
+      "Dropout": 16,
+      "InputLayer": 1,
+      "Lambda": 1,
+      "LayerNormalization": 16,
+      "MaxPooling2D": 1,
+      "MultiHeadAttention": 8,
+      "PatchEncoder": 1,
+      "Patches": 1,
+      "TFOpLambda": 1,
+      "UpSampling2D": 5,
+      "ZeroPadding2D": 7
+    },
+    "name": "model_1",
+    "output_shape": [
+      null,
+      448,
+      448,
+      2
+    ],
+    "parameters": 36988874,
+    "path": "/Volumes/InkModel/model",
+    "release": "2022-08-16",
+    "source": "https://huggingface.co/SBB/sbb_binarization/resolve/cfdf4446f8e33b2c743a66bf7c1a4686515442ae/saved_model/2022-08-16"
+  },
+  "page_id": "012-18630108-L01-04",
+  "probability": {
+    "file": "foreground-probability.float16.npy",
+    "file_sha256": "2caf0a6e85b671cfdd335c31a3f6cfb1facac2abd120991053eebc6e8ac54646",
+    "max": 1.0,
+    "mean": 0.05483746901154518,
+    "min": 1.4471523854808765e-06,
+    "quantiles": {
+      "0.5": 9.925357153406367e-05,
+      "0.9": 0.009260767046362155,
+      "0.95": 0.6138431608676893,
+      "0.99": 0.9998739957809448,
+      "0.995": 0.9999839067459106,
+      "0.999": 0.9999991655349731
+    }
+  },
+  "runtime": {
+    "device": "CPU",
+    "host_arch": "arm64",
+    "tensorflow": "2.12.0",
+    "wall_seconds": 47.89137191700138
+  },
+  "schema_version": "sbb-probability-sweep.v1",
+  "sealed_human_evidence_used": false,
+  "thresholds": {
+    "0.50": {
+      "components": 2182,
+      "components_ge_3px": 1665,
+      "components_ge_8px": 1376,
+      "file": "foreground-p0.50.png",
+      "file_sha256": "b1bbe557acaa859f066e7070ec882654ef44440879c868ec050e441b04d4b2f8",
+      "mask_pixel_sha256": "c9b0e4abaab1c4a5cfd11af125bdf590e28e212d1975aee41c8314fecf7b2749",
+      "median_component_pixels": 45.0,
+      "page_fraction": 0.05348675,
+      "pixels": 641841
+    }
+  }
+}

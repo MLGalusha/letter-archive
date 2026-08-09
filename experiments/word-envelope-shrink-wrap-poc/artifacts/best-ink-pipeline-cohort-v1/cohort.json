@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "cohort_id": "best-ink-pipeline-cohort-v1",
+  "frozen_at": "2026-08-09",
+  "evidence_visibility": "acting-safe-source-only",
+  "sealed_human_evidence_opened": false,
+  "selection_rule": "Predeclared diversity cohort spanning known faint-ink failures, folds, stains, clutter, and an easy control. Frozen before new inference or parameter selection.",
+  "pages": [
+    {
+      "page_id": "001-18881103-L01-01",
+      "difficulty_role": "hard-clutter-and-faint",
+      "source": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/workspaces/word-ink-ground-truth-v1/collections/001/18881103/L01/pages/001-18881103-L01-01/runs/run-cfd4cf589c5c/source/working.png",
+      "source_sha256": "0bf222b2413e0c0f91b3f46519845b2ff32abf8e0f5e91e0f5634acfc8840b6d",
+      "width": 2588,
+      "height": 3632,
+      "declared_challenges": ["faint handwriting", "glass-weight rings", "page edge"]
+    },
+    {
+      "page_id": "002-19001113-L01-02",
+      "difficulty_role": "medium-folded-handwriting",
+      "source": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/workspaces/word-ink-ground-truth-v1/collections/002/19001113/L01/pages/002-19001113-L01-02/runs/run-6b217db34f1c/source/working.png",
+      "source_sha256": "570a51ae974c545fd9c5d2ac011c282ca0ff4f88fcd58cc713bc56d454b849af",
+      "width": 3000,
+      "height": 4000,
+      "declared_challenges": ["folds", "dense cursive", "detached marks"]
+    },
+    {
+      "page_id": "003-18860314-L01-01",
+      "difficulty_role": "extreme-faint-development",
+      "source": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/workspaces/word-ink-ground-truth-v1/collections/003/18860314/L01/pages/003-18860314-L01-01/runs/run-4111a8cd75be/source/working.png",
+      "source_sha256": "ac21aa38dbff33823d08e156b214355d85a55a3c8bbdccc0228738b70e41d027",
+      "width": 2834,
+      "height": 3780,
+      "declared_challenges": ["near-erased writing", "ruling", "fold", "weak disconnected strokes"]
+    },
+    {
+      "page_id": "014-18780127-L01-04",
+      "difficulty_role": "hard-fold-stain-clutter",
+      "source": "/Users/masongalusha/Workspace/projects/letter-archive/backend/storage/collections/014/18780127/L01/014-18780127-L01-04.jpg",
+      "source_sha256": "a52f9665c362880699636c45bd6533767c8ff46df996affd6cfca856ed2b2d69",
+      "width": 1200,
+      "height": 1600,
+      "declared_challenges": ["dense dark handwriting", "folds", "stains", "external background"]
+    },
+    {
+      "page_id": "012-18630108-L01-04",
+      "difficulty_role": "extreme-faint-brown-spread",
+      "source": "/Users/masongalusha/Workspace/projects/letter-archive/backend/storage/collections/012/18630108/L01/012-18630108-L01-04.jpg",
+      "source_sha256": "5be260c09b90a70cc077ae7b5f2f3e545685ac81289afd8c4ff260d22ffc9225",
+      "width": 4000,
+      "height": 3000,
+      "declared_challenges": ["very faint brown ink", "two-page spread", "uneven illumination", "cut page edge"]
+    },
+    {
+      "page_id": "013-19441223-L01-03",
+      "difficulty_role": "medium-mixed-density-stain",
+      "source": "/Users/masongalusha/Workspace/projects/letter-archive/backend/storage/collections/013/19441223/L01/013-19441223-L01-03.jpg",
+      "source_sha256": "3a814609203b6875220689c657f415f34930418f49e37f8633fe4329381ba7c2",
+      "width": 4000,
+      "height": 3000,
+      "declared_challenges": ["mixed strong and faint handwriting", "brown circular stain", "blue-black ink"]
+    },
+    {
+      "page_id": "009-19470827-L01-03",
+      "difficulty_role": "easy-typewritten-control",
+      "source": "/Users/masongalusha/Workspace/projects/letter-archive/backend/storage/collections/009/19470827/L01/009-19470827-L01-03.jpg",
+      "source_sha256": "caabd88d59cf9aaf27856422fc4ed013248c336507dfd9cf33f266f0616983d5",
+      "width": 4000,
+      "height": 3000,
+      "declared_challenges": ["clean typewritten control", "page boundary"]
+    }
+  ]
+}

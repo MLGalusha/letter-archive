@@ -165,6 +165,53 @@ Lowering the hybrid threshold from `0.50` to `0.20` adds between 33,086 and
 the old convolutional checkpoint to the hybrid. Model architecture/checkpoint
 choice is therefore the major gain; a low global threshold is secondary.
 
+## Independent Kraken-line conditioning on page 001
+
+The first composition experiment used the existing frozen 14-line Kraken layout
+for page 001. Its prepared-pixel coordinate space exactly matches the upright
+source and hybrid mask. It did not derive geometry from the hybrid output and did
+not use human ownership evidence.
+
+Artifact root:
+
+`/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-line-conditioning-v1/001-18881103-L01-01`
+
+Direct pixel intersection with the union of Kraken line polygons removed both
+glass rings and almost all page-edge foreground:
+
+| Polygon expansion | Selected hybrid pixels | Raw hybrid retained |
+| ---: | ---: | ---: |
+| 0 px | 194,273 | 78.15% |
+| 15 px | 200,631 | 80.71% |
+| 30 px | 206,873 | 83.22% |
+| 60 px | 224,049 | 90.13% |
+
+This confirmed that the strong line geometry can exclude high-confidence
+non-text objects. It also reproduced the prior spikage failure: pixel clipping
+visibly cuts real strokes wherever a line polygon is imperfect. The line should
+decide component admission, not crop accepted ink.
+
+A second policy preserved each admitted connected component whole. Using a
+30-pixel corridor:
+
+| Minimum component overlap | Selected pixels | Components accepted | Result |
+| ---: | ---: | ---: | --- |
+| 10% | 237,344 | 355/444 | Too permissive; bottom ring and page edge return |
+| 25% | 204,368 | 353/444 | Promising page-bound result; both rings and page edge excluded, components remain whole |
+| 50% | 201,445 | 352/444 | Too strict; removes one additional 2,923-pixel writing component near the top line |
+
+At 25%, the rejected set contains 44,228 pixels. The two glass rings and vertical
+page edge account for 36,256 of them (81.98%), based on exact component areas and
+source-coordinate boxes preserved in the manifest. This is a materially better
+operation than pixel clipping: geometry rejects complete foreign objects without
+creating broken stroke boundaries.
+
+This remains a one-page development result. Kraken found 14 lines, so any missed
+salutation, signature, marginalia, page number, or rotated writing needs a
+residual/alternate-orientation stream. It must not be deleted simply for being
+outside the main line union. The `30 px / 25%` policy is promoted only as a
+held-out candidate for pages with independently frozen line geometry.
+
 ## The page-adaptive “vector” idea
 
 The user's vector idea is technically plausible if “vector” means an embedding
@@ -283,9 +330,9 @@ version and exact proposal that the human corrected.
 
 ## Next bounded experiments
 
-1. On the same three pages, intersect hybrid `p0.50` with extracted-page,
-   text-region, and fitted-line corridors. Verify that 001's glass rings/page edge
-   disappear without erasing ascenders, descenders, signatures, or marginalia.
+1. Freeze the `30 px / 25%` whole-component line policy on independent pages with
+   existing line geometry. Preserve a separate residual stream for writing not
+   represented by any detected line.
 2. Build a seed-driven page-adaptive graph propagation baseline and compare it
    with unrestricted source-color growth and threshold `0.20`.
 3. Download and hash the current Eynollah 2023 default hybrid checkpoint; repeat

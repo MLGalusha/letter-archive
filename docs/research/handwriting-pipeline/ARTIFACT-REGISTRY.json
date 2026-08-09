@@ -544,6 +544,21 @@
       "identity_sha256": null,
       "predecessor_ids": ["20260809-sbb-probability-sweep"],
       "summary": "The hybrid retained 96.93% of old p0.50 ink and added 159,697 coherent pixels on faint page 003, generalized strongly to folded page 002, and exposed high-confidence glass-ring/page-edge false foreground on 001. Promote probability for geometry-conditioned testing, not as handwriting or ownership truth."
+    },
+    {
+      "record_id": "20260809-eynollah-kraken-line-conditioning-v1",
+      "title": "Eynollah hybrid whole-component admission by Kraken line geometry",
+      "evidence_role": "run_state",
+      "decision": "candidate_heldout",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-line-conditioning-v1/001-18881103-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-line-conditioning-v1/001-18881103-L01-01/experiment.json",
+        "file_sha256": "a7f80b1b74927b694239ad4dc27d3f6d98d15d89c0de0fb234fc287969cb4df1"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-eynollah-hybrid-binarization-cohort"],
+      "summary": "Pixel clipping removed non-text but broke strokes. A 30px line corridor with whole-component overlap >=25% retained 82.21% of hybrid ink while visually excluding both glass rings and the page edge; hold for independent-page testing with residual safeguards."
     }
   ]
 }

@@ -1,0 +1,5 @@
+# Generated experiment products stay local unless deliberately force-added as
+# a hash-bound research record or representative visual receipt.
+artifacts/
+output/
+test-results/

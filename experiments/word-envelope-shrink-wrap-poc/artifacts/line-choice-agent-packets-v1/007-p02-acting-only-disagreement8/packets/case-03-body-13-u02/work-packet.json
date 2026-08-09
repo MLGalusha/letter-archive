@@ -1,0 +1,233 @@
+{
+  "allowed_response": {
+    "action": [
+      "choose",
+      "choose_and_toggle",
+      "defer"
+    ],
+    "add_component_ids": "zero or more IDs from toggleable_components",
+    "chosen_selected_pixel_sha256": "required for choose or choose_and_toggle",
+    "confidence": [
+      "high",
+      "medium",
+      "low"
+    ],
+    "note": "brief visible-evidence rationale",
+    "remove_component_ids": "zero or more IDs already present in the chosen proposal"
+  },
+  "distinct_proposals": [
+    {
+      "fit_statuses": [
+        "pass"
+      ],
+      "proposal_ids": [
+        "transcript_bbox_xywh|line_midpoint_centroid"
+      ],
+      "selected_component_ids": [
+        248,
+        253,
+        258
+      ],
+      "selected_pixel_sha256": "0e611657d44d482ac66091d13a5b45f14154890bb6d4a66112852dc1aa881677",
+      "selected_pixels": 7306
+    },
+    {
+      "fit_statuses": [
+        "pass"
+      ],
+      "proposal_ids": [
+        "reviewed_bbox_xywh|line_midpoint_centroid"
+      ],
+      "selected_component_ids": [
+        248,
+        253,
+        256,
+        258
+      ],
+      "selected_pixel_sha256": "14c6a2982e0ecb8e38a50462f5507ce5521332e75c5d9ec4d30130e1a60db922",
+      "selected_pixels": 8453
+    },
+    {
+      "fit_statuses": [
+        "pass"
+      ],
+      "proposal_ids": [
+        "reviewed_bbox_xywh|global_exclusive"
+      ],
+      "selected_component_ids": [
+        232,
+        237,
+        238,
+        240
+      ],
+      "selected_pixel_sha256": "5af2ce325cb103a9a9296d2a6abc8f2728e517d5991eafe9d7125ca935eefaf5",
+      "selected_pixels": 666
+    },
+    {
+      "fit_statuses": [
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass"
+      ],
+      "proposal_ids": [
+        "reviewed_bbox_xywh|line_locator_strip",
+        "reviewed_bbox_xywh|line_valley_centroid",
+        "transcript_bbox_xywh|global_exclusive",
+        "transcript_bbox_xywh|line_locator_strip",
+        "transcript_bbox_xywh|line_valley_centroid"
+      ],
+      "selected_component_ids": [
+        253
+      ],
+      "selected_pixel_sha256": "d77cf2dc2fa79d1106da453a418b53833a3f983d015c88527dc0118b6ef12a2b",
+      "selected_pixels": 5678
+    }
+  ],
+  "evidence": {
+    "proposal_grid": {
+      "file_sha256": "3509723e981df14ef2f0efa4ca6af55cf540423b86d804334560f356c48b2a13",
+      "path": "packets/case-03-body-13-u02/proposal-grid.jpg"
+    },
+    "source_context": {
+      "file_sha256": "c7dfd828068efcbd59f1796e5eef1232f9fef2d4b55d2fccabdc1b19d8e14d74",
+      "path": "packets/case-03-body-13-u02/source-context.jpg"
+    }
+  },
+  "evidence_role": "acting_only_source_clean_line_and_frozen_proposals",
+  "instructions": [
+    "Select only the ink belonging to the named unit.",
+    "Use the centerline for vertical context and component IDs for exact ownership edits.",
+    "Do not claim a component merely because it increases recovered ink.",
+    "Consider neighboring words and defer when a whole component cannot express the boundary."
+  ],
+  "neighbor_units": [
+    {
+      "text": "thinking",
+      "unit_id": "body-13-U01",
+      "word_order": 1
+    },
+    {
+      "text": "and",
+      "unit_id": "body-13-U02",
+      "word_order": 2
+    },
+    {
+      "text": "loving",
+      "unit_id": "body-13-U03",
+      "word_order": 3
+    }
+  ],
+  "packet_id": "case-03-body-13-u02",
+  "packet_sha256": "9638145be0976d74af0a2c28e9b0985b541fe7215c7f889f0ecc98888abbf7c6",
+  "provenance": {
+    "clean_pixel_sha256": "3283b1d85cedbf6479f865f3ad2f97b014cc28176862f0a964821bf015c8ed66",
+    "frozen_candidate_file_sha256": "1a6158990dd367fcf137e3629a158d2b61be759c2455d2533a85aadaf4fc26ef",
+    "frozen_candidate_set_sha256": "d4d9777c6c2d14fd8f792a2d729ceec24a42b8ac2cbfc20d2d68c27837542510"
+  },
+  "schema_version": "line-choice-agent-work-packet.v1",
+  "selection_reason": {
+    "acting_gate_disagrees": true,
+    "disagreement_pixels": 9119,
+    "disputed_component_count": 8,
+    "distinct_proposal_count": 4,
+    "policy": "software_disagreement_only"
+  },
+  "toggleable_components": [
+    {
+      "bbox_xywh": [
+        1103,
+        2259,
+        43,
+        38
+      ],
+      "component_id": 232,
+      "pixels": 322
+    },
+    {
+      "bbox_xywh": [
+        1271,
+        2283,
+        37,
+        26
+      ],
+      "component_id": 237,
+      "pixels": 342
+    },
+    {
+      "bbox_xywh": [
+        1122,
+        2290,
+        1,
+        1
+      ],
+      "component_id": 238,
+      "pixels": 1
+    },
+    {
+      "bbox_xywh": [
+        1117,
+        2293,
+        1,
+        1
+      ],
+      "component_id": 240,
+      "pixels": 1
+    },
+    {
+      "bbox_xywh": [
+        1020,
+        2370,
+        18,
+        21
+      ],
+      "component_id": 248,
+      "pixels": 210
+    },
+    {
+      "bbox_xywh": [
+        1125,
+        2398,
+        299,
+        82
+      ],
+      "component_id": 253,
+      "pixels": 5678
+    },
+    {
+      "bbox_xywh": [
+        941,
+        2420,
+        84,
+        29
+      ],
+      "component_id": 256,
+      "pixels": 1147
+    },
+    {
+      "bbox_xywh": [
+        996,
+        2433,
+        89,
+        83
+      ],
+      "component_id": 258,
+      "pixels": 1418
+    }
+  ],
+  "unit": {
+    "line_id": "body-13",
+    "text": "and",
+    "unit_id": "body-13-U02",
+    "word_order": 2
+  },
+  "visual_legend": {
+    "amber_box_and_number": "toggleable component in the union of proposals",
+    "cyan_box": "transcript rough locator",
+    "green": "component selected by that proposal",
+    "purple_box": "reviewed/Kraken rough locator",
+    "red_line": "fitted body centerline"
+  }
+}
+

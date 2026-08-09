@@ -1,0 +1,349 @@
+{
+  "analysis_sha256": "27c8e13201bd9e359c339a1ed115b1b366995488a3715fe2247ef453a3014a96",
+  "audit_definition": {
+    "candidate": "move one already-claimed whole Clean component to another scorable word on the same fitted line",
+    "nonregressing": "high-quality count does not fall; foreign, missed, and unlabelled pixels do not increase; at least one objective improves",
+    "target_directed": "recipient contains more target pixels from the component than the current owner and contains at least one"
+  },
+  "clean_mask": {
+    "file_sha256": "69620d07dd04c4e5da08f5139d807e8da78bcb7dd6028c4c4e226871d92cbfff",
+    "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/agent-ink-variants-v2/007-p02-v4-quality/clean.mask.png",
+    "pixel_sha256": "3283b1d85cedbf6479f865f3ad2f97b014cc28176862f0a964821bf015c8ed66"
+  },
+  "configurations": [
+    {
+      "baseline_high_quality_count": 55,
+      "nonregressing_transfer_count": 27,
+      "policy": "global_exclusive",
+      "positive_high_quality_transfer_count": 5,
+      "positive_transfer_direction_counts": {
+        "to_earlier_word": 3,
+        "to_later_word": 2
+      },
+      "positive_transfers": [
+        {
+          "component_id": 5,
+          "direction": "to_earlier_word",
+          "foreign_pixel_delta": -2780,
+          "high_quality_delta": 2,
+          "missed_pixel_delta": -2780,
+          "owner_text": "guess",
+          "owner_unit_id": "body-01-U06",
+          "recipient_text": "I",
+          "recipient_unit_id": "body-01-U05",
+          "unlabelled_pixel_delta": 0
+        },
+        {
+          "component_id": 71,
+          "direction": "to_earlier_word",
+          "foreign_pixel_delta": -2355,
+          "high_quality_delta": 1,
+          "missed_pixel_delta": -2355,
+          "owner_text": "I",
+          "owner_unit_id": "body-06-U03",
+          "recipient_text": "you.",
+          "recipient_unit_id": "body-06-U02",
+          "unlabelled_pixel_delta": 0
+        },
+        {
+          "component_id": 106,
+          "direction": "to_earlier_word",
+          "foreign_pixel_delta": -8763,
+          "high_quality_delta": 2,
+          "missed_pixel_delta": -8763,
+          "owner_text": "write",
+          "owner_unit_id": "body-08-U03",
+          "recipient_text": "will",
+          "recipient_unit_id": "body-08-U02",
+          "unlabelled_pixel_delta": 0
+        },
+        {
+          "component_id": 149,
+          "direction": "to_later_word",
+          "foreign_pixel_delta": -5985,
+          "high_quality_delta": 1,
+          "missed_pixel_delta": -5985,
+          "owner_text": "felt",
+          "owner_unit_id": "body-10-U01",
+          "recipient_text": "like",
+          "recipient_unit_id": "body-10-U02",
+          "unlabelled_pixel_delta": 0
+        },
+        {
+          "component_id": 159,
+          "direction": "to_later_word",
+          "foreign_pixel_delta": -3192,
+          "high_quality_delta": 1,
+          "missed_pixel_delta": -3192,
+          "owner_text": "do.",
+          "owner_unit_id": "body-10-U04",
+          "recipient_text": "I",
+          "recipient_unit_id": "body-10-U05",
+          "unlabelled_pixel_delta": 0
+        }
+      ]
+    },
+    {
+      "baseline_high_quality_count": 57,
+      "nonregressing_transfer_count": 29,
+      "policy": "line_locator_strip",
+      "positive_high_quality_transfer_count": 4,
+      "positive_transfer_direction_counts": {
+        "to_earlier_word": 2,
+        "to_later_word": 2
+      },
+      "positive_transfers": [
+        {
+          "component_id": 5,
+          "direction": "to_earlier_word",
+          "foreign_pixel_delta": -2780,
+          "high_quality_delta": 2,
+          "missed_pixel_delta": -2780,
+          "owner_text": "guess",
+          "owner_unit_id": "body-01-U06",
+          "recipient_text": "I",
+          "recipient_unit_id": "body-01-U05",
+          "unlabelled_pixel_delta": 0
+        },
+        {
+          "component_id": 71,
+          "direction": "to_earlier_word",
+          "foreign_pixel_delta": -2355,
+          "high_quality_delta": 1,
+          "missed_pixel_delta": -2355,
+          "owner_text": "I",
+          "owner_unit_id": "body-06-U03",
+          "recipient_text": "you.",
+          "recipient_unit_id": "body-06-U02",
+          "unlabelled_pixel_delta": 0
+        },
+        {
+          "component_id": 149,
+          "direction": "to_later_word",
+          "foreign_pixel_delta": -5985,
+          "high_quality_delta": 1,
+          "missed_pixel_delta": -5985,
+          "owner_text": "felt",
+          "owner_unit_id": "body-10-U01",
+          "recipient_text": "like",
+          "recipient_unit_id": "body-10-U02",
+          "unlabelled_pixel_delta": 0
+        },
+        {
+          "component_id": 159,
+          "direction": "to_later_word",
+          "foreign_pixel_delta": -3192,
+          "high_quality_delta": 1,
+          "missed_pixel_delta": -3192,
+          "owner_text": "do.",
+          "owner_unit_id": "body-10-U04",
+          "recipient_text": "I",
+          "recipient_unit_id": "body-10-U05",
+          "unlabelled_pixel_delta": 0
+        }
+      ]
+    },
+    {
+      "baseline_high_quality_count": 54,
+      "nonregressing_transfer_count": 30,
+      "policy": "line_midpoint_centroid",
+      "positive_high_quality_transfer_count": 7,
+      "positive_transfer_direction_counts": {
+        "to_earlier_word": 3,
+        "to_later_word": 4
+      },
+      "positive_transfers": [
+        {
+          "component_id": 49,
+          "direction": "to_later_word",
+          "foreign_pixel_delta": -533,
+          "high_quality_delta": 2,
+          "missed_pixel_delta": -533,
+          "owner_text": "a",
+          "owner_unit_id": "body-04-U01",
+          "recipient_text": "answer.",
+          "recipient_unit_id": "body-04-U02",
+          "unlabelled_pixel_delta": 0
+        },
+        {
+          "component_id": 69,
+          "direction": "to_later_word",
+          "foreign_pixel_delta": -3074,
+          "high_quality_delta": 1,
+          "missed_pixel_delta": -3074,
+          "owner_text": "Love",
+          "owner_unit_id": "body-06-U01",
+          "recipient_text": "you.",
+          "recipient_unit_id": "body-06-U02",
+          "unlabelled_pixel_delta": 0
+        },
+        {
+          "component_id": 71,
+          "direction": "to_earlier_word",
+          "foreign_pixel_delta": -2355,
+          "high_quality_delta": 1,
+          "missed_pixel_delta": -2355,
+          "owner_text": "I",
+          "owner_unit_id": "body-06-U03",
+          "recipient_text": "you.",
+          "recipient_unit_id": "body-06-U02",
+          "unlabelled_pixel_delta": 0
+        },
+        {
+          "component_id": 127,
+          "direction": "to_earlier_word",
+          "foreign_pixel_delta": -258,
+          "high_quality_delta": 1,
+          "missed_pixel_delta": -258,
+          "owner_text": "thing,",
+          "owner_unit_id": "body-08-U05",
+          "recipient_text": "any",
+          "recipient_unit_id": "body-08-U04",
+          "unlabelled_pixel_delta": 0
+        },
+        {
+          "component_id": 149,
+          "direction": "to_later_word",
+          "foreign_pixel_delta": -5985,
+          "high_quality_delta": 1,
+          "missed_pixel_delta": -5985,
+          "owner_text": "felt",
+          "owner_unit_id": "body-10-U01",
+          "recipient_text": "like",
+          "recipient_unit_id": "body-10-U02",
+          "unlabelled_pixel_delta": 0
+        },
+        {
+          "component_id": 172,
+          "direction": "to_later_word",
+          "foreign_pixel_delta": -1685,
+          "high_quality_delta": 1,
+          "missed_pixel_delta": -1685,
+          "owner_text": "I",
+          "owner_unit_id": "body-10-U05",
+          "recipient_text": "mean",
+          "recipient_unit_id": "body-10-U06",
+          "unlabelled_pixel_delta": 0
+        },
+        {
+          "component_id": 258,
+          "direction": "to_earlier_word",
+          "foreign_pixel_delta": -1418,
+          "high_quality_delta": 1,
+          "missed_pixel_delta": -1418,
+          "owner_text": "and",
+          "owner_unit_id": "body-13-U02",
+          "recipient_text": "thinking",
+          "recipient_unit_id": "body-13-U01",
+          "unlabelled_pixel_delta": 0
+        }
+      ]
+    },
+    {
+      "baseline_high_quality_count": 56,
+      "nonregressing_transfer_count": 30,
+      "policy": "line_valley_centroid",
+      "positive_high_quality_transfer_count": 6,
+      "positive_transfer_direction_counts": {
+        "to_earlier_word": 3,
+        "to_later_word": 3
+      },
+      "positive_transfers": [
+        {
+          "component_id": 5,
+          "direction": "to_earlier_word",
+          "foreign_pixel_delta": -2780,
+          "high_quality_delta": 2,
+          "missed_pixel_delta": -2780,
+          "owner_text": "guess",
+          "owner_unit_id": "body-01-U06",
+          "recipient_text": "I",
+          "recipient_unit_id": "body-01-U05",
+          "unlabelled_pixel_delta": 0
+        },
+        {
+          "component_id": 24,
+          "direction": "to_earlier_word",
+          "foreign_pixel_delta": -3132,
+          "high_quality_delta": 2,
+          "missed_pixel_delta": -3132,
+          "owner_text": "you",
+          "owner_unit_id": "body-02-U03",
+          "recipient_text": "now",
+          "recipient_unit_id": "body-02-U02",
+          "unlabelled_pixel_delta": 0
+        },
+        {
+          "component_id": 71,
+          "direction": "to_earlier_word",
+          "foreign_pixel_delta": -2355,
+          "high_quality_delta": 1,
+          "missed_pixel_delta": -2355,
+          "owner_text": "I",
+          "owner_unit_id": "body-06-U03",
+          "recipient_text": "you.",
+          "recipient_unit_id": "body-06-U02",
+          "unlabelled_pixel_delta": 0
+        },
+        {
+          "component_id": 149,
+          "direction": "to_later_word",
+          "foreign_pixel_delta": -5985,
+          "high_quality_delta": 1,
+          "missed_pixel_delta": -5985,
+          "owner_text": "felt",
+          "owner_unit_id": "body-10-U01",
+          "recipient_text": "like",
+          "recipient_unit_id": "body-10-U02",
+          "unlabelled_pixel_delta": 0
+        },
+        {
+          "component_id": 159,
+          "direction": "to_later_word",
+          "foreign_pixel_delta": -3192,
+          "high_quality_delta": 1,
+          "missed_pixel_delta": -3192,
+          "owner_text": "do.",
+          "owner_unit_id": "body-10-U04",
+          "recipient_text": "I",
+          "recipient_unit_id": "body-10-U05",
+          "unlabelled_pixel_delta": 0
+        },
+        {
+          "component_id": 172,
+          "direction": "to_later_word",
+          "foreign_pixel_delta": -1685,
+          "high_quality_delta": 1,
+          "missed_pixel_delta": -1685,
+          "owner_text": "do.",
+          "owner_unit_id": "body-10-U04",
+          "recipient_text": "mean",
+          "recipient_unit_id": "body-10-U06",
+          "unlabelled_pixel_delta": 0
+        }
+      ]
+    }
+  ],
+  "evidence_role": "sealed_post_freeze_evaluation_only_never_acting_input",
+  "guardrails": [
+    "Direction counts are sealed oracle diagnostics, not proof of a processing policy.",
+    "Excluded merged targets do not participate.",
+    "Every configuration remains exclusive before each independent transfer."
+  ],
+  "schema_version": "semantic-exclusive-component-transfer-audit.v1",
+  "sealed_human_partition": {
+    "latest_state_file_sha256": "90a60fe1e635a14ae858852edf02191a19dd9b92af9481b2cbeb1f8ee0de3505",
+    "ownership_uint16_sha256": "57a2264935c81bcfd60ef1ac6848d689521abe6a2c5779999b59673a2cb3881c",
+    "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/source-color-selector-v2/007-p02-next-iteration-reset-23c97df1a695-reset-ba7be47e2edc"
+  },
+  "semantic_binding": {
+    "adjudication_sha256": "bdfd80d9eafe4568d192d4e426e5f5dd933123ebe4d77d84e0abd5c95bb62c97",
+    "file_sha256": "3c9030c7aaa08c457bc24dfa76ff367429e20d51e6152c1c8776459468f26a5e",
+    "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/semantic-binding-adjudication-v1/007-p02-completed-evaluator-v1/adjudicated-ledger.json"
+  },
+  "source_experiment": {
+    "experiment_sha256": "ebb8d735d4d32bd97a42b2448af44e9c1b4652506997980e7d3ba143d875feee",
+    "file_sha256": "ea30421d995e79751b664db72b5562b68c1a0825bd8edf1a728278a26f1bcfdd",
+    "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed/experiment.json"
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "blocked_markers": [
+    "human-ground-truth",
+    "source-color-selector-v2",
+    "archived-evaluation",
+    "sealed-component",
+    "sealed-recovery",
+    "hidden-target",
+    "neighbor-truth",
+    "target-mask",
+    "human_pixel_sha256",
+    "evaluation_human_word_number",
+    "foreign_human_word_pixels",
+    "\"evaluation\":"
+  ],
+  "files": [
+    {
+      "bytes": 202367,
+      "file_sha256": "3509723e981df14ef2f0efa4ca6af55cf540423b86d804334560f356c48b2a13",
+      "path": "proposal-grid.jpg"
+    },
+    {
+      "bytes": 289383,
+      "file_sha256": "c7dfd828068efcbd59f1796e5eef1232f9fef2d4b55d2fccabdc1b19d8e14d74",
+      "path": "source-context.jpg"
+    },
+    {
+      "bytes": 5551,
+      "file_sha256": "38667a7b910f22a52650b5edc318e6f43c5ce491d8c3d491cf2b6b5ca0a44511",
+      "path": "work-packet.json"
+    }
+  ],
+  "packet_dir": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-choice-agent-packets-v1/007-p02-acting-only-disagreement8/packets/case-03-body-13-u02",
+  "passed": true,
+  "run_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-choice-agent-packets-v1/007-p02-acting-only-disagreement8",
+  "schema_version": "acting-packet-boundary-validation.v1",
+  "validation_sha256": "7f5f2ae9bd764e48f343db0202c69bbd021718992499b2c0a13d3a49d12979f9",
+  "violation_count": 0,
+  "violations": []
+}
+

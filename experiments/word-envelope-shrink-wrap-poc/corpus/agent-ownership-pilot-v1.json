@@ -1,0 +1,74 @@
+{
+  "schema_version": "word-ink-agent-benchmark.v1",
+  "suite_id": "agent-ownership-tools-pilot-v1",
+  "source_manifest": "corpus/real-stress-v1.json",
+  "variants": [
+    {
+      "id": "context-only",
+      "opaque_suffix": "c",
+      "show_prior_owned_ink": false
+    },
+    {
+      "id": "prior-owned",
+      "opaque_suffix": "o",
+      "show_prior_owned_ink": true
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "007-p02-i-love",
+      "opaque_id": "w01",
+      "pilot_tier": "routine"
+    },
+    {
+      "case_id": "007-p02-think",
+      "opaque_id": "w02",
+      "pilot_tier": "routine-plus"
+    },
+    {
+      "case_id": "014-p01-table",
+      "opaque_id": "w03",
+      "pilot_tier": "routine-plus"
+    },
+    {
+      "case_id": "014-p04-over",
+      "opaque_id": "w04",
+      "pilot_tier": "routine-plus"
+    },
+    {
+      "case_id": "007-p02-ps",
+      "opaque_id": "w05",
+      "pilot_tier": "complex"
+    },
+    {
+      "case_id": "007-p02-did",
+      "opaque_id": "w06",
+      "pilot_tier": "complex"
+    },
+    {
+      "case_id": "014-p04-we-will",
+      "opaque_id": "w07",
+      "pilot_tier": "complex"
+    },
+    {
+      "case_id": "014-p04-gobbler",
+      "opaque_id": "w08",
+      "pilot_tier": "complex"
+    },
+    {
+      "case_id": "014-p01-seed",
+      "opaque_id": "w09",
+      "pilot_tier": "abstention"
+    },
+    {
+      "case_id": "014-p04-fold-fragment",
+      "opaque_id": "w10",
+      "pilot_tier": "abstention"
+    }
+  ],
+  "context": {
+    "large_blue_padding_px": 180,
+    "small_gray_padding_px": 90,
+    "maximum_pixels": 1500000
+  }
+}

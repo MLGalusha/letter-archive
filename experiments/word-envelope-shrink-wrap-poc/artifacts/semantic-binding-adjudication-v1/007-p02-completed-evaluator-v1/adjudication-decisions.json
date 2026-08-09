@@ -1,0 +1,42 @@
+{
+  "protocol": "sealed_visual_line_board_review.v1",
+  "assignments": {
+    "body-01-U01": [99], "body-01-U02": [98], "body-01-U03": [97], "body-01-U04": [96], "body-01-U05": [95], "body-01-U06": [94],
+    "body-02-U01": [93], "body-02-U02": [92], "body-02-U03": [91], "body-02-U04": [90], "body-02-U05": [89], "body-02-U06": [88],
+    "body-03-U01": [87, 86], "body-03-U02": [85], "body-03-U03": [84], "body-03-U04": [83], "body-03-U05": [82],
+    "body-04-U01": [81], "body-04-U02": [80], "body-04-U05": [79],
+    "body-05-U01": [78], "body-05-U02": [77], "body-05-U05": [75], "body-05-U06": [74],
+    "body-06-U01": [72], "body-06-U02": [71, 70], "body-06-U03": [69], "body-06-U04": [68], "body-06-U05": [67],
+    "body-07-U01": [66], "body-07-U02": [65], "body-07-U03": [64], "body-07-U04": [63], "body-07-U05": [62], "body-07-U06": [61], "body-07-U07": [60],
+    "body-08-U01": [59], "body-08-U02": [58], "body-08-U03": [57], "body-08-U04": [56, 55], "body-08-U05": [54],
+    "body-09-U01": [53], "body-09-U04": [51], "body-09-U05": [50], "body-09-U06": [49], "body-09-U07": [48],
+    "body-10-U01": [47], "body-10-U02": [46], "body-10-U03": [45], "body-10-U04": [44], "body-10-U05": [43], "body-10-U06": [42], "body-10-U07": [41],
+    "body-11-U01": [40], "body-11-U02": [39], "body-11-U03": [38], "body-11-U04": [37], "body-11-U05": [36],
+    "body-12-U01": [35], "body-12-U02": [34], "body-12-U03": [33], "body-12-U04": [32], "body-12-U05": [31], "body-12-U06": [30],
+    "body-13-U01": [29], "body-13-U02": [28], "body-13-U03": [27], "body-13-U04": [26],
+    "body-14-U01": [25], "body-14-U02": [24], "body-14-U03": [23]
+  },
+  "assignment_notes": {
+    "body-03-U01": "Dolly is represented by two disjoint completed masks.",
+    "body-06-U02": "you. is represented by the main word mask plus a detached punctuation/stroke mask.",
+    "body-08-U04": "any is represented by two disjoint completed masks."
+  },
+  "excluded_merged": {
+    "body-04-U03": "H73 visibly spans Sure and that; no exact per-word target exists without editing the sealed partition.",
+    "body-04-U04": "H73 visibly spans Sure and that; no exact per-word target exists without editing the sealed partition.",
+    "body-05-U03": "H76 visibly spans how and much; no exact per-word target exists without editing the sealed partition.",
+    "body-05-U04": "H76 visibly spans how and much; no exact per-word target exists without editing the sealed partition.",
+    "body-09-U02": "H52 visibly spans mean and it.; no exact per-word target exists without editing the sealed partition.",
+    "body-09-U03": "H52 visibly spans mean and it.; no exact per-word target exists without editing the sealed partition."
+  },
+  "unbound_by_line": {
+    "body-04": [73],
+    "body-05": [76],
+    "body-09": [52]
+  },
+  "line_notes": {
+    "body-04": "H73 is deliberately unbound because it merges two semantic units.",
+    "body-05": "H76 is deliberately unbound because it merges two semantic units.",
+    "body-09": "H52 is deliberately unbound because it merges two semantic units."
+  }
+}

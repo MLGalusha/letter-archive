@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Letter Archive · Simple word selector</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <section id="library-view" class="library-view" hidden>
+    <header class="library-header">
+      <div>
+        <span class="eyebrow">Letter Archive experiment</span>
+        <h1>Choose a page</h1>
+        <p>Open a page to start, or resume exactly where you left it.</p>
+      </div>
+      <button id="library-back" class="quiet" type="button">Back to current page</button>
+    </header>
+    <div class="library-tools">
+      <input id="library-search" type="search" placeholder="Find collection, date, page, or challenge…" aria-label="Search letter pages">
+      <span id="library-count" aria-live="polite"></span>
+    </div>
+    <div id="library-grid" class="library-grid" aria-live="polite"></div>
+  </section>
+
+  <div id="workspace-view" class="workspace-view">
+  <header class="toolbar">
+    <div class="identity">
+      <span class="eyebrow">Letter Archive experiment</span>
+      <strong id="instruction">Select one word · press Enter</strong>
+    </div>
+    <div class="progress" aria-live="polite"><b id="word-count">0</b> words finished</div>
+    <div class="toolbar-actions">
+      <button id="open-library" class="quiet" type="button">Library</button>
+      <button id="reset-page" class="quiet danger" type="button">Reset page</button>
+      <button id="toggle-boxes" class="quiet" type="button" aria-pressed="false">Boxes off</button>
+      <button id="undo-word" class="quiet" type="button" title="Keyboard shortcut: Command or Control + Z">Undo last red word</button>
+      <button id="tool-cut" class="quiet" type="button" aria-pressed="false">Cut ink</button>
+      <button id="finish-page" class="quiet" type="button">Finish + fit boxes</button>
+    </div>
+  </header>
+
+  <main id="stage" class="stage">
+    <div class="page-view-controls" aria-label="Letter image zoom">
+      <span>Page zoom</span>
+      <button id="zoom-out" class="quiet" type="button" aria-label="Zoom letter images out">−</button>
+      <output id="zoom-label">100%</output>
+      <button id="zoom-in" class="quiet" type="button" aria-label="Zoom letter images in">+</button>
+    </div>
+    <section id="pages" class="pages" aria-label="Synchronized original and ink pages">
+      <article id="original-card" class="page-card original-card">
+        <header><b id="original-title">Original</b><span id="original-role">Context</span></header>
+        <div id="original-shell" class="canvas-shell">
+          <canvas id="original-canvas" aria-label="Original letter with completed word ink shown red"></canvas>
+          <div id="original-drag" class="drag-box" hidden></div>
+        </div>
+      </article>
+      <article id="ink-card" class="page-card ink-card">
+        <header class="ink-card-header">
+          <div><b id="ink-title">Clean ink</b><span id="ink-layer-description">V4 likely handwriting · lower noise</span></div>
+          <div id="ink-layer-switch" class="ink-layer-switch" role="group" aria-label="Ink selection layer" hidden>
+            <button id="ink-clean" type="button" aria-pressed="true">Clean ink</button>
+            <button id="ink-high-recall" type="button" aria-pressed="false">High recall</button>
+          </div>
+        </header>
+        <div id="ink-shell" class="canvas-shell interactive">
+          <canvas id="ink-canvas" tabindex="0" aria-label="Extracted ink page. Click or drag around one word, then press Enter."></canvas>
+          <div id="ink-drag" class="drag-box" hidden></div>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <footer id="commit-bar" class="commit-bar">
+    <div class="commit-context">
+      <div id="selection-copy" class="selection-copy">
+        <strong id="selection-status">Click an ink piece or drag across a complete word.</strong>
+        <span id="shortcut-help">Click green ink to toggle it off · Cut ink draws a split path · Escape clears</span>
+      </div>
+      <div id="recovery-panel" class="recovery-panel" role="group" aria-label="Recovered ink amount" hidden>
+        <button id="recovery-original" class="quiet" type="button" aria-pressed="false">Original</button>
+        <button id="recovery-conservative" class="quiet" type="button" aria-pressed="true">Conservative</button>
+        <button id="recovery-balanced" class="quiet" type="button" aria-pressed="false">Balanced</button>
+        <button id="recovery-maximum" class="quiet" type="button" aria-pressed="false">Maximum recall</button>
+      </div>
+    </div>
+    <button id="recover-ink" class="quiet" type="button" disabled>Recover missed ink</button>
+    <button id="clear-selection" class="quiet" type="button">Erase selection</button>
+    <button id="commit-word" class="primary" type="button" disabled>Enter · finish word</button>
+  </footer>
+  </div>
+
+  <section id="notes-panel" class="notes-panel" hidden>
+    <div class="notes-copy">
+      <span class="eyebrow">Once, at the end</span>
+      <h1>What should we improve?</h1>
+      <p>Write one page-level summary. To attach context, drag a crop on the original page, describe it, and add it below.</p>
+    </div>
+    <label>Page summary<textarea id="page-summary" rows="7" placeholder="What worked, what was slow, what the selector or agent missed…"></textarea></label>
+    <div class="crop-note-builder">
+      <b>Optional context crop</b>
+      <span id="crop-status">Drag on the original page to choose a crop.</span>
+      <textarea id="crop-text" rows="3" placeholder="Why this crop matters"></textarea>
+      <button id="add-crop-note" class="quiet" type="button" disabled>Add crop note</button>
+    </div>
+    <ol id="crop-notes"></ol>
+    <button id="save-notes" class="primary" type="button">Save final page notes</button>
+  </section>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+  <script src="/app.js" defer></script>
+</body>
+</html>

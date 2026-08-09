@@ -1,0 +1,2931 @@
+{
+  "boards": [
+    {
+      "evidence_role": "acting_visible_no_human_data",
+      "file_sha256": "76b923558567879bf9c15132d7545a0957d3d7a4dc091663c958d330d1c59c8f",
+      "path": "acting-recovery-sweep.jpg"
+    },
+    {
+      "evidence_role": "post_freeze_sealed_evaluation_only",
+      "file_sha256": "c63f309cf45ce5d71282d63a385494339b126a6ed1b739c2681107894bd1f2e3",
+      "path": "sealed-recovery-evaluation.jpg"
+    }
+  ],
+  "candidate_freeze_wall_time_ms": 14302.88,
+  "evidence_role": "ten_word_development_diagnostic_with_post_freeze_sealed_evaluation",
+  "experiment_sha256": "a717715d65ee771f34866a3bff0bc059b59651adacaa89136fae27468174a7c7",
+  "inputs": {
+    "clean_mask": {
+      "file_sha256": "69620d07dd04c4e5da08f5139d807e8da78bcb7dd6028c4c4e226871d92cbfff",
+      "path": "artifacts/agent-ink-variants-v2/007-p02-v4-quality/clean.mask.png",
+      "pixel_sha256": "3283b1d85cedbf6479f865f3ad2f97b014cc28176862f0a964821bf015c8ed66",
+      "pixels": 625101
+    },
+    "experiment": {
+      "experiment_sha256": "0f99252cd612ce3c5fe275919ac61d9fd18273dc3ee65422f99f0676f7f5726a",
+      "file_sha256": "bf53311c5b45067f1a567cddaae6514d68dc872b7a409238607629fc877ab746",
+      "path": "artifacts/auto-shrink-select-fit-v1/007-p02-body77-v3/experiment.json"
+    },
+    "sealed_human_run": {
+      "path": "artifacts/source-color-selector-v2/007-p02-next-iteration-reset-23c97df1a695-reset-ba7be47e2edc",
+      "word_count": 100
+    },
+    "source": {
+      "file_sha256": "0bce0fe0b8c4a578b846bf004a36cc7774ecf7cbaeebe4f12106a1b962490312",
+      "path": "/Users/masongalusha/Workspace/projects/letter-archive/backend/storage/collections/007/19430411/L01/007-19430411-L01-02.jpg"
+    },
+    "strong_mask": {
+      "file_sha256": "6b7d101ca4dfddb79804f2706687d1a624aeb0aea6be9c50b10a75b821365798",
+      "path": "artifacts/agent-ink-variants-v2/007-p02-v4-quality/strong.mask.png",
+      "pixel_sha256": "599bc5c99ad9591295111ee0330450e12e52c8a3cd07ae24eb35dcfc78777458",
+      "pixels": 686035
+    }
+  },
+  "margins": [
+    0.0,
+    0.1,
+    0.18,
+    0.3,
+    0.45
+  ],
+  "method": {
+    "automatic_ownership_of_recovery": false,
+    "conditioning_anchor": "V4 Clean pixels inside ink-tight bbox expanded by the configured margin",
+    "fixed_ownership": "exact transcript-locator 0%-margin frozen selection; identical at every recovery margin",
+    "recovery": "maximum_recall local source-colour candidate clipped to bound V4 High Recall; every candidate pixel outside fixed ownership remains optional evidence, including conditioning-anchor Clean ink",
+    "sealed_evaluation_loaded_after_candidates_frozen": true
+  },
+  "metric_warning": "Recovered target pixels are potential evidence, not ownership. Foreign and unlabelled available pixels require exclusion; naive ownership is reported only as a failure counterfactual.",
+  "sample": {
+    "selection_role": "predeclared mixed development sample spanning easy, broad, neighbor-capture, incomplete, and punctuation cases",
+    "unit_ids": [
+      "body-01-U02",
+      "body-02-U01",
+      "body-02-U02",
+      "body-02-U03",
+      "body-02-U04",
+      "body-05-U04",
+      "body-08-U03",
+      "body-10-U02",
+      "body-11-U03",
+      "body-14-U03"
+    ]
+  },
+  "schema_version": "recovery-conditioning-ownership-independent-sweep.v2",
+  "summary_by_margin": [
+    {
+      "conditioning_margin_fraction": 0.0,
+      "median_conditioning_anchor_pixels": 6340.0,
+      "median_foreign_word_optional_evidence_pixels": 883.0,
+      "median_naive_all_recovery_precision": 0.519961,
+      "median_optional_evidence_pixels": 1153.0,
+      "median_potential_target_recall": 1.0,
+      "median_recovery_wall_time_ms": 210.42,
+      "median_target_optional_evidence_pixels": 0.0,
+      "median_unlabelled_optional_evidence_pixels": 0.0,
+      "total_false_residual_removal_if_naively_owned": 12156,
+      "total_target_residual_reduction_if_correctly_approved": 3147,
+      "words_with_foreign_optional_evidence": 8,
+      "words_with_target_optional_evidence": 2
+    },
+    {
+      "conditioning_margin_fraction": 0.1,
+      "median_conditioning_anchor_pixels": 6913.5,
+      "median_foreign_word_optional_evidence_pixels": 1490.0,
+      "median_naive_all_recovery_precision": 0.446365,
+      "median_optional_evidence_pixels": 2113.0,
+      "median_potential_target_recall": 1.0,
+      "median_recovery_wall_time_ms": 223.709,
+      "median_target_optional_evidence_pixels": 0.0,
+      "median_unlabelled_optional_evidence_pixels": 0.0,
+      "total_false_residual_removal_if_naively_owned": 25349,
+      "total_target_residual_reduction_if_correctly_approved": 5852,
+      "words_with_foreign_optional_evidence": 8,
+      "words_with_target_optional_evidence": 2
+    },
+    {
+      "conditioning_margin_fraction": 0.18,
+      "median_conditioning_anchor_pixels": 7134.5,
+      "median_foreign_word_optional_evidence_pixels": 2086.5,
+      "median_naive_all_recovery_precision": 0.386693,
+      "median_optional_evidence_pixels": 3068.0,
+      "median_potential_target_recall": 1.0,
+      "median_recovery_wall_time_ms": 214.189,
+      "median_target_optional_evidence_pixels": 0.0,
+      "median_unlabelled_optional_evidence_pixels": 0.0,
+      "total_false_residual_removal_if_naively_owned": 39488,
+      "total_target_residual_reduction_if_correctly_approved": 8339,
+      "words_with_foreign_optional_evidence": 9,
+      "words_with_target_optional_evidence": 2
+    },
+    {
+      "conditioning_margin_fraction": 0.3,
+      "median_conditioning_anchor_pixels": 8538.5,
+      "median_foreign_word_optional_evidence_pixels": 4627.0,
+      "median_naive_all_recovery_precision": 0.341795,
+      "median_optional_evidence_pixels": 6213.0,
+      "median_potential_target_recall": 1.0,
+      "median_recovery_wall_time_ms": 210.952,
+      "median_target_optional_evidence_pixels": 0.0,
+      "median_unlabelled_optional_evidence_pixels": 1.0,
+      "total_false_residual_removal_if_naively_owned": 67786,
+      "total_target_residual_reduction_if_correctly_approved": 10817,
+      "words_with_foreign_optional_evidence": 9,
+      "words_with_target_optional_evidence": 2
+    },
+    {
+      "conditioning_margin_fraction": 0.45,
+      "median_conditioning_anchor_pixels": 10730.5,
+      "median_foreign_word_optional_evidence_pixels": 5452.0,
+      "median_naive_all_recovery_precision": 0.314474,
+      "median_optional_evidence_pixels": 7079.5,
+      "median_potential_target_recall": 1.0,
+      "median_recovery_wall_time_ms": 212.574,
+      "median_target_optional_evidence_pixels": 0.0,
+      "median_unlabelled_optional_evidence_pixels": 1.5,
+      "total_false_residual_removal_if_naively_owned": 80133,
+      "total_target_residual_reduction_if_correctly_approved": 11988,
+      "words_with_foreign_optional_evidence": 10,
+      "words_with_target_optional_evidence": 2
+    }
+  ],
+  "words": [
+    {
+      "evaluation_human_word_number": 98,
+      "fixed_ownership_bbox_xywh": [
+        788,
+        497,
+        144,
+        42
+      ],
+      "fixed_ownership_component_ids": [
+        11
+      ],
+      "fixed_ownership_pixel_sha256": "2348f4b526eb849f2ec551de5630042e41fd1ceb24c3d7af948dc830d5103a4a",
+      "fixed_ownership_pixels": 2535,
+      "ink_tight_bbox_xywh": [
+        788,
+        497,
+        144,
+        42
+      ],
+      "line_id": "body-01",
+      "margins": [
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            788,
+            497,
+            144,
+            42
+          ],
+          "candidate_component_count": 1,
+          "candidate_pixel_sha256": "2348f4b526eb849f2ec551de5630042e41fd1ceb24c3d7af948dc830d5103a4a",
+          "candidate_pixels": 2535,
+          "changed_candidate_pixels_from_previous_margin": null,
+          "conditioning_anchor_optional_pixels": 0,
+          "conditioning_anchor_pixels": 2535,
+          "conditioning_bbox_xywh": [
+            786,
+            495,
+            148,
+            46
+          ],
+          "conditioning_margin_fraction": 0.0,
+          "local_recovery_addition_optional_pixels": 0,
+          "optional_evidence_pixel_sha256": "c569308f2e492520168f15dd7c43f6cdc470fd1e8ce0c62cf9ca875bed4b90f0",
+          "optional_evidence_pixels": 0,
+          "outside_generous_proposal_fraction": 0.0,
+          "outside_generous_proposal_pixels": 0,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 57.192,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 0,
+            "false_residual_removal_pixels_if_naively_owned": 0,
+            "foreign_word_optional_evidence_pixels": 0,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 1.0,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            788,
+            497,
+            144,
+            42
+          ],
+          "candidate_component_count": 1,
+          "candidate_pixel_sha256": "2348f4b526eb849f2ec551de5630042e41fd1ceb24c3d7af948dc830d5103a4a",
+          "candidate_pixels": 2535,
+          "changed_candidate_pixels_from_previous_margin": 0,
+          "conditioning_anchor_optional_pixels": 0,
+          "conditioning_anchor_pixels": 2535,
+          "conditioning_bbox_xywh": [
+            774,
+            493,
+            172,
+            50
+          ],
+          "conditioning_margin_fraction": 0.1,
+          "local_recovery_addition_optional_pixels": 0,
+          "optional_evidence_pixel_sha256": "c569308f2e492520168f15dd7c43f6cdc470fd1e8ce0c62cf9ca875bed4b90f0",
+          "optional_evidence_pixels": 0,
+          "outside_generous_proposal_fraction": 0.0,
+          "outside_generous_proposal_pixels": 0,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 73.014,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 0,
+            "false_residual_removal_pixels_if_naively_owned": 0,
+            "foreign_word_optional_evidence_pixels": 0,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 1.0,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            788,
+            497,
+            144,
+            42
+          ],
+          "candidate_component_count": 1,
+          "candidate_pixel_sha256": "2348f4b526eb849f2ec551de5630042e41fd1ceb24c3d7af948dc830d5103a4a",
+          "candidate_pixels": 2535,
+          "changed_candidate_pixels_from_previous_margin": 0,
+          "conditioning_anchor_optional_pixels": 0,
+          "conditioning_anchor_pixels": 2535,
+          "conditioning_bbox_xywh": [
+            762,
+            489,
+            196,
+            58
+          ],
+          "conditioning_margin_fraction": 0.18,
+          "local_recovery_addition_optional_pixels": 0,
+          "optional_evidence_pixel_sha256": "c569308f2e492520168f15dd7c43f6cdc470fd1e8ce0c62cf9ca875bed4b90f0",
+          "optional_evidence_pixels": 0,
+          "outside_generous_proposal_fraction": 0.0,
+          "outside_generous_proposal_pixels": 0,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 58.397,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 0,
+            "false_residual_removal_pixels_if_naively_owned": 0,
+            "foreign_word_optional_evidence_pixels": 0,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 1.0,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            788,
+            497,
+            144,
+            42
+          ],
+          "candidate_component_count": 1,
+          "candidate_pixel_sha256": "2348f4b526eb849f2ec551de5630042e41fd1ceb24c3d7af948dc830d5103a4a",
+          "candidate_pixels": 2535,
+          "changed_candidate_pixels_from_previous_margin": 0,
+          "conditioning_anchor_optional_pixels": 0,
+          "conditioning_anchor_pixels": 2535,
+          "conditioning_bbox_xywh": [
+            745,
+            484,
+            230,
+            68
+          ],
+          "conditioning_margin_fraction": 0.3,
+          "local_recovery_addition_optional_pixels": 0,
+          "optional_evidence_pixel_sha256": "c569308f2e492520168f15dd7c43f6cdc470fd1e8ce0c62cf9ca875bed4b90f0",
+          "optional_evidence_pixels": 0,
+          "outside_generous_proposal_fraction": 0.0,
+          "outside_generous_proposal_pixels": 0,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 51.549,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 0,
+            "false_residual_removal_pixels_if_naively_owned": 0,
+            "foreign_word_optional_evidence_pixels": 0,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 1.0,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            788,
+            497,
+            245,
+            42
+          ],
+          "candidate_component_count": 3,
+          "candidate_pixel_sha256": "7c72a6c628e9e078ab7192a9faea9fd0496f6cc0092ce854cdc0510325b7166c",
+          "candidate_pixels": 2940,
+          "changed_candidate_pixels_from_previous_margin": 405,
+          "conditioning_anchor_optional_pixels": 129,
+          "conditioning_anchor_pixels": 2664,
+          "conditioning_bbox_xywh": [
+            723,
+            478,
+            274,
+            80
+          ],
+          "conditioning_margin_fraction": 0.45,
+          "local_recovery_addition_optional_pixels": 276,
+          "optional_evidence_pixel_sha256": "1f9aae99fac7c08ca7d47f4c518d39fb211ca2277c3b172410acb3de5dcdf2ff",
+          "optional_evidence_pixels": 405,
+          "outside_generous_proposal_fraction": 0.042857,
+          "outside_generous_proposal_pixels": 126,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 49.228,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 405,
+            "false_residual_removal_pixels_if_naively_owned": 399,
+            "foreign_word_optional_evidence_pixels": 399,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.862245,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 6
+          }
+        }
+      ],
+      "proposal_bbox_xywh": [
+        744,
+        491,
+        201,
+        53
+      ],
+      "recovery_crop_bbox_xywh": [
+        687,
+        461,
+        346,
+        114
+      ],
+      "sealed_fixed_ownership_evaluation": {
+        "foreign_word_pixels": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "target_word": {
+          "bbox_xywh": [
+            788,
+            497,
+            144,
+            42
+          ],
+          "pixel_sha256": "5403bacc86a96766a41fdea7c5fe1cb566b1a42abfbc8f76f42ddeaaa014ecbd",
+          "pixels": 2535,
+          "word_number": 98
+        },
+        "true_positive_pixels": 2535,
+        "unlabelled_pixels": 0
+      },
+      "text": "so",
+      "unit_id": "body-01-U02"
+    },
+    {
+      "evaluation_human_word_number": 93,
+      "fixed_ownership_bbox_xywh": [
+        397,
+        471,
+        313,
+        366
+      ],
+      "fixed_ownership_component_ids": [
+        7,
+        17,
+        22,
+        27,
+        29
+      ],
+      "fixed_ownership_pixel_sha256": "093d54673e6eed3d1f1875f7eca937d4931d09c79cc815f4beae5f6223562ce9",
+      "fixed_ownership_pixels": 17125,
+      "ink_tight_bbox_xywh": [
+        418,
+        579,
+        173,
+        136
+      ],
+      "line_id": "body-02",
+      "margins": [
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            418,
+            484,
+            289,
+            326
+          ],
+          "candidate_component_count": 15,
+          "candidate_pixel_sha256": "93aa4305d86fa4ac21706f0a3bb766f81067f3b12399bc0f5bac728479106b7f",
+          "candidate_pixels": 12665,
+          "changed_candidate_pixels_from_previous_margin": null,
+          "conditioning_anchor_optional_pixels": 0,
+          "conditioning_anchor_pixels": 6527,
+          "conditioning_bbox_xywh": [
+            416,
+            577,
+            177,
+            140
+          ],
+          "conditioning_margin_fraction": 0.0,
+          "local_recovery_addition_optional_pixels": 1160,
+          "optional_evidence_pixel_sha256": "167b865be4d3c5f4ce11bfd4119273fad2f1b00176b63c21503584f471c02ace",
+          "optional_evidence_pixels": 1160,
+          "outside_generous_proposal_fraction": 0.355231,
+          "outside_generous_proposal_pixels": 4499,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 166.3,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 1160,
+            "false_residual_removal_pixels_if_naively_owned": 1160,
+            "foreign_word_optional_evidence_pixels": 1160,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.25808,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            408,
+            484,
+            304,
+            326
+          ],
+          "candidate_component_count": 14,
+          "candidate_pixel_sha256": "2f50dfbc18be3fa72f39fceb93361bdb7d2c962e45e0af431891db9d2df61bcc",
+          "candidate_pixels": 13549,
+          "changed_candidate_pixels_from_previous_margin": 1018,
+          "conditioning_anchor_optional_pixels": 0,
+          "conditioning_anchor_pixels": 7037,
+          "conditioning_bbox_xywh": [
+            401,
+            565,
+            207,
+            164
+          ],
+          "conditioning_margin_fraction": 0.1,
+          "local_recovery_addition_optional_pixels": 1653,
+          "optional_evidence_pixel_sha256": "f9297ee80dea787cd3d0bec74d5326d43ce4b02919c45b96233af7c5e0e6b5f8",
+          "optional_evidence_pixels": 1653,
+          "outside_generous_proposal_fraction": 0.364455,
+          "outside_generous_proposal_pixels": 4938,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 166.936,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 1653,
+            "false_residual_removal_pixels_if_naively_owned": 1652,
+            "foreign_word_optional_evidence_pixels": 1652,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.251305,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 1
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            408,
+            484,
+            304,
+            326
+          ],
+          "candidate_component_count": 14,
+          "candidate_pixel_sha256": "2901256ddf6b322f238096d522e8ed6708716e444b102be7cf4683b04ce51f05",
+          "candidate_pixels": 14033,
+          "changed_candidate_pixels_from_previous_margin": 822,
+          "conditioning_anchor_optional_pixels": 0,
+          "conditioning_anchor_pixels": 7560,
+          "conditioning_bbox_xywh": [
+            387,
+            555,
+            235,
+            184
+          ],
+          "conditioning_margin_fraction": 0.18,
+          "local_recovery_addition_optional_pixels": 1971,
+          "optional_evidence_pixel_sha256": "cf01f7ff5b52380b545517f136c8b5d425b098334132cf38a48709b480fbd356",
+          "optional_evidence_pixels": 1971,
+          "outside_generous_proposal_fraction": 0.352811,
+          "outside_generous_proposal_pixels": 4951,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 167.092,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 1971,
+            "false_residual_removal_pixels_if_naively_owned": 1970,
+            "foreign_word_optional_evidence_pixels": 1970,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.24712,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 1
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            408,
+            484,
+            304,
+            326
+          ],
+          "candidate_component_count": 14,
+          "candidate_pixel_sha256": "123182fb2b5f02d7263240e3b928b0654fb50f8882823e7889a048f009072933",
+          "candidate_pixels": 16532,
+          "changed_candidate_pixels_from_previous_margin": 2499,
+          "conditioning_anchor_optional_pixels": 472,
+          "conditioning_anchor_pixels": 8976,
+          "conditioning_bbox_xywh": [
+            366,
+            538,
+            277,
+            218
+          ],
+          "conditioning_margin_fraction": 0.3,
+          "local_recovery_addition_optional_pixels": 3228,
+          "optional_evidence_pixel_sha256": "0cd38d4177c504dea04fe5e3c3b60564005a988ea048d6d9b677b2f448d2db6d",
+          "optional_evidence_pixels": 3700,
+          "outside_generous_proposal_fraction": 0.40473,
+          "outside_generous_proposal_pixels": 6691,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 172.682,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 3700,
+            "false_residual_removal_pixels_if_naively_owned": 3698,
+            "foreign_word_optional_evidence_pixels": 3698,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.226603,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 2
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            408,
+            484,
+            304,
+            326
+          ],
+          "candidate_component_count": 13,
+          "candidate_pixel_sha256": "7f44b9a3e1b7a09e0dd43520a4e8a1be662ee13373e208a21b465295c74ef312",
+          "candidate_pixels": 18785,
+          "changed_candidate_pixels_from_previous_margin": 2257,
+          "conditioning_anchor_optional_pixels": 2082,
+          "conditioning_anchor_pixels": 13654,
+          "conditioning_bbox_xywh": [
+            340,
+            518,
+            329,
+            258
+          ],
+          "conditioning_margin_fraction": 0.45,
+          "local_recovery_addition_optional_pixels": 2586,
+          "optional_evidence_pixel_sha256": "0aeefd9a331ca3f4dcd755bde12156f157423c079280917d0ce0115750d4dd53",
+          "optional_evidence_pixels": 4668,
+          "outside_generous_proposal_fraction": 0.438595,
+          "outside_generous_proposal_pixels": 8239,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 167.828,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 4668,
+            "false_residual_removal_pixels_if_naively_owned": 4665,
+            "foreign_word_optional_evidence_pixels": 4665,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.216537,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 3
+          }
+        }
+      ],
+      "proposal_bbox_xywh": [
+        415,
+        579,
+        182,
+        136
+      ],
+      "recovery_crop_bbox_xywh": [
+        297,
+        484,
+        415,
+        326
+      ],
+      "sealed_fixed_ownership_evaluation": {
+        "foreign_word_pixels": 12404,
+        "precision": 0.275562,
+        "recall": 1.0,
+        "target_word": {
+          "bbox_xywh": [
+            418,
+            572,
+            162,
+            146
+          ],
+          "pixel_sha256": "8f5b31c186cea9f69509821f8961412fe67768e82c4bad98c59baaec8997423f",
+          "pixels": 4719,
+          "word_number": 93
+        },
+        "true_positive_pixels": 4719,
+        "unlabelled_pixels": 2
+      },
+      "text": "By",
+      "unit_id": "body-02-U01"
+    },
+    {
+      "evaluation_human_word_number": 92,
+      "fixed_ownership_bbox_xywh": [
+        640,
+        619,
+        298,
+        49
+      ],
+      "fixed_ownership_component_ids": [
+        24,
+        25
+      ],
+      "fixed_ownership_pixel_sha256": "702945f40dd6cfac3b4b78b386bdfd7b383dd61e31d111b01067bc3a3d679604",
+      "fixed_ownership_pixels": 4760,
+      "ink_tight_bbox_xywh": [
+        640,
+        620,
+        215,
+        45
+      ],
+      "line_id": "body-02",
+      "margins": [
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            640,
+            620,
+            271,
+            45
+          ],
+          "candidate_component_count": 2,
+          "candidate_pixel_sha256": "1373f1713fbaa9c3957386df714d2c31f7a1f7488ff12d29833d259afd353f3d",
+          "candidate_pixels": 3966,
+          "changed_candidate_pixels_from_previous_margin": null,
+          "conditioning_anchor_optional_pixels": 0,
+          "conditioning_anchor_pixels": 3375,
+          "conditioning_bbox_xywh": [
+            638,
+            618,
+            219,
+            49
+          ],
+          "conditioning_margin_fraction": 0.0,
+          "local_recovery_addition_optional_pixels": 0,
+          "optional_evidence_pixel_sha256": "c569308f2e492520168f15dd7c43f6cdc470fd1e8ce0c62cf9ca875bed4b90f0",
+          "optional_evidence_pixels": 0,
+          "outside_generous_proposal_fraction": 0.0,
+          "outside_generous_proposal_pixels": 0,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 75.914,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 0,
+            "false_residual_removal_pixels_if_naively_owned": 0,
+            "foreign_word_optional_evidence_pixels": 0,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 1.0,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            640,
+            620,
+            297,
+            48
+          ],
+          "candidate_component_count": 2,
+          "candidate_pixel_sha256": "77a14de1156178741d8e2990a1b4c59c4235e89d5a0e6e17d6d87c447975f576",
+          "candidate_pixels": 4391,
+          "changed_candidate_pixels_from_previous_margin": 425,
+          "conditioning_anchor_optional_pixels": 0,
+          "conditioning_anchor_pixels": 3912,
+          "conditioning_bbox_xywh": [
+            618,
+            616,
+            259,
+            53
+          ],
+          "conditioning_margin_fraction": 0.1,
+          "local_recovery_addition_optional_pixels": 0,
+          "optional_evidence_pixel_sha256": "c569308f2e492520168f15dd7c43f6cdc470fd1e8ce0c62cf9ca875bed4b90f0",
+          "optional_evidence_pixels": 0,
+          "outside_generous_proposal_fraction": 0.0,
+          "outside_generous_proposal_pixels": 0,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 75.015,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 0,
+            "false_residual_removal_pixels_if_naively_owned": 0,
+            "foreign_word_optional_evidence_pixels": 0,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 1.0,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            640,
+            620,
+            311,
+            81
+          ],
+          "candidate_component_count": 3,
+          "candidate_pixel_sha256": "0489d40bc1115e288d872bf56c8f9ca166a4fafb974f7f06da41522c8deca8bd",
+          "candidate_pixels": 4604,
+          "changed_candidate_pixels_from_previous_margin": 213,
+          "conditioning_anchor_optional_pixels": 0,
+          "conditioning_anchor_pixels": 4221,
+          "conditioning_bbox_xywh": [
+            601,
+            612,
+            293,
+            61
+          ],
+          "conditioning_margin_fraction": 0.18,
+          "local_recovery_addition_optional_pixels": 39,
+          "optional_evidence_pixel_sha256": "789c56bb6033580bf27115df76557b0dba7e29c778a26aca15cacb45f65a8c71",
+          "optional_evidence_pixels": 39,
+          "outside_generous_proposal_fraction": 0.008471,
+          "outside_generous_proposal_pixels": 39,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 78.075,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 39,
+            "false_residual_removal_pixels_if_naively_owned": 39,
+            "foreign_word_optional_evidence_pixels": 39,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.991873,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            494,
+            584,
+            507,
+            117
+          ],
+          "candidate_component_count": 4,
+          "candidate_pixel_sha256": "b3c19f78ccbf61424deb7be7e678ca298342eac57868bf33a103e3e17ed577ac",
+          "candidate_pixels": 7326,
+          "changed_candidate_pixels_from_previous_margin": 2722,
+          "conditioning_anchor_optional_pixels": 15,
+          "conditioning_anchor_pixels": 4565,
+          "conditioning_bbox_xywh": [
+            576,
+            606,
+            343,
+            73
+          ],
+          "conditioning_margin_fraction": 0.3,
+          "local_recovery_addition_optional_pixels": 2639,
+          "optional_evidence_pixel_sha256": "ba5b3ae70e07c97c6ad1ab727745716f03bb2f7ebee3fbcfcb3fadce559b7464",
+          "optional_evidence_pixels": 2654,
+          "outside_generous_proposal_fraction": 0.156293,
+          "outside_generous_proposal_pixels": 1145,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 77.963,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 2654,
+            "false_residual_removal_pixels_if_naively_owned": 2654,
+            "foreign_word_optional_evidence_pixels": 2654,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.642029,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            490,
+            584,
+            515,
+            117
+          ],
+          "candidate_component_count": 5,
+          "candidate_pixel_sha256": "c43334c148f39abfb8d9bf471e3d0e3f0e4f885ba9e1e2000bc0d2d4c1e7685a",
+          "candidate_pixels": 8048,
+          "changed_candidate_pixels_from_previous_margin": 800,
+          "conditioning_anchor_optional_pixels": 1139,
+          "conditioning_anchor_pixels": 5899,
+          "conditioning_bbox_xywh": [
+            543,
+            600,
+            409,
+            85
+          ],
+          "conditioning_margin_fraction": 0.45,
+          "local_recovery_addition_optional_pixels": 2149,
+          "optional_evidence_pixel_sha256": "0c8edd222b2b1e98bb57848ea9c0535ea77588fc44c928dacfb3442cd0565828",
+          "optional_evidence_pixels": 3288,
+          "outside_generous_proposal_fraction": 0.171347,
+          "outside_generous_proposal_pixels": 1379,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 77.698,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 3288,
+            "false_residual_removal_pixels_if_naively_owned": 3288,
+            "foreign_word_optional_evidence_pixels": 3288,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.591451,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        }
+      ],
+      "proposal_bbox_xywh": [
+        597,
+        614,
+        258,
+        56
+      ],
+      "recovery_crop_bbox_xywh": [
+        490,
+        584,
+        515,
+        117
+      ],
+      "sealed_fixed_ownership_evaluation": {
+        "foreign_word_pixels": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "target_word": {
+          "bbox_xywh": [
+            640,
+            619,
+            298,
+            49
+          ],
+          "pixel_sha256": "319fb9faf3bf8192db373fbd7e07e6dc75ed644c754c9895fe25c64b6afeab58",
+          "pixels": 4760,
+          "word_number": 92
+        },
+        "true_positive_pixels": 4760,
+        "unlabelled_pixels": 0
+      },
+      "text": "now",
+      "unit_id": "body-02-U02"
+    },
+    {
+      "evaluation_human_word_number": 91,
+      "fixed_ownership_bbox_xywh": [
+        767,
+        612,
+        406,
+        129
+      ],
+      "fixed_ownership_component_ids": [
+        23,
+        24
+      ],
+      "fixed_ownership_pixel_sha256": "da2a5637c6f77644c19e7a6dc765260caeafc4f26a5eab6c51047b099d2ea9d3",
+      "fixed_ownership_pixels": 8154,
+      "ink_tight_bbox_xywh": [
+        855,
+        612,
+        318,
+        109
+      ],
+      "line_id": "body-02",
+      "margins": [
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            776,
+            612,
+            481,
+            185
+          ],
+          "candidate_component_count": 11,
+          "candidate_pixel_sha256": "453c5bcb01cdd8c6bbbbc15c53d7df55b6a0843a092ba70184f3a57898740303",
+          "candidate_pixels": 8979,
+          "changed_candidate_pixels_from_previous_margin": null,
+          "conditioning_anchor_optional_pixels": 0,
+          "conditioning_anchor_pixels": 6153,
+          "conditioning_bbox_xywh": [
+            853,
+            610,
+            322,
+            113
+          ],
+          "conditioning_margin_fraction": 0.0,
+          "local_recovery_addition_optional_pixels": 1826,
+          "optional_evidence_pixel_sha256": "20e2fe06d48d0b7b065aee7012f91c852ca3cd47c050dd0ffb1bae37d9e15d59",
+          "optional_evidence_pixels": 1826,
+          "outside_generous_proposal_fraction": 0.141218,
+          "outside_generous_proposal_pixels": 1268,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 232.818,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 1826,
+            "false_residual_removal_pixels_if_naively_owned": 1826,
+            "foreign_word_optional_evidence_pixels": 1826,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.503206,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            735,
+            612,
+            527,
+            185
+          ],
+          "candidate_component_count": 14,
+          "candidate_pixel_sha256": "2c0dfd2ac029111d74e3276cbf93f8f64101b018a4257fc6bdb59b3c699053cf",
+          "candidate_pixels": 11810,
+          "changed_candidate_pixels_from_previous_margin": 2833,
+          "conditioning_anchor_optional_pixels": 18,
+          "conditioning_anchor_pixels": 7255,
+          "conditioning_bbox_xywh": [
+            823,
+            601,
+            382,
+            131
+          ],
+          "conditioning_margin_fraction": 0.1,
+          "local_recovery_addition_optional_pixels": 3889,
+          "optional_evidence_pixel_sha256": "889bcae443ee9cf760315a3f463d1bfff73d20e7c2b850f0d4545e7faef8ea1c",
+          "optional_evidence_pixels": 3907,
+          "outside_generous_proposal_fraction": 0.259865,
+          "outside_generous_proposal_pixels": 3069,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 240.706,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 3907,
+            "false_residual_removal_pixels_if_naively_owned": 3907,
+            "foreign_word_optional_evidence_pixels": 3907,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.416383,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            707,
+            612,
+            562,
+            185
+          ],
+          "candidate_component_count": 17,
+          "candidate_pixel_sha256": "34f586c06f6d53e77f025e3eb4c68a016bd43ef6d221993f54c463805d1cf5c5",
+          "candidate_pixels": 12774,
+          "changed_candidate_pixels_from_previous_margin": 966,
+          "conditioning_anchor_optional_pixels": 198,
+          "conditioning_anchor_pixels": 7782,
+          "conditioning_bbox_xywh": [
+            798,
+            592,
+            432,
+            149
+          ],
+          "conditioning_margin_fraction": 0.18,
+          "local_recovery_addition_optional_pixels": 4549,
+          "optional_evidence_pixel_sha256": "e5352b63e0de0059727d003413acb4525924a4e9a0ac428865f2342902210a38",
+          "optional_evidence_pixels": 4747,
+          "outside_generous_proposal_fraction": 0.295992,
+          "outside_generous_proposal_pixels": 3781,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 241.412,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 4747,
+            "false_residual_removal_pixels_if_naively_owned": 4747,
+            "foreign_word_optional_evidence_pixels": 4747,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.389272,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            648,
+            536,
+            739,
+            261
+          ],
+          "candidate_component_count": 30,
+          "candidate_pixel_sha256": "be2e3057c68ecceb29b433fce12988133b06e6ef20cbadb8f068a9fcddd9092e",
+          "candidate_pixels": 17307,
+          "changed_candidate_pixels_from_previous_margin": 4535,
+          "conditioning_anchor_optional_pixels": 553,
+          "conditioning_anchor_pixels": 8707,
+          "conditioning_bbox_xywh": [
+            760,
+            579,
+            508,
+            175
+          ],
+          "conditioning_margin_fraction": 0.3,
+          "local_recovery_addition_optional_pixels": 8600,
+          "optional_evidence_pixel_sha256": "d4e90bae8edb167e7301075e79a9b697a80175b53112cebd063aa6af7a456197",
+          "optional_evidence_pixels": 9153,
+          "outside_generous_proposal_fraction": 0.451089,
+          "outside_generous_proposal_pixels": 7807,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 244.317,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 9153,
+            "false_residual_removal_pixels_if_naively_owned": 9152,
+            "foreign_word_optional_evidence_pixels": 9152,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.290172,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 1
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            632,
+            536,
+            764,
+            261
+          ],
+          "candidate_component_count": 34,
+          "candidate_pixel_sha256": "4bf16e6f87c90fb6600120a0575b55a79f2faf72fc353267803bb81882b2fd08",
+          "candidate_pixels": 18583,
+          "changed_candidate_pixels_from_previous_margin": 1436,
+          "conditioning_anchor_optional_pixels": 3259,
+          "conditioning_anchor_pixels": 11413,
+          "conditioning_bbox_xywh": [
+            712,
+            563,
+            604,
+            207
+          ],
+          "conditioning_margin_fraction": 0.45,
+          "local_recovery_addition_optional_pixels": 7170,
+          "optional_evidence_pixel_sha256": "552d5288a3aa2531440a4e489b11ef90d61d535babbce6ba3be8a0bce14204b6",
+          "optional_evidence_pixels": 10429,
+          "outside_generous_proposal_fraction": 0.478771,
+          "outside_generous_proposal_pixels": 8897,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 245.825,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 10429,
+            "false_residual_removal_pixels_if_naively_owned": 10428,
+            "foreign_word_optional_evidence_pixels": 10428,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.270247,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 1
+          }
+        }
+      ],
+      "proposal_bbox_xywh": [
+        855,
+        606,
+        330,
+        115
+      ],
+      "recovery_crop_bbox_xywh": [
+        632,
+        536,
+        764,
+        261
+      ],
+      "sealed_fixed_ownership_evaluation": {
+        "foreign_word_pixels": 3132,
+        "precision": 0.615894,
+        "recall": 1.0,
+        "target_word": {
+          "bbox_xywh": [
+            911,
+            612,
+            262,
+            129
+          ],
+          "pixel_sha256": "9fc25297dacc29d791af632e86734b1a36ff323547b7f91c1bbe24551ea955d3",
+          "pixels": 5022,
+          "word_number": 91
+        },
+        "true_positive_pixels": 5022,
+        "unlabelled_pixels": 0
+      },
+      "text": "you",
+      "unit_id": "body-02-U03"
+    },
+    {
+      "evaluation_human_word_number": 90,
+      "fixed_ownership_bbox_xywh": [
+        1161,
+        488,
+        471,
+        194
+      ],
+      "fixed_ownership_component_ids": [
+        8,
+        20,
+        26
+      ],
+      "fixed_ownership_pixel_sha256": "052fb3a17d8919d126c0c23cc5dfd88c75abeb65ebf2f29edfd417814f997a2f",
+      "fixed_ownership_pixels": 11917,
+      "ink_tight_bbox_xywh": [
+        1273,
+        583,
+        359,
+        99
+      ],
+      "line_id": "body-02",
+      "margins": [
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            1209,
+            514,
+            423,
+            237
+          ],
+          "candidate_component_count": 9,
+          "candidate_pixel_sha256": "724e00f1601c2186c5f05ae60e818d54d43a6383db40214bf4fab33c02cf1a77",
+          "candidate_pixels": 8348,
+          "changed_candidate_pixels_from_previous_margin": null,
+          "conditioning_anchor_optional_pixels": 0,
+          "conditioning_anchor_pixels": 7155,
+          "conditioning_bbox_xywh": [
+            1271,
+            581,
+            363,
+            103
+          ],
+          "conditioning_margin_fraction": 0.0,
+          "local_recovery_addition_optional_pixels": 149,
+          "optional_evidence_pixel_sha256": "68ec957c2220b0a5b7837e667aba9d50a0218fb9624a98d74dfbc2dc7166660a",
+          "optional_evidence_pixels": 149,
+          "outside_generous_proposal_fraction": 0.104935,
+          "outside_generous_proposal_pixels": 876,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 233.866,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 149,
+            "false_residual_removal_pixels_if_naively_owned": 149,
+            "foreign_word_optional_evidence_pixels": 149,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.536715,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            1211,
+            514,
+            421,
+            237
+          ],
+          "candidate_component_count": 9,
+          "candidate_pixel_sha256": "48a57f3502141b1a549054b2cfc5ed5bec2119462b8d3091bea0e7266ee817a5",
+          "candidate_pixels": 8469,
+          "changed_candidate_pixels_from_previous_margin": 143,
+          "conditioning_anchor_optional_pixels": 0,
+          "conditioning_anchor_pixels": 7266,
+          "conditioning_bbox_xywh": [
+            1237,
+            573,
+            431,
+            119
+          ],
+          "conditioning_margin_fraction": 0.1,
+          "local_recovery_addition_optional_pixels": 224,
+          "optional_evidence_pixel_sha256": "f4b3f91d7b2c0b1ddef3c3d467cd68542b6fe75c392a1a8fe6a495dc1e3db6f5",
+          "optional_evidence_pixels": 224,
+          "outside_generous_proposal_fraction": 0.113945,
+          "outside_generous_proposal_pixels": 965,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 227.786,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 224,
+            "false_residual_removal_pixels_if_naively_owned": 224,
+            "foreign_word_optional_evidence_pixels": 224,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.533399,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            1233,
+            514,
+            399,
+            237
+          ],
+          "candidate_component_count": 9,
+          "candidate_pixel_sha256": "8634eda226acf107a08b1d9a738fe8f92ce60911a60a2aa7ca31e4682a1b4ab4",
+          "candidate_pixels": 8496,
+          "changed_candidate_pixels_from_previous_margin": 37,
+          "conditioning_anchor_optional_pixels": 0,
+          "conditioning_anchor_pixels": 7363,
+          "conditioning_bbox_xywh": [
+            1208,
+            565,
+            489,
+            135
+          ],
+          "conditioning_margin_fraction": 0.18,
+          "local_recovery_addition_optional_pixels": 234,
+          "optional_evidence_pixel_sha256": "d736467d76ac06ad176e4ff34cc8a49b9a5a0bb891d574207b0b846788c69a42",
+          "optional_evidence_pixels": 234,
+          "outside_generous_proposal_fraction": 0.114289,
+          "outside_generous_proposal_pixels": 971,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 225.401,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 234,
+            "false_residual_removal_pixels_if_naively_owned": 234,
+            "foreign_word_optional_evidence_pixels": 234,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.53296,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            1025,
+            514,
+            858,
+            237
+          ],
+          "candidate_component_count": 18,
+          "candidate_pixel_sha256": "bb1c46be8623180f8a0de45e350b8ad4ca88d6d57883c98c13f52e434f095d30",
+          "candidate_pixels": 13548,
+          "changed_candidate_pixels_from_previous_margin": 5062,
+          "conditioning_anchor_optional_pixels": 59,
+          "conditioning_anchor_pixels": 7556,
+          "conditioning_bbox_xywh": [
+            1165,
+            553,
+            575,
+            159
+          ],
+          "conditioning_margin_fraction": 0.3,
+          "local_recovery_addition_optional_pixels": 5072,
+          "optional_evidence_pixel_sha256": "173e8cf80e7e61f9e2a0d7a6f3babc3a82006128952cbc0ae434081b2be6793b",
+          "optional_evidence_pixels": 5131,
+          "outside_generous_proposal_fraction": 0.190286,
+          "outside_generous_proposal_pixels": 2578,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 236.528,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 5131,
+            "false_residual_removal_pixels_if_naively_owned": 5130,
+            "foreign_word_optional_evidence_pixels": 5130,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.379869,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 1
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            1022,
+            514,
+            861,
+            237
+          ],
+          "candidate_component_count": 20,
+          "candidate_pixel_sha256": "fc507640273b10b9319ce41b30513e6bf4e4958f75cd85e95b187cce03ef260d",
+          "candidate_pixels": 14621,
+          "changed_candidate_pixels_from_previous_margin": 1075,
+          "conditioning_anchor_optional_pixels": 1970,
+          "conditioning_anchor_pixels": 9643,
+          "conditioning_bbox_xywh": [
+            1111,
+            538,
+            683,
+            189
+          ],
+          "conditioning_margin_fraction": 0.45,
+          "local_recovery_addition_optional_pixels": 4167,
+          "optional_evidence_pixel_sha256": "b6f80716d52ec7d41ad8bc0f607881f651259ae6304b9f6ba87401f4538eed51",
+          "optional_evidence_pixels": 6137,
+          "outside_generous_proposal_fraction": 0.199029,
+          "outside_generous_proposal_pixels": 2910,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 237.306,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 6137,
+            "false_residual_removal_pixels_if_naively_owned": 6137,
+            "foreign_word_optional_evidence_pixels": 6137,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.358702,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        }
+      ],
+      "proposal_bbox_xywh": [
+        1185,
+        583,
+        477,
+        104
+      ],
+      "recovery_crop_bbox_xywh": [
+        1022,
+        514,
+        861,
+        237
+      ],
+      "sealed_fixed_ownership_evaluation": {
+        "foreign_word_pixels": 5441,
+        "precision": 0.543425,
+        "recall": 1.0,
+        "target_word": {
+          "bbox_xywh": [
+            1273,
+            599,
+            359,
+            83
+          ],
+          "pixel_sha256": "1e82fd3f14524042436a25977658ce7c14d44bf77557f31802791badfb94da5c",
+          "pixels": 6476,
+          "word_number": 90
+        },
+        "true_positive_pixels": 6476,
+        "unlabelled_pixels": 0
+      },
+      "text": "know",
+      "unit_id": "body-02-U04"
+    },
+    {
+      "evaluation_human_word_number": 76,
+      "fixed_ownership_bbox_xywh": [
+        1458,
+        1114,
+        386,
+        60
+      ],
+      "fixed_ownership_component_ids": [
+        63
+      ],
+      "fixed_ownership_pixel_sha256": "dedef938d6b386c2bc0279bd574895eb0ec2142b917abbe8e5abcf19bf7498cf",
+      "fixed_ownership_pixels": 5576,
+      "ink_tight_bbox_xywh": [
+        1458,
+        1114,
+        386,
+        60
+      ],
+      "line_id": "body-05",
+      "margins": [
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            1366,
+            1105,
+            570,
+            88
+          ],
+          "candidate_component_count": 6,
+          "candidate_pixel_sha256": "eeb40388efd740b7f6f4dec95d63d0f6740e77c85dfea7a28c7723c58baf28a2",
+          "candidate_pixels": 6722,
+          "changed_candidate_pixels_from_previous_margin": null,
+          "conditioning_anchor_optional_pixels": 0,
+          "conditioning_anchor_pixels": 5576,
+          "conditioning_bbox_xywh": [
+            1456,
+            1112,
+            390,
+            64
+          ],
+          "conditioning_margin_fraction": 0.0,
+          "local_recovery_addition_optional_pixels": 1146,
+          "optional_evidence_pixel_sha256": "6454bcf70b57239f5703ca5452805ad030799e22ff6a3526ab1f506c33266491",
+          "optional_evidence_pixels": 1146,
+          "outside_generous_proposal_fraction": 0.0,
+          "outside_generous_proposal_pixels": 0,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 152.052,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 606,
+            "false_residual_removal_pixels_if_naively_owned": 606,
+            "foreign_word_optional_evidence_pixels": 606,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 1,
+            "naive_all_recovery_precision": 0.909848,
+            "naive_all_recovery_recall": 0.577362,
+            "potential_target_recall_if_only_correct_additions_approved": 0.577362,
+            "recovered_pixels_by_missed_target_component": [
+              540
+            ],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 540,
+            "target_residual_reduction_pixels_if_correctly_approved": 540,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            1306,
+            1101,
+            677,
+            92
+          ],
+          "candidate_component_count": 7,
+          "candidate_pixel_sha256": "fe8f7849ad86823251e8b63f645b8b7a9bdacaa95db86319c0c0ff3946ecdfc3",
+          "candidate_pixels": 8149,
+          "changed_candidate_pixels_from_previous_margin": 1431,
+          "conditioning_anchor_optional_pixels": 211,
+          "conditioning_anchor_pixels": 5787,
+          "conditioning_bbox_xywh": [
+            1419,
+            1108,
+            464,
+            72
+          ],
+          "conditioning_margin_fraction": 0.1,
+          "local_recovery_addition_optional_pixels": 2362,
+          "optional_evidence_pixel_sha256": "04357253178c10c5e8f0d50fecb653e7b384c38f8140485ac33637499cb4a385",
+          "optional_evidence_pixels": 2573,
+          "outside_generous_proposal_fraction": 0.002086,
+          "outside_generous_proposal_pixels": 17,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 151.126,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 1328,
+            "false_residual_removal_pixels_if_naively_owned": 1328,
+            "foreign_word_optional_evidence_pixels": 1328,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 1,
+            "naive_all_recovery_precision": 0.837035,
+            "naive_all_recovery_recall": 0.643916,
+            "potential_target_recall_if_only_correct_additions_approved": 0.643916,
+            "recovered_pixels_by_missed_target_component": [
+              1245
+            ],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 1245,
+            "target_residual_reduction_pixels_if_correctly_approved": 1245,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            1262,
+            1072,
+            778,
+            142
+          ],
+          "candidate_component_count": 9,
+          "candidate_pixel_sha256": "fcfc9139a1ce53e9a20b557aa665fabe11de8efe387725e60f0f33e3aec4e480",
+          "candidate_pixels": 9509,
+          "changed_candidate_pixels_from_previous_margin": 1360,
+          "conditioning_anchor_optional_pixels": 824,
+          "conditioning_anchor_pixels": 6400,
+          "conditioning_bbox_xywh": [
+            1389,
+            1103,
+            524,
+            82
+          ],
+          "conditioning_margin_fraction": 0.18,
+          "local_recovery_addition_optional_pixels": 3109,
+          "optional_evidence_pixel_sha256": "f403bdad38b4730911de6e81fc69b40cca65a691a33ce2a39dae5fb4e1e37b6c",
+          "optional_evidence_pixels": 3933,
+          "outside_generous_proposal_fraction": 0.126827,
+          "outside_generous_proposal_pixels": 1206,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 152.737,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 1889,
+            "false_residual_removal_pixels_if_naively_owned": 1889,
+            "foreign_word_optional_evidence_pixels": 1889,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 1,
+            "naive_all_recovery_precision": 0.801346,
+            "naive_all_recovery_recall": 0.719343,
+            "potential_target_recall_if_only_correct_additions_approved": 0.719343,
+            "recovered_pixels_by_missed_target_component": [
+              2044
+            ],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 2044,
+            "target_residual_reduction_pixels_if_correctly_approved": 2044,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            1201,
+            1072,
+            909,
+            143
+          ],
+          "candidate_component_count": 8,
+          "candidate_pixel_sha256": "1cf48d972e978af2c4de113f712516f44e30e7ab1d2dfa0337aabcb1f26b0f65",
+          "candidate_pixels": 12871,
+          "changed_candidate_pixels_from_previous_margin": 3366,
+          "conditioning_anchor_optional_pixels": 2794,
+          "conditioning_anchor_pixels": 8370,
+          "conditioning_bbox_xywh": [
+            1342,
+            1096,
+            618,
+            96
+          ],
+          "conditioning_margin_fraction": 0.3,
+          "local_recovery_addition_optional_pixels": 4501,
+          "optional_evidence_pixel_sha256": "50b69e150ce32e0c0f5707520c01f6f3dedc6cda778323ccc02875bcb78828b3",
+          "optional_evidence_pixels": 7295,
+          "outside_generous_proposal_fraction": 0.279155,
+          "outside_generous_proposal_pixels": 3593,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 155.073,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 4124,
+            "false_residual_removal_pixels_if_naively_owned": 4124,
+            "foreign_word_optional_evidence_pixels": 4124,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 1,
+            "naive_all_recovery_precision": 0.67959,
+            "naive_all_recovery_recall": 0.825734,
+            "potential_target_recall_if_only_correct_additions_approved": 0.825734,
+            "recovered_pixels_by_missed_target_component": [
+              3171
+            ],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 3171,
+            "target_residual_reduction_pixels_if_correctly_approved": 3171,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            1201,
+            1072,
+            913,
+            143
+          ],
+          "candidate_component_count": 7,
+          "candidate_pixel_sha256": "89787cc943112a19427137a9b6f5b724d307905b1e0c648d2d815d39c88c9624",
+          "candidate_pixels": 13598,
+          "changed_candidate_pixels_from_previous_margin": 745,
+          "conditioning_anchor_optional_pixels": 4472,
+          "conditioning_anchor_pixels": 10048,
+          "conditioning_bbox_xywh": [
+            1284,
+            1087,
+            734,
+            114
+          ],
+          "conditioning_margin_fraction": 0.45,
+          "local_recovery_addition_optional_pixels": 3550,
+          "optional_evidence_pixel_sha256": "dbf5959200134d2ef06359bddaf3df49470c66b5bd4fd64b6b25a0a311493473",
+          "optional_evidence_pixels": 8022,
+          "outside_generous_proposal_fraction": 0.286733,
+          "outside_generous_proposal_pixels": 3899,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 154.068,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 4681,
+            "false_residual_removal_pixels_if_naively_owned": 4681,
+            "foreign_word_optional_evidence_pixels": 4681,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 1,
+            "naive_all_recovery_precision": 0.655758,
+            "naive_all_recovery_recall": 0.841782,
+            "potential_target_recall_if_only_correct_additions_approved": 0.841782,
+            "recovered_pixels_by_missed_target_component": [
+              3341
+            ],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 3341,
+            "target_residual_reduction_pixels_if_correctly_approved": 3341,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        }
+      ],
+      "proposal_bbox_xywh": [
+        1452,
+        1104,
+        408,
+        77
+      ],
+      "recovery_crop_bbox_xywh": [
+        1188,
+        1072,
+        926,
+        144
+      ],
+      "sealed_fixed_ownership_evaluation": {
+        "foreign_word_pixels": 0,
+        "precision": 1.0,
+        "recall": 0.526385,
+        "target_word": {
+          "bbox_xywh": [
+            1163,
+            1049,
+            681,
+            125
+          ],
+          "pixel_sha256": "036dee9ec430c6e620bbc746ed6cddd8a26c096fb63cb1f232054b10da16f3b3",
+          "pixels": 10593,
+          "word_number": 76
+        },
+        "true_positive_pixels": 5576,
+        "unlabelled_pixels": 0
+      },
+      "text": "much",
+      "unit_id": "body-05-U04"
+    },
+    {
+      "evaluation_human_word_number": 57,
+      "fixed_ownership_bbox_xywh": [
+        579,
+        1510,
+        705,
+        97
+      ],
+      "fixed_ownership_component_ids": [
+        106,
+        108,
+        109,
+        111,
+        114,
+        117,
+        124
+      ],
+      "fixed_ownership_pixel_sha256": "ef8c369211eebd36a38feb5d3363a5c659758fe6de58524187c2b038565a221d",
+      "fixed_ownership_pixels": 16033,
+      "ink_tight_bbox_xywh": [
+        721,
+        1510,
+        563,
+        97
+      ],
+      "line_id": "body-08",
+      "margins": [
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            590,
+            1455,
+            830,
+            152
+          ],
+          "candidate_component_count": 9,
+          "candidate_pixel_sha256": "cedea020d1671f587de12e3c91cdacd8ce1aafaa889be18edb4889682a21f983",
+          "candidate_pixels": 16443,
+          "changed_candidate_pixels_from_previous_margin": null,
+          "conditioning_anchor_optional_pixels": 0,
+          "conditioning_anchor_pixels": 13350,
+          "conditioning_bbox_xywh": [
+            719,
+            1508,
+            567,
+            101
+          ],
+          "conditioning_margin_fraction": 0.0,
+          "local_recovery_addition_optional_pixels": 1983,
+          "optional_evidence_pixel_sha256": "308a4c800dfff9e8007d674faa334acd1741910ab6dd5103da59ea0f86c1f232",
+          "optional_evidence_pixels": 1983,
+          "outside_generous_proposal_fraction": 0.0,
+          "outside_generous_proposal_pixels": 0,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 357.703,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 1983,
+            "false_residual_removal_pixels_if_naively_owned": 1983,
+            "foreign_word_optional_evidence_pixels": 1983,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.396314,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            516,
+            1455,
+            916,
+            205
+          ],
+          "candidate_component_count": 14,
+          "candidate_pixel_sha256": "7c0841b1c5f97c3d73aa19fd7760b1a1806f0ca4cb69c1705b71dca4a61196b4",
+          "candidate_pixels": 18545,
+          "changed_candidate_pixels_from_previous_margin": 2102,
+          "conditioning_anchor_optional_pixels": 3,
+          "conditioning_anchor_pixels": 14740,
+          "conditioning_bbox_xywh": [
+            665,
+            1500,
+            675,
+            117
+          ],
+          "conditioning_margin_fraction": 0.1,
+          "local_recovery_addition_optional_pixels": 3247,
+          "optional_evidence_pixel_sha256": "88fcd508fa0695e23d1baa031c9dd88974aa6a485399a9625633b85cfc909a6a",
+          "optional_evidence_pixels": 3250,
+          "outside_generous_proposal_fraction": 0.004691,
+          "outside_generous_proposal_pixels": 87,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 365.688,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 3250,
+            "false_residual_removal_pixels_if_naively_owned": 3250,
+            "foreign_word_optional_evidence_pixels": 3250,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.370274,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            472,
+            1442,
+            1096,
+            233
+          ],
+          "candidate_component_count": 22,
+          "candidate_pixel_sha256": "28e7c87dd2fbb56014cb8714eb07156418a4d7f79c9ae55c05186cd181e024bf",
+          "candidate_pixels": 22808,
+          "changed_candidate_pixels_from_previous_margin": 4263,
+          "conditioning_anchor_optional_pixels": 1105,
+          "conditioning_anchor_pixels": 16707,
+          "conditioning_bbox_xywh": [
+            620,
+            1493,
+            765,
+            131
+          ],
+          "conditioning_margin_fraction": 0.18,
+          "local_recovery_addition_optional_pixels": 5945,
+          "optional_evidence_pixel_sha256": "56bfa99db91e37a6c3004e95aa2aa1866441850fd34a26c483ece1be4e383c40",
+          "optional_evidence_pixels": 7050,
+          "outside_generous_proposal_fraction": 0.111759,
+          "outside_generous_proposal_pixels": 2549,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 362.6,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 7050,
+            "false_residual_removal_pixels_if_naively_owned": 7050,
+            "foreign_word_optional_evidence_pixels": 7050,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.309319,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            472,
+            1442,
+            1198,
+            233
+          ],
+          "candidate_component_count": 25,
+          "candidate_pixel_sha256": "5c5d4e9847a008c56b88e5933313fe268152ee8a70a708200abf799a4f2833e5",
+          "candidate_pixels": 26434,
+          "changed_candidate_pixels_from_previous_margin": 3626,
+          "conditioning_anchor_optional_pixels": 3581,
+          "conditioning_anchor_pixels": 19614,
+          "conditioning_bbox_xywh": [
+            552,
+            1481,
+            901,
+            155
+          ],
+          "conditioning_margin_fraction": 0.3,
+          "local_recovery_addition_optional_pixels": 6820,
+          "optional_evidence_pixel_sha256": "6c95d6eb68358dca3ae918f37fc864fa240d305f68dce49d97ff25faec0c3763",
+          "optional_evidence_pixels": 10401,
+          "outside_generous_proposal_fraction": 0.192593,
+          "outside_generous_proposal_pixels": 5091,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 363.308,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 10401,
+            "false_residual_removal_pixels_if_naively_owned": 10396,
+            "foreign_word_optional_evidence_pixels": 10396,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.270107,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 5
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            468,
+            1442,
+            1210,
+            233
+          ],
+          "candidate_component_count": 31,
+          "candidate_pixel_sha256": "7bc5fc4f3def272d524f8cacfc2abf8e6f02b37a382861dc8e021bbd1e67fc5e",
+          "candidate_pixels": 28215,
+          "changed_candidate_pixels_from_previous_margin": 1785,
+          "conditioning_anchor_optional_pixels": 7840,
+          "conditioning_anchor_pixels": 23873,
+          "conditioning_bbox_xywh": [
+            468,
+            1466,
+            1069,
+            185
+          ],
+          "conditioning_margin_fraction": 0.45,
+          "local_recovery_addition_optional_pixels": 4342,
+          "optional_evidence_pixel_sha256": "56412373487c3f4653eae20c5445eca54978a33132fc4d9814f9b0062481f30a",
+          "optional_evidence_pixels": 12182,
+          "outside_generous_proposal_fraction": 0.22364,
+          "outside_generous_proposal_pixels": 6310,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 377.936,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 12182,
+            "false_residual_removal_pixels_if_naively_owned": 12168,
+            "foreign_word_optional_evidence_pixels": 12168,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.253057,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 14
+          }
+        }
+      ],
+      "proposal_bbox_xywh": [
+        721,
+        1491,
+        570,
+        134
+      ],
+      "recovery_crop_bbox_xywh": [
+        327,
+        1442,
+        1351,
+        233
+      ],
+      "sealed_fixed_ownership_evaluation": {
+        "foreign_word_pixels": 8893,
+        "precision": 0.445332,
+        "recall": 1.0,
+        "target_word": {
+          "bbox_xywh": [
+            957,
+            1514,
+            327,
+            93
+          ],
+          "pixel_sha256": "7930e5ba2045dc6f8419d58daad9dfb385a217840dcd70cf1c39d52710e4654a",
+          "pixels": 7140,
+          "word_number": 57
+        },
+        "true_positive_pixels": 7140,
+        "unlabelled_pixels": 0
+      },
+      "text": "write",
+      "unit_id": "body-08-U03"
+    },
+    {
+      "evaluation_human_word_number": 45,
+      "fixed_ownership_bbox_xywh": [
+        985,
+        1833,
+        286,
+        97
+      ],
+      "fixed_ownership_component_ids": [
+        153,
+        155,
+        160,
+        163,
+        167
+      ],
+      "fixed_ownership_pixel_sha256": "38777bcf136024055c2afe99dccbe466db8cdef08ddac0345d1a52d405852e4b",
+      "fixed_ownership_pixels": 6637,
+      "ink_tight_bbox_xywh": [
+        985,
+        1833,
+        286,
+        97
+      ],
+      "line_id": "body-10",
+      "margins": [
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            918,
+            1831,
+            381,
+            103
+          ],
+          "candidate_component_count": 8,
+          "candidate_pixel_sha256": "ec71118574a319145824bd6f976e4a943da005efcf3b0bba9f36b8932d668452",
+          "candidate_pixels": 7008,
+          "changed_candidate_pixels_from_previous_margin": null,
+          "conditioning_anchor_optional_pixels": 0,
+          "conditioning_anchor_pixels": 6637,
+          "conditioning_bbox_xywh": [
+            983,
+            1831,
+            290,
+            101
+          ],
+          "conditioning_margin_fraction": 0.0,
+          "local_recovery_addition_optional_pixels": 371,
+          "optional_evidence_pixel_sha256": "98a9510c8cfe395edf357df887584376bff08e3b1dfc02a71cb23fcd3dbea504",
+          "optional_evidence_pixels": 371,
+          "outside_generous_proposal_fraction": 0.0,
+          "outside_generous_proposal_pixels": 0,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 188.022,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 371,
+            "false_residual_removal_pixels_if_naively_owned": 371,
+            "foreign_word_optional_evidence_pixels": 371,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.427511,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            911,
+            1831,
+            465,
+            103
+          ],
+          "candidate_component_count": 9,
+          "candidate_pixel_sha256": "35ef2bb03a5509f596e79882e77cd05a8f185b8d0c9bf0ba078d3adb2db3c839",
+          "candidate_pixels": 7169,
+          "changed_candidate_pixels_from_previous_margin": 161,
+          "conditioning_anchor_optional_pixels": 153,
+          "conditioning_anchor_pixels": 6790,
+          "conditioning_bbox_xywh": [
+            956,
+            1823,
+            344,
+            117
+          ],
+          "conditioning_margin_fraction": 0.1,
+          "local_recovery_addition_optional_pixels": 379,
+          "optional_evidence_pixel_sha256": "00b010ee0d58bd0d87bb73d9eefb8fdbdc8acdb9cdf245802792ece51ea407a4",
+          "optional_evidence_pixels": 532,
+          "outside_generous_proposal_fraction": 0.0,
+          "outside_generous_proposal_pixels": 0,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 219.632,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 532,
+            "false_residual_removal_pixels_if_naively_owned": 532,
+            "foreign_word_optional_evidence_pixels": 532,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.41791,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            843,
+            1831,
+            547,
+            105
+          ],
+          "candidate_component_count": 9,
+          "candidate_pixel_sha256": "5dd7026d1c7b051a821d656a1350dd54587b072bc3a607a9225c842749985748",
+          "candidate_pixels": 8840,
+          "changed_candidate_pixels_from_previous_margin": 1671,
+          "conditioning_anchor_optional_pixels": 269,
+          "conditioning_anchor_pixels": 6906,
+          "conditioning_bbox_xywh": [
+            934,
+            1816,
+            388,
+            131
+          ],
+          "conditioning_margin_fraction": 0.18,
+          "local_recovery_addition_optional_pixels": 1934,
+          "optional_evidence_pixel_sha256": "a96309f3726a4b56e0268e5f217f7831fe07c99bf1bcfab826a95d15684a3c59",
+          "optional_evidence_pixels": 2203,
+          "outside_generous_proposal_fraction": 0.000113,
+          "outside_generous_proposal_pixels": 1,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 202.976,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 2203,
+            "false_residual_removal_pixels_if_naively_owned": 2203,
+            "foreign_word_optional_evidence_pixels": 2203,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.338914,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            797,
+            1818,
+            602,
+            119
+          ],
+          "candidate_component_count": 10,
+          "candidate_pixel_sha256": "3370e65322a13df916bc562cbff71cb99079c2102ee3b433bcd0fe5f9f644a9e",
+          "candidate_pixels": 9740,
+          "changed_candidate_pixels_from_previous_margin": 900,
+          "conditioning_anchor_optional_pixels": 881,
+          "conditioning_anchor_pixels": 7518,
+          "conditioning_bbox_xywh": [
+            899,
+            1804,
+            458,
+            155
+          ],
+          "conditioning_margin_fraction": 0.3,
+          "local_recovery_addition_optional_pixels": 2222,
+          "optional_evidence_pixel_sha256": "7cf10710af7a3335899e0798db928d6f4eff2dcd2096147c2dac3fb0edca807a",
+          "optional_evidence_pixels": 3103,
+          "outside_generous_proposal_fraction": 0.06848,
+          "outside_generous_proposal_pixels": 667,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 185.375,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 3103,
+            "false_residual_removal_pixels_if_naively_owned": 3103,
+            "foreign_word_optional_evidence_pixels": 3103,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.307598,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            785,
+            1818,
+            686,
+            180
+          ],
+          "candidate_component_count": 13,
+          "candidate_pixel_sha256": "6ee390b75e6eb59a83ed791dc9901a182ba04894c50e588dad33ed27f99995e0",
+          "candidate_pixels": 11404,
+          "changed_candidate_pixels_from_previous_margin": 1664,
+          "conditioning_anchor_optional_pixels": 2582,
+          "conditioning_anchor_pixels": 9219,
+          "conditioning_bbox_xywh": [
+            856,
+            1789,
+            544,
+            185
+          ],
+          "conditioning_margin_fraction": 0.45,
+          "local_recovery_addition_optional_pixels": 2185,
+          "optional_evidence_pixel_sha256": "5c0c6047c198544be13bbbe27245aead4d9c154bb4394634b20818856b5b6dba",
+          "optional_evidence_pixels": 4767,
+          "outside_generous_proposal_fraction": 0.16994,
+          "outside_generous_proposal_pixels": 1938,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 187.842,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 4767,
+            "false_residual_removal_pixels_if_naively_owned": 4767,
+            "foreign_word_optional_evidence_pixels": 4767,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.262715,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        }
+      ],
+      "proposal_bbox_xywh": [
+        952,
+        1817,
+        324,
+        122
+      ],
+      "recovery_crop_bbox_xywh": [
+        785,
+        1765,
+        686,
+        233
+      ],
+      "sealed_fixed_ownership_evaluation": {
+        "foreign_word_pixels": 3640,
+        "precision": 0.451409,
+        "recall": 1.0,
+        "target_word": {
+          "bbox_xywh": [
+            985,
+            1833,
+            152,
+            83
+          ],
+          "pixel_sha256": "debf0188870dada8a5258e3ee86c6ad12e4d1d41eb48e0503ace412851026f67",
+          "pixels": 2996,
+          "word_number": 45
+        },
+        "true_positive_pixels": 2996,
+        "unlabelled_pixels": 1
+      },
+      "text": "like",
+      "unit_id": "body-10-U02"
+    },
+    {
+      "evaluation_human_word_number": 38,
+      "fixed_ownership_bbox_xywh": [
+        1108,
+        1952,
+        461,
+        182
+      ],
+      "fixed_ownership_component_ids": [
+        172,
+        175,
+        187,
+        189,
+        195,
+        198
+      ],
+      "fixed_ownership_pixel_sha256": "c1cdf022d2f23b4ac3f2d7bf981b0add5eb0068931bc43f2bbc934da057147a7",
+      "fixed_ownership_pixels": 9437,
+      "ink_tight_bbox_xywh": [
+        1108,
+        1990,
+        385,
+        144
+      ],
+      "line_id": "body-11",
+      "margins": [
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            1008,
+            1891,
+            585,
+            344
+          ],
+          "candidate_component_count": 23,
+          "candidate_pixel_sha256": "ddd14a54bf270b1ca71259df5f12a9e489532c7a81cabac45129e958486e5251",
+          "candidate_pixels": 13604,
+          "changed_candidate_pixels_from_previous_margin": null,
+          "conditioning_anchor_optional_pixels": 0,
+          "conditioning_anchor_pixels": 8495,
+          "conditioning_bbox_xywh": [
+            1106,
+            1988,
+            389,
+            148
+          ],
+          "conditioning_margin_fraction": 0.0,
+          "local_recovery_addition_optional_pixels": 4442,
+          "optional_evidence_pixel_sha256": "8342149a65c555cece2014195c1538a0461df0522cd81701916e79a26b5ce69b",
+          "optional_evidence_pixels": 4442,
+          "outside_generous_proposal_fraction": 0.228903,
+          "outside_generous_proposal_pixels": 3114,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 369.919,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 4442,
+            "false_residual_removal_pixels_if_naively_owned": 4442,
+            "foreign_word_optional_evidence_pixels": 4442,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.557749,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            992,
+            1889,
+            656,
+            346
+          ],
+          "candidate_component_count": 30,
+          "candidate_pixel_sha256": "5f4485e15083b6fb1c55778570818540ba3b5a8399a2c9d9377935cce16990e6",
+          "candidate_pixels": 16188,
+          "changed_candidate_pixels_from_previous_margin": 2584,
+          "conditioning_anchor_optional_pixels": 478,
+          "conditioning_anchor_pixels": 9446,
+          "conditioning_bbox_xywh": [
+            1070,
+            1976,
+            461,
+            172
+          ],
+          "conditioning_margin_fraction": 0.1,
+          "local_recovery_addition_optional_pixels": 6388,
+          "optional_evidence_pixel_sha256": "6f6d1d1f2e91c56d391b39cbbcd111fee4e129fd69b4c269f9e79bfabf3b813a",
+          "optional_evidence_pixels": 6866,
+          "outside_generous_proposal_fraction": 0.26217,
+          "outside_generous_proposal_pixels": 4244,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 368.155,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 6866,
+            "false_residual_removal_pixels_if_naively_owned": 6866,
+            "foreign_word_optional_evidence_pixels": 6866,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.474821,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            905,
+            1889,
+            806,
+            346
+          ],
+          "candidate_component_count": 39,
+          "candidate_pixel_sha256": "b96c4f0dd0ae50e0c5e7847f7baf15c2122be43d5238bea90102c529e3089b06",
+          "candidate_pixels": 22003,
+          "changed_candidate_pixels_from_previous_margin": 5815,
+          "conditioning_anchor_optional_pixels": 1159,
+          "conditioning_anchor_pixels": 10442,
+          "conditioning_bbox_xywh": [
+            1039,
+            1964,
+            523,
+            196
+          ],
+          "conditioning_margin_fraction": 0.18,
+          "local_recovery_addition_optional_pixels": 11467,
+          "optional_evidence_pixel_sha256": "bc110e36796eedb58b5048f9e2eefc26a7225fe5e9f001d65b8d54f0cf0389e7",
+          "optional_evidence_pixels": 12626,
+          "outside_generous_proposal_fraction": 0.380085,
+          "outside_generous_proposal_pixels": 8363,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 389.549,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 12626,
+            "false_residual_removal_pixels_if_naively_owned": 12625,
+            "foreign_word_optional_evidence_pixels": 12625,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.350859,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 1
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            838,
+            1889,
+            925,
+            346
+          ],
+          "candidate_component_count": 41,
+          "candidate_pixel_sha256": "b8111a8304ced6dbd8b2e2de30deb6fa6065914b983ab9afa60f89aa75884bbd",
+          "candidate_pixels": 27594,
+          "changed_candidate_pixels_from_previous_margin": 5591,
+          "conditioning_anchor_optional_pixels": 3030,
+          "conditioning_anchor_pixels": 12467,
+          "conditioning_bbox_xywh": [
+            992,
+            1947,
+            617,
+            230
+          ],
+          "conditioning_margin_fraction": 0.3,
+          "local_recovery_addition_optional_pixels": 15127,
+          "optional_evidence_pixel_sha256": "2348ea994fdb0dec686942c8027d33e1813d5ba04f4c84ee82de9df5e885b4fa",
+          "optional_evidence_pixels": 18157,
+          "outside_generous_proposal_fraction": 0.478619,
+          "outside_generous_proposal_pixels": 13207,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 378.977,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 18157,
+            "false_residual_removal_pixels_if_naively_owned": 18155,
+            "foreign_word_optional_evidence_pixels": 18155,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.280532,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 2
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            838,
+            1889,
+            925,
+            346
+          ],
+          "candidate_component_count": 41,
+          "candidate_pixel_sha256": "8e01228bfb2ccfa107e9de36b7dc5bd67d29acade71115734f7316e6298a3aca",
+          "candidate_pixels": 29851,
+          "changed_candidate_pixels_from_previous_margin": 2283,
+          "conditioning_anchor_optional_pixels": 9418,
+          "conditioning_anchor_pixels": 18855,
+          "conditioning_bbox_xywh": [
+            935,
+            1925,
+            731,
+            274
+          ],
+          "conditioning_margin_fraction": 0.45,
+          "local_recovery_addition_optional_pixels": 10996,
+          "optional_evidence_pixel_sha256": "61ce5fe4a6c66a77bedb6942fb21d642d55458d7e9771fe7b1dbfd104f981e43",
+          "optional_evidence_pixels": 20414,
+          "outside_generous_proposal_fraction": 0.480754,
+          "outside_generous_proposal_pixels": 14351,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 388.109,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 20414,
+            "false_residual_removal_pixels_if_naively_owned": 20412,
+            "foreign_word_optional_evidence_pixels": 20412,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 0,
+            "naive_all_recovery_precision": 0.259321,
+            "naive_all_recovery_recall": 1.0,
+            "potential_target_recall_if_only_correct_additions_approved": 1.0,
+            "recovered_pixels_by_missed_target_component": [],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 0,
+            "target_residual_reduction_pixels_if_correctly_approved": 0,
+            "unlabelled_optional_evidence_pixels": 2
+          }
+        }
+      ],
+      "proposal_bbox_xywh": [
+        1089,
+        1990,
+        404,
+        148
+      ],
+      "recovery_crop_bbox_xywh": [
+        838,
+        1889,
+        925,
+        346
+      ],
+      "sealed_fixed_ownership_evaluation": {
+        "foreign_word_pixels": 1685,
+        "precision": 0.820282,
+        "recall": 1.0,
+        "target_word": {
+          "bbox_xywh": [
+            1108,
+            2003,
+            368,
+            131
+          ],
+          "pixel_sha256": "7b4b0c3904d6247e052a56dfd930a36236b5034179a7ae3150dd58b74b078e13",
+          "pixels": 7741,
+          "word_number": 38
+        },
+        "true_positive_pixels": 7741,
+        "unlabelled_pixels": 11
+      },
+      "text": "bored",
+      "unit_id": "body-11-U03"
+    },
+    {
+      "evaluation_human_word_number": 23,
+      "fixed_ownership_bbox_xywh": [
+        1449,
+        2416,
+        532,
+        214
+      ],
+      "fixed_ownership_component_ids": [
+        255,
+        259,
+        303,
+        304,
+        305,
+        306,
+        307
+      ],
+      "fixed_ownership_pixel_sha256": "630ccfac62c713dec21c9bf5ead8a3174722dfd56056053961f9d4b6e10e485e",
+      "fixed_ownership_pixels": 3529,
+      "ink_tight_bbox_xywh": [
+        1449,
+        2491,
+        516,
+        125
+      ],
+      "line_id": "body-14",
+      "margins": [
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            1304,
+            2417,
+            783,
+            270
+          ],
+          "candidate_component_count": 14,
+          "candidate_pixel_sha256": "41d21a79830344adf96c196e60301d910c649429a5ea2aa9a9ba2699d2d7deed",
+          "candidate_pixels": 7171,
+          "changed_candidate_pixels_from_previous_margin": null,
+          "conditioning_anchor_optional_pixels": 0,
+          "conditioning_anchor_pixels": 1828,
+          "conditioning_bbox_xywh": [
+            1447,
+            2489,
+            520,
+            129
+          ],
+          "conditioning_margin_fraction": 0.0,
+          "local_recovery_addition_optional_pixels": 4226,
+          "optional_evidence_pixel_sha256": "241e06d2b4389d1009634444e3d04d98d6f026e9992a58f0efccf0d1be207a64",
+          "optional_evidence_pixels": 4226,
+          "outside_generous_proposal_fraction": 0.114489,
+          "outside_generous_proposal_pixels": 821,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 428.062,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 1619,
+            "false_residual_removal_pixels_if_naively_owned": 1619,
+            "foreign_word_optional_evidence_pixels": 1619,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 2,
+            "naive_all_recovery_precision": 0.443585,
+            "naive_all_recovery_recall": 0.341033,
+            "potential_target_recall_if_only_correct_additions_approved": 0.341033,
+            "recovered_pixels_by_missed_target_component": [
+              325,
+              2282
+            ],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 2607,
+            "target_residual_reduction_pixels_if_correctly_approved": 2607,
+            "unlabelled_optional_evidence_pixels": 0
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            1224,
+            2403,
+            878,
+            284
+          ],
+          "candidate_component_count": 19,
+          "candidate_pixel_sha256": "25d9cf63a1ce1824a879317c4dd4c196616240b560dc92e561f13b71a144667a",
+          "candidate_pixels": 15418,
+          "changed_candidate_pixels_from_previous_margin": 8247,
+          "conditioning_anchor_optional_pixels": 600,
+          "conditioning_anchor_pixels": 2947,
+          "conditioning_bbox_xywh": [
+            1397,
+            2479,
+            620,
+            149
+          ],
+          "conditioning_margin_fraction": 0.1,
+          "local_recovery_addition_optional_pixels": 11599,
+          "optional_evidence_pixel_sha256": "d449f40b260be2de2d7d8227a2a10c823d8a23f6340267cfdf502a4439e76ee5",
+          "optional_evidence_pixels": 12199,
+          "outside_generous_proposal_fraction": 0.315994,
+          "outside_generous_proposal_pixels": 4872,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 427.304,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 7592,
+            "false_residual_removal_pixels_if_naively_owned": 7590,
+            "foreign_word_optional_evidence_pixels": 7590,
+            "missed_target_components_fully_recovered": 0,
+            "missed_target_components_touched": 2,
+            "naive_all_recovery_precision": 0.34588,
+            "naive_all_recovery_recall": 0.539308,
+            "potential_target_recall_if_only_correct_additions_approved": 0.539308,
+            "recovered_pixels_by_missed_target_component": [
+              1555,
+              3052
+            ],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 4607,
+            "target_residual_reduction_pixels_if_correctly_approved": 4607,
+            "unlabelled_optional_evidence_pixels": 2
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            1170,
+            2403,
+            1021,
+            284
+          ],
+          "candidate_component_count": 22,
+          "candidate_pixel_sha256": "1b7211974da6da7b3b5b0b47eb10804d5aec6131a028140a13a9399530f88e8c",
+          "candidate_pixels": 18280,
+          "changed_candidate_pixels_from_previous_margin": 3002,
+          "conditioning_anchor_optional_pixels": 2762,
+          "conditioning_anchor_pixels": 5274,
+          "conditioning_bbox_xywh": [
+            1356,
+            2469,
+            702,
+            169
+          ],
+          "conditioning_margin_fraction": 0.18,
+          "local_recovery_addition_optional_pixels": 12266,
+          "optional_evidence_pixel_sha256": "1f4ee4f09e61f1e82074f496e548c2132de6b4e6da9bc7f89f5d56aa15205fc8",
+          "optional_evidence_pixels": 15028,
+          "outside_generous_proposal_fraction": 0.339442,
+          "outside_generous_proposal_pixels": 6205,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 423.38,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 8733,
+            "false_residual_removal_pixels_if_naively_owned": 8731,
+            "foreign_word_optional_evidence_pixels": 8731,
+            "missed_target_components_fully_recovered": 3,
+            "missed_target_components_touched": 5,
+            "naive_all_recovery_precision": 0.384114,
+            "naive_all_recovery_recall": 0.706652,
+            "potential_target_recall_if_only_correct_additions_approved": 0.706652,
+            "recovered_pixels_by_missed_target_component": [
+              2729,
+              7,
+              3555,
+              3,
+              1
+            ],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 6295,
+            "target_residual_reduction_pixels_if_correctly_approved": 6295,
+            "unlabelled_optional_evidence_pixels": 2
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            1088,
+            2403,
+            1155,
+            284
+          ],
+          "candidate_component_count": 29,
+          "candidate_pixel_sha256": "b3bd7c68598b6732fb60836ef907df2f4fe52d210633431fdb53cb676c2df8cf",
+          "candidate_pixels": 22378,
+          "changed_candidate_pixels_from_previous_margin": 4196,
+          "conditioning_anchor_optional_pixels": 8378,
+          "conditioning_anchor_pixels": 11399,
+          "conditioning_bbox_xywh": [
+            1294,
+            2453,
+            826,
+            201
+          ],
+          "conditioning_margin_fraction": 0.3,
+          "local_recovery_addition_optional_pixels": 10644,
+          "optional_evidence_pixel_sha256": "bc581ec6fec7273918dfad2e298f7cab8fd48c9e14a93c08c8f1d204d393b290",
+          "optional_evidence_pixels": 19022,
+          "outside_generous_proposal_fraction": 0.371302,
+          "outside_generous_proposal_pixels": 8309,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 424.685,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 11376,
+            "false_residual_removal_pixels_if_naively_owned": 11374,
+            "foreign_word_optional_evidence_pixels": 11374,
+            "missed_target_components_fully_recovered": 8,
+            "missed_target_components_touched": 10,
+            "naive_all_recovery_precision": 0.375992,
+            "naive_all_recovery_recall": 0.840587,
+            "potential_target_recall_if_only_correct_additions_approved": 0.840587,
+            "recovered_pixels_by_missed_target_component": [
+              3272,
+              2,
+              3,
+              1,
+              7,
+              4355,
+              3,
+              1,
+              1,
+              1
+            ],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 7646,
+            "target_residual_reduction_pixels_if_correctly_approved": 7646,
+            "unlabelled_optional_evidence_pixels": 2
+          }
+        },
+        {
+          "automatic_ownership_effect": "none",
+          "candidate_bbox_xywh": [
+            1088,
+            2403,
+            1155,
+            284
+          ],
+          "candidate_component_count": 31,
+          "candidate_pixel_sha256": "1294a3a84e71b71fdc58746c52506178087bffa2d7590298e180685cce458fc4",
+          "candidate_pixels": 25253,
+          "changed_candidate_pixels_from_previous_margin": 3089,
+          "conditioning_anchor_optional_pixels": 17332,
+          "conditioning_anchor_pixels": 20577,
+          "conditioning_bbox_xywh": [
+            1217,
+            2435,
+            980,
+            237
+          ],
+          "conditioning_margin_fraction": 0.45,
+          "local_recovery_addition_optional_pixels": 4509,
+          "optional_evidence_pixel_sha256": "405152d308de41b0a3a1e6230a01a702fadc38610854a7fd48116f0093310591",
+          "optional_evidence_pixels": 21841,
+          "outside_generous_proposal_fraction": 0.399596,
+          "outside_generous_proposal_pixels": 10091,
+          "recovery_profile": "maximum_recall_clipped_to_bound_v4_high_recall",
+          "recovery_wall_time_ms": 428.84,
+          "sealed_evaluation": {
+            "correction_pixels_if_all_recovery_naively_owned": 13194,
+            "false_residual_removal_pixels_if_naively_owned": 13188,
+            "foreign_word_optional_evidence_pixels": 13188,
+            "missed_target_components_fully_recovered": 11,
+            "missed_target_components_touched": 13,
+            "naive_all_recovery_precision": 0.37367,
+            "naive_all_recovery_recall": 0.939824,
+            "potential_target_recall_if_only_correct_additions_approved": 0.939824,
+            "recovered_pixels_by_missed_target_component": [
+              3823,
+              2,
+              3,
+              1,
+              7,
+              4792,
+              3,
+              2,
+              2,
+              1,
+              1,
+              1,
+              9
+            ],
+            "target_optional_evidence_pixels_not_in_fixed_ownership": 8647,
+            "target_residual_reduction_pixels_if_correctly_approved": 8647,
+            "unlabelled_optional_evidence_pixels": 6
+          }
+        }
+      ],
+      "proposal_bbox_xywh": [
+        1440,
+        2491,
+        531,
+        125
+      ],
+      "recovery_crop_bbox_xywh": [
+        1088,
+        2403,
+        1238,
+        301
+      ],
+      "sealed_fixed_ownership_evaluation": {
+        "foreign_word_pixels": 2695,
+        "precision": 0.236044,
+        "recall": 0.082582,
+        "target_word": {
+          "bbox_xywh": [
+            1187,
+            2496,
+            342,
+            194
+          ],
+          "pixel_sha256": "671c08dd271336fa5e997cea82ad2e037bf9e08e5dc53df12e80d7eaaddb8c56",
+          "pixels": 10087,
+          "word_number": 23
+        },
+        "true_positive_pixels": 833,
+        "unlabelled_pixels": 1
+      },
+      "text": "day-",
+      "unit_id": "body-14-U03"
+    }
+  ]
+}
+

@@ -1,0 +1,122 @@
+{
+  "schema_version": "word-ink-agent-benchmark.v1",
+  "suite_id": "agent-ownership-tools-pilot-v2",
+  "source_manifest": "corpus/real-stress-v1.json",
+  "frozen_order_seed": 20260806,
+  "variants": [
+    {
+      "id": "context-only",
+      "opaque_suffix": "c",
+      "show_prior_owned_ink": false,
+      "expose_prior_component_refs": false
+    },
+    {
+      "id": "oracle-prior-red-only",
+      "opaque_suffix": "r",
+      "show_prior_owned_ink": true,
+      "expose_prior_component_refs": false
+    },
+    {
+      "id": "oracle-prior-red-and-refs",
+      "opaque_suffix": "s",
+      "show_prior_owned_ink": true,
+      "expose_prior_component_refs": true
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "014-p04-we-will",
+      "opaque_id": "r137rc",
+      "pilot_tier": "complex",
+      "preprocessing": {
+        "operation_count": 4,
+        "provenance": "frozen-collection-014-crop-perimeter-cuts-v1"
+      }
+    },
+    {
+      "case_id": "007-p02-think",
+      "opaque_id": "kvkyo8",
+      "pilot_tier": "routine-plus",
+      "preprocessing": {
+        "operation_count": 0,
+        "provenance": "none"
+      }
+    },
+    {
+      "case_id": "014-p01-seed",
+      "opaque_id": "hhsdua",
+      "pilot_tier": "abstention",
+      "preprocessing": {
+        "operation_count": 4,
+        "provenance": "frozen-collection-014-crop-perimeter-cuts-v1"
+      }
+    },
+    {
+      "case_id": "014-p04-gobbler",
+      "opaque_id": "r0onck",
+      "pilot_tier": "complex",
+      "preprocessing": {
+        "operation_count": 4,
+        "provenance": "frozen-collection-014-crop-perimeter-cuts-v1"
+      }
+    },
+    {
+      "case_id": "007-p02-i-love",
+      "opaque_id": "9yo7ol",
+      "pilot_tier": "routine",
+      "preprocessing": {
+        "operation_count": 0,
+        "provenance": "none"
+      }
+    },
+    {
+      "case_id": "014-p01-table",
+      "opaque_id": "n5j2ir",
+      "pilot_tier": "routine-plus",
+      "preprocessing": {
+        "operation_count": 4,
+        "provenance": "frozen-collection-014-crop-perimeter-cuts-v1"
+      }
+    },
+    {
+      "case_id": "014-p04-over",
+      "opaque_id": "ilwq5d",
+      "pilot_tier": "routine-plus",
+      "preprocessing": {
+        "operation_count": 4,
+        "provenance": "frozen-collection-014-crop-perimeter-cuts-v1"
+      }
+    },
+    {
+      "case_id": "007-p02-ps",
+      "opaque_id": "exx236",
+      "pilot_tier": "complex",
+      "preprocessing": {
+        "operation_count": 0,
+        "provenance": "none"
+      }
+    },
+    {
+      "case_id": "007-p02-did",
+      "opaque_id": "7lkfns",
+      "pilot_tier": "complex",
+      "preprocessing": {
+        "operation_count": 0,
+        "provenance": "none"
+      }
+    }
+  ],
+  "router_controls": [
+    {
+      "case_id": "014-p04-fold-fragment",
+      "route": "human_review",
+      "reason_code": "missing_target_transcript",
+      "notes": "A null target transcript is routed before model invocation and is not scored as visual fold detection."
+    }
+  ],
+  "context": {
+    "large_blue_padding_px": 180,
+    "small_gray_padding_px": 90,
+    "maximum_pixels": 1500000
+  }
+}

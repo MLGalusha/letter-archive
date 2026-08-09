@@ -1,0 +1,260 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://letter-archive.local/schemas/word-work-decision-v1.schema.json",
+  "title": "One software-supervised word-work decision",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "word-work-decision.v1"
+    },
+    "action": {
+      "$ref": "#/$defs/action"
+    }
+  },
+  "required": ["schema_version", "action"],
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "action": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {"const": "approve_line_registration"},
+            "line_id": {"type": "string", "minLength": 1},
+            "item_id": {"type": "string", "minLength": 1},
+            "payload": {
+              "type": "object",
+              "properties": {
+                "directed_reading_sha256": {"$ref": "#/$defs/sha256"}
+              },
+              "required": ["directed_reading_sha256"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["type", "line_id", "item_id", "payload"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {"const": "confirm_location"},
+            "line_id": {"type": "string", "minLength": 1},
+            "item_id": {"type": "string", "minLength": 1},
+            "payload": {
+              "type": "object",
+              "properties": {"evidence_sha256": {"$ref": "#/$defs/sha256"}},
+              "required": ["evidence_sha256"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["type", "line_id", "item_id", "payload"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {"const": "accept_alignment_group"},
+            "line_id": {"type": "string", "minLength": 1},
+            "item_id": {"type": "string", "minLength": 1},
+            "payload": {
+              "type": "object",
+              "properties": {"evidence_sha256": {"$ref": "#/$defs/sha256"}},
+              "required": ["evidence_sha256"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["type", "line_id", "item_id", "payload"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {"const": "reject_transcript"},
+            "line_id": {"type": "string", "minLength": 1},
+            "item_id": {"type": "string", "minLength": 1},
+            "payload": {
+              "type": "object",
+              "properties": {
+                "transcript_unit_id": {"type": "string", "minLength": 1},
+                "replacement_text": {"type": "string", "minLength": 1, "pattern": "^\\S+$"},
+                "evidence_sha256": {"$ref": "#/$defs/sha256"}
+              },
+              "required": ["transcript_unit_id", "replacement_text", "evidence_sha256"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["type", "line_id", "item_id", "payload"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {"const": "approve_ownership"},
+            "line_id": {"type": "string", "minLength": 1},
+            "item_id": {"type": "string", "minLength": 1},
+            "payload": {
+              "type": "object",
+              "properties": {
+                "owned_mask_sha256": {"$ref": "#/$defs/sha256"},
+                "selection_record_sha256": {"$ref": "#/$defs/sha256"}
+              },
+              "required": ["owned_mask_sha256", "selection_record_sha256"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["type", "line_id", "item_id", "payload"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {"const": "classify_residual"},
+            "line_id": {"type": "string", "minLength": 1},
+            "item_id": {"type": "string", "minLength": 1},
+            "payload": {
+              "type": "object",
+              "properties": {
+                "disposition": {
+                  "enum": ["punctuation", "non_word_mark", "scan_artifact"]
+                },
+                "evidence_sha256": {"$ref": "#/$defs/sha256"}
+              },
+              "required": ["disposition", "evidence_sha256"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["type", "line_id", "item_id", "payload"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {"const": "insert_visible_unit"},
+            "line_id": {"type": "string", "minLength": 1},
+            "item_id": {"type": "string", "minLength": 1},
+            "payload": {
+              "type": "object",
+              "properties": {
+                "visible_unit": {
+                  "type": "object",
+                  "properties": {
+                    "id": {"type": "string", "minLength": 1},
+                    "order": {"type": "integer", "minimum": 0},
+                    "bbox_source_xywh": {
+                      "type": "array",
+                      "prefixItems": [
+                        {"type": "integer", "minimum": 0},
+                        {"type": "integer", "minimum": 0},
+                        {"type": "integer", "minimum": 1},
+                        {"type": "integer", "minimum": 1}
+                      ],
+                      "minItems": 4,
+                      "maxItems": 4
+                    },
+                    "proposed_text": {"type": ["string", "null"], "minLength": 1}
+                  },
+                  "required": ["id", "order", "bbox_source_xywh", "proposed_text"],
+                  "additionalProperties": false
+                },
+                "alignment_group": {
+                  "type": "object",
+                  "properties": {
+                    "id": {"type": "string", "minLength": 1},
+                    "order": {"type": "integer", "minimum": 0},
+                    "transcript_unit_ids": {
+                      "type": "array",
+                      "items": {"type": "string", "minLength": 1},
+                      "uniqueItems": true
+                    },
+                    "visible_unit_ids": {
+                      "type": "array",
+                      "items": {"type": "string", "minLength": 1},
+                      "minItems": 1,
+                      "uniqueItems": true
+                    }
+                  },
+                  "required": ["id", "order", "transcript_unit_ids", "visible_unit_ids"],
+                  "additionalProperties": false
+                },
+                "evidence_sha256": {"$ref": "#/$defs/sha256"}
+              },
+              "required": ["visible_unit", "alignment_group", "evidence_sha256"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["type", "line_id", "item_id", "payload"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {"const": "complete_residual_audit"},
+            "line_id": {"type": "string", "minLength": 1},
+            "item_id": {"type": "string", "minLength": 1},
+            "payload": {
+              "type": "object",
+              "properties": {"evidence_sha256": {"$ref": "#/$defs/sha256"}},
+              "required": ["evidence_sha256"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["type", "line_id", "item_id", "payload"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {"const": "record_envelope"},
+            "line_id": {"type": "string", "minLength": 1},
+            "item_id": {"type": "string", "minLength": 1},
+            "payload": {
+              "type": "object",
+              "properties": {
+                "outcome": {"enum": ["pass", "box_only_failure"]},
+                "result_sha256": {"$ref": "#/$defs/sha256"}
+              },
+              "required": ["outcome", "result_sha256"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["type", "line_id", "item_id", "payload"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {"const": "escalate_human"},
+            "line_id": {"type": "string", "minLength": 1},
+            "item_id": {"type": "string", "minLength": 1},
+            "payload": {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "enum": [
+                    "ambiguous_ownership",
+                    "insufficient_context",
+                    "line_registration",
+                    "shared_ink",
+                    "transcript_conflict",
+                    "unreadable",
+                    "unsafe_cut",
+                    "envelope_failure"
+                  ]
+                },
+                "evidence_sha256": {"$ref": "#/$defs/sha256"}
+              },
+              "required": ["reason", "evidence_sha256"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["type", "line_id", "item_id", "payload"],
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

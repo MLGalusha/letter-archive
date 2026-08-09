@@ -1,0 +1,3512 @@
+{
+  "cases": [
+    {
+      "angle_degrees": 8,
+      "assessment": {
+        "morphological": {
+          "notes": "The deterministic wrapper rejected this cleaned mask under the frozen profile; see failure.json.",
+          "status": "failure"
+        },
+        "soft_union": {
+          "notes": "Includes both letters and both punctuation marks while excluding the Did line below.",
+          "status": "success"
+        }
+      },
+      "crop": {
+        "max_pixels": 1500000,
+        "origin_xy": [
+          560,
+          2670
+        ],
+        "padding_px": 60,
+        "requested_box_xywh": [
+          620,
+          2730,
+          415,
+          230
+        ],
+        "sha256": "d73b2031af573e6f5ae86791af7843010cdeb08b43e1842b40d4a65942cb5b33",
+        "size_wh": [
+          535,
+          350
+        ]
+      },
+      "envelope_profile": "large-oblique-v1",
+      "extraction_profile": "blue-large-v1",
+      "id": "007-p02-ps",
+      "input_assessment": {
+        "notes": "Target crop and cleanup are suitable for wrapper evaluation.",
+        "status": "evaluable"
+      },
+      "label": "P.S.",
+      "preferred_method": "soft_union",
+      "raw_mask_pixel_sha256": "00db50011b7602899d46822e87c94add53439e2d492fa1f06cc454c4e5b31d7d",
+      "raw_mask_sha256": "dda8cc8b92ca468303be784e17761d8a2333a4e95022262bfd91d74c44538ae6",
+      "rough_box_crop_xywh": [
+        4,
+        4,
+        527,
+        342
+      ],
+      "semantic_neighbor_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "00db50011b7602899d46822e87c94add53439e2d492fa1f06cc454c4e5b31d7d",
+            "ids": [
+              23,
+              28,
+              30,
+              31,
+              33
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      },
+      "source_path": "/Users/masongalusha/Workspace/projects/letter-archive/backend/storage/collections/007/19430411/L01/007-19430411-L01-02.jpg",
+      "source_sha256": "0bce0fe0b8c4a578b846bf004a36cc7774ecf7cbaeebe4f12106a1b962490312",
+      "source_target_box_xywh": [
+        620,
+        2730,
+        415,
+        230
+      ],
+      "tags": [
+        "sideways-island",
+        "fold-crossing",
+        "punctuation",
+        "hard"
+      ],
+      "target_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "00db50011b7602899d46822e87c94add53439e2d492fa1f06cc454c4e5b31d7d",
+            "ids": [
+              10,
+              12,
+              13,
+              20,
+              26
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      }
+    },
+    {
+      "angle_degrees": -7,
+      "assessment": {
+        "morphological": {
+          "notes": "The deterministic wrapper rejected this cleaned mask under the frozen profile; see failure.json.",
+          "status": "failure"
+        },
+        "soft_union": {
+          "notes": "Visually wraps the disconnected capital, dot, and trailing strokes, but captures 24.61% of one labeled neighboring component and therefore requires review.",
+          "status": "partial"
+        }
+      },
+      "crop": {
+        "max_pixels": 1500000,
+        "origin_xy": [
+          360,
+          2850
+        ],
+        "padding_px": 60,
+        "requested_box_xywh": [
+          420,
+          2910,
+          590,
+          160
+        ],
+        "sha256": "d5baa88c9046f314167524498e4b796d667fe670952d5c5e8191f58ddd26ad48",
+        "size_wh": [
+          710,
+          280
+        ]
+      },
+      "envelope_profile": "large-oblique-v1",
+      "extraction_profile": "blue-large-v1",
+      "id": "007-p02-did",
+      "input_assessment": {
+        "notes": "Target crop and cleanup are suitable for wrapper evaluation.",
+        "status": "evaluable"
+      },
+      "label": "Did",
+      "preferred_method": "soft_union",
+      "raw_mask_pixel_sha256": "4ffa2cdb272eb92b38ccaeb1c6f888f4ffd507cd8e9f3cc1e0884e0803a7cc7e",
+      "raw_mask_sha256": "cd5a167771f54e4288613a143ef03b395156bcfdc4d8d5862522b90231351a8f",
+      "rough_box_crop_xywh": [
+        4,
+        4,
+        702,
+        272
+      ],
+      "semantic_neighbor_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "4ffa2cdb272eb92b38ccaeb1c6f888f4ffd507cd8e9f3cc1e0884e0803a7cc7e",
+            "ids": [
+              1,
+              3,
+              5,
+              11,
+              12,
+              19,
+              22,
+              25,
+              26,
+              27
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      },
+      "source_path": "/Users/masongalusha/Workspace/projects/letter-archive/backend/storage/collections/007/19430411/L01/007-19430411-L01-02.jpg",
+      "source_sha256": "0bce0fe0b8c4a578b846bf004a36cc7774ecf7cbaeebe4f12106a1b962490312",
+      "source_target_box_xywh": [
+        420,
+        2910,
+        590,
+        160
+      ],
+      "tags": [
+        "sideways-island",
+        "detached-dot",
+        "fold-nearby",
+        "hard"
+      ],
+      "target_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "4ffa2cdb272eb92b38ccaeb1c6f888f4ffd507cd8e9f3cc1e0884e0803a7cc7e",
+            "ids": [
+              8,
+              14,
+              15
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      }
+    },
+    {
+      "angle_degrees": 4,
+      "assessment": {
+        "morphological": {
+          "notes": "Tight, complete envelope around the two-word script.",
+          "status": "success"
+        },
+        "soft_union": {
+          "notes": "Smooth complete envelope around the two-word script.",
+          "status": "success"
+        }
+      },
+      "crop": {
+        "max_pixels": 1500000,
+        "origin_xy": [
+          1190,
+          2630
+        ],
+        "padding_px": 60,
+        "requested_box_xywh": [
+          1250,
+          2690,
+          560,
+          205
+        ],
+        "sha256": "fa837e3d24cdaf3fa794ed039ae28c920cf6bf13b68a871fc0f59b2d5ca164ce",
+        "size_wh": [
+          680,
+          325
+        ]
+      },
+      "envelope_profile": "large-oblique-v1",
+      "extraction_profile": "blue-large-v1",
+      "id": "007-p02-i-love",
+      "input_assessment": {
+        "notes": "Target crop and cleanup are suitable for wrapper evaluation.",
+        "status": "evaluable"
+      },
+      "label": "I Love",
+      "preferred_method": "morphological",
+      "raw_mask_pixel_sha256": "4705d443d25f417187d1bdd34a0ad668946a457b5d61af2ae2ac4a848a0edd24",
+      "raw_mask_sha256": "eee7f56134ed9e632701172b22cb02f43e8d71281d261972f33bff6cb86e8dd7",
+      "rough_box_crop_xywh": [
+        4,
+        4,
+        672,
+        317
+      ],
+      "semantic_neighbor_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "4705d443d25f417187d1bdd34a0ad668946a457b5d61af2ae2ac4a848a0edd24",
+            "ids": [
+              1,
+              4,
+              5,
+              8
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      },
+      "source_path": "/Users/masongalusha/Workspace/projects/letter-archive/backend/storage/collections/007/19430411/L01/007-19430411-L01-02.jpg",
+      "source_sha256": "0bce0fe0b8c4a578b846bf004a36cc7774ecf7cbaeebe4f12106a1b962490312",
+      "source_target_box_xywh": [
+        1250,
+        2690,
+        560,
+        205
+      ],
+      "tags": [
+        "oblique",
+        "large-loop",
+        "medium"
+      ],
+      "target_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "4705d443d25f417187d1bdd34a0ad668946a457b5d61af2ae2ac4a848a0edd24",
+            "ids": [
+              2,
+              3
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      }
+    },
+    {
+      "angle_degrees": 13,
+      "assessment": {
+        "morphological": {
+          "notes": "The deterministic wrapper rejected this cleaned mask under the frozen profile; see failure.json.",
+          "status": "failure"
+        },
+        "soft_union": {
+          "notes": "Includes the detached dot and excludes nearby oblique words.",
+          "status": "success"
+        }
+      },
+      "crop": {
+        "max_pixels": 1500000,
+        "origin_xy": [
+          890,
+          3035
+        ],
+        "padding_px": 60,
+        "requested_box_xywh": [
+          950,
+          3095,
+          560,
+          200
+        ],
+        "sha256": "8619f0386d86d882c4f6ca489d603137de4d66b55b148e79d5b2ac5bad6a519e",
+        "size_wh": [
+          680,
+          320
+        ]
+      },
+      "envelope_profile": "large-oblique-v1",
+      "extraction_profile": "blue-large-v1",
+      "id": "007-p02-think",
+      "input_assessment": {
+        "notes": "Target crop and cleanup are suitable for wrapper evaluation.",
+        "status": "evaluable"
+      },
+      "label": "Think",
+      "preferred_method": "soft_union",
+      "raw_mask_pixel_sha256": "ae3e225433e947de0a274c54f91abfc7ebaf4693d84ac91ef96ae4b072e7fa6d",
+      "raw_mask_sha256": "77c5f2486f09564f9f1bf6d83b680f8cb7b626777841c32a1758e04b8b440e76",
+      "rough_box_crop_xywh": [
+        4,
+        4,
+        672,
+        312
+      ],
+      "semantic_neighbor_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "ae3e225433e947de0a274c54f91abfc7ebaf4693d84ac91ef96ae4b072e7fa6d",
+            "ids": [
+              2,
+              5,
+              6,
+              7,
+              9
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      },
+      "source_path": "/Users/masongalusha/Workspace/projects/letter-archive/backend/storage/collections/007/19430411/L01/007-19430411-L01-02.jpg",
+      "source_sha256": "0bce0fe0b8c4a578b846bf004a36cc7774ecf7cbaeebe4f12106a1b962490312",
+      "source_target_box_xywh": [
+        950,
+        3095,
+        560,
+        200
+      ],
+      "tags": [
+        "oblique",
+        "detached-dot",
+        "hard"
+      ],
+      "target_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "ae3e225433e947de0a274c54f91abfc7ebaf4693d84ac91ef96ae4b072e7fa6d",
+            "ids": [
+              3,
+              4
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      }
+    },
+    {
+      "angle_degrees": 11,
+      "assessment": {
+        "morphological": {
+          "notes": "The deterministic wrapper rejected this cleaned mask under the frozen profile; see failure.json.",
+          "status": "failure"
+        },
+        "soft_union": {
+          "notes": "The deterministic wrapper rejected this cleaned mask under the frozen profile; see failure.json.",
+          "status": "failure"
+        }
+      },
+      "crop": {
+        "max_pixels": 1500000,
+        "origin_xy": [
+          220,
+          3380
+        ],
+        "padding_px": 60,
+        "requested_box_xywh": [
+          280,
+          3440,
+          800,
+          300
+        ],
+        "sha256": "acba49d5a3157d5c67a5ef46b63267e781d8024691f0bbfa0c92c6bcbd0f98b1",
+        "size_wh": [
+          920,
+          420
+        ]
+      },
+      "envelope_profile": "large-oblique-v1",
+      "extraction_profile": "blue-large-v1",
+      "id": "007-p02-love-you",
+      "input_assessment": {
+        "notes": "Target crop and cleanup are suitable for wrapper evaluation.",
+        "status": "evaluable"
+      },
+      "label": "Love you",
+      "preferred_method": "morphological",
+      "raw_mask_pixel_sha256": "df3be107d86503baacb25bf390cd4b79924ee6818d814842c45d1a0f910f7258",
+      "raw_mask_sha256": "b7da4a5a34a2e1bcdee82a093064a50cf3dccf95644299dee77417935577c968",
+      "rough_box_crop_xywh": [
+        4,
+        4,
+        912,
+        412
+      ],
+      "semantic_neighbor_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "df3be107d86503baacb25bf390cd4b79924ee6818d814842c45d1a0f910f7258",
+            "ids": [
+              3,
+              5,
+              12,
+              13,
+              14,
+              44
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      },
+      "source_path": "/Users/masongalusha/Workspace/projects/letter-archive/backend/storage/collections/007/19430411/L01/007-19430411-L01-02.jpg",
+      "source_sha256": "0bce0fe0b8c4a578b846bf004a36cc7774ecf7cbaeebe4f12106a1b962490312",
+      "source_target_box_xywh": [
+        280,
+        3440,
+        800,
+        300
+      ],
+      "tags": [
+        "multi-word",
+        "fold-crossing",
+        "multi-island",
+        "hard"
+      ],
+      "target_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "df3be107d86503baacb25bf390cd4b79924ee6818d814842c45d1a0f910f7258",
+            "ids": [
+              24,
+              40,
+              43,
+              47,
+              48,
+              51,
+              54
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      }
+    },
+    {
+      "angle_degrees": 90,
+      "assessment": {
+        "morphological": {
+          "notes": "The deterministic wrapper rejected this cleaned mask under the frozen profile; see failure.json.",
+          "status": "failure"
+        },
+        "soft_union": {
+          "notes": "The deterministic wrapper rejected this cleaned mask under the frozen profile; see failure.json.",
+          "status": "failure"
+        }
+      },
+      "crop": {
+        "max_pixels": 1500000,
+        "origin_xy": [
+          196,
+          106
+        ],
+        "padding_px": 22,
+        "requested_box_xywh": [
+          218,
+          128,
+          47,
+          127
+        ],
+        "sha256": "abb203066402cc17ad1a52496def254fb95a13ad8635ec40dbf4e7b776ba0804",
+        "size_wh": [
+          91,
+          171
+        ]
+      },
+      "envelope_profile": "small-vertical-v1",
+      "extraction_profile": "gray-small-v1",
+      "id": "014-p01-a-few",
+      "input_assessment": {
+        "notes": "Target crop and cleanup are suitable for wrapper evaluation.",
+        "status": "evaluable"
+      },
+      "label": "a few",
+      "preferred_method": "morphological",
+      "raw_mask_pixel_sha256": "29284943ce08e440fe940ce4ca4bd92854b2704a14578f606d59e2bbbe5dc0f9",
+      "raw_mask_sha256": "c4fbe4faaa27c931620764a774f3e374dc2c0d052e9f6a1247a0d9155e30a42d",
+      "rough_box_crop_xywh": [
+        4,
+        4,
+        83,
+        163
+      ],
+      "semantic_neighbor_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "29284943ce08e440fe940ce4ca4bd92854b2704a14578f606d59e2bbbe5dc0f9",
+            "points": [
+              [
+                12,
+                0
+              ],
+              [
+                12,
+                170
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "33723fe22974466b318a02ad4a7c8dfbdb0abaa617376fff888118759d0d4c7b",
+            "points": [
+              [
+                79,
+                0
+              ],
+              [
+                79,
+                170
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "705dec170e2e07c32d6a710df83c41a3b6a9011202d40abdb7c803213471db8c",
+            "points": [
+              [
+                0,
+                12
+              ],
+              [
+                90,
+                12
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "76fbbc0dcb41948669f3644354cf92206b7db58497ed4006e9d62fe010973063",
+            "points": [
+              [
+                0,
+                159
+              ],
+              [
+                90,
+                159
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "76fbbc0dcb41948669f3644354cf92206b7db58497ed4006e9d62fe010973063",
+            "ids": [
+              2,
+              4,
+              7,
+              10,
+              11,
+              15,
+              16,
+              17,
+              18,
+              19
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      },
+      "source_path": "/Users/masongalusha/Workspace/projects/letter-archive/backend/storage/collections/014/18780127/L01/014-18780127-L01-01.jpg",
+      "source_sha256": "a832951e6c3f25d0ab963bc9e666090652ae8ca8e5fb9b578fb9a9f97f90fdbd",
+      "source_target_box_xywh": [
+        218,
+        128,
+        47,
+        127
+      ],
+      "tags": [
+        "vertical",
+        "multi-word",
+        "narrow",
+        "hard"
+      ],
+      "target_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "29284943ce08e440fe940ce4ca4bd92854b2704a14578f606d59e2bbbe5dc0f9",
+            "points": [
+              [
+                12,
+                0
+              ],
+              [
+                12,
+                170
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "33723fe22974466b318a02ad4a7c8dfbdb0abaa617376fff888118759d0d4c7b",
+            "points": [
+              [
+                79,
+                0
+              ],
+              [
+                79,
+                170
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "705dec170e2e07c32d6a710df83c41a3b6a9011202d40abdb7c803213471db8c",
+            "points": [
+              [
+                0,
+                12
+              ],
+              [
+                90,
+                12
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "76fbbc0dcb41948669f3644354cf92206b7db58497ed4006e9d62fe010973063",
+            "points": [
+              [
+                0,
+                159
+              ],
+              [
+                90,
+                159
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "76fbbc0dcb41948669f3644354cf92206b7db58497ed4006e9d62fe010973063",
+            "ids": [
+              5,
+              6,
+              13,
+              14
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      }
+    },
+    {
+      "angle_degrees": 90,
+      "assessment": {
+        "morphological": {
+          "notes": "Correct word ownership, but the contour is visibly lobed and less smooth than desired.",
+          "status": "partial"
+        },
+        "soft_union": {
+          "notes": "Smooth vertical envelope around the recovered word, but its 53.9% background reduction misses the proposed 65% auto-pass bar.",
+          "status": "partial"
+        }
+      },
+      "crop": {
+        "max_pixels": 1500000,
+        "origin_xy": [
+          246,
+          130
+        ],
+        "padding_px": 22,
+        "requested_box_xywh": [
+          268,
+          152,
+          39,
+          81
+        ],
+        "sha256": "6de2b3f4a71de49ef14000d71efde525c145c32bc39f7fdbb1458214323790e2",
+        "size_wh": [
+          83,
+          125
+        ]
+      },
+      "envelope_profile": "small-vertical-v1",
+      "extraction_profile": "gray-small-v1",
+      "id": "014-p01-good",
+      "input_assessment": {
+        "notes": "Target crop and cleanup are suitable for wrapper evaluation.",
+        "status": "evaluable"
+      },
+      "label": "good",
+      "preferred_method": "morphological",
+      "raw_mask_pixel_sha256": "589a280ee8101fa292fecfcfc48fbfe8d424fb345826dd72331f23be7505deeb",
+      "raw_mask_sha256": "6419ed2117413d1c80b1366cff41c5520f969ab1854f2672566004d78ca42eb8",
+      "rough_box_crop_xywh": [
+        4,
+        4,
+        75,
+        117
+      ],
+      "semantic_neighbor_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "589a280ee8101fa292fecfcfc48fbfe8d424fb345826dd72331f23be7505deeb",
+            "ids": [
+              2,
+              4,
+              8,
+              9
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      },
+      "source_path": "/Users/masongalusha/Workspace/projects/letter-archive/backend/storage/collections/014/18780127/L01/014-18780127-L01-01.jpg",
+      "source_sha256": "a832951e6c3f25d0ab963bc9e666090652ae8ca8e5fb9b578fb9a9f97f90fdbd",
+      "source_target_box_xywh": [
+        268,
+        152,
+        39,
+        81
+      ],
+      "tags": [
+        "vertical",
+        "pale",
+        "tiny",
+        "hard"
+      ],
+      "target_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "589a280ee8101fa292fecfcfc48fbfe8d424fb345826dd72331f23be7505deeb",
+            "points": [
+              [
+                12,
+                0
+              ],
+              [
+                12,
+                124
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "dfcebcaf0153b6904cfb0f69be421c88f66f9dc7cb12b3aef41730e9e1326027",
+            "points": [
+              [
+                71,
+                0
+              ],
+              [
+                71,
+                124
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "d6b11022bb5c6ded2c2e3663d6fc302691b20254a2be452af477d3643ee8dc06",
+            "points": [
+              [
+                0,
+                12
+              ],
+              [
+                82,
+                12
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "3361002598d8eb0c7ee1bbc73f619b7cbedc1d5bcb9368773203cdf3f8540f5a",
+            "points": [
+              [
+                0,
+                113
+              ],
+              [
+                82,
+                113
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "944b882495335e3334119140642b123cafe1dcb24f5e068f023f44d79a3f2272",
+            "ids": [
+              7,
+              12,
+              14
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      }
+    },
+    {
+      "angle_degrees": 90,
+      "assessment": {
+        "morphological": {
+          "notes": "Invalid input, diagnostic-only morphological run; not scored as a wrapper outcome.",
+          "status": "failure"
+        },
+        "soft_union": {
+          "notes": "Invalid input, diagnostic-only soft_union run; not scored as a wrapper outcome.",
+          "status": "failure"
+        }
+      },
+      "crop": {
+        "max_pixels": 1500000,
+        "origin_xy": [
+          292,
+          108
+        ],
+        "padding_px": 22,
+        "requested_box_xywh": [
+          314,
+          130,
+          53,
+          82
+        ],
+        "sha256": "8496861ac7f1f5f8b8a20527c75f7014c9ddbcbf6135dadf8ebb86b3fec45c12",
+        "size_wh": [
+          97,
+          126
+        ]
+      },
+      "envelope_profile": "small-vertical-v1",
+      "extraction_profile": "gray-small-v1",
+      "id": "014-p01-cabbage",
+      "input_assessment": {
+        "notes": "The final letters of Cabbage lie outside this frozen crop; retained as a crop-preparation failure and not scored.",
+        "reason_code": "target_crop_clipped",
+        "status": "invalid_input"
+      },
+      "label": "Cabbage",
+      "preferred_method": "morphological",
+      "raw_mask_pixel_sha256": "15d285fd6caf9e13afb8c7e6affa207eef383334f24955fe4af975297d73a129",
+      "raw_mask_sha256": "93b319da61d2398f75cead6d726cbac54f9f39e1b9a901e41ab1f56e182ff1ed",
+      "rough_box_crop_xywh": [
+        4,
+        4,
+        89,
+        118
+      ],
+      "semantic_neighbor_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "15d285fd6caf9e13afb8c7e6affa207eef383334f24955fe4af975297d73a129",
+            "points": [
+              [
+                12,
+                0
+              ],
+              [
+                12,
+                125
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "f4fc450d896fee97252b9bafaf7926ce3ef4028d72bff9a12b3f3a293af690a0",
+            "points": [
+              [
+                85,
+                0
+              ],
+              [
+                85,
+                125
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "be178af41e4b0d92b124b707a2bfe0315825c9f15d35c2cf2c22a94f536d08a5",
+            "points": [
+              [
+                0,
+                12
+              ],
+              [
+                96,
+                12
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "1d10d8ab94babda586a0d3f378ccd659a91d5f52d85a4406c39f60ecf1f24758",
+            "points": [
+              [
+                0,
+                114
+              ],
+              [
+                96,
+                114
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "a1fcfa5c25466effb1508621f2e740e6d03eb3f0f523a366bfec3aa8eb60597b",
+            "ids": [
+              1,
+              3,
+              4,
+              6,
+              7,
+              9,
+              10,
+              11,
+              12,
+              13,
+              23,
+              27,
+              29,
+              32,
+              33,
+              35,
+              39,
+              41,
+              42,
+              43,
+              44,
+              46,
+              47,
+              48
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      },
+      "source_path": "/Users/masongalusha/Workspace/projects/letter-archive/backend/storage/collections/014/18780127/L01/014-18780127-L01-01.jpg",
+      "source_sha256": "a832951e6c3f25d0ab963bc9e666090652ae8ca8e5fb9b578fb9a9f97f90fdbd",
+      "source_target_box_xywh": [
+        314,
+        130,
+        53,
+        82
+      ],
+      "tags": [
+        "vertical",
+        "large-initial",
+        "neighbor-nearby",
+        "hard"
+      ],
+      "target_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "15d285fd6caf9e13afb8c7e6affa207eef383334f24955fe4af975297d73a129",
+            "points": [
+              [
+                12,
+                0
+              ],
+              [
+                12,
+                125
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "f4fc450d896fee97252b9bafaf7926ce3ef4028d72bff9a12b3f3a293af690a0",
+            "points": [
+              [
+                85,
+                0
+              ],
+              [
+                85,
+                125
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "be178af41e4b0d92b124b707a2bfe0315825c9f15d35c2cf2c22a94f536d08a5",
+            "points": [
+              [
+                0,
+                12
+              ],
+              [
+                96,
+                12
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "1d10d8ab94babda586a0d3f378ccd659a91d5f52d85a4406c39f60ecf1f24758",
+            "points": [
+              [
+                0,
+                114
+              ],
+              [
+                96,
+                114
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "a1fcfa5c25466effb1508621f2e740e6d03eb3f0f523a366bfec3aa8eb60597b",
+            "ids": [
+              14,
+              18,
+              19,
+              22,
+              24,
+              26,
+              28,
+              30,
+              31,
+              34
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      }
+    },
+    {
+      "angle_degrees": 90,
+      "assessment": {
+        "morphological": {
+          "notes": "Invalid input, diagnostic-only morphological run; not scored as a wrapper outcome.",
+          "status": "failure"
+        },
+        "soft_union": {
+          "notes": "Invalid input, diagnostic-only soft_union run; not scored as a wrapper outcome.",
+          "status": "failure"
+        }
+      },
+      "crop": {
+        "max_pixels": 1500000,
+        "origin_xy": [
+          341,
+          176
+        ],
+        "padding_px": 22,
+        "requested_box_xywh": [
+          363,
+          198,
+          46,
+          66
+        ],
+        "sha256": "300028071fae9272c879915bd43bddfa300ad4f0235b32ace2de9ba4176a6908",
+        "size_wh": [
+          90,
+          110
+        ]
+      },
+      "envelope_profile": "small-vertical-v1",
+      "extraction_profile": "gray-small-v1",
+      "id": "014-p01-seed",
+      "input_assessment": {
+        "notes": "The final d is clipped and one selected diagonal stroke has ambiguous ownership; retained as input evidence and not scored.",
+        "reason_code": "target_crop_clipped",
+        "status": "invalid_input"
+      },
+      "label": "Seed",
+      "preferred_method": "morphological",
+      "raw_mask_pixel_sha256": "514d5f7d1c453a97b611a90c0fd2ab2333657c55d2583f4be8ec904f31bdd3a3",
+      "raw_mask_sha256": "720a07f1fa342924e94adf983b36d2084f8ca6af64eae14ce9126dd136f5ea21",
+      "rough_box_crop_xywh": [
+        4,
+        4,
+        82,
+        102
+      ],
+      "semantic_neighbor_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "514d5f7d1c453a97b611a90c0fd2ab2333657c55d2583f4be8ec904f31bdd3a3",
+            "points": [
+              [
+                12,
+                0
+              ],
+              [
+                12,
+                109
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "446108e8ea3660b219d9f0ec168fc095f6cbc688e8c42c5e328596d579aa6d68",
+            "points": [
+              [
+                78,
+                0
+              ],
+              [
+                78,
+                109
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "edbbb0d06e1edb534b38ce242fc0d64e393be50ae62148823c3b3042944e3d73",
+            "points": [
+              [
+                0,
+                12
+              ],
+              [
+                89,
+                12
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "2cd31aed3e6290519649e4bd32c4ef8f547665503c53aa55266b4fcf505b9f7d",
+            "points": [
+              [
+                0,
+                98
+              ],
+              [
+                89,
+                98
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "0181172770006b71052799c2c2295b41a58126bebf869193bebf14e548b08e8a",
+            "ids": [
+              1,
+              2,
+              3,
+              7,
+              11,
+              12,
+              15,
+              20,
+              23
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      },
+      "source_path": "/Users/masongalusha/Workspace/projects/letter-archive/backend/storage/collections/014/18780127/L01/014-18780127-L01-01.jpg",
+      "source_sha256": "a832951e6c3f25d0ab963bc9e666090652ae8ca8e5fb9b578fb9a9f97f90fdbd",
+      "source_target_box_xywh": [
+        363,
+        198,
+        46,
+        66
+      ],
+      "tags": [
+        "vertical",
+        "compact",
+        "body-text-nearby",
+        "hard"
+      ],
+      "target_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "514d5f7d1c453a97b611a90c0fd2ab2333657c55d2583f4be8ec904f31bdd3a3",
+            "points": [
+              [
+                12,
+                0
+              ],
+              [
+                12,
+                109
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "446108e8ea3660b219d9f0ec168fc095f6cbc688e8c42c5e328596d579aa6d68",
+            "points": [
+              [
+                78,
+                0
+              ],
+              [
+                78,
+                109
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "edbbb0d06e1edb534b38ce242fc0d64e393be50ae62148823c3b3042944e3d73",
+            "points": [
+              [
+                0,
+                12
+              ],
+              [
+                89,
+                12
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "2cd31aed3e6290519649e4bd32c4ef8f547665503c53aa55266b4fcf505b9f7d",
+            "points": [
+              [
+                0,
+                98
+              ],
+              [
+                89,
+                98
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "0181172770006b71052799c2c2295b41a58126bebf869193bebf14e548b08e8a",
+            "ids": [
+              8,
+              14
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      }
+    },
+    {
+      "angle_degrees": 90,
+      "assessment": {
+        "morphological": {
+          "notes": "The deterministic wrapper rejected this cleaned mask under the frozen profile; see failure.json.",
+          "status": "failure"
+        },
+        "soft_union": {
+          "notes": "The frozen soft-union envelope escapes the allowed rough region and is rejected.",
+          "status": "failure"
+        }
+      },
+      "crop": {
+        "max_pixels": 1500000,
+        "origin_xy": [
+          398,
+          54
+        ],
+        "padding_px": 22,
+        "requested_box_xywh": [
+          420,
+          76,
+          46,
+          193
+        ],
+        "sha256": "8d2d0c9daf6130af2414c3005f698c9b8b0ffbab9efca8cbd9a3e93e5fbe33f5",
+        "size_wh": [
+          90,
+          237
+        ]
+      },
+      "envelope_profile": "small-vertical-v1",
+      "extraction_profile": "gray-small-v1",
+      "id": "014-p01-dropped",
+      "input_assessment": {
+        "notes": "Target crop and cleanup are suitable for wrapper evaluation.",
+        "status": "evaluable"
+      },
+      "label": "dropped",
+      "preferred_method": "morphological",
+      "raw_mask_pixel_sha256": "e3c469c1d7b7703f44ebb08bcdf112c0ae6ff7baaa4ac9eed5cc4b704adfda0f",
+      "raw_mask_sha256": "883f09454521de27167965660ca94d38635390dd905cde64401aa539aa1324a9",
+      "rough_box_crop_xywh": [
+        4,
+        4,
+        82,
+        229
+      ],
+      "semantic_neighbor_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "e3c469c1d7b7703f44ebb08bcdf112c0ae6ff7baaa4ac9eed5cc4b704adfda0f",
+            "ids": [
+              8,
+              15,
+              16,
+              21,
+              25,
+              31,
+              36,
+              38
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      },
+      "source_path": "/Users/masongalusha/Workspace/projects/letter-archive/backend/storage/collections/014/18780127/L01/014-18780127-L01-01.jpg",
+      "source_sha256": "a832951e6c3f25d0ab963bc9e666090652ae8ca8e5fb9b578fb9a9f97f90fdbd",
+      "source_target_box_xywh": [
+        420,
+        76,
+        46,
+        193
+      ],
+      "tags": [
+        "vertical",
+        "fragmented",
+        "extreme"
+      ],
+      "target_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "e3c469c1d7b7703f44ebb08bcdf112c0ae6ff7baaa4ac9eed5cc4b704adfda0f",
+            "points": [
+              [
+                12,
+                0
+              ],
+              [
+                12,
+                236
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "77431c4797008353fae1652f496ed21393754f0b7babcccc687ac3a38ee9bd9e",
+            "points": [
+              [
+                78,
+                0
+              ],
+              [
+                78,
+                236
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "1c4dd543dbadbb1d7240296d9c8205237154a30da69c32fc4a008f5bfb9a5462",
+            "points": [
+              [
+                0,
+                12
+              ],
+              [
+                89,
+                12
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "a3c1e992445288780a554fc4b73f84eaa3d377f9a09f07507223b2cc074239d5",
+            "points": [
+              [
+                0,
+                225
+              ],
+              [
+                89,
+                225
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "4bb559b7d67a8f3d4392e0b372beec885900e0da7d9e6232c0f834b6f0c4111d",
+            "ids": [
+              3,
+              4,
+              6,
+              7,
+              8,
+              9,
+              10,
+              12,
+              15,
+              16,
+              26,
+              30,
+              33,
+              37,
+              38,
+              39
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      }
+    },
+    {
+      "angle_degrees": 90,
+      "assessment": {
+        "morphological": {
+          "notes": "Correct tight envelope around the complete two-word target after removing neighboring letter ink.",
+          "status": "success"
+        },
+        "soft_union": {
+          "notes": "The frozen soft-union profile expands outside the allowed rough region and is rejected.",
+          "status": "failure"
+        }
+      },
+      "crop": {
+        "max_pixels": 1500000,
+        "origin_xy": [
+          433,
+          109
+        ],
+        "padding_px": 22,
+        "requested_box_xywh": [
+          455,
+          131,
+          45,
+          110
+        ],
+        "sha256": "34c066186bbe25aef3d3445663c4d1fd8306ac0d01b185d3b6e3102df8bb8bf8",
+        "size_wh": [
+          89,
+          154
+        ]
+      },
+      "envelope_profile": "small-vertical-v1",
+      "extraction_profile": "gray-small-v1",
+      "id": "014-p01-with-a",
+      "input_assessment": {
+        "notes": "Target crop and cleanup are suitable for wrapper evaluation.",
+        "status": "evaluable"
+      },
+      "label": "with a",
+      "preferred_method": "morphological",
+      "raw_mask_pixel_sha256": "2be46a9c19520dcad96fbfa93e417a993067a8f00417e4680e025349c9c8753a",
+      "raw_mask_sha256": "ff85ea5ece63a2882dd1e6fec467017d5f0d0e2732dfc53a8ad219e61526854c",
+      "rough_box_crop_xywh": [
+        4,
+        4,
+        81,
+        146
+      ],
+      "semantic_neighbor_operations": null,
+      "source_path": "/Users/masongalusha/Workspace/projects/letter-archive/backend/storage/collections/014/18780127/L01/014-18780127-L01-01.jpg",
+      "source_sha256": "a832951e6c3f25d0ab963bc9e666090652ae8ca8e5fb9b578fb9a9f97f90fdbd",
+      "source_target_box_xywh": [
+        455,
+        131,
+        45,
+        110
+      ],
+      "tags": [
+        "vertical",
+        "detached-word",
+        "hard"
+      ],
+      "target_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "2be46a9c19520dcad96fbfa93e417a993067a8f00417e4680e025349c9c8753a",
+            "points": [
+              [
+                12,
+                0
+              ],
+              [
+                12,
+                153
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "210e859438b28bfb1167487d82f631a44191d4b3acd17925506ad2b5b4acc0e5",
+            "points": [
+              [
+                77,
+                0
+              ],
+              [
+                77,
+                153
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "948029a01072ed576d714a946be02d36b1d768244c5e51a02c3b4a59416d9560",
+            "points": [
+              [
+                0,
+                12
+              ],
+              [
+                88,
+                12
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "3821a89b1c8b032b0b1fb4097d12119b644ffc9c88e0f4abe4ca4477dfe212aa",
+            "points": [
+              [
+                0,
+                142
+              ],
+              [
+                88,
+                142
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "91269459242dbc3d36e02229d4b1744ab4a9dcab60d9c1cede01b71a698591f0",
+            "ids": [
+              4,
+              6,
+              14,
+              20,
+              26
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      }
+    },
+    {
+      "angle_degrees": 90,
+      "assessment": {
+        "morphological": {
+          "notes": "Correct tight envelope around the complete word-only mask.",
+          "status": "success"
+        },
+        "soft_union": {
+          "notes": "Correct smooth envelope, but 59.3% background reduction misses the proposed 65% auto-pass bar.",
+          "status": "partial"
+        }
+      },
+      "crop": {
+        "max_pixels": 1500000,
+        "origin_xy": [
+          473,
+          73
+        ],
+        "padding_px": 22,
+        "requested_box_xywh": [
+          495,
+          95,
+          45,
+          147
+        ],
+        "sha256": "6e08bb95c38b0a8ccd7539e01b94860c0b4e00dc9fe534406f207aa43f0741be",
+        "size_wh": [
+          89,
+          191
+        ]
+      },
+      "envelope_profile": "small-vertical-v1",
+      "extraction_profile": "gray-small-v1",
+      "id": "014-p01-letter",
+      "input_assessment": {
+        "notes": "Target crop and cleanup are suitable for wrapper evaluation.",
+        "status": "evaluable"
+      },
+      "label": "letter",
+      "preferred_method": "morphological",
+      "raw_mask_pixel_sha256": "e566cd556480574adf90be518c92abbf9b4a16d2c9e6999ec71644f0a7334f7f",
+      "raw_mask_sha256": "034b0c1e750b34cbcdffe2c4012dd0b907cfa7be0c2766db67c9cce519359ffb",
+      "rough_box_crop_xywh": [
+        4,
+        4,
+        81,
+        183
+      ],
+      "semantic_neighbor_operations": null,
+      "source_path": "/Users/masongalusha/Workspace/projects/letter-archive/backend/storage/collections/014/18780127/L01/014-18780127-L01-01.jpg",
+      "source_sha256": "a832951e6c3f25d0ab963bc9e666090652ae8ca8e5fb9b578fb9a9f97f90fdbd",
+      "source_target_box_xywh": [
+        495,
+        95,
+        45,
+        147
+      ],
+      "tags": [
+        "vertical",
+        "light-strokes",
+        "hard"
+      ],
+      "target_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "e566cd556480574adf90be518c92abbf9b4a16d2c9e6999ec71644f0a7334f7f",
+            "points": [
+              [
+                12,
+                0
+              ],
+              [
+                12,
+                190
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "aad0ce9c569ad5ae8391f9159b759ccfbba036107289748b433fb0e363c91bfc",
+            "points": [
+              [
+                77,
+                0
+              ],
+              [
+                77,
+                190
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "ab98e018cad1c93c88dcb3d2c89e251a4d0aa0422387ae6f417951689a9d2a64",
+            "points": [
+              [
+                0,
+                12
+              ],
+              [
+                88,
+                12
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "fdc49d9fc541b83ba89be72b4eca4ce95d7eefb6f20543497c9c887a4c79f940",
+            "points": [
+              [
+                0,
+                179
+              ],
+              [
+                88,
+                179
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "5d259f4255142385b1d5ff7af170524f821ef0945975e0cbded218bd686135dc",
+            "ids": [
+              4
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      }
+    },
+    {
+      "angle_degrees": 90,
+      "assessment": {
+        "morphological": {
+          "notes": "Correct tight envelope around the complete faint vertical word.",
+          "status": "success"
+        },
+        "soft_union": {
+          "notes": "Correct smooth envelope, but 63.5% background reduction is just below the proposed 65% auto-pass bar.",
+          "status": "partial"
+        }
+      },
+      "crop": {
+        "max_pixels": 1500000,
+        "origin_xy": [
+          513,
+          76
+        ],
+        "padding_px": 22,
+        "requested_box_xywh": [
+          535,
+          98,
+          45,
+          162
+        ],
+        "sha256": "afec3306c7f57f4bd7ef7cfbeaec3a6c32b65b2a84bbabae3e9c82cad870b437",
+        "size_wh": [
+          89,
+          206
+        ]
+      },
+      "envelope_profile": "small-vertical-v1",
+      "extraction_profile": "gray-small-v1",
+      "id": "014-p01-would",
+      "input_assessment": {
+        "notes": "Target crop and cleanup are suitable for wrapper evaluation.",
+        "status": "evaluable"
+      },
+      "label": "would",
+      "preferred_method": "morphological",
+      "raw_mask_pixel_sha256": "0c640523069fb1a203b13af5ad87e4875ecca1f4ac137bee7b3670c7c9ba3ec9",
+      "raw_mask_sha256": "73fdca76ab187ba5ad1e1c8585f0a4c246d2892a998887564dc9ea225de7ba04",
+      "rough_box_crop_xywh": [
+        4,
+        4,
+        81,
+        198
+      ],
+      "semantic_neighbor_operations": null,
+      "source_path": "/Users/masongalusha/Workspace/projects/letter-archive/backend/storage/collections/014/18780127/L01/014-18780127-L01-01.jpg",
+      "source_sha256": "a832951e6c3f25d0ab963bc9e666090652ae8ca8e5fb9b578fb9a9f97f90fdbd",
+      "source_target_box_xywh": [
+        535,
+        98,
+        45,
+        162
+      ],
+      "tags": [
+        "vertical",
+        "faded",
+        "fragmented",
+        "hard"
+      ],
+      "target_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "0c640523069fb1a203b13af5ad87e4875ecca1f4ac137bee7b3670c7c9ba3ec9",
+            "points": [
+              [
+                12,
+                0
+              ],
+              [
+                12,
+                205
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "4f07ece05ee90c89101067e3c23be97e3d2a1cba15d504c5438d767ca0adc546",
+            "points": [
+              [
+                77,
+                0
+              ],
+              [
+                77,
+                205
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "45f16975160a3e2508f13b0b86cbeebf7b4391d8fc784f2b957d043b01ceebfe",
+            "points": [
+              [
+                0,
+                12
+              ],
+              [
+                88,
+                12
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "214e1b85290151200166c6bda7c288f9fe24cbe63ed900c300e6e57ad3bb0ae3",
+            "points": [
+              [
+                0,
+                194
+              ],
+              [
+                88,
+                194
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "4dc423c1e871ff27d8eb7228c069e79ba3e452d847c1cfdb7603493d08e3106e",
+            "ids": [
+              7,
+              24,
+              28,
+              33,
+              39,
+              42
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      }
+    },
+    {
+      "angle_degrees": 90,
+      "assessment": {
+        "morphological": {
+          "notes": "Correct tight envelope around the actual table word while excluding the separate exclamation mark.",
+          "status": "success"
+        },
+        "soft_union": {
+          "notes": "Correct smooth envelope around the actual table word while excluding the separate exclamation mark.",
+          "status": "success"
+        }
+      },
+      "crop": {
+        "max_pixels": 1500000,
+        "origin_xy": [
+          588,
+          43
+        ],
+        "padding_px": 22,
+        "requested_box_xywh": [
+          610,
+          65,
+          70,
+          170
+        ],
+        "sha256": "cd3524d1bb45a9d4bb607a65af61fdd65f9ae0c68a27afbc17de00fb31c59ee2",
+        "size_wh": [
+          114,
+          214
+        ]
+      },
+      "envelope_profile": "small-vertical-v1",
+      "extraction_profile": "gray-small-v1",
+      "id": "014-p01-table",
+      "input_assessment": {
+        "notes": "Target crop and cleanup are suitable for wrapper evaluation.",
+        "status": "evaluable"
+      },
+      "label": "table",
+      "preferred_method": "morphological",
+      "raw_mask_pixel_sha256": "da5b458ba6da06c1a678a06434eb492ef34ea268919fdee7e92dcc2871d66d05",
+      "raw_mask_sha256": "7ceab5c0dbba7afb7476918e22f218b0bb3adfe3189d12583035f7593aabdb0c",
+      "rough_box_crop_xywh": [
+        4,
+        4,
+        106,
+        206
+      ],
+      "semantic_neighbor_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "da5b458ba6da06c1a678a06434eb492ef34ea268919fdee7e92dcc2871d66d05",
+            "points": [
+              [
+                12,
+                0
+              ],
+              [
+                12,
+                213
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "bed953826eeb0a6b6cfa28304d218020c51efcb9191d999908c8b7860daa4d14",
+            "points": [
+              [
+                102,
+                0
+              ],
+              [
+                102,
+                213
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "bed953826eeb0a6b6cfa28304d218020c51efcb9191d999908c8b7860daa4d14",
+            "points": [
+              [
+                0,
+                12
+              ],
+              [
+                113,
+                12
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "91d31bf2fd44cf9160ac4cee7abaaffb0d4ee341b506e4fc8b51917aa09301f7",
+            "points": [
+              [
+                0,
+                202
+              ],
+              [
+                113,
+                202
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "983b2399c58ba370f38fdbc18f6e5c4d191287053d91240d23f61f329e054bf4",
+            "ids": [
+              8,
+              15,
+              20
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      },
+      "source_path": "/Users/masongalusha/Workspace/projects/letter-archive/backend/storage/collections/014/18780127/L01/014-18780127-L01-01.jpg",
+      "source_sha256": "a832951e6c3f25d0ab963bc9e666090652ae8ca8e5fb9b578fb9a9f97f90fdbd",
+      "source_target_box_xywh": [
+        610,
+        65,
+        70,
+        170
+      ],
+      "tags": [
+        "vertical",
+        "punctuation-nearby",
+        "hard"
+      ],
+      "target_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "da5b458ba6da06c1a678a06434eb492ef34ea268919fdee7e92dcc2871d66d05",
+            "points": [
+              [
+                12,
+                0
+              ],
+              [
+                12,
+                213
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "bed953826eeb0a6b6cfa28304d218020c51efcb9191d999908c8b7860daa4d14",
+            "points": [
+              [
+                102,
+                0
+              ],
+              [
+                102,
+                213
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "bed953826eeb0a6b6cfa28304d218020c51efcb9191d999908c8b7860daa4d14",
+            "points": [
+              [
+                0,
+                12
+              ],
+              [
+                113,
+                12
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "91d31bf2fd44cf9160ac4cee7abaaffb0d4ee341b506e4fc8b51917aa09301f7",
+            "points": [
+              [
+                0,
+                202
+              ],
+              [
+                113,
+                202
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "983b2399c58ba370f38fdbc18f6e5c4d191287053d91240d23f61f329e054bf4",
+            "ids": [
+              23,
+              43,
+              45,
+              47,
+              48
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      }
+    },
+    {
+      "angle_degrees": 90,
+      "assessment": {
+        "morphological": {
+          "notes": "Contains the vertical two-word phrase, but the contour is scalloped and too glyph-following for the intended smooth bubble.",
+          "status": "partial"
+        },
+        "soft_union": {
+          "notes": "Correct smooth vertical envelope around the two-word phrase.",
+          "status": "success"
+        }
+      },
+      "crop": {
+        "max_pixels": 1500000,
+        "origin_xy": [
+          183,
+          25
+        ],
+        "padding_px": 25,
+        "requested_box_xywh": [
+          208,
+          50,
+          77,
+          208
+        ],
+        "sha256": "3d6bad26487b1b22f2182fbc912180a5aec02354a220ec44fad39458e2583477",
+        "size_wh": [
+          127,
+          258
+        ]
+      },
+      "envelope_profile": "small-vertical-v1",
+      "extraction_profile": "gray-small-v1",
+      "id": "014-p04-we-will",
+      "input_assessment": {
+        "notes": "Target crop and cleanup are suitable for wrapper evaluation.",
+        "status": "evaluable"
+      },
+      "label": "We will",
+      "preferred_method": "soft_union",
+      "raw_mask_pixel_sha256": "c9a40730c849931497f92d4e42b70f01e5022a60a905d5066f394cd7ce4bea54",
+      "raw_mask_sha256": "e26f930c12989b4c3e3a9cb311a7a8c30f15d89a06adfeceabe5f694e9b8fc88",
+      "rough_box_crop_xywh": [
+        4,
+        4,
+        119,
+        250
+      ],
+      "semantic_neighbor_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "c9a40730c849931497f92d4e42b70f01e5022a60a905d5066f394cd7ce4bea54",
+            "ids": [
+              2,
+              14,
+              15,
+              16
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      },
+      "source_path": "/Users/masongalusha/Workspace/projects/letter-archive/backend/storage/collections/014/18780127/L01/014-18780127-L01-04.jpg",
+      "source_sha256": "a52f9665c362880699636c45bd6533767c8ff46df996affd6cfca856ed2b2d69",
+      "source_target_box_xywh": [
+        208,
+        50,
+        77,
+        208
+      ],
+      "tags": [
+        "vertical",
+        "multi-word",
+        "medium"
+      ],
+      "target_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "c9a40730c849931497f92d4e42b70f01e5022a60a905d5066f394cd7ce4bea54",
+            "points": [
+              [
+                15,
+                0
+              ],
+              [
+                15,
+                257
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "28b731a9542b3725f32adbfe01006baa00e11d726f8366f0629bc8ea94e1de79",
+            "points": [
+              [
+                112,
+                0
+              ],
+              [
+                112,
+                257
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "866d72a5537da9291d0a15657dd218d48fb5e9fd93ad78b83a6a9e94b9bab0bc",
+            "points": [
+              [
+                0,
+                15
+              ],
+              [
+                126,
+                15
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "4cd28c2e70037385ff8af8b7d717904a85fb8bb4063d89a38c06c706d915f08a",
+            "points": [
+              [
+                0,
+                243
+              ],
+              [
+                126,
+                243
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "7eb231c67ecdc6a50134b00c66149573ce3e47d005e8b3f862cf2679ba829b52",
+            "ids": [
+              18,
+              21,
+              23,
+              24,
+              27,
+              29,
+              30
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      }
+    },
+    {
+      "angle_degrees": 90,
+      "assessment": {
+        "morphological": {
+          "notes": "The deterministic wrapper rejected this cleaned mask under the frozen profile; see failure.json.",
+          "status": "failure"
+        },
+        "soft_union": {
+          "notes": "The deterministic wrapper rejected this cleaned mask under the frozen profile; see failure.json.",
+          "status": "failure"
+        }
+      },
+      "crop": {
+        "max_pixels": 1500000,
+        "origin_xy": [
+          301,
+          33
+        ],
+        "padding_px": 25,
+        "requested_box_xywh": [
+          326,
+          58,
+          69,
+          200
+        ],
+        "sha256": "c8f16744371985bbb5ef99f9fc23017c0d34c332d05a56365bbf8175fb203a24",
+        "size_wh": [
+          119,
+          250
+        ]
+      },
+      "envelope_profile": "small-vertical-v1",
+      "extraction_profile": "gray-small-v1",
+      "id": "014-p04-big-fat",
+      "input_assessment": {
+        "notes": "Target crop and cleanup are suitable for wrapper evaluation.",
+        "status": "evaluable"
+      },
+      "label": "big fat",
+      "preferred_method": "morphological",
+      "raw_mask_pixel_sha256": "3807c860193890cd9ebd4d460e3dda3f3090e922a38a48c9db5180ebc71da80e",
+      "raw_mask_sha256": "2fa858be0d2b12e024539af8a9103b8fd08be0cc377f4e4291e96aa03ea2485e",
+      "rough_box_crop_xywh": [
+        4,
+        4,
+        111,
+        242
+      ],
+      "semantic_neighbor_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "3807c860193890cd9ebd4d460e3dda3f3090e922a38a48c9db5180ebc71da80e",
+            "points": [
+              [
+                15,
+                0
+              ],
+              [
+                15,
+                249
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "91204803ab733499f0a66ad0045731701e89e505078bf98d3b10941b61313287",
+            "points": [
+              [
+                104,
+                0
+              ],
+              [
+                104,
+                249
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "fdf1ba9bfa0d9cbdb549b23a7d7103a8401e5aa5f1226e75ed42f15750d4fb89",
+            "points": [
+              [
+                0,
+                15
+              ],
+              [
+                118,
+                15
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "bb036642cd6b00405f6ba5fba3aeb22f0088759df1a13cc922aeb6d2e2553910",
+            "points": [
+              [
+                0,
+                235
+              ],
+              [
+                118,
+                235
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "ccab3076ffb3ddb3cd18adfa30b4a0ef473299d48ddd554a26fad8aafad1446c",
+            "ids": [
+              1,
+              2,
+              3,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              16,
+              17,
+              21,
+              23,
+              24,
+              27,
+              29,
+              31,
+              32,
+              35,
+              38,
+              39,
+              43,
+              45,
+              49,
+              51,
+              55
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      },
+      "source_path": "/Users/masongalusha/Workspace/projects/letter-archive/backend/storage/collections/014/18780127/L01/014-18780127-L01-04.jpg",
+      "source_sha256": "a52f9665c362880699636c45bd6533767c8ff46df996affd6cfca856ed2b2d69",
+      "source_target_box_xywh": [
+        326,
+        58,
+        69,
+        200
+      ],
+      "tags": [
+        "vertical",
+        "pale",
+        "multi-word",
+        "hard"
+      ],
+      "target_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "3807c860193890cd9ebd4d460e3dda3f3090e922a38a48c9db5180ebc71da80e",
+            "points": [
+              [
+                15,
+                0
+              ],
+              [
+                15,
+                249
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "91204803ab733499f0a66ad0045731701e89e505078bf98d3b10941b61313287",
+            "points": [
+              [
+                104,
+                0
+              ],
+              [
+                104,
+                249
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "fdf1ba9bfa0d9cbdb549b23a7d7103a8401e5aa5f1226e75ed42f15750d4fb89",
+            "points": [
+              [
+                0,
+                15
+              ],
+              [
+                118,
+                15
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "bb036642cd6b00405f6ba5fba3aeb22f0088759df1a13cc922aeb6d2e2553910",
+            "points": [
+              [
+                0,
+                235
+              ],
+              [
+                118,
+                235
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "ccab3076ffb3ddb3cd18adfa30b4a0ef473299d48ddd554a26fad8aafad1446c",
+            "ids": [
+              19,
+              20,
+              22,
+              25,
+              26,
+              28,
+              30,
+              33,
+              36,
+              37,
+              40,
+              41,
+              42,
+              46,
+              47,
+              48,
+              50,
+              52,
+              53,
+              54,
+              56,
+              57,
+              58
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      }
+    },
+    {
+      "angle_degrees": 90,
+      "assessment": {
+        "morphological": {
+          "notes": "The deterministic wrapper rejected this cleaned mask under the frozen profile; see failure.json.",
+          "status": "failure"
+        },
+        "soft_union": {
+          "notes": "The deterministic wrapper rejected this cleaned mask under the frozen profile; see failure.json.",
+          "status": "failure"
+        }
+      },
+      "crop": {
+        "max_pixels": 1500000,
+        "origin_xy": [
+          360,
+          33
+        ],
+        "padding_px": 25,
+        "requested_box_xywh": [
+          385,
+          58,
+          70,
+          207
+        ],
+        "sha256": "6c73ba7b6f6c92211928452c307f054b52a70af4791cf4ff4aabd961f1b7baaf",
+        "size_wh": [
+          120,
+          257
+        ]
+      },
+      "envelope_profile": "small-vertical-v1",
+      "extraction_profile": "gray-small-v1",
+      "id": "014-p04-gobbler",
+      "input_assessment": {
+        "notes": "Target crop and cleanup are suitable for wrapper evaluation.",
+        "status": "evaluable"
+      },
+      "label": "gobbler",
+      "preferred_method": "morphological",
+      "raw_mask_pixel_sha256": "aab400e24506eed40859cfb55be6828c7fc267a244d0ee83c6500a58191388f4",
+      "raw_mask_sha256": "11c47895b5ce8c676365637c45218e74c5d736b6a99491e28d49cac7ae042b5c",
+      "rough_box_crop_xywh": [
+        4,
+        4,
+        112,
+        249
+      ],
+      "semantic_neighbor_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "aab400e24506eed40859cfb55be6828c7fc267a244d0ee83c6500a58191388f4",
+            "points": [
+              [
+                15,
+                0
+              ],
+              [
+                15,
+                256
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "8fc9dfb632b5e3f6bd149fec87bd0aa84e2978b5bab2c261d6cea5df747e63bd",
+            "points": [
+              [
+                105,
+                0
+              ],
+              [
+                105,
+                256
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "5ef79f8d26ef4199ffdf7dad808ef46830012d644317b8e21ee62cbd8d7259da",
+            "points": [
+              [
+                0,
+                15
+              ],
+              [
+                119,
+                15
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "d1de0c9f87cd61c22b639bd1262b0aedc54fd1b78bbcf3ce5a5a0ef3225e20de",
+            "points": [
+              [
+                0,
+                242
+              ],
+              [
+                119,
+                242
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "03038d41f64084c6ecc693879b31ae13d99240ebc5406611cf7f8cb8ee392553",
+            "ids": [
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              11,
+              16,
+              17,
+              18,
+              23,
+              24,
+              25,
+              26,
+              27,
+              30,
+              31,
+              39,
+              41,
+              42,
+              44,
+              50,
+              51,
+              57,
+              58,
+              61,
+              63,
+              64,
+              65,
+              66
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      },
+      "source_path": "/Users/masongalusha/Workspace/projects/letter-archive/backend/storage/collections/014/18780127/L01/014-18780127-L01-04.jpg",
+      "source_sha256": "a52f9665c362880699636c45bd6533767c8ff46df996affd6cfca856ed2b2d69",
+      "source_target_box_xywh": [
+        385,
+        58,
+        70,
+        207
+      ],
+      "tags": [
+        "vertical",
+        "long-loops",
+        "neighbor-nearby",
+        "hard"
+      ],
+      "target_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "aab400e24506eed40859cfb55be6828c7fc267a244d0ee83c6500a58191388f4",
+            "points": [
+              [
+                15,
+                0
+              ],
+              [
+                15,
+                256
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "8fc9dfb632b5e3f6bd149fec87bd0aa84e2978b5bab2c261d6cea5df747e63bd",
+            "points": [
+              [
+                105,
+                0
+              ],
+              [
+                105,
+                256
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "5ef79f8d26ef4199ffdf7dad808ef46830012d644317b8e21ee62cbd8d7259da",
+            "points": [
+              [
+                0,
+                15
+              ],
+              [
+                119,
+                15
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "d1de0c9f87cd61c22b639bd1262b0aedc54fd1b78bbcf3ce5a5a0ef3225e20de",
+            "points": [
+              [
+                0,
+                242
+              ],
+              [
+                119,
+                242
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "03038d41f64084c6ecc693879b31ae13d99240ebc5406611cf7f8cb8ee392553",
+            "ids": [
+              10,
+              12,
+              19,
+              28,
+              29,
+              32,
+              34,
+              35,
+              36,
+              37,
+              38,
+              47
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      }
+    },
+    {
+      "angle_degrees": 90,
+      "assessment": {
+        "morphological": {
+          "notes": "Invalid input, diagnostic-only morphological run; not scored as a wrapper outcome.",
+          "status": "failure"
+        },
+        "soft_union": {
+          "notes": "Invalid input, diagnostic-only soft_union run; not scored as a wrapper outcome.",
+          "status": "failure"
+        }
+      },
+      "crop": {
+        "max_pixels": 1500000,
+        "origin_xy": [
+          420,
+          20
+        ],
+        "padding_px": 25,
+        "requested_box_xywh": [
+          445,
+          45,
+          80,
+          225
+        ],
+        "sha256": "5cf1884896337be030da46749b7ed10b4ca9970b0de639b92f1bea56b3296061",
+        "size_wh": [
+          130,
+          275
+        ]
+      },
+      "envelope_profile": "small-vertical-v1",
+      "extraction_profile": "gray-small-v1",
+      "id": "014-p04-fold-fragment",
+      "input_assessment": {
+        "notes": "The crop crosses the page edge and fold; extraction mixes fold texture and multiple neighboring words, so no trustworthy target mask exists.",
+        "reason_code": "no_trustworthy_target_mask",
+        "status": "invalid_input"
+      },
+      "label": "fold-crossing fragment",
+      "preferred_method": "morphological",
+      "raw_mask_pixel_sha256": "d03a58b14b56db02dadcdce6fe070dcccd5c25dbc29ed88b1c8967a8d67e3063",
+      "raw_mask_sha256": "b81db402a820cd3e180802d9de2f3978562e3bc54f0ecdeb31332630afdd740a",
+      "rough_box_crop_xywh": [
+        4,
+        4,
+        122,
+        267
+      ],
+      "semantic_neighbor_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "d03a58b14b56db02dadcdce6fe070dcccd5c25dbc29ed88b1c8967a8d67e3063",
+            "points": [
+              [
+                15,
+                0
+              ],
+              [
+                15,
+                274
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "aae6378dcf2a4ccb3f4bf33f33aa17bab6b23a61da5adbc207f1854c770edcd5",
+            "points": [
+              [
+                115,
+                0
+              ],
+              [
+                115,
+                274
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "ba352c213d7d8844582ef0e27fe72ce035096980310e77c570f086e4e87fd753",
+            "points": [
+              [
+                0,
+                15
+              ],
+              [
+                129,
+                15
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "271be63d0ffbcff965ccc4424bef708277ecc55ed76bcb46ff4af251cc6e55c3",
+            "points": [
+              [
+                0,
+                260
+              ],
+              [
+                129,
+                260
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "c9a14aa79079fe8924e6e32672c26e3386bd55e15d5085a952de420d24a06c6d",
+            "ids": [
+              2,
+              5,
+              9,
+              13,
+              16,
+              17,
+              18,
+              20,
+              26,
+              31,
+              35,
+              37,
+              42,
+              48,
+              52,
+              55,
+              56,
+              60,
+              63,
+              71,
+              74,
+              83,
+              84,
+              88,
+              100,
+              104,
+              116,
+              117,
+              118,
+              121,
+              123,
+              124,
+              125
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      },
+      "source_path": "/Users/masongalusha/Workspace/projects/letter-archive/backend/storage/collections/014/18780127/L01/014-18780127-L01-04.jpg",
+      "source_sha256": "a52f9665c362880699636c45bd6533767c8ff46df996affd6cfca856ed2b2d69",
+      "source_target_box_xywh": [
+        445,
+        45,
+        80,
+        225
+      ],
+      "tags": [
+        "vertical",
+        "fold-shadow",
+        "nearly-erased",
+        "extreme"
+      ],
+      "target_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "d03a58b14b56db02dadcdce6fe070dcccd5c25dbc29ed88b1c8967a8d67e3063",
+            "points": [
+              [
+                15,
+                0
+              ],
+              [
+                15,
+                274
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "aae6378dcf2a4ccb3f4bf33f33aa17bab6b23a61da5adbc207f1854c770edcd5",
+            "points": [
+              [
+                115,
+                0
+              ],
+              [
+                115,
+                274
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "ba352c213d7d8844582ef0e27fe72ce035096980310e77c570f086e4e87fd753",
+            "points": [
+              [
+                0,
+                15
+              ],
+              [
+                129,
+                15
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "271be63d0ffbcff965ccc4424bef708277ecc55ed76bcb46ff4af251cc6e55c3",
+            "points": [
+              [
+                0,
+                260
+              ],
+              [
+                129,
+                260
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "c9a14aa79079fe8924e6e32672c26e3386bd55e15d5085a952de420d24a06c6d",
+            "ids": [
+              15,
+              21,
+              23,
+              25,
+              28,
+              29,
+              30,
+              32,
+              33,
+              34,
+              36,
+              38,
+              39,
+              43,
+              45,
+              46,
+              49,
+              50,
+              57,
+              58,
+              61,
+              62,
+              65,
+              68,
+              70,
+              72,
+              73,
+              75,
+              76,
+              77,
+              78,
+              81,
+              82,
+              85,
+              86,
+              87,
+              89,
+              90,
+              91,
+              92,
+              95,
+              96,
+              97,
+              98,
+              101,
+              102,
+              103,
+              105,
+              106,
+              107,
+              109,
+              110,
+              111,
+              113,
+              114
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      }
+    },
+    {
+      "angle_degrees": 90,
+      "assessment": {
+        "morphological": {
+          "notes": "Correct word ownership with a visibly irregular contour.",
+          "status": "partial"
+        },
+        "soft_union": {
+          "notes": "Correct smooth envelope around the faint vertical word.",
+          "status": "success"
+        }
+      },
+      "crop": {
+        "max_pixels": 1500000,
+        "origin_xy": [
+          573,
+          37
+        ],
+        "padding_px": 25,
+        "requested_box_xywh": [
+          598,
+          62,
+          62,
+          198
+        ],
+        "sha256": "e78932a9fdbcff2e57bea612890e76d046a0dc9bd97fb5f50c88040edda3c142",
+        "size_wh": [
+          112,
+          248
+        ]
+      },
+      "envelope_profile": "small-vertical-v1",
+      "extraction_profile": "gray-small-v1",
+      "id": "014-p04-come",
+      "input_assessment": {
+        "notes": "Target crop and cleanup are suitable for wrapper evaluation.",
+        "status": "evaluable"
+      },
+      "label": "Come",
+      "preferred_method": "soft_union",
+      "raw_mask_pixel_sha256": "f28e752ffee231ff0f1cad7fa57dede1c2ced7060db184967cd7fbb80515e60f",
+      "raw_mask_sha256": "0a1c7d1e4797d9690faa6a06db3588c5f17fe59328a746fcc0e487e0718ff983",
+      "rough_box_crop_xywh": [
+        4,
+        4,
+        104,
+        240
+      ],
+      "semantic_neighbor_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "f28e752ffee231ff0f1cad7fa57dede1c2ced7060db184967cd7fbb80515e60f",
+            "ids": [
+              1,
+              13,
+              15,
+              17,
+              20,
+              25,
+              26,
+              27,
+              30,
+              35,
+              36,
+              39,
+              40,
+              41
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      },
+      "source_path": "/Users/masongalusha/Workspace/projects/letter-archive/backend/storage/collections/014/18780127/L01/014-18780127-L01-04.jpg",
+      "source_sha256": "a52f9665c362880699636c45bd6533767c8ff46df996affd6cfca856ed2b2d69",
+      "source_target_box_xywh": [
+        598,
+        62,
+        62,
+        198
+      ],
+      "tags": [
+        "vertical",
+        "faint",
+        "hard"
+      ],
+      "target_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "f28e752ffee231ff0f1cad7fa57dede1c2ced7060db184967cd7fbb80515e60f",
+            "points": [
+              [
+                15,
+                0
+              ],
+              [
+                15,
+                247
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "b33dc5890d6a418211c28f1bc24c7ec5700c29fca43f167e15c8618456727d03",
+            "points": [
+              [
+                97,
+                0
+              ],
+              [
+                97,
+                247
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "653f79c55c3f33b56053545b82a90fac31279a8b65acbb5342d653086e793e3d",
+            "points": [
+              [
+                0,
+                15
+              ],
+              [
+                111,
+                15
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "784e234c59985c34b2b1c22f87fee32175054fbb27a2f6a088996c8560333e86",
+            "points": [
+              [
+                0,
+                233
+              ],
+              [
+                111,
+                233
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "b097864b7edc226a1c2d5eb146b43d7e0145da530ddda3c38472cc7ce75a6998",
+            "ids": [
+              17,
+              19,
+              21,
+              24,
+              26,
+              34
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      }
+    },
+    {
+      "angle_degrees": 90,
+      "assessment": {
+        "morphological": {
+          "notes": "Tight complete envelope after removing the neighboring Come tail from the target mask.",
+          "status": "success"
+        },
+        "soft_union": {
+          "notes": "Complete smooth envelope, but its 8.63 envelope-to-ink ratio is in the proposed review band.",
+          "status": "partial"
+        }
+      },
+      "crop": {
+        "max_pixels": 1500000,
+        "origin_xy": [
+          625,
+          60
+        ],
+        "padding_px": 25,
+        "requested_box_xywh": [
+          650,
+          85,
+          60,
+          175
+        ],
+        "sha256": "c3d4ec564e3fdad05862ff374d6366a94ce8ff194fd920cacfc36fae8c48ef97",
+        "size_wh": [
+          110,
+          225
+        ]
+      },
+      "envelope_profile": "small-vertical-v1",
+      "extraction_profile": "gray-small-v1",
+      "id": "014-p04-over",
+      "input_assessment": {
+        "notes": "Target crop and cleanup are suitable for wrapper evaluation.",
+        "status": "evaluable"
+      },
+      "label": "over",
+      "preferred_method": "morphological",
+      "raw_mask_pixel_sha256": "9ac09ad75d7a7790c1686c682a9ca1debcec6699e5bfe7a6bf2add6264ac15fb",
+      "raw_mask_sha256": "7115849cb6def436626022455aa674aea6c5958825b77be334cb9b10ce8fd28f",
+      "rough_box_crop_xywh": [
+        4,
+        4,
+        102,
+        217
+      ],
+      "semantic_neighbor_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "9ac09ad75d7a7790c1686c682a9ca1debcec6699e5bfe7a6bf2add6264ac15fb",
+            "points": [
+              [
+                15,
+                0
+              ],
+              [
+                15,
+                224
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "6366f911b3d42a4a4d0b3a829088b16c0d67f1e656abf4104ba754d2a962d76e",
+            "points": [
+              [
+                95,
+                0
+              ],
+              [
+                95,
+                224
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "6366f911b3d42a4a4d0b3a829088b16c0d67f1e656abf4104ba754d2a962d76e",
+            "points": [
+              [
+                0,
+                15
+              ],
+              [
+                109,
+                15
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "6366f911b3d42a4a4d0b3a829088b16c0d67f1e656abf4104ba754d2a962d76e",
+            "points": [
+              [
+                0,
+                210
+              ],
+              [
+                109,
+                210
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "6366f911b3d42a4a4d0b3a829088b16c0d67f1e656abf4104ba754d2a962d76e",
+            "ids": [
+              3,
+              4,
+              5,
+              6,
+              7,
+              9,
+              10,
+              11,
+              13,
+              14,
+              18,
+              22,
+              23,
+              24
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      },
+      "source_path": "/Users/masongalusha/Workspace/projects/letter-archive/backend/storage/collections/014/18780127/L01/014-18780127-L01-04.jpg",
+      "source_sha256": "a52f9665c362880699636c45bd6533767c8ff46df996affd6cfca856ed2b2d69",
+      "source_target_box_xywh": [
+        650,
+        85,
+        60,
+        175
+      ],
+      "tags": [
+        "vertical",
+        "low-contrast",
+        "narrow",
+        "hard"
+      ],
+      "target_operations": {
+        "operations": [
+          {
+            "expected_input_mask_pixel_sha256": "9ac09ad75d7a7790c1686c682a9ca1debcec6699e5bfe7a6bf2add6264ac15fb",
+            "points": [
+              [
+                15,
+                0
+              ],
+              [
+                15,
+                224
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "6366f911b3d42a4a4d0b3a829088b16c0d67f1e656abf4104ba754d2a962d76e",
+            "points": [
+              [
+                95,
+                0
+              ],
+              [
+                95,
+                224
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "6366f911b3d42a4a4d0b3a829088b16c0d67f1e656abf4104ba754d2a962d76e",
+            "points": [
+              [
+                0,
+                15
+              ],
+              [
+                109,
+                15
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "6366f911b3d42a4a4d0b3a829088b16c0d67f1e656abf4104ba754d2a962d76e",
+            "points": [
+              [
+                0,
+                210
+              ],
+              [
+                109,
+                210
+              ]
+            ],
+            "type": "cut",
+            "width_px": 3
+          },
+          {
+            "expected_input_mask_pixel_sha256": "6366f911b3d42a4a4d0b3a829088b16c0d67f1e656abf4104ba754d2a962d76e",
+            "ids": [
+              2,
+              12,
+              15,
+              16,
+              17,
+              19,
+              20,
+              21
+            ],
+            "type": "keep_components"
+          }
+        ],
+        "schema_version": "word-envelope-cleanup-operations.v1"
+      }
+    }
+  ],
+  "description": "Twenty frozen real-word and short-phrase stress cases, led by the detached P.S./Did island and both Collection 14 vertical top notes.",
+  "envelope_profiles": {
+    "large-oblique-v1": {
+      "morphological": {
+        "along_bridge_px": 45,
+        "cross_bridge_px": 30,
+        "maximum_envelope_fraction": 0.95,
+        "padding_px": 8,
+        "simplify_tolerance_px": 1.2,
+        "smooth_iterations": 2
+      },
+      "soft_union": {
+        "along_bridge_px": 40,
+        "cross_bridge_px": 30,
+        "maximum_envelope_fraction": 0.95,
+        "padding_px": 7,
+        "simplify_tolerance_px": 1.2,
+        "smooth_iterations": 2,
+        "soft_threshold": 0.18
+      }
+    },
+    "small-vertical-v1": {
+      "morphological": {
+        "along_bridge_px": 18,
+        "cross_bridge_px": 12,
+        "maximum_envelope_fraction": 0.95,
+        "padding_px": 4,
+        "simplify_tolerance_px": 1.2,
+        "smooth_iterations": 2
+      },
+      "soft_union": {
+        "along_bridge_px": 18,
+        "cross_bridge_px": 12,
+        "maximum_envelope_fraction": 0.95,
+        "padding_px": 4,
+        "simplify_tolerance_px": 1.2,
+        "smooth_iterations": 2,
+        "soft_threshold": 0.18
+      }
+    }
+  },
+  "extraction_profiles": {
+    "blue-large-v1": {
+      "k": 0.16,
+      "minimum_component_area": 3,
+      "offset": 0.0,
+      "window_size": 51
+    },
+    "gray-small-v1": {
+      "k": 0.18,
+      "minimum_component_area": 3,
+      "offset": 0.0,
+      "window_size": 41
+    }
+  },
+  "policy": {
+    "cleanup": "Human-reviewed component ownership from one fixed extraction per scale. Tiny ambiguous texture retained in the hardest faded cases; outcomes are not accuracy estimates.",
+    "evaluation": "All cases are development stress cases. Algorithm failures are retained and the suite is not a held-out benchmark.",
+    "parameter_selection": "Two profiles frozen by observable source scale/orientation before envelope replay; no per-case bridge, padding, threshold, or smoothing overrides."
+  },
+  "required_case_ids": [
+    "007-p02-ps",
+    "007-p02-did",
+    "014-p04-we-will",
+    "014-p01-a-few"
+  ],
+  "schema_version": "word-envelope-real-stress-suite.v1",
+  "suite_id": "approved-pages-007-014-messy-words-v1"
+}

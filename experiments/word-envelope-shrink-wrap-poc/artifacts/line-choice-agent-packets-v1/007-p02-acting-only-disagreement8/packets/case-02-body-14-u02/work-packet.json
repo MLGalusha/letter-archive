@@ -1,0 +1,707 @@
+{
+  "allowed_response": {
+    "action": [
+      "choose",
+      "choose_and_toggle",
+      "defer"
+    ],
+    "add_component_ids": "zero or more IDs from toggleable_components",
+    "chosen_selected_pixel_sha256": "required for choose or choose_and_toggle",
+    "confidence": [
+      "high",
+      "medium",
+      "low"
+    ],
+    "note": "brief visible-evidence rationale",
+    "remove_component_ids": "zero or more IDs already present in the chosen proposal"
+  },
+  "distinct_proposals": [
+    {
+      "fit_statuses": [
+        "pass",
+        "pass"
+      ],
+      "proposal_ids": [
+        "reviewed_bbox_xywh|line_midpoint_centroid",
+        "reviewed_bbox_xywh|line_valley_centroid"
+      ],
+      "selected_component_ids": [
+        264,
+        275,
+        279,
+        280,
+        282,
+        283,
+        284,
+        285,
+        286,
+        287,
+        288,
+        290,
+        291,
+        294,
+        297,
+        298,
+        299,
+        300
+      ],
+      "selected_pixel_sha256": "082ef50f87e3300e2177a240327182178ffccd20ffcb73a173c22a8023aed4e7",
+      "selected_pixels": 6802
+    },
+    {
+      "fit_statuses": [
+        "pass"
+      ],
+      "proposal_ids": [
+        "transcript_bbox_xywh|global_exclusive"
+      ],
+      "selected_component_ids": [
+        260,
+        264,
+        268,
+        269,
+        273,
+        275,
+        277,
+        278,
+        279,
+        280,
+        281,
+        282,
+        283,
+        284,
+        285,
+        286,
+        287,
+        288,
+        289,
+        290,
+        291,
+        292,
+        293,
+        294,
+        295,
+        296,
+        297,
+        298,
+        299,
+        300,
+        301,
+        302
+      ],
+      "selected_pixel_sha256": "3261e6a2126961563631a89462523147fdf7133a7c8d0553c7c664b22b93251b",
+      "selected_pixels": 16054
+    },
+    {
+      "fit_statuses": [
+        "pass",
+        "pass"
+      ],
+      "proposal_ids": [
+        "transcript_bbox_xywh|line_locator_strip",
+        "transcript_bbox_xywh|line_valley_centroid"
+      ],
+      "selected_component_ids": [
+        260,
+        264,
+        268,
+        269,
+        273,
+        275,
+        277,
+        278,
+        279,
+        280,
+        281,
+        282,
+        283,
+        284,
+        285,
+        286,
+        287,
+        288,
+        289,
+        290,
+        291,
+        292,
+        293,
+        294,
+        295,
+        296,
+        297,
+        298,
+        299,
+        300,
+        301,
+        302,
+        310,
+        311,
+        312,
+        313,
+        314
+      ],
+      "selected_pixel_sha256": "7b08d7052dbebecbff7439d09512ab3f73d515eeda163bb8373a29b27e171281",
+      "selected_pixels": 16075
+    },
+    {
+      "fit_statuses": [
+        "pass"
+      ],
+      "proposal_ids": [
+        "reviewed_bbox_xywh|global_exclusive"
+      ],
+      "selected_component_ids": [
+        251,
+        256,
+        258,
+        264,
+        275,
+        279,
+        280,
+        282,
+        283
+      ],
+      "selected_pixel_sha256": "b0b0b0ae2cfaf8c37b7953dacacdd390a28507d38c9da3525a53d862acf0172c",
+      "selected_pixels": 10283
+    },
+    {
+      "fit_statuses": [
+        "pass"
+      ],
+      "proposal_ids": [
+        "transcript_bbox_xywh|line_midpoint_centroid"
+      ],
+      "selected_component_ids": [
+        260,
+        264,
+        268,
+        269,
+        273,
+        275,
+        277,
+        278,
+        279,
+        281,
+        282,
+        284,
+        285,
+        286,
+        288,
+        289,
+        291,
+        292,
+        293,
+        294,
+        295,
+        296,
+        297,
+        298,
+        299,
+        300,
+        301,
+        302,
+        310,
+        311,
+        312,
+        313,
+        314
+      ],
+      "selected_pixel_sha256": "d6288ee4f034b214c9d2cdc15e61c4fb93230a8b1c6522dfbcb48cb3efb627e5",
+      "selected_pixels": 16064
+    },
+    {
+      "fit_statuses": [
+        "pass"
+      ],
+      "proposal_ids": [
+        "reviewed_bbox_xywh|line_locator_strip"
+      ],
+      "selected_component_ids": [
+        264,
+        275,
+        279,
+        280,
+        283,
+        284,
+        285,
+        286,
+        287,
+        288,
+        290,
+        291,
+        294,
+        297,
+        298,
+        299,
+        300
+      ],
+      "selected_pixel_sha256": "ea01c7437acb1e25c729bc33da366ef0be1b759cb63e8c9ee88e1abb740337a5",
+      "selected_pixels": 6800
+    }
+  ],
+  "evidence": {
+    "proposal_grid": {
+      "file_sha256": "e22246f756ab3cd125971c2caed77dc57f4e8aaf0854db1ab8892f85dc419cb7",
+      "path": "packets/case-02-body-14-u02/proposal-grid.jpg"
+    },
+    "source_context": {
+      "file_sha256": "cd92aaad92193584b9b10c0feb1a49280c2ad1c3b3b32abc415ecd325b8ad443",
+      "path": "packets/case-02-body-14-u02/source-context.jpg"
+    }
+  },
+  "evidence_role": "acting_only_source_clean_line_and_frozen_proposals",
+  "instructions": [
+    "Select only the ink belonging to the named unit.",
+    "Use the centerline for vertical context and component IDs for exact ownership edits.",
+    "Do not claim a component merely because it increases recovered ink.",
+    "Consider neighboring words and defer when a whole component cannot express the boundary."
+  ],
+  "neighbor_units": [
+    {
+      "text": "more",
+      "unit_id": "body-14-U01",
+      "word_order": 1
+    },
+    {
+      "text": "each",
+      "unit_id": "body-14-U02",
+      "word_order": 2
+    },
+    {
+      "text": "day-",
+      "unit_id": "body-14-U03",
+      "word_order": 3
+    }
+  ],
+  "packet_id": "case-02-body-14-u02",
+  "packet_sha256": "9aecd785cea9d173ace53797bd6a22f52a50dce2e1dd081122cad3e863152175",
+  "provenance": {
+    "clean_pixel_sha256": "3283b1d85cedbf6479f865f3ad2f97b014cc28176862f0a964821bf015c8ed66",
+    "frozen_candidate_file_sha256": "1a6158990dd367fcf137e3629a158d2b61be759c2455d2533a85aadaf4fc26ef",
+    "frozen_candidate_set_sha256": "d4d9777c6c2d14fd8f792a2d729ceec24a42b8ac2cbfc20d2d68c27837542510"
+  },
+  "schema_version": "line-choice-agent-work-packet.v1",
+  "selection_reason": {
+    "acting_gate_disagrees": false,
+    "disagreement_pixels": 12823,
+    "disputed_component_count": 37,
+    "distinct_proposal_count": 6,
+    "policy": "software_disagreement_only"
+  },
+  "toggleable_components": [
+    {
+      "bbox_xywh": [
+        860,
+        2388,
+        79,
+        46
+      ],
+      "component_id": 251,
+      "pixels": 946
+    },
+    {
+      "bbox_xywh": [
+        941,
+        2420,
+        84,
+        29
+      ],
+      "component_id": 256,
+      "pixels": 1147
+    },
+    {
+      "bbox_xywh": [
+        996,
+        2433,
+        89,
+        83
+      ],
+      "component_id": 258,
+      "pixels": 1418
+    },
+    {
+      "bbox_xywh": [
+        1187,
+        2496,
+        228,
+        103
+      ],
+      "component_id": 260,
+      "pixels": 4151
+    },
+    {
+      "bbox_xywh": [
+        817,
+        2522,
+        363,
+        73
+      ],
+      "component_id": 264,
+      "pixels": 6759
+    },
+    {
+      "bbox_xywh": [
+        1341,
+        2537,
+        2,
+        1
+      ],
+      "component_id": 268,
+      "pixels": 2
+    },
+    {
+      "bbox_xywh": [
+        1330,
+        2538,
+        2,
+        2
+      ],
+      "component_id": 269,
+      "pixels": 3
+    },
+    {
+      "bbox_xywh": [
+        1326,
+        2543,
+        1,
+        1
+      ],
+      "component_id": 273,
+      "pixels": 1
+    },
+    {
+      "bbox_xywh": [
+        889,
+        2545,
+        1,
+        1
+      ],
+      "component_id": 275,
+      "pixels": 1
+    },
+    {
+      "bbox_xywh": [
+        1373,
+        2549,
+        3,
+        4
+      ],
+      "component_id": 277,
+      "pixels": 7
+    },
+    {
+      "bbox_xywh": [
+        1266,
+        2552,
+        156,
+        138
+      ],
+      "component_id": 278,
+      "pixels": 5071
+    },
+    {
+      "bbox_xywh": [
+        1046,
+        2555,
+        2,
+        2
+      ],
+      "component_id": 279,
+      "pixels": 3
+    },
+    {
+      "bbox_xywh": [
+        858,
+        2561,
+        1,
+        1
+      ],
+      "component_id": 280,
+      "pixels": 1
+    },
+    {
+      "bbox_xywh": [
+        1377,
+        2565,
+        2,
+        2
+      ],
+      "component_id": 281,
+      "pixels": 3
+    },
+    {
+      "bbox_xywh": [
+        1086,
+        2568,
+        1,
+        2
+      ],
+      "component_id": 282,
+      "pixels": 2
+    },
+    {
+      "bbox_xywh": [
+        827,
+        2569,
+        2,
+        3
+      ],
+      "component_id": 283,
+      "pixels": 6
+    },
+    {
+      "bbox_xywh": [
+        1068,
+        2570,
+        4,
+        1
+      ],
+      "component_id": 284,
+      "pixels": 4
+    },
+    {
+      "bbox_xywh": [
+        989,
+        2573,
+        2,
+        1
+      ],
+      "component_id": 285,
+      "pixels": 2
+    },
+    {
+      "bbox_xywh": [
+        992,
+        2573,
+        1,
+        1
+      ],
+      "component_id": 286,
+      "pixels": 1
+    },
+    {
+      "bbox_xywh": [
+        861,
+        2574,
+        1,
+        1
+      ],
+      "component_id": 287,
+      "pixels": 1
+    },
+    {
+      "bbox_xywh": [
+        951,
+        2577,
+        3,
+        6
+      ],
+      "component_id": 288,
+      "pixels": 11
+    },
+    {
+      "bbox_xywh": [
+        1260,
+        2578,
+        2,
+        2
+      ],
+      "component_id": 289,
+      "pixels": 2
+    },
+    {
+      "bbox_xywh": [
+        818,
+        2580,
+        3,
+        3
+      ],
+      "component_id": 290,
+      "pixels": 3
+    },
+    {
+      "bbox_xywh": [
+        1030,
+        2580,
+        1,
+        1
+      ],
+      "component_id": 291,
+      "pixels": 1
+    },
+    {
+      "bbox_xywh": [
+        1235,
+        2582,
+        3,
+        2
+      ],
+      "component_id": 292,
+      "pixels": 4
+    },
+    {
+      "bbox_xywh": [
+        1255,
+        2582,
+        2,
+        1
+      ],
+      "component_id": 293,
+      "pixels": 2
+    },
+    {
+      "bbox_xywh": [
+        966,
+        2584,
+        1,
+        1
+      ],
+      "component_id": 294,
+      "pixels": 1
+    },
+    {
+      "bbox_xywh": [
+        1380,
+        2585,
+        1,
+        1
+      ],
+      "component_id": 295,
+      "pixels": 1
+    },
+    {
+      "bbox_xywh": [
+        1215,
+        2587,
+        1,
+        1
+      ],
+      "component_id": 296,
+      "pixels": 1
+    },
+    {
+      "bbox_xywh": [
+        917,
+        2588,
+        1,
+        1
+      ],
+      "component_id": 297,
+      "pixels": 1
+    },
+    {
+      "bbox_xywh": [
+        919,
+        2589,
+        2,
+        2
+      ],
+      "component_id": 298,
+      "pixels": 3
+    },
+    {
+      "bbox_xywh": [
+        897,
+        2590,
+        1,
+        1
+      ],
+      "component_id": 299,
+      "pixels": 1
+    },
+    {
+      "bbox_xywh": [
+        882,
+        2591,
+        1,
+        1
+      ],
+      "component_id": 300,
+      "pixels": 1
+    },
+    {
+      "bbox_xywh": [
+        1200,
+        2596,
+        1,
+        1
+      ],
+      "component_id": 301,
+      "pixels": 1
+    },
+    {
+      "bbox_xywh": [
+        1215,
+        2599,
+        2,
+        2
+      ],
+      "component_id": 302,
+      "pixels": 3
+    },
+    {
+      "bbox_xywh": [
+        1359,
+        2645,
+        1,
+        1
+      ],
+      "component_id": 310,
+      "pixels": 1
+    },
+    {
+      "bbox_xywh": [
+        1358,
+        2647,
+        1,
+        1
+      ],
+      "component_id": 311,
+      "pixels": 1
+    },
+    {
+      "bbox_xywh": [
+        1360,
+        2658,
+        5,
+        6
+      ],
+      "component_id": 312,
+      "pixels": 9
+    },
+    {
+      "bbox_xywh": [
+        1328,
+        2683,
+        2,
+        7
+      ],
+      "component_id": 313,
+      "pixels": 9
+    },
+    {
+      "bbox_xywh": [
+        1334,
+        2689,
+        1,
+        1
+      ],
+      "component_id": 314,
+      "pixels": 1
+    }
+  ],
+  "unit": {
+    "line_id": "body-14",
+    "text": "each",
+    "unit_id": "body-14-U02",
+    "word_order": 2
+  },
+  "visual_legend": {
+    "amber_box_and_number": "toggleable component in the union of proposals",
+    "cyan_box": "transcript rough locator",
+    "green": "component selected by that proposal",
+    "purple_box": "reviewed/Kraken rough locator",
+    "red_line": "fitted body centerline"
+  }
+}
+

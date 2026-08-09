@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "simple-page-cut-action-v1.schema.json",
+  "title": "Simple page ink cut action v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "base_state_sha256", "points", "width_px", "cut_preview_sha256"],
+  "properties": {
+    "schema_version": {"const": "simple-page-cut-action.v1"},
+    "base_state_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "cut_preview_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "width_px": {"type": "integer", "minimum": 1, "maximum": 40},
+    "points": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 32,
+      "items": {
+        "type": "array",
+        "prefixItems": [
+          {"type": "integer", "minimum": 0},
+          {"type": "integer", "minimum": 0}
+        ],
+        "items": false,
+        "minItems": 2,
+        "maxItems": 2
+      }
+    }
+  }
+}

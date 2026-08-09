@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <meta name="theme-color" content="#f5ede1">
+    <title>Letter Archive · Agent walkthrough</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="/app.css">
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to walkthrough</a>
+
+    <div class="shell" id="app" data-screen="loading" data-mobile-section="agent">
+      <header class="topbar">
+        <a class="brand" href="#" id="home-link" aria-label="Return to source chooser">
+          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span><small>Letter Archive</small><strong>Agent walkthrough</strong></span>
+        </a>
+        <div class="topbar-context" id="topbar-context" aria-live="polite">
+          <span class="pulse-dot" aria-hidden="true"></span>
+          <span>Loading safe source catalog…</span>
+        </div>
+        <div class="topbar-actions">
+          <button class="quiet-button" id="refresh-button" type="button">Refresh</button>
+          <button class="quiet-button" id="leave-session" type="button" hidden>Sources</button>
+        </div>
+      </header>
+
+      <main id="main-content" class="main" tabindex="-1">
+        <section class="loading-screen" id="loading-screen" role="status">
+          <div class="loading-card">
+            <span class="spinner" aria-hidden="true"></span>
+            <h1>Opening the walkthrough</h1>
+            <p>The source catalog and resumable sessions are being verified.</p>
+          </div>
+        </section>
+
+        <section class="error-screen" id="error-screen" hidden>
+          <div class="message-card message-card--error">
+            <p class="eyebrow">Could not open walkthrough</p>
+            <h1 id="fatal-error-title">Something went wrong</h1>
+            <p id="fatal-error-message"></p>
+            <button class="primary-button" id="retry-button" type="button">Try again</button>
+          </div>
+        </section>
+
+        <section class="chooser-screen" id="chooser-screen" hidden aria-labelledby="chooser-title">
+          <div class="chooser-hero">
+            <p class="eyebrow">Stage 0 · Operator setup</p>
+            <h1 id="chooser-title">Choose the exact source image</h1>
+            <p class="hero-copy">This setup screen is not part of the agent turn. Starting a session freezes one source revision; the agent walkthrough begins only after that receipt exists.</p>
+            <div class="visibility-banner visibility-banner--software">
+              <strong>Operator-only setup</strong>
+              <span>Catalog details shown here are not sent to the acting model.</span>
+            </div>
+          </div>
+
+          <div class="chooser-layout">
+            <section aria-labelledby="sources-title">
+              <div class="section-heading">
+                <div><p class="eyebrow">Frozen catalog</p><h2 id="sources-title">Available sources</h2></div>
+                <code id="catalog-revision" class="hash-chip" title="Catalog revision"></code>
+              </div>
+              <div class="source-grid" id="source-grid"></div>
+            </section>
+
+            <aside class="resume-panel" aria-labelledby="resume-title">
+              <div class="section-heading">
+                <div><p class="eyebrow">Exact heads</p><h2 id="resume-title">Resume a session</h2></div>
+              </div>
+              <p class="panel-copy">Resume never resets a session. To try a different path, start a new lineage.</p>
+              <div class="session-list" id="session-list"></div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="session-screen" id="session-screen" hidden>
+          <nav class="mobile-nav" aria-label="Walkthrough sections">
+            <button type="button" data-mobile-section="stages">Stages</button>
+            <button type="button" data-mobile-section="agent" aria-current="page">Agent view</button>
+            <button type="button" data-mobile-section="controls">Tools</button>
+          </nav>
+
+          <div class="walkthrough-grid">
+            <aside class="stage-rail" aria-labelledby="stage-rail-title">
+              <div class="rail-sticky">
+                <div class="rail-heading">
+                  <p class="eyebrow">Software-owned order</p>
+                  <h2 id="stage-rail-title">Exact stages</h2>
+                </div>
+                <div class="session-source" id="session-source"></div>
+                <ol class="stage-list" id="stage-list"></ol>
+                <div class="rail-legend">
+                  <span><i class="status-mark status-mark--done"></i>Receipt</span>
+                  <span><i class="status-mark status-mark--current"></i>Current</span>
+                  <span><i class="status-mark status-mark--future"></i>Not materialized</span>
+                </div>
+              </div>
+            </aside>
+
+            <section class="agent-column" aria-label="Current agent turn">
+              <div class="agent-scroll" id="agent-scroll">
+                <div id="agent-view"></div>
+              </div>
+            </section>
+
+            <aside class="control-column" aria-label="Walkthrough controls">
+              <div class="control-tabs" role="tablist" aria-label="Agent walkthrough panels">
+                <button id="tab-action" type="button" role="tab" aria-selected="true" aria-controls="panel-action" data-control-tab="action">Action</button>
+                <button id="tab-instructions" type="button" role="tab" aria-selected="false" aria-controls="panel-instructions" data-control-tab="instructions">Instructions</button>
+                <button id="tab-inspector" type="button" role="tab" aria-selected="false" aria-controls="panel-inspector" data-control-tab="inspector">Inspector</button>
+                <button id="tab-notebook" type="button" role="tab" aria-selected="false" aria-controls="panel-notebook" data-control-tab="notebook">Notebook <span id="note-count" class="count-badge">0</span></button>
+              </div>
+
+              <section class="control-panel" id="panel-action" role="tabpanel" aria-labelledby="tab-action"></section>
+              <section class="control-panel" id="panel-instructions" role="tabpanel" aria-labelledby="tab-instructions" hidden></section>
+              <section class="control-panel" id="panel-inspector" role="tabpanel" aria-labelledby="tab-inspector" hidden></section>
+              <section class="control-panel notebook-panel" id="panel-notebook" role="tabpanel" aria-labelledby="tab-notebook" hidden>
+                <div class="panel-intro">
+                  <p class="eyebrow">Every stage · exact receipt</p>
+                  <h2>Field notebook</h2>
+                  <p>Document what is confusing, slow, missing, or wrong. Saving a note never advances the pipeline.</p>
+                </div>
+                <div id="note-draft-warning" class="inline-warning" hidden></div>
+                <form id="note-form" class="stack-form" novalidate>
+                  <div class="two-fields">
+                    <label class="field"><span>Category</span><select name="category" required></select></label>
+                    <label class="field"><span>Severity</span><select name="severity" required></select></label>
+                  </div>
+                  <label class="field">
+                    <span>What happened?</span>
+                    <textarea name="text" rows="5" maxlength="5000" placeholder="Describe the moment while it is fresh."></textarea>
+                    <small><span id="note-char-count">0</span> / <span id="note-char-limit">5,000</span></small>
+                  </label>
+                  <label class="field"><span>Evidence on screen</span><select name="evidence_ref"><option value="">Current stage (no image attached)</option></select></label>
+                  <label class="upload-zone" id="upload-zone">
+                    <input id="screenshot-input" type="file" name="screenshot" accept="image/png,image/jpeg,image/webp">
+                    <span aria-hidden="true">＋</span>
+                    <span><strong>Paste, drop, or choose a screenshot</strong><small id="upload-hint">PNG, JPEG, or WebP</small></span>
+                  </label>
+                  <div class="upload-preview" id="upload-preview" hidden>
+                    <img alt="Screenshot ready to attach"><span></span><button type="button" id="remove-upload" aria-label="Remove screenshot">×</button>
+                  </div>
+                  <p class="form-message" id="note-message" role="alert" hidden></p>
+                  <button class="primary-button" type="submit">Save note without moving on</button>
+                </form>
+                <div class="note-history">
+                  <div class="section-heading"><div><p class="eyebrow">Session log</p><h3>Saved notes</h3></div></div>
+                  <div id="notes-list"></div>
+                </div>
+              </section>
+            </aside>
+          </div>
+        </section>
+      </main>
+
+      <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
+    </div>
+  </body>
+</html>

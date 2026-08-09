@@ -1,0 +1,1860 @@
+{
+  "analysis_sha256": "82af6c04dd628089828015788810d88bf208853eb8493ed891a3dd86f48aa14a",
+  "clean_mask": {
+    "component_count": 622,
+    "file_sha256": "69620d07dd04c4e5da08f5139d807e8da78bcb7dd6028c4c4e226871d92cbfff",
+    "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/agent-ink-variants-v2/007-p02-v4-quality/clean.mask.png",
+    "pixel_sha256": "3283b1d85cedbf6479f865f3ad2f97b014cc28176862f0a964821bf015c8ed66",
+    "pixels": 625101
+  },
+  "evidence_role": "sealed_post_freeze_evaluation_only",
+  "interaction_definition": {
+    "canonical_binding": "transcript_bbox_xywh|global_exclusive",
+    "excludes": [
+      "components absent from every frozen proposal",
+      "component splitting",
+      "pixel painting or erasing",
+      "new locator or line reassignment"
+    ],
+    "locator_family": "both",
+    "one_toggle": "choose a frozen proposal, then add or remove one whole Clean component",
+    "toggle_pool": "union of component IDs already visible in the 8 frozen proposals for that word",
+    "zero_action": "choose any one of 8 already-frozen proposals"
+  },
+  "interpretation_guardrails": [
+    "Counts are sealed oracle ceilings, not acting-agent accuracy.",
+    "The human partition was loaded only after the proposal suite and toggle pools were frozen.",
+    "One-toggle success does not show that an agent can identify the correct component.",
+    "Unresolved words may need multiple toggles, unseen local components, splitting, or reassignment.",
+    "High quality requires precision >= 0.97 and recall >= 0.95."
+  ],
+  "schema_version": "one-toggle-affordance-analysis.v1",
+  "sealed_human_partition": {
+    "latest_state_file_sha256": "90a60fe1e635a14ae858852edf02191a19dd9b92af9481b2cbeb1f8ee0de3505",
+    "latest_state_path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/source-color-selector-v2/007-p02-next-iteration-reset-23c97df1a695-reset-ba7be47e2edc/revisions/r000103/state.json",
+    "manifest_file_sha256": "2ef84ac52a42fc6e775dfa75f3c73a7237408b30d7b4f6d0d44f15d2b2e66f2c",
+    "ownership_uint16_sha256": "57a2264935c81bcfd60ef1ac6848d689521abe6a2c5779999b59673a2cb3881c",
+    "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/source-color-selector-v2/007-p02-next-iteration-reset-23c97df1a695-reset-ba7be47e2edc",
+    "word_count": 100
+  },
+  "source_experiment": {
+    "experiment_sha256": "ebb8d735d4d32bd97a42b2448af44e9c1b4652506997980e7d3ba143d875feee",
+    "file_sha256": "ea30421d995e79751b664db72b5562b68c1a0825bd8edf1a728278a26f1bcfdd",
+    "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed/experiment.json"
+  },
+  "summary": {
+    "additional_one_component_toggle_high_quality_count": 6,
+    "choice_plus_one_toggle_oracle_high_quality_count": 70,
+    "frozen_choice_only_high_quality_count": 64,
+    "unit_count": 77,
+    "unresolved_count": 7,
+    "unresolved_units": [
+      {
+        "text": "Sure",
+        "unit_id": "body-04-U03"
+      },
+      {
+        "text": "how",
+        "unit_id": "body-05-U03"
+      },
+      {
+        "text": "much",
+        "unit_id": "body-05-U04"
+      },
+      {
+        "text": "you.",
+        "unit_id": "body-06-U02"
+      },
+      {
+        "text": "it.",
+        "unit_id": "body-09-U03"
+      },
+      {
+        "text": "I",
+        "unit_id": "body-10-U05"
+      },
+      {
+        "text": "mean",
+        "unit_id": "body-10-U06"
+      }
+    ]
+  },
+  "units": [
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        7,
+        10,
+        13
+      ],
+      "frozen_union_component_pool_count": 3,
+      "human_word_number": 99,
+      "line_id": "body-01",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "You",
+      "unit_id": "body-01-U01"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        11,
+        16
+      ],
+      "frozen_union_component_pool_count": 2,
+      "human_word_number": 98,
+      "line_id": "body-01",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "so",
+      "unit_id": "body-01-U02"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        8,
+        9,
+        16
+      ],
+      "frozen_union_component_pool_count": 3,
+      "human_word_number": 97,
+      "line_id": "body-01",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "many",
+      "unit_id": "body-01-U03"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        4,
+        6,
+        14,
+        15
+      ],
+      "frozen_union_component_pool_count": 4,
+      "human_word_number": 96,
+      "line_id": "body-01",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "times.",
+      "unit_id": "body-01-U04"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        5,
+        14
+      ],
+      "frozen_union_component_pool_count": 2,
+      "human_word_number": 95,
+      "line_id": "body-01",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "I",
+      "unit_id": "body-01-U05"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        5,
+        12
+      ],
+      "frozen_union_component_pool_count": 2,
+      "human_word_number": 94,
+      "line_id": "body-01",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "guess",
+      "unit_id": "body-01-U06"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        17,
+        22,
+        27
+      ],
+      "frozen_union_component_pool_count": 3,
+      "human_word_number": 93,
+      "line_id": "body-02",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "By",
+      "unit_id": "body-02-U01"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        24,
+        25
+      ],
+      "frozen_union_component_pool_count": 2,
+      "human_word_number": 92,
+      "line_id": "body-02",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "now",
+      "unit_id": "body-02-U02"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        23,
+        24
+      ],
+      "frozen_union_component_pool_count": 2,
+      "human_word_number": 91,
+      "line_id": "body-02",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "you",
+      "unit_id": "body-02-U03"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        20,
+        26
+      ],
+      "frozen_union_component_pool_count": 2,
+      "human_word_number": 90,
+      "line_id": "body-02",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "know",
+      "unit_id": "body-02-U04"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        18
+      ],
+      "frozen_union_component_pool_count": 1,
+      "human_word_number": 89,
+      "line_id": "body-02",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "that",
+      "unit_id": "body-02-U05"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        19,
+        21,
+        28
+      ],
+      "frozen_union_component_pool_count": 3,
+      "human_word_number": 88,
+      "line_id": "body-02",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "this",
+      "unit_id": "body-02-U06"
+    },
+    {
+      "disposition": "one_component_toggle_high_quality",
+      "frozen_union_component_pool": [
+        29,
+        30,
+        31,
+        38,
+        44
+      ],
+      "frozen_union_component_pool_count": 5,
+      "human_word_number": 87,
+      "line_id": "body-03",
+      "one_toggle_solution_count": 8,
+      "one_toggle_solutions": [
+        {
+          "action": "remove",
+          "component_foreign_pixels": 4481,
+          "component_id": 31,
+          "component_pixels": 4481,
+          "component_target_pixels": 0,
+          "component_unlabelled_pixels": 0,
+          "from_proposal_id": "reviewed_bbox_xywh|global_exclusive",
+          "result": {
+            "evaluation_gate_high_quality": true,
+            "f1": 0.999956,
+            "foreign_human_word_pixels": 0,
+            "missed_target_pixels": 0,
+            "precision": 0.999913,
+            "recall": 1.0,
+            "true_positive_pixels": 11457,
+            "unlabelled_selected_pixels": 1
+          }
+        },
+        {
+          "action": "remove",
+          "component_foreign_pixels": 4481,
+          "component_id": 31,
+          "component_pixels": 4481,
+          "component_target_pixels": 0,
+          "component_unlabelled_pixels": 0,
+          "from_proposal_id": "reviewed_bbox_xywh|line_locator_strip",
+          "result": {
+            "evaluation_gate_high_quality": true,
+            "f1": 0.999956,
+            "foreign_human_word_pixels": 0,
+            "missed_target_pixels": 0,
+            "precision": 0.999913,
+            "recall": 1.0,
+            "true_positive_pixels": 11457,
+            "unlabelled_selected_pixels": 1
+          }
+        },
+        {
+          "action": "remove",
+          "component_foreign_pixels": 4481,
+          "component_id": 31,
+          "component_pixels": 4481,
+          "component_target_pixels": 0,
+          "component_unlabelled_pixels": 0,
+          "from_proposal_id": "reviewed_bbox_xywh|line_midpoint_centroid",
+          "result": {
+            "evaluation_gate_high_quality": true,
+            "f1": 0.999956,
+            "foreign_human_word_pixels": 0,
+            "missed_target_pixels": 0,
+            "precision": 0.999913,
+            "recall": 1.0,
+            "true_positive_pixels": 11457,
+            "unlabelled_selected_pixels": 1
+          }
+        },
+        {
+          "action": "remove",
+          "component_foreign_pixels": 4481,
+          "component_id": 31,
+          "component_pixels": 4481,
+          "component_target_pixels": 0,
+          "component_unlabelled_pixels": 0,
+          "from_proposal_id": "reviewed_bbox_xywh|line_valley_centroid",
+          "result": {
+            "evaluation_gate_high_quality": true,
+            "f1": 0.999956,
+            "foreign_human_word_pixels": 0,
+            "missed_target_pixels": 0,
+            "precision": 0.999913,
+            "recall": 1.0,
+            "true_positive_pixels": 11457,
+            "unlabelled_selected_pixels": 1
+          }
+        },
+        {
+          "action": "remove",
+          "component_foreign_pixels": 4481,
+          "component_id": 31,
+          "component_pixels": 4481,
+          "component_target_pixels": 0,
+          "component_unlabelled_pixels": 0,
+          "from_proposal_id": "transcript_bbox_xywh|global_exclusive",
+          "result": {
+            "evaluation_gate_high_quality": true,
+            "f1": 0.999956,
+            "foreign_human_word_pixels": 0,
+            "missed_target_pixels": 0,
+            "precision": 0.999913,
+            "recall": 1.0,
+            "true_positive_pixels": 11457,
+            "unlabelled_selected_pixels": 1
+          }
+        },
+        {
+          "action": "remove",
+          "component_foreign_pixels": 4481,
+          "component_id": 31,
+          "component_pixels": 4481,
+          "component_target_pixels": 0,
+          "component_unlabelled_pixels": 0,
+          "from_proposal_id": "transcript_bbox_xywh|line_locator_strip",
+          "result": {
+            "evaluation_gate_high_quality": true,
+            "f1": 0.999956,
+            "foreign_human_word_pixels": 0,
+            "missed_target_pixels": 0,
+            "precision": 0.999913,
+            "recall": 1.0,
+            "true_positive_pixels": 11457,
+            "unlabelled_selected_pixels": 1
+          }
+        },
+        {
+          "action": "remove",
+          "component_foreign_pixels": 4481,
+          "component_id": 31,
+          "component_pixels": 4481,
+          "component_target_pixels": 0,
+          "component_unlabelled_pixels": 0,
+          "from_proposal_id": "transcript_bbox_xywh|line_midpoint_centroid",
+          "result": {
+            "evaluation_gate_high_quality": true,
+            "f1": 0.999956,
+            "foreign_human_word_pixels": 0,
+            "missed_target_pixels": 0,
+            "precision": 0.999913,
+            "recall": 1.0,
+            "true_positive_pixels": 11457,
+            "unlabelled_selected_pixels": 1
+          }
+        },
+        {
+          "action": "remove",
+          "component_foreign_pixels": 4481,
+          "component_id": 31,
+          "component_pixels": 4481,
+          "component_target_pixels": 0,
+          "component_unlabelled_pixels": 0,
+          "from_proposal_id": "transcript_bbox_xywh|line_valley_centroid",
+          "result": {
+            "evaluation_gate_high_quality": true,
+            "f1": 0.999956,
+            "foreign_human_word_pixels": 0,
+            "missed_target_pixels": 0,
+            "precision": 0.999913,
+            "recall": 1.0,
+            "true_positive_pixels": 11457,
+            "unlabelled_selected_pixels": 1
+          }
+        }
+      ],
+      "text": "Dolly",
+      "unit_id": "body-03-U01"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        33,
+        34,
+        39,
+        42,
+        43
+      ],
+      "frozen_union_component_pool_count": 5,
+      "human_word_number": 85,
+      "line_id": "body-03",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "won't",
+      "unit_id": "body-03-U02"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        32,
+        33,
+        34,
+        37
+      ],
+      "frozen_union_component_pool_count": 4,
+      "human_word_number": 84,
+      "line_id": "body-03",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "take",
+      "unit_id": "body-03-U03"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        35,
+        36,
+        41,
+        45
+      ],
+      "frozen_union_component_pool_count": 4,
+      "human_word_number": 83,
+      "line_id": "body-03",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "No",
+      "unit_id": "body-03-U04"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        40
+      ],
+      "frozen_union_component_pool_count": 1,
+      "human_word_number": 82,
+      "line_id": "body-03",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "for",
+      "unit_id": "body-03-U05"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        47,
+        49
+      ],
+      "frozen_union_component_pool_count": 2,
+      "human_word_number": 81,
+      "line_id": "body-04",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "a",
+      "unit_id": "body-04-U01"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        48,
+        49,
+        50,
+        53
+      ],
+      "frozen_union_component_pool_count": 4,
+      "human_word_number": 80,
+      "line_id": "body-04",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "answer.",
+      "unit_id": "body-04-U02"
+    },
+    {
+      "disposition": "unresolved_by_choice_plus_one_union_component_toggle",
+      "frozen_union_component_pool": [
+        50
+      ],
+      "frozen_union_component_pool_count": 1,
+      "human_word_number": 86,
+      "line_id": "body-04",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "Sure",
+      "unit_id": "body-04-U03"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        46
+      ],
+      "frozen_union_component_pool_count": 1,
+      "human_word_number": 73,
+      "line_id": "body-04",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "that",
+      "unit_id": "body-04-U04"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        52
+      ],
+      "frozen_union_component_pool_count": 1,
+      "human_word_number": 79,
+      "line_id": "body-04",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "you",
+      "unit_id": "body-04-U05"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        51,
+        53,
+        54,
+        55,
+        58,
+        60,
+        61,
+        62,
+        67
+      ],
+      "frozen_union_component_pool_count": 9,
+      "human_word_number": 78,
+      "line_id": "body-05",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "don't",
+      "unit_id": "body-05-U01"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        56,
+        59
+      ],
+      "frozen_union_component_pool_count": 2,
+      "human_word_number": 77,
+      "line_id": "body-05",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "realize",
+      "unit_id": "body-05-U02"
+    },
+    {
+      "disposition": "unresolved_by_choice_plus_one_union_component_toggle",
+      "frozen_union_component_pool": [
+        57
+      ],
+      "frozen_union_component_pool_count": 1,
+      "human_word_number": 70,
+      "line_id": "body-05",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "how",
+      "unit_id": "body-05-U03"
+    },
+    {
+      "disposition": "unresolved_by_choice_plus_one_union_component_toggle",
+      "frozen_union_component_pool": [
+        63
+      ],
+      "frozen_union_component_pool_count": 1,
+      "human_word_number": 76,
+      "line_id": "body-05",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "much",
+      "unit_id": "body-05-U04"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        64,
+        68
+      ],
+      "frozen_union_component_pool_count": 2,
+      "human_word_number": 75,
+      "line_id": "body-05",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "I",
+      "unit_id": "body-05-U05"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        65,
+        70
+      ],
+      "frozen_union_component_pool_count": 2,
+      "human_word_number": 74,
+      "line_id": "body-05",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "do",
+      "unit_id": "body-05-U06"
+    },
+    {
+      "disposition": "one_component_toggle_high_quality",
+      "frozen_union_component_pool": [
+        66,
+        67,
+        69,
+        72,
+        73,
+        74,
+        76
+      ],
+      "frozen_union_component_pool_count": 7,
+      "human_word_number": 71,
+      "line_id": "body-06",
+      "one_toggle_solution_count": 3,
+      "one_toggle_solutions": [
+        {
+          "action": "remove",
+          "component_foreign_pixels": 7179,
+          "component_id": 66,
+          "component_pixels": 7179,
+          "component_target_pixels": 0,
+          "component_unlabelled_pixels": 0,
+          "from_proposal_id": "transcript_bbox_xywh|global_exclusive",
+          "result": {
+            "evaluation_gate_high_quality": true,
+            "f1": 0.982513,
+            "foreign_human_word_pixels": 0,
+            "missed_target_pixels": 126,
+            "precision": 0.992321,
+            "recall": 0.972897,
+            "true_positive_pixels": 4523,
+            "unlabelled_selected_pixels": 35
+          }
+        },
+        {
+          "action": "remove",
+          "component_foreign_pixels": 7179,
+          "component_id": 66,
+          "component_pixels": 7179,
+          "component_target_pixels": 0,
+          "component_unlabelled_pixels": 0,
+          "from_proposal_id": "transcript_bbox_xywh|line_locator_strip",
+          "result": {
+            "evaluation_gate_high_quality": true,
+            "f1": 0.9823,
+            "foreign_human_word_pixels": 0,
+            "missed_target_pixels": 126,
+            "precision": 0.991886,
+            "recall": 0.972897,
+            "true_positive_pixels": 4523,
+            "unlabelled_selected_pixels": 37
+          }
+        },
+        {
+          "action": "remove",
+          "component_foreign_pixels": 7179,
+          "component_id": 66,
+          "component_pixels": 7179,
+          "component_target_pixels": 0,
+          "component_unlabelled_pixels": 0,
+          "from_proposal_id": "transcript_bbox_xywh|line_valley_centroid",
+          "result": {
+            "evaluation_gate_high_quality": true,
+            "f1": 0.9823,
+            "foreign_human_word_pixels": 0,
+            "missed_target_pixels": 126,
+            "precision": 0.991886,
+            "recall": 0.972897,
+            "true_positive_pixels": 4523,
+            "unlabelled_selected_pixels": 37
+          }
+        }
+      ],
+      "text": "Love",
+      "unit_id": "body-06-U01"
+    },
+    {
+      "disposition": "unresolved_by_choice_plus_one_union_component_toggle",
+      "frozen_union_component_pool": [
+        74,
+        79
+      ],
+      "frozen_union_component_pool_count": 2,
+      "human_word_number": 72,
+      "line_id": "body-06",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "you.",
+      "unit_id": "body-06-U02"
+    },
+    {
+      "disposition": "one_component_toggle_high_quality",
+      "frozen_union_component_pool": [
+        71,
+        75,
+        80,
+        83
+      ],
+      "frozen_union_component_pool_count": 4,
+      "human_word_number": 69,
+      "line_id": "body-06",
+      "one_toggle_solution_count": 4,
+      "one_toggle_solutions": [
+        {
+          "action": "remove",
+          "component_foreign_pixels": 2355,
+          "component_id": 71,
+          "component_pixels": 2355,
+          "component_target_pixels": 0,
+          "component_unlabelled_pixels": 0,
+          "from_proposal_id": "transcript_bbox_xywh|global_exclusive",
+          "result": {
+            "evaluation_gate_high_quality": true,
+            "f1": 0.999915,
+            "foreign_human_word_pixels": 0,
+            "missed_target_pixels": 0,
+            "precision": 0.99983,
+            "recall": 1.0,
+            "true_positive_pixels": 5877,
+            "unlabelled_selected_pixels": 1
+          }
+        },
+        {
+          "action": "remove",
+          "component_foreign_pixels": 2355,
+          "component_id": 71,
+          "component_pixels": 2355,
+          "component_target_pixels": 0,
+          "component_unlabelled_pixels": 0,
+          "from_proposal_id": "transcript_bbox_xywh|line_locator_strip",
+          "result": {
+            "evaluation_gate_high_quality": true,
+            "f1": 0.999915,
+            "foreign_human_word_pixels": 0,
+            "missed_target_pixels": 0,
+            "precision": 0.99983,
+            "recall": 1.0,
+            "true_positive_pixels": 5877,
+            "unlabelled_selected_pixels": 1
+          }
+        },
+        {
+          "action": "remove",
+          "component_foreign_pixels": 2355,
+          "component_id": 71,
+          "component_pixels": 2355,
+          "component_target_pixels": 0,
+          "component_unlabelled_pixels": 0,
+          "from_proposal_id": "transcript_bbox_xywh|line_midpoint_centroid",
+          "result": {
+            "evaluation_gate_high_quality": true,
+            "f1": 0.999915,
+            "foreign_human_word_pixels": 0,
+            "missed_target_pixels": 0,
+            "precision": 0.99983,
+            "recall": 1.0,
+            "true_positive_pixels": 5877,
+            "unlabelled_selected_pixels": 1
+          }
+        },
+        {
+          "action": "remove",
+          "component_foreign_pixels": 2355,
+          "component_id": 71,
+          "component_pixels": 2355,
+          "component_target_pixels": 0,
+          "component_unlabelled_pixels": 0,
+          "from_proposal_id": "transcript_bbox_xywh|line_valley_centroid",
+          "result": {
+            "evaluation_gate_high_quality": true,
+            "f1": 0.999915,
+            "foreign_human_word_pixels": 0,
+            "missed_target_pixels": 0,
+            "precision": 0.99983,
+            "recall": 1.0,
+            "true_positive_pixels": 5877,
+            "unlabelled_selected_pixels": 1
+          }
+        }
+      ],
+      "text": "I",
+      "unit_id": "body-06-U03"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        78,
+        80,
+        85
+      ],
+      "frozen_union_component_pool_count": 3,
+      "human_word_number": 68,
+      "line_id": "body-06",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "guess",
+      "unit_id": "body-06-U04"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        77,
+        78,
+        81,
+        82,
+        85,
+        87
+      ],
+      "frozen_union_component_pool_count": 6,
+      "human_word_number": 67,
+      "line_id": "body-06",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "you",
+      "unit_id": "body-06-U05"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        84,
+        88,
+        89,
+        93,
+        95,
+        96,
+        100
+      ],
+      "frozen_union_component_pool_count": 7,
+      "human_word_number": 66,
+      "line_id": "body-07",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "that",
+      "unit_id": "body-07-U01"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        86
+      ],
+      "frozen_union_component_pool_count": 1,
+      "human_word_number": 65,
+      "line_id": "body-07",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "I",
+      "unit_id": "body-07-U02"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        75,
+        91,
+        102,
+        103
+      ],
+      "frozen_union_component_pool_count": 4,
+      "human_word_number": 64,
+      "line_id": "body-07",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "am",
+      "unit_id": "body-07-U03"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        92,
+        97,
+        98,
+        102,
+        103
+      ],
+      "frozen_union_component_pool_count": 5,
+      "human_word_number": 63,
+      "line_id": "body-07",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "so",
+      "unit_id": "body-07-U04"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        78,
+        85,
+        90
+      ],
+      "frozen_union_component_pool_count": 3,
+      "human_word_number": 62,
+      "line_id": "body-07",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "far",
+      "unit_id": "body-07-U05"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        99
+      ],
+      "frozen_union_component_pool_count": 1,
+      "human_word_number": 61,
+      "line_id": "body-07",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "away",
+      "unit_id": "body-07-U06"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        82,
+        87,
+        94,
+        101
+      ],
+      "frozen_union_component_pool_count": 4,
+      "human_word_number": 60,
+      "line_id": "body-07",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "that",
+      "unit_id": "body-07-U07"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        104,
+        105,
+        107,
+        110,
+        112,
+        113,
+        123
+      ],
+      "frozen_union_component_pool_count": 7,
+      "human_word_number": 59,
+      "line_id": "body-08",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "I",
+      "unit_id": "body-08-U01"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        106,
+        109,
+        110,
+        114,
+        116,
+        117,
+        120,
+        121,
+        122
+      ],
+      "frozen_union_component_pool_count": 9,
+      "human_word_number": 58,
+      "line_id": "body-08",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "will",
+      "unit_id": "body-08-U02"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        106,
+        108,
+        109,
+        111,
+        114,
+        124
+      ],
+      "frozen_union_component_pool_count": 6,
+      "human_word_number": 57,
+      "line_id": "body-08",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "write",
+      "unit_id": "body-08-U03"
+    },
+    {
+      "disposition": "one_component_toggle_high_quality",
+      "frozen_union_component_pool": [
+        108,
+        115,
+        119,
+        125,
+        126,
+        127
+      ],
+      "frozen_union_component_pool_count": 6,
+      "human_word_number": 55,
+      "line_id": "body-08",
+      "one_toggle_solution_count": 4,
+      "one_toggle_solutions": [
+        {
+          "action": "remove",
+          "component_foreign_pixels": 4127,
+          "component_id": 119,
+          "component_pixels": 4127,
+          "component_target_pixels": 0,
+          "component_unlabelled_pixels": 0,
+          "from_proposal_id": "transcript_bbox_xywh|global_exclusive",
+          "result": {
+            "evaluation_gate_high_quality": true,
+            "f1": 1.0,
+            "foreign_human_word_pixels": 0,
+            "missed_target_pixels": 0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "true_positive_pixels": 5450,
+            "unlabelled_selected_pixels": 0
+          }
+        },
+        {
+          "action": "remove",
+          "component_foreign_pixels": 4127,
+          "component_id": 119,
+          "component_pixels": 4127,
+          "component_target_pixels": 0,
+          "component_unlabelled_pixels": 0,
+          "from_proposal_id": "transcript_bbox_xywh|line_locator_strip",
+          "result": {
+            "evaluation_gate_high_quality": true,
+            "f1": 1.0,
+            "foreign_human_word_pixels": 0,
+            "missed_target_pixels": 0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "true_positive_pixels": 5450,
+            "unlabelled_selected_pixels": 0
+          }
+        },
+        {
+          "action": "remove",
+          "component_foreign_pixels": 4127,
+          "component_id": 119,
+          "component_pixels": 4127,
+          "component_target_pixels": 0,
+          "component_unlabelled_pixels": 0,
+          "from_proposal_id": "transcript_bbox_xywh|line_valley_centroid",
+          "result": {
+            "evaluation_gate_high_quality": true,
+            "f1": 1.0,
+            "foreign_human_word_pixels": 0,
+            "missed_target_pixels": 0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "true_positive_pixels": 5450,
+            "unlabelled_selected_pixels": 0
+          }
+        },
+        {
+          "action": "remove",
+          "component_foreign_pixels": 4127,
+          "component_id": 119,
+          "component_pixels": 4127,
+          "component_target_pixels": 0,
+          "component_unlabelled_pixels": 0,
+          "from_proposal_id": "transcript_bbox_xywh|line_midpoint_centroid",
+          "result": {
+            "evaluation_gate_high_quality": true,
+            "f1": 0.975756,
+            "foreign_human_word_pixels": 0,
+            "missed_target_pixels": 258,
+            "precision": 1.0,
+            "recall": 0.952661,
+            "true_positive_pixels": 5192,
+            "unlabelled_selected_pixels": 0
+          }
+        }
+      ],
+      "text": "any",
+      "unit_id": "body-08-U04"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        115,
+        118,
+        125,
+        126,
+        127
+      ],
+      "frozen_union_component_pool_count": 5,
+      "human_word_number": 54,
+      "line_id": "body-08",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "thing,",
+      "unit_id": "body-08-U05"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        128,
+        132,
+        134,
+        136
+      ],
+      "frozen_union_component_pool_count": 4,
+      "human_word_number": 53,
+      "line_id": "body-09",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "I",
+      "unit_id": "body-09-U01"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        130,
+        131,
+        132,
+        133,
+        135,
+        136,
+        138,
+        140,
+        141,
+        142,
+        144
+      ],
+      "frozen_union_component_pool_count": 11,
+      "human_word_number": 52,
+      "line_id": "body-09",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "mean",
+      "unit_id": "body-09-U02"
+    },
+    {
+      "disposition": "unresolved_by_choice_plus_one_union_component_toggle",
+      "frozen_union_component_pool": [
+        130,
+        133,
+        135,
+        144
+      ],
+      "frozen_union_component_pool_count": 4,
+      "human_word_number": 46,
+      "line_id": "body-09",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "it.",
+      "unit_id": "body-09-U03"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        129
+      ],
+      "frozen_union_component_pool_count": 1,
+      "human_word_number": 51,
+      "line_id": "body-09",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "I",
+      "unit_id": "body-09-U04"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        137
+      ],
+      "frozen_union_component_pool_count": 1,
+      "human_word_number": 50,
+      "line_id": "body-09",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "sure",
+      "unit_id": "body-09-U05"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        127,
+        139,
+        143
+      ],
+      "frozen_union_component_pool_count": 3,
+      "human_word_number": 49,
+      "line_id": "body-09",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "wish",
+      "unit_id": "body-09-U06"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        145
+      ],
+      "frozen_union_component_pool_count": 1,
+      "human_word_number": 48,
+      "line_id": "body-09",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "you",
+      "unit_id": "body-09-U07"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        146,
+        147,
+        148,
+        149,
+        150,
+        151,
+        152,
+        154,
+        156,
+        157,
+        158,
+        161,
+        162,
+        164,
+        165,
+        166,
+        168
+      ],
+      "frozen_union_component_pool_count": 17,
+      "human_word_number": 47,
+      "line_id": "body-10",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "felt",
+      "unit_id": "body-10-U01"
+    },
+    {
+      "disposition": "one_component_toggle_high_quality",
+      "frozen_union_component_pool": [
+        149,
+        153,
+        154,
+        155,
+        158,
+        160,
+        163,
+        167
+      ],
+      "frozen_union_component_pool_count": 8,
+      "human_word_number": 45,
+      "line_id": "body-10",
+      "one_toggle_solution_count": 1,
+      "one_toggle_solutions": [
+        {
+          "action": "remove",
+          "component_foreign_pixels": 2820,
+          "component_id": 155,
+          "component_pixels": 2820,
+          "component_target_pixels": 0,
+          "component_unlabelled_pixels": 0,
+          "from_proposal_id": "transcript_bbox_xywh|line_midpoint_centroid",
+          "result": {
+            "evaluation_gate_high_quality": true,
+            "f1": 0.999833,
+            "foreign_human_word_pixels": 0,
+            "missed_target_pixels": 0,
+            "precision": 0.999666,
+            "recall": 1.0,
+            "true_positive_pixels": 2996,
+            "unlabelled_selected_pixels": 1
+          }
+        }
+      ],
+      "text": "like",
+      "unit_id": "body-10-U02"
+    },
+    {
+      "disposition": "one_component_toggle_high_quality",
+      "frozen_union_component_pool": [
+        153,
+        155,
+        160,
+        163,
+        167,
+        169
+      ],
+      "frozen_union_component_pool_count": 6,
+      "human_word_number": 44,
+      "line_id": "body-10",
+      "one_toggle_solution_count": 2,
+      "one_toggle_solutions": [
+        {
+          "action": "add",
+          "component_foreign_pixels": 0,
+          "component_id": 155,
+          "component_pixels": 2820,
+          "component_target_pixels": 2820,
+          "component_unlabelled_pixels": 0,
+          "from_proposal_id": "transcript_bbox_xywh|line_midpoint_centroid",
+          "result": {
+            "evaluation_gate_high_quality": true,
+            "f1": 1.0,
+            "foreign_human_word_pixels": 0,
+            "missed_target_pixels": 0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "true_positive_pixels": 3793,
+            "unlabelled_selected_pixels": 0
+          }
+        },
+        {
+          "action": "remove",
+          "component_foreign_pixels": 2996,
+          "component_id": 153,
+          "component_pixels": 2996,
+          "component_target_pixels": 0,
+          "component_unlabelled_pixels": 0,
+          "from_proposal_id": "reviewed_bbox_xywh|line_valley_centroid",
+          "result": {
+            "evaluation_gate_high_quality": true,
+            "f1": 0.979284,
+            "foreign_human_word_pixels": 0,
+            "missed_target_pixels": 153,
+            "precision": 0.999725,
+            "recall": 0.959663,
+            "true_positive_pixels": 3640,
+            "unlabelled_selected_pixels": 1
+          }
+        }
+      ],
+      "text": "I",
+      "unit_id": "body-10-U03"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        159,
+        160,
+        167,
+        169,
+        172
+      ],
+      "frozen_union_component_pool_count": 5,
+      "human_word_number": 43,
+      "line_id": "body-10",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "do.",
+      "unit_id": "body-10-U04"
+    },
+    {
+      "disposition": "unresolved_by_choice_plus_one_union_component_toggle",
+      "frozen_union_component_pool": [
+        159,
+        172
+      ],
+      "frozen_union_component_pool_count": 2,
+      "human_word_number": 56,
+      "line_id": "body-10",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "I",
+      "unit_id": "body-10-U05"
+    },
+    {
+      "disposition": "unresolved_by_choice_plus_one_union_component_toggle",
+      "frozen_union_component_pool": [
+        170
+      ],
+      "frozen_union_component_pool_count": 1,
+      "human_word_number": 42,
+      "line_id": "body-10",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "mean",
+      "unit_id": "body-10-U06"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        171
+      ],
+      "frozen_union_component_pool_count": 1,
+      "human_word_number": 41,
+      "line_id": "body-10",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "you",
+      "unit_id": "body-10-U07"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        174,
+        180,
+        184,
+        186,
+        191,
+        200,
+        203
+      ],
+      "frozen_union_component_pool_count": 7,
+      "human_word_number": 40,
+      "line_id": "body-11",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "are",
+      "unit_id": "body-11-U01"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        173,
+        176,
+        177,
+        178,
+        179,
+        181,
+        182,
+        183,
+        186,
+        190,
+        191,
+        193,
+        194,
+        196,
+        197,
+        200,
+        203,
+        205
+      ],
+      "frozen_union_component_pool_count": 18,
+      "human_word_number": 39,
+      "line_id": "body-11",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "getting",
+      "unit_id": "body-11-U02"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        175,
+        187,
+        189,
+        195,
+        198
+      ],
+      "frozen_union_component_pool_count": 5,
+      "human_word_number": 38,
+      "line_id": "body-11",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "bored",
+      "unit_id": "body-11-U03"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        172,
+        185,
+        187,
+        189,
+        192,
+        198,
+        199,
+        201,
+        202
+      ],
+      "frozen_union_component_pool_count": 9,
+      "human_word_number": 37,
+      "line_id": "body-11",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "trying",
+      "unit_id": "body-11-U04"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        188,
+        192,
+        202,
+        204
+      ],
+      "frozen_union_component_pool_count": 4,
+      "human_word_number": 36,
+      "line_id": "body-11",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "to",
+      "unit_id": "body-11-U05"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        205,
+        206,
+        208,
+        209,
+        210,
+        213,
+        214,
+        215,
+        216,
+        221,
+        222,
+        223,
+        226,
+        227,
+        229,
+        233,
+        234,
+        236,
+        239,
+        241,
+        242,
+        243,
+        244
+      ],
+      "frozen_union_component_pool_count": 23,
+      "human_word_number": 35,
+      "line_id": "body-12",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "read",
+      "unit_id": "body-12-U01"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        190,
+        207,
+        211,
+        230,
+        231
+      ],
+      "frozen_union_component_pool_count": 5,
+      "human_word_number": 34,
+      "line_id": "body-12",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "this,",
+      "unit_id": "body-12-U02"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        211,
+        218,
+        225,
+        228,
+        232,
+        235,
+        237,
+        238,
+        240
+      ],
+      "frozen_union_component_pool_count": 9,
+      "human_word_number": 33,
+      "line_id": "body-12",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "so,",
+      "unit_id": "body-12-U03"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        212,
+        219,
+        237
+      ],
+      "frozen_union_component_pool_count": 3,
+      "human_word_number": 32,
+      "line_id": "body-12",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "I",
+      "unit_id": "body-12-U04"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        202,
+        217,
+        224
+      ],
+      "frozen_union_component_pool_count": 3,
+      "human_word_number": 31,
+      "line_id": "body-12",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "will",
+      "unit_id": "body-12-U05"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        188,
+        204,
+        220
+      ],
+      "frozen_union_component_pool_count": 3,
+      "human_word_number": 30,
+      "line_id": "body-12",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "be",
+      "unit_id": "body-12-U06"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        222,
+        229,
+        233,
+        234,
+        236,
+        239,
+        241,
+        242,
+        243,
+        244,
+        245,
+        246,
+        247,
+        248,
+        250,
+        251,
+        252,
+        256,
+        258
+      ],
+      "frozen_union_component_pool_count": 19,
+      "human_word_number": 29,
+      "line_id": "body-13",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "thinking",
+      "unit_id": "body-13-U01"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        232,
+        237,
+        238,
+        240,
+        248,
+        253,
+        256,
+        258
+      ],
+      "frozen_union_component_pool_count": 8,
+      "human_word_number": 28,
+      "line_id": "body-13",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "and",
+      "unit_id": "body-13-U02"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        219,
+        224,
+        249,
+        254,
+        259
+      ],
+      "frozen_union_component_pool_count": 5,
+      "human_word_number": 27,
+      "line_id": "body-13",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "loving",
+      "unit_id": "body-13-U03"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        254,
+        255,
+        257,
+        259
+      ],
+      "frozen_union_component_pool_count": 4,
+      "human_word_number": 26,
+      "line_id": "body-13",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "you",
+      "unit_id": "body-13-U04"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        261,
+        262,
+        263,
+        265,
+        266,
+        267,
+        270,
+        271,
+        272,
+        274,
+        276,
+        280,
+        283,
+        287,
+        290
+      ],
+      "frozen_union_component_pool_count": 15,
+      "human_word_number": 25,
+      "line_id": "body-14",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "more",
+      "unit_id": "body-14-U01"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        251,
+        256,
+        258,
+        260,
+        264,
+        268,
+        269,
+        273,
+        275,
+        277,
+        278,
+        279,
+        280,
+        281,
+        282,
+        283,
+        284,
+        285,
+        286,
+        287,
+        288,
+        289,
+        290,
+        291,
+        292,
+        293,
+        294,
+        295,
+        296,
+        297,
+        298,
+        299,
+        300,
+        301,
+        302,
+        310,
+        311,
+        312,
+        313,
+        314
+      ],
+      "frozen_union_component_pool_count": 40,
+      "human_word_number": 24,
+      "line_id": "body-14",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "each",
+      "unit_id": "body-14-U02"
+    },
+    {
+      "disposition": "frozen_choice_only_high_quality",
+      "frozen_union_component_pool": [
+        253,
+        260,
+        268,
+        269,
+        273,
+        277,
+        278,
+        281,
+        289,
+        292,
+        293,
+        295,
+        296,
+        301,
+        302,
+        303,
+        304,
+        305,
+        306,
+        307,
+        308,
+        309,
+        310,
+        311,
+        312,
+        313,
+        314,
+        327
+      ],
+      "frozen_union_component_pool_count": 28,
+      "human_word_number": 23,
+      "line_id": "body-14",
+      "one_toggle_solution_count": 0,
+      "one_toggle_solutions": [],
+      "text": "day-",
+      "unit_id": "body-14-U03"
+    }
+  ]
+}
+

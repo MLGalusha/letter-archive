@@ -1,0 +1,63 @@
+{
+  "evidence_role": "acting_only_no_completed_page",
+  "frozen_candidates": {
+    "candidate_set_sha256": "d4d9777c6c2d14fd8f792a2d729ceec24a42b8ac2cbfc20d2d68c27837542510",
+    "file_sha256": "1a6158990dd367fcf137e3629a158d2b61be759c2455d2533a85aadaf4fc26ef",
+    "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed/frozen-acting-candidates.json"
+  },
+  "manifest_sha256": "e1337c4183ee150a9db50b3749bf9208dcf2800b91d45fbeeb41e0cc01895ba8",
+  "packet_count": 8,
+  "packets": [
+    {
+      "packet_id": "case-01-body-08-u04",
+      "packet_sha256": "a6171d1c059bc6dfea05ba552bcf78b963c8ca27472d385cb652ee2905badaf5",
+      "unit_id": "body-08-U04",
+      "work_packet_file_sha256": "64bec88da04547e3f5f042abaa5db02bbad6c948806a7f05ec3a9391e04a8b6d"
+    },
+    {
+      "packet_id": "case-02-body-14-u02",
+      "packet_sha256": "9aecd785cea9d173ace53797bd6a22f52a50dce2e1dd081122cad3e863152175",
+      "unit_id": "body-14-U02",
+      "work_packet_file_sha256": "4e3e895e1f015400c431c3d8029cec89d40f948769dc760972616557a587685a"
+    },
+    {
+      "packet_id": "case-03-body-13-u02",
+      "packet_sha256": "9638145be0976d74af0a2c28e9b0985b541fe7215c7f889f0ecc98888abbf7c6",
+      "unit_id": "body-13-U02",
+      "work_packet_file_sha256": "38667a7b910f22a52650b5edc318e6f43c5ce491d8c3d491cf2b6b5ca0a44511"
+    },
+    {
+      "packet_id": "case-04-body-10-u03",
+      "packet_sha256": "035cde56244e9672422ab89fe2c601bfd0594d144c83f212de6c9726fbe5002f",
+      "unit_id": "body-10-U03",
+      "work_packet_file_sha256": "e2eef37fcc615b24d922d56a331dce75c003533e929e328180684f9329af5b30"
+    },
+    {
+      "packet_id": "case-05-body-09-u02",
+      "packet_sha256": "418b50254aebeea40ab7b4d02bf7129fecc557d448e5ff36fab264ed8ca8f804",
+      "unit_id": "body-09-U02",
+      "work_packet_file_sha256": "e6573c5267560e64901aa96620c9e90ccfe6355f9f4a274b11e858546859bfb6"
+    },
+    {
+      "packet_id": "case-06-body-06-u05",
+      "packet_sha256": "e517e86425a685252b6203bcc5f1c80385399efd3db33e2da08cd1ab08876b7f",
+      "unit_id": "body-06-U05",
+      "work_packet_file_sha256": "3aac931d1538c1e7e8103bcc2816d8aba849bfc1f22f64f9ce0a602e8d72c5bb"
+    },
+    {
+      "packet_id": "case-07-body-04-u04",
+      "packet_sha256": "80b2973ab476421cec4c8bd7e5dbf30a2f23353416f06580db0f1f00ec87630e",
+      "unit_id": "body-04-U04",
+      "work_packet_file_sha256": "41e4187860df1dcb2c45e894e53969a6ccc3241fdc78809acc710cd60b8f62a4"
+    },
+    {
+      "packet_id": "case-08-body-11-u04",
+      "packet_sha256": "53883fc444d0a9b6d6c6e042e87cf9c4e2e83cd536484b40a9403b3b477e93a6",
+      "unit_id": "body-11-U04",
+      "work_packet_file_sha256": "ab225bfba919663af8e730239370382bc4cc0c4a84b536b4a23bf702eb39749e"
+    }
+  ],
+  "schema_version": "line-choice-agent-packet-run.v1",
+  "selection_policy": "rank frozen proposal disagreement, then diversify fitted lines"
+}
+

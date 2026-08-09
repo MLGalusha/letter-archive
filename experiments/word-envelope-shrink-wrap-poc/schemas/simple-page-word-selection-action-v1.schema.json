@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "simple-page-word-selection-action-v1.schema.json",
+  "title": "Simple page word selection action v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "base_state_sha256", "ink_variant", "rectangles", "deselect_rectangles", "selection_preview_sha256"],
+  "properties": {
+    "schema_version": {"const": "simple-page-word-selection-action.v1"},
+    "base_state_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "ink_variant": {"enum": ["clean", "high_recall"]},
+    "selection_preview_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "rectangles": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {
+        "type": "array",
+        "prefixItems": [
+          {"type": "integer", "minimum": 0},
+          {"type": "integer", "minimum": 0},
+          {"type": "integer", "minimum": 1},
+          {"type": "integer", "minimum": 1}
+        ],
+        "items": false,
+        "minItems": 4,
+        "maxItems": 4
+      }
+    },
+    "deselect_rectangles": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "array",
+        "prefixItems": [
+          {"type": "integer", "minimum": 0},
+          {"type": "integer", "minimum": 0},
+          {"type": "integer", "minimum": 1},
+          {"type": "integer", "minimum": 1}
+        ],
+        "items": false,
+        "minItems": 4,
+        "maxItems": 4
+      }
+    }
+  }
+}

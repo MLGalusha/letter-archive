@@ -1,0 +1,224 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "alignment-stage-b-decision-v3.schema.json",
+  "title": "Many-to-many visible/transcript/proposal graph decision v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "trial_id",
+    "page_id",
+    "line_id",
+    "stage",
+    "state_revision",
+    "state_sha256",
+    "packet_sha256",
+    "action"
+  ],
+  "properties": {
+    "schema_version": {"const": "alignment-stage-b-decision.v3"},
+    "trial_id": {"type": "string", "minLength": 1},
+    "page_id": {"type": "string", "minLength": 1},
+    "line_id": {"type": "string", "minLength": 1},
+    "stage": {"const": "stage_b_graph_alignment"},
+    "state_revision": {"type": "integer", "minimum": 0},
+    "state_sha256": {"$ref": "#/$defs/sha256"},
+    "packet_sha256": {"$ref": "#/$defs/sha256"},
+    "action": {
+      "oneOf": [
+        {"$ref": "#/$defs/submit_alignment_graph"},
+        {"$ref": "#/$defs/defer_line"}
+      ]
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "id": {"type": "string", "minLength": 1},
+    "bbox": {
+      "type": "array",
+      "prefixItems": [
+        {"type": "integer", "minimum": 0},
+        {"type": "integer", "minimum": 0},
+        {"type": "integer", "minimum": 1},
+        {"type": "integer", "minimum": 1}
+      ],
+      "items": false,
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "inserted_span": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "span_id",
+        "order",
+        "bbox_source_xywh",
+        "visual_kind",
+        "estimated_word_count_min",
+        "estimated_word_count_max",
+        "internal_boundary_status",
+        "uncertainty_flags",
+        "evidence_note"
+      ],
+      "properties": {
+        "span_id": {"$ref": "#/$defs/id"},
+        "order": {"type": "integer", "minimum": 1},
+        "bbox_source_xywh": {"$ref": "#/$defs/bbox"},
+        "visual_kind": {
+          "enum": ["word_like", "punctuation", "non_word_mark", "unreadable"]
+        },
+        "estimated_word_count_min": {"type": "integer", "minimum": 0},
+        "estimated_word_count_max": {"type": "integer", "minimum": 0},
+        "internal_boundary_status": {
+          "enum": ["clear_single", "possible_multiword", "likely_multiword", "not_applicable", "unknown"]
+        },
+        "uncertainty_flags": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "none", "wide_span", "touching_neighbors", "fragmented", "faint",
+              "fold", "clipped_context", "rotation_uncertain", "punctuation_uncertain", "unreadable"
+            ]
+          }
+        },
+        "evidence_note": {"type": "string", "minLength": 1}
+      }
+    },
+    "word_unit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "word_unit_id", "order", "bbox_source_xywh", "kind", "text_guess", "evidence_note"
+      ],
+      "properties": {
+        "word_unit_id": {"$ref": "#/$defs/id"},
+        "order": {"type": "integer", "minimum": 1},
+        "bbox_source_xywh": {"$ref": "#/$defs/bbox"},
+        "kind": {"enum": ["word", "punctuation", "non_word_mark", "unreadable"]},
+        "text_guess": {"type": ["string", "null"], "minLength": 1},
+        "evidence_note": {"type": "string", "minLength": 1}
+      }
+    },
+    "span_word_edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["span_id", "word_unit_id"],
+      "properties": {
+        "span_id": {"$ref": "#/$defs/id"},
+        "word_unit_id": {"$ref": "#/$defs/id"}
+      }
+    },
+    "word_transcript_edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["word_unit_id", "transcript_node_id"],
+      "properties": {
+        "word_unit_id": {"$ref": "#/$defs/id"},
+        "transcript_node_id": {"$ref": "#/$defs/id"}
+      }
+    },
+    "word_proposal_edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["word_unit_id", "proposal_node_id"],
+      "properties": {
+        "word_unit_id": {"$ref": "#/$defs/id"},
+        "proposal_node_id": {"$ref": "#/$defs/id"}
+      }
+    },
+    "gap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node_type", "node_id", "missing_relation", "reason", "evidence_note"],
+      "properties": {
+        "node_type": {"enum": ["word_unit", "transcript_node", "proposal_node"]},
+        "node_id": {"$ref": "#/$defs/id"},
+        "missing_relation": {"enum": ["word_unit", "transcript_node", "proposal_node"]},
+        "reason": {
+          "enum": [
+            "omitted_visible_word",
+            "punctuation_untranscribed",
+            "detector_miss",
+            "transcript_without_visible_ink",
+            "detector_false_positive",
+            "non_word_visible",
+            "unreadable",
+            "uncertain_alignment"
+          ]
+        },
+        "evidence_note": {"type": "string", "minLength": 1}
+      }
+    },
+    "graph": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inserted_visible_spans",
+        "visible_span_order",
+        "word_units",
+        "span_word_edges",
+        "word_transcript_edges",
+        "word_proposal_edges",
+        "explicit_gaps",
+        "graph_note"
+      ],
+      "properties": {
+        "inserted_visible_spans": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/inserted_span"}
+        },
+        "visible_span_order": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/id"}
+        },
+        "word_units": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/word_unit"}
+        },
+        "span_word_edges": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/span_word_edge"}
+        },
+        "word_transcript_edges": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/word_transcript_edge"}
+        },
+        "word_proposal_edges": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/word_proposal_edge"}
+        },
+        "explicit_gaps": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/gap"}
+        },
+        "graph_note": {"type": "string", "minLength": 1}
+      }
+    },
+    "submit_alignment_graph": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "graph"],
+      "properties": {
+        "type": {"const": "submit_alignment_graph"},
+        "graph": {"$ref": "#/$defs/graph"}
+      }
+    },
+    "defer_line": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "reason", "evidence_note"],
+      "properties": {
+        "type": {"const": "defer_line"},
+        "reason": {
+          "enum": ["insufficient_context", "wrong_transform", "unreadable", "unsafe_ambiguity"]
+        },
+        "evidence_note": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

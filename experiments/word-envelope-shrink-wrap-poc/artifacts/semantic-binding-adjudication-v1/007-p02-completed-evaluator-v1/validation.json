@@ -1,0 +1,13 @@
+{
+  "assigned_mask_count": 74,
+  "declared_mask_count": 77,
+  "ledger_file_sha256": "3c9030c7aaa08c457bc24dfa76ff367429e20d51e6152c1c8776459468f26a5e",
+  "ledger_path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/semantic-binding-adjudication-v1/007-p02-completed-evaluator-v1/adjudicated-ledger.json",
+  "passed": true,
+  "require_complete": true,
+  "resolved_mask_count": 77,
+  "schema_version": "semantic-binding-validation.v1",
+  "verify_inputs": true,
+  "violation_count": 0,
+  "violations": []
+}

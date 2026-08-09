@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "page-structure-inventory-stage-0-decision-v1.schema.json",
+  "title": "Proposed raw-page structure inventory decision v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "session_id", "source_sha256", "packet_sha256", "action"],
+  "properties": {
+    "schema_version": {"const": "page-structure-inventory-decision.v1"},
+    "session_id": {"type": "string", "minLength": 1},
+    "source_sha256": {"$ref": "#/$defs/sha256"},
+    "packet_sha256": {"$ref": "#/$defs/sha256"},
+    "action": {
+      "oneOf": [
+        {"$ref": "#/$defs/submit_page_structure"},
+        {"$ref": "#/$defs/defer_page"}
+      ]
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "bbox": {
+      "type": "array",
+      "prefixItems": [
+        {"type": "integer", "minimum": 0},
+        {"type": "integer", "minimum": 0},
+        {"type": "integer", "minimum": 1},
+        {"type": "integer", "minimum": 1}
+      ],
+      "items": false,
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "point": {
+      "type": "array",
+      "prefixItems": [{"type": "number"}, {"type": "number"}],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "region": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["region_id", "order", "region_kind", "bbox_source_xywh", "evidence_note"],
+      "properties": {
+        "region_id": {"type": "string", "minLength": 1},
+        "order": {"type": "integer", "minimum": 1},
+        "region_kind": {
+          "enum": ["main_body", "closing", "signature", "postscript", "margin_note", "address_or_header", "unknown_writing"]
+        },
+        "bbox_source_xywh": {"$ref": "#/$defs/bbox"},
+        "evidence_note": {"type": "string", "minLength": 1}
+      }
+    },
+    "line": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "line_id", "region_id", "order_in_region", "page_reading_order", "bbox_source_xywh",
+        "source_to_upright_rotation_degrees", "source_start_edge",
+        "semantic_start_anchor_source_xy", "semantic_end_anchor_source_xy",
+        "line_legibility", "boundary_status", "evidence_note"
+      ],
+      "properties": {
+        "line_id": {"type": "string", "minLength": 1},
+        "region_id": {"type": "string", "minLength": 1},
+        "order_in_region": {"type": "integer", "minimum": 1},
+        "page_reading_order": {"type": "integer", "minimum": 1},
+        "bbox_source_xywh": {"$ref": "#/$defs/bbox"},
+        "source_to_upright_rotation_degrees": {"type": "number", "minimum": -180, "maximum": 180},
+        "source_start_edge": {"enum": ["min_source_x", "max_source_x", "min_source_y", "max_source_y", "custom_anchor"]},
+        "semantic_start_anchor_source_xy": {"$ref": "#/$defs/point"},
+        "semantic_end_anchor_source_xy": {"$ref": "#/$defs/point"},
+        "line_legibility": {"enum": ["readable", "partly_readable", "unreadable"]},
+        "boundary_status": {"enum": ["clear", "touching_neighbor", "overwritten", "fold_or_damage", "clipped", "uncertain"]},
+        "evidence_note": {"type": "string", "minLength": 1}
+      }
+    },
+    "residual": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["residual_id", "bbox_source_xywh", "disposition", "evidence_note"],
+      "properties": {
+        "residual_id": {"type": "string", "minLength": 1},
+        "bbox_source_xywh": {"$ref": "#/$defs/bbox"},
+        "disposition": {"enum": ["possible_missing_writing", "punctuation_or_detached_mark", "paper_damage_or_fold", "surround_or_background", "unknown_artifact"]},
+        "evidence_note": {"type": "string", "minLength": 1}
+      }
+    },
+    "submit_page_structure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "paper_bbox_source_xywh", "regions", "lines", "completeness_audit", "page_note"],
+      "properties": {
+        "type": {"const": "submit_page_structure"},
+        "paper_bbox_source_xywh": {"$ref": "#/$defs/bbox"},
+        "regions": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/region"}},
+        "lines": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/line"}},
+        "completeness_audit": {"type": "array", "items": {"$ref": "#/$defs/residual"}},
+        "page_note": {"type": "string", "minLength": 1}
+      }
+    },
+    "defer_page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "reason", "evidence_note"],
+      "properties": {
+        "type": {"const": "defer_page"},
+        "reason": {"enum": ["source_unavailable", "page_boundary_uncertain", "writing_regions_uncertain", "transform_unsupported", "unsafe_ambiguity"]},
+        "evidence_note": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

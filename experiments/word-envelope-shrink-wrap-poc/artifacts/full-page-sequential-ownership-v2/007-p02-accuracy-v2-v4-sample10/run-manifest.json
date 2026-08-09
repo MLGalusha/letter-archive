@@ -1,0 +1,310 @@
+{
+  "diagnostic_unit_subset": {
+    "not_a_page_completeness_run": true,
+    "unit_count": 10,
+    "unit_ids": [
+      "body-01-U02",
+      "body-01-U04",
+      "body-02-U01",
+      "body-02-U02",
+      "body-02-U03",
+      "body-02-U04",
+      "body-03-U02",
+      "body-06-U01",
+      "ps-02-U02",
+      "ps-04-U02"
+    ]
+  },
+  "ignored_non_word_units": [],
+  "input_bindings": {
+    "clean_reference_ink_mask": {
+      "file_sha256": "69620d07dd04c4e5da08f5139d807e8da78bcb7dd6028c4c4e226871d92cbfff",
+      "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/agent-ink-variants-v2/007-p02-v4-quality/clean.mask.png",
+      "pixel_sha256": "3283b1d85cedbf6479f865f3ad2f97b014cc28176862f0a964821bf015c8ed66",
+      "size_wh": [
+        3000,
+        4000
+      ]
+    },
+    "knockout_manifest": {
+      "file_sha256": "438b84ca3df37ac2bc2b37698995c9eded21a80031b4e7857923e9ffd540a298",
+      "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/full-page-supervisor-trial-v2/007-p02/sol-adjudicated-knockout/manifest.json"
+    },
+    "normalized_global_ink_mask": {
+      "file_sha256": "6b7d101ca4dfddb79804f2706687d1a624aeb0aea6be9c50b10a75b821365798",
+      "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/agent-ink-variants-v2/007-p02-v4-quality/strong.mask.png",
+      "pixel_sha256": "599bc5c99ad9591295111ee0330450e12e52c8a3cd07ae24eb35dcfc78777458",
+      "size_wh": [
+        3000,
+        4000
+      ]
+    },
+    "pass1_decision": {
+      "file_sha256": "66b50317e47994b2ac94d16e55a14a916b95b6cac4229af835e8c03cab4b9c5b",
+      "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/full-page-supervisor-trial-v2/007-p02/agent-sol-adjudication/decisions.json"
+    },
+    "public_packet": {
+      "file_sha256": "e5e65eddf7fc1e58dd9ebd8214cc64f742714e500d7a451734ec7d50eb04a7d5",
+      "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/full-page-supervisor-trial-v2/007-p02/public/run-packet.json"
+    },
+    "source": {
+      "file_sha256": "0bce0fe0b8c4a578b846bf004a36cc7774ecf7cbaeebe4f12106a1b962490312",
+      "path": "/Users/masongalusha/Workspace/projects/letter-archive/backend/storage/collections/007/19430411/L01/007-19430411-L01-02.jpg",
+      "size_wh": [
+        3000,
+        4000
+      ]
+    },
+    "upstream_knockout_ink_mask": {
+      "file_sha256": "ac1d24d090c92b2c0972103775ffe9d2de9495108f38c1f733307addbe5321a8",
+      "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/full-page-supervisor-trial-v2/007-p02/sol-adjudicated-knockout/masks/ink-proposal.png",
+      "pixel_sha256": "fea4819e2ab62a484b5131b07b80985551a176928f6c2eb5c5cde91104ec12a7",
+      "purpose": "provenance_only_not_implicitly_clean_or_claimable",
+      "size_wh": [
+        3000,
+        4000
+      ]
+    }
+  },
+  "page_id": "007-p02",
+  "policy": {
+    "claim_universe": "normalized_global_ink_mask_only",
+    "connectivity": 8,
+    "context_padding_px": 250,
+    "default_padding_policy": "scale_aware_long_edge:work=2.625_percent,context=6_percent; approximately 105/240px at 3000x4000 and 42/96px at 1200x1600",
+    "ink_view_policy": "explicit_clean_and_high_recall_pair",
+    "model_tier_policy": {
+      "automatic_approval": "only a validated pass2 approve_candidate_mask is preloaded",
+      "interactive_routing": "original pass1 ownership route plus explicit geometry/risk flags; pass2 sol_review alone does not require Sol",
+      "terra_cut_policy": "cut is reserved for Sol"
+    },
+    "nonterminal_actions": [
+      "exclude",
+      "cut",
+      "request_expanded_context",
+      "reopen_bbox"
+    ],
+    "prior_claim_policy": "red_and_removed_from_current_inventory",
+    "terminal_actions": [
+      "claim_select",
+      "defer_tier",
+      "defer_manual"
+    ],
+    "unit_order": "pass1_line_reading_order_then_unit_reading_order",
+    "unit_subset_policy": "explicit_diagnostic_subset_in_canonical_page_order",
+    "work_padding_px": 110
+  },
+  "preloaded_approved_units": [],
+  "run_id": "007-p02--8f3566796a3283ca",
+  "run_manifest_sha256": "1d6dcc40f5cb583c9bfffcd4dbd0ac474d2311b94631afc16c4fba6626b1ed7d",
+  "schema_version": "sequential-full-page-ownership-run.v1",
+  "units": [
+    {
+      "bbox_source_xywh": [
+        778,
+        488,
+        150,
+        48
+      ],
+      "directed_reading": "left_to_right",
+      "line_id": "body-01",
+      "line_reading_order": 1,
+      "ownership_route": "terra_box_mask",
+      "risk_flags": [
+        "none"
+      ],
+      "tentative_text": "so",
+      "unit_id": "body-01-U02",
+      "unit_kind": "word",
+      "unit_reading_order": 2,
+      "upright_rotation_degrees": 0
+    },
+    {
+      "bbox_source_xywh": [
+        1440,
+        432,
+        378,
+        95
+      ],
+      "directed_reading": "left_to_right",
+      "line_id": "body-01",
+      "line_reading_order": 1,
+      "ownership_route": "terra_box_mask",
+      "risk_flags": [
+        "none"
+      ],
+      "tentative_text": "times.",
+      "unit_id": "body-01-U04",
+      "unit_kind": "word",
+      "unit_reading_order": 4,
+      "upright_rotation_degrees": 0
+    },
+    {
+      "bbox_source_xywh": [
+        410,
+        540,
+        162,
+        130
+      ],
+      "directed_reading": "left_to_right",
+      "line_id": "body-02",
+      "line_reading_order": 2,
+      "ownership_route": "terra_box_mask",
+      "risk_flags": [
+        "none"
+      ],
+      "tentative_text": "By",
+      "unit_id": "body-02-U01",
+      "unit_kind": "word",
+      "unit_reading_order": 1,
+      "upright_rotation_degrees": 0
+    },
+    {
+      "bbox_source_xywh": [
+        635,
+        612,
+        298,
+        50
+      ],
+      "directed_reading": "left_to_right",
+      "line_id": "body-02",
+      "line_reading_order": 2,
+      "ownership_route": "terra_box_mask",
+      "risk_flags": [
+        "none"
+      ],
+      "tentative_text": "now",
+      "unit_id": "body-02-U02",
+      "unit_kind": "word",
+      "unit_reading_order": 2,
+      "upright_rotation_degrees": 0
+    },
+    {
+      "bbox_source_xywh": [
+        958,
+        602,
+        210,
+        68
+      ],
+      "directed_reading": "left_to_right",
+      "line_id": "body-02",
+      "line_reading_order": 2,
+      "ownership_route": "terra_box_mask",
+      "risk_flags": [
+        "none"
+      ],
+      "tentative_text": "you",
+      "unit_id": "body-02-U03",
+      "unit_kind": "word",
+      "unit_reading_order": 3,
+      "upright_rotation_degrees": 0
+    },
+    {
+      "bbox_source_xywh": [
+        1265,
+        540,
+        360,
+        130
+      ],
+      "directed_reading": "left_to_right",
+      "line_id": "body-02",
+      "line_reading_order": 2,
+      "ownership_route": "terra_box_mask",
+      "risk_flags": [
+        "none"
+      ],
+      "tentative_text": "know",
+      "unit_id": "body-02-U04",
+      "unit_kind": "word",
+      "unit_reading_order": 4,
+      "upright_rotation_degrees": 0
+    },
+    {
+      "bbox_source_xywh": [
+        825,
+        710,
+        335,
+        115
+      ],
+      "directed_reading": "left_to_right",
+      "line_id": "body-03",
+      "line_reading_order": 3,
+      "ownership_route": "terra_box_mask",
+      "risk_flags": [
+        "none"
+      ],
+      "tentative_text": "won't",
+      "unit_id": "body-03-U02",
+      "unit_kind": "word",
+      "unit_reading_order": 2,
+      "upright_rotation_degrees": 0
+    },
+    {
+      "bbox_source_xywh": [
+        400,
+        1120,
+        360,
+        210
+      ],
+      "directed_reading": "left_to_right",
+      "line_id": "body-06",
+      "line_reading_order": 6,
+      "ownership_route": "sol_shared_ink",
+      "risk_flags": [
+        "touching_neighbor",
+        "transcript_conflict"
+      ],
+      "tentative_text": "Love",
+      "unit_id": "body-06-U01",
+      "unit_kind": "word",
+      "unit_reading_order": 1,
+      "upright_rotation_degrees": 0
+    },
+    {
+      "bbox_source_xywh": [
+        480,
+        3020,
+        230,
+        170
+      ],
+      "directed_reading": "left_to_right",
+      "line_id": "ps-02",
+      "line_reading_order": 18,
+      "ownership_route": "sol_shared_ink",
+      "risk_flags": [
+        "sideways"
+      ],
+      "tentative_text": "you",
+      "unit_id": "ps-02-U02",
+      "unit_kind": "word",
+      "unit_reading_order": 2,
+      "upright_rotation_degrees": -25
+    },
+    {
+      "bbox_source_xywh": [
+        350,
+        3110,
+        330,
+        180
+      ],
+      "directed_reading": "left_to_right",
+      "line_id": "ps-04",
+      "line_reading_order": 20,
+      "ownership_route": "sol_shared_ink",
+      "risk_flags": [
+        "sideways",
+        "touching_neighbor"
+      ],
+      "tentative_text": "O.K.",
+      "unit_id": "ps-04-U02",
+      "unit_kind": "word",
+      "unit_reading_order": 2,
+      "upright_rotation_degrees": -25
+    }
+  ],
+  "upstream_bindings": {
+    "knockout_decision_file_sha256": "66b50317e47994b2ac94d16e55a14a916b95b6cac4229af835e8c03cab4b9c5b",
+    "knockout_manifest_internal_sha256": "43561ed4a1ad4ba34ccad3d455b4f763969a7e53a48e385ff9910f611d8238e3",
+    "public_packet_internal_sha256": "cb0afeb1b78cc77e24ba4a83e60b35850e5094afdc2f25529a5e52ae158550f4"
+  }
+}

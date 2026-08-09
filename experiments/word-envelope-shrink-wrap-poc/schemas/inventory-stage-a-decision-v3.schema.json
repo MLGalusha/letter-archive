@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "inventory-stage-a-decision-v3.schema.json",
+  "title": "Transcript- and detector-blind visible-span inventory decision v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "trial_id",
+    "page_id",
+    "line_id",
+    "stage",
+    "state_revision",
+    "state_sha256",
+    "packet_sha256",
+    "action"
+  ],
+  "properties": {
+    "schema_version": {"const": "inventory-stage-a-decision.v3"},
+    "trial_id": {"type": "string", "minLength": 1},
+    "page_id": {"type": "string", "minLength": 1},
+    "line_id": {"type": "string", "minLength": 1},
+    "stage": {"const": "stage_a_visible_inventory"},
+    "state_revision": {"type": "integer", "minimum": 0},
+    "state_sha256": {"$ref": "#/$defs/sha256"},
+    "packet_sha256": {"$ref": "#/$defs/sha256"},
+    "action": {
+      "oneOf": [
+        {"$ref": "#/$defs/submit_visible_inventory"},
+        {"$ref": "#/$defs/defer_line"}
+      ]
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "bbox": {
+      "type": "array",
+      "prefixItems": [
+        {"type": "integer", "minimum": 0},
+        {"type": "integer", "minimum": 0},
+        {"type": "integer", "minimum": 1},
+        {"type": "integer", "minimum": 1}
+      ],
+      "items": false,
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "span": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "order",
+        "bbox_source_xywh",
+        "visual_kind",
+        "estimated_word_count_min",
+        "estimated_word_count_max",
+        "internal_boundary_status",
+        "uncertainty_flags",
+        "evidence_note"
+      ],
+      "properties": {
+        "order": {"type": "integer", "minimum": 1},
+        "bbox_source_xywh": {"$ref": "#/$defs/bbox"},
+        "visual_kind": {
+          "enum": ["word_like", "punctuation", "non_word_mark", "unreadable"]
+        },
+        "estimated_word_count_min": {"type": "integer", "minimum": 0},
+        "estimated_word_count_max": {"type": "integer", "minimum": 0},
+        "internal_boundary_status": {
+          "enum": [
+            "clear_single",
+            "possible_multiword",
+            "likely_multiword",
+            "not_applicable",
+            "unknown"
+          ]
+        },
+        "uncertainty_flags": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "none",
+              "wide_span",
+              "touching_neighbors",
+              "fragmented",
+              "faint",
+              "fold",
+              "clipped_context",
+              "rotation_uncertain",
+              "punctuation_uncertain",
+              "unreadable"
+            ]
+          }
+        },
+        "evidence_note": {"type": "string", "minLength": 1}
+      }
+    },
+    "submit_visible_inventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "visible_span_count", "spans", "line_note"],
+      "properties": {
+        "type": {"const": "submit_visible_inventory"},
+        "visible_span_count": {"type": "integer", "minimum": 1},
+        "spans": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/span"}
+        },
+        "line_note": {"type": "string", "minLength": 1}
+      }
+    },
+    "defer_line": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "reason", "evidence_note"],
+      "properties": {
+        "type": {"const": "defer_line"},
+        "reason": {
+          "enum": ["insufficient_context", "wrong_transform", "unreadable", "unsafe_ambiguity"]
+        },
+        "evidence_note": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

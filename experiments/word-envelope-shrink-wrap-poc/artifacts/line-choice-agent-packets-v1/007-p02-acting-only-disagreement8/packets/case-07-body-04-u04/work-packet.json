@@ -1,0 +1,131 @@
+{
+  "allowed_response": {
+    "action": [
+      "choose",
+      "choose_and_toggle",
+      "defer"
+    ],
+    "add_component_ids": "zero or more IDs from toggleable_components",
+    "chosen_selected_pixel_sha256": "required for choose or choose_and_toggle",
+    "confidence": [
+      "high",
+      "medium",
+      "low"
+    ],
+    "note": "brief visible-evidence rationale",
+    "remove_component_ids": "zero or more IDs already present in the chosen proposal"
+  },
+  "distinct_proposals": [
+    {
+      "fit_statuses": [
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass"
+      ],
+      "proposal_ids": [
+        "reviewed_bbox_xywh|line_midpoint_centroid",
+        "reviewed_bbox_xywh|line_valley_centroid",
+        "transcript_bbox_xywh|global_exclusive",
+        "transcript_bbox_xywh|line_locator_strip",
+        "transcript_bbox_xywh|line_midpoint_centroid",
+        "transcript_bbox_xywh|line_valley_centroid"
+      ],
+      "selected_component_ids": [
+        46
+      ],
+      "selected_pixel_sha256": "aa2035e04bc9b824a8550ab9235ac687268d443d30f988ad8b7eeb869b4e6b85",
+      "selected_pixels": 16501
+    },
+    {
+      "fit_statuses": [
+        "not_run_empty",
+        "not_run_empty"
+      ],
+      "proposal_ids": [
+        "reviewed_bbox_xywh|global_exclusive",
+        "reviewed_bbox_xywh|line_locator_strip"
+      ],
+      "selected_component_ids": [],
+      "selected_pixel_sha256": "c569308f2e492520168f15dd7c43f6cdc470fd1e8ce0c62cf9ca875bed4b90f0",
+      "selected_pixels": 0
+    }
+  ],
+  "evidence": {
+    "proposal_grid": {
+      "file_sha256": "daf791875fd63c267a687c4dab4cd45e70f30125f0f32465c45420455d499da7",
+      "path": "packets/case-07-body-04-u04/proposal-grid.jpg"
+    },
+    "source_context": {
+      "file_sha256": "9c7071b8c319794e8eab90efa82e974c759c0d5a7fedd397124a4d020024dafd",
+      "path": "packets/case-07-body-04-u04/source-context.jpg"
+    }
+  },
+  "evidence_role": "acting_only_source_clean_line_and_frozen_proposals",
+  "instructions": [
+    "Select only the ink belonging to the named unit.",
+    "Use the centerline for vertical context and component IDs for exact ownership edits.",
+    "Do not claim a component merely because it increases recovered ink.",
+    "Consider neighboring words and defer when a whole component cannot express the boundary."
+  ],
+  "neighbor_units": [
+    {
+      "text": "Sure",
+      "unit_id": "body-04-U03",
+      "word_order": 3
+    },
+    {
+      "text": "that",
+      "unit_id": "body-04-U04",
+      "word_order": 4
+    },
+    {
+      "text": "you",
+      "unit_id": "body-04-U05",
+      "word_order": 5
+    }
+  ],
+  "packet_id": "case-07-body-04-u04",
+  "packet_sha256": "80b2973ab476421cec4c8bd7e5dbf30a2f23353416f06580db0f1f00ec87630e",
+  "provenance": {
+    "clean_pixel_sha256": "3283b1d85cedbf6479f865f3ad2f97b014cc28176862f0a964821bf015c8ed66",
+    "frozen_candidate_file_sha256": "1a6158990dd367fcf137e3629a158d2b61be759c2455d2533a85aadaf4fc26ef",
+    "frozen_candidate_set_sha256": "d4d9777c6c2d14fd8f792a2d729ceec24a42b8ac2cbfc20d2d68c27837542510"
+  },
+  "schema_version": "line-choice-agent-work-packet.v1",
+  "selection_reason": {
+    "acting_gate_disagrees": true,
+    "disagreement_pixels": 16501,
+    "disputed_component_count": 1,
+    "distinct_proposal_count": 2,
+    "policy": "software_disagreement_only"
+  },
+  "toggleable_components": [
+    {
+      "bbox_xywh": [
+        1193,
+        868,
+        724,
+        159
+      ],
+      "component_id": 46,
+      "pixels": 16501
+    }
+  ],
+  "unit": {
+    "line_id": "body-04",
+    "text": "that",
+    "unit_id": "body-04-U04",
+    "word_order": 4
+  },
+  "visual_legend": {
+    "amber_box_and_number": "toggleable component in the union of proposals",
+    "cyan_box": "transcript rough locator",
+    "green": "component selected by that proposal",
+    "purple_box": "reviewed/Kraken rough locator",
+    "red_line": "fitted body centerline"
+  }
+}
+

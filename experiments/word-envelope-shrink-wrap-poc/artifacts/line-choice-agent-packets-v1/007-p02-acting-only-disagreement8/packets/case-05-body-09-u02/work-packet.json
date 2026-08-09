@@ -1,0 +1,296 @@
+{
+  "allowed_response": {
+    "action": [
+      "choose",
+      "choose_and_toggle",
+      "defer"
+    ],
+    "add_component_ids": "zero or more IDs from toggleable_components",
+    "chosen_selected_pixel_sha256": "required for choose or choose_and_toggle",
+    "confidence": [
+      "high",
+      "medium",
+      "low"
+    ],
+    "note": "brief visible-evidence rationale",
+    "remove_component_ids": "zero or more IDs already present in the chosen proposal"
+  },
+  "distinct_proposals": [
+    {
+      "fit_statuses": [
+        "pass"
+      ],
+      "proposal_ids": [
+        "transcript_bbox_xywh|line_valley_centroid"
+      ],
+      "selected_component_ids": [
+        131,
+        132,
+        136,
+        138,
+        140,
+        141,
+        142
+      ],
+      "selected_pixel_sha256": "42a5d664091fc287bc2519355216fe0f0d01537157d71df957feb7d43d8350a8",
+      "selected_pixels": 6149
+    },
+    {
+      "fit_statuses": [
+        "pass"
+      ],
+      "proposal_ids": [
+        "reviewed_bbox_xywh|line_midpoint_centroid"
+      ],
+      "selected_component_ids": [
+        131,
+        138,
+        140,
+        141,
+        142
+      ],
+      "selected_pixel_sha256": "566b4a21b350bbc194143f6bcb51f0347f41147a9504af669b4e412f9b193482",
+      "selected_pixels": 3228
+    },
+    {
+      "fit_statuses": [
+        "pass",
+        "pass",
+        "pass"
+      ],
+      "proposal_ids": [
+        "reviewed_bbox_xywh|global_exclusive",
+        "reviewed_bbox_xywh|line_locator_strip",
+        "reviewed_bbox_xywh|line_valley_centroid"
+      ],
+      "selected_component_ids": [
+        131,
+        132,
+        138,
+        140,
+        141,
+        142
+      ],
+      "selected_pixel_sha256": "e709147876017de35b5fb6d257b8c3e90da63be4ebd17932888c97ab69c9256a",
+      "selected_pixels": 6148
+    },
+    {
+      "fit_statuses": [
+        "pass"
+      ],
+      "proposal_ids": [
+        "transcript_bbox_xywh|line_midpoint_centroid"
+      ],
+      "selected_component_ids": [
+        131,
+        133,
+        138,
+        140,
+        141,
+        142
+      ],
+      "selected_pixel_sha256": "ee2bb4ccfb9f3aebc06acedb272edf9a5897fa7f20171241ee20756cbe123d96",
+      "selected_pixels": 3464
+    },
+    {
+      "fit_statuses": [
+        "pass",
+        "pass"
+      ],
+      "proposal_ids": [
+        "transcript_bbox_xywh|global_exclusive",
+        "transcript_bbox_xywh|line_locator_strip"
+      ],
+      "selected_component_ids": [
+        130,
+        131,
+        132,
+        133,
+        135,
+        136,
+        138,
+        140,
+        141,
+        142,
+        144
+      ],
+      "selected_pixel_sha256": "fdcc48c3f9f8c6178314db73e8767cebbcb567b74a237222a49d187badfb330a",
+      "selected_pixels": 9172
+    }
+  ],
+  "evidence": {
+    "proposal_grid": {
+      "file_sha256": "657118eb90bfbaee7f655edd4572af51950f5f627697eba47cf9b1ce6f467e4b",
+      "path": "packets/case-05-body-09-u02/proposal-grid.jpg"
+    },
+    "source_context": {
+      "file_sha256": "7e7ea29f128a96b0f5be0f7380b4aeec8e61b0320dbb15054ee345f9823fc4e4",
+      "path": "packets/case-05-body-09-u02/source-context.jpg"
+    }
+  },
+  "evidence_role": "acting_only_source_clean_line_and_frozen_proposals",
+  "instructions": [
+    "Select only the ink belonging to the named unit.",
+    "Use the centerline for vertical context and component IDs for exact ownership edits.",
+    "Do not claim a component merely because it increases recovered ink.",
+    "Consider neighboring words and defer when a whole component cannot express the boundary."
+  ],
+  "neighbor_units": [
+    {
+      "text": "I",
+      "unit_id": "body-09-U01",
+      "word_order": 1
+    },
+    {
+      "text": "mean",
+      "unit_id": "body-09-U02",
+      "word_order": 2
+    },
+    {
+      "text": "it.",
+      "unit_id": "body-09-U03",
+      "word_order": 3
+    }
+  ],
+  "packet_id": "case-05-body-09-u02",
+  "packet_sha256": "418b50254aebeea40ab7b4d02bf7129fecc557d448e5ff36fab264ed8ca8f804",
+  "provenance": {
+    "clean_pixel_sha256": "3283b1d85cedbf6479f865f3ad2f97b014cc28176862f0a964821bf015c8ed66",
+    "frozen_candidate_file_sha256": "1a6158990dd367fcf137e3629a158d2b61be759c2455d2533a85aadaf4fc26ef",
+    "frozen_candidate_set_sha256": "d4d9777c6c2d14fd8f792a2d729ceec24a42b8ac2cbfc20d2d68c27837542510"
+  },
+  "schema_version": "line-choice-agent-work-packet.v1",
+  "selection_reason": {
+    "acting_gate_disagrees": true,
+    "disagreement_pixels": 5944,
+    "disputed_component_count": 6,
+    "distinct_proposal_count": 5,
+    "policy": "software_disagreement_only"
+  },
+  "toggleable_components": [
+    {
+      "bbox_xywh": [
+        904,
+        1689,
+        206,
+        76
+      ],
+      "component_id": 130,
+      "pixels": 2651
+    },
+    {
+      "bbox_xywh": [
+        703,
+        1692,
+        185,
+        67
+      ],
+      "component_id": 131,
+      "pixels": 3224
+    },
+    {
+      "bbox_xywh": [
+        550,
+        1695,
+        158,
+        54
+      ],
+      "component_id": 132,
+      "pixels": 2920
+    },
+    {
+      "bbox_xywh": [
+        961,
+        1700,
+        17,
+        23
+      ],
+      "component_id": 133,
+      "pixels": 236
+    },
+    {
+      "bbox_xywh": [
+        1049,
+        1710,
+        1,
+        1
+      ],
+      "component_id": 135,
+      "pixels": 1
+    },
+    {
+      "bbox_xywh": [
+        594,
+        1725,
+        1,
+        1
+      ],
+      "component_id": 136,
+      "pixels": 1
+    },
+    {
+      "bbox_xywh": [
+        773,
+        1730,
+        1,
+        1
+      ],
+      "component_id": 138,
+      "pixels": 1
+    },
+    {
+      "bbox_xywh": [
+        685,
+        1742,
+        1,
+        1
+      ],
+      "component_id": 140,
+      "pixels": 1
+    },
+    {
+      "bbox_xywh": [
+        699,
+        1743,
+        1,
+        1
+      ],
+      "component_id": 141,
+      "pixels": 1
+    },
+    {
+      "bbox_xywh": [
+        685,
+        1744,
+        1,
+        1
+      ],
+      "component_id": 142,
+      "pixels": 1
+    },
+    {
+      "bbox_xywh": [
+        1030,
+        1745,
+        19,
+        13
+      ],
+      "component_id": 144,
+      "pixels": 135
+    }
+  ],
+  "unit": {
+    "line_id": "body-09",
+    "text": "mean",
+    "unit_id": "body-09-U02",
+    "word_order": 2
+  },
+  "visual_legend": {
+    "amber_box_and_number": "toggleable component in the union of proposals",
+    "cyan_box": "transcript rough locator",
+    "green": "component selected by that proposal",
+    "purple_box": "reviewed/Kraken rough locator",
+    "red_line": "fitted body centerline"
+  }
+}
+

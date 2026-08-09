@@ -1,0 +1,252 @@
+{
+  "allowed_response": {
+    "action": [
+      "choose",
+      "choose_and_toggle",
+      "defer"
+    ],
+    "add_component_ids": "zero or more IDs from toggleable_components",
+    "chosen_selected_pixel_sha256": "required for choose or choose_and_toggle",
+    "confidence": [
+      "high",
+      "medium",
+      "low"
+    ],
+    "note": "brief visible-evidence rationale",
+    "remove_component_ids": "zero or more IDs already present in the chosen proposal"
+  },
+  "distinct_proposals": [
+    {
+      "fit_statuses": [
+        "pass"
+      ],
+      "proposal_ids": [
+        "reviewed_bbox_xywh|line_valley_centroid"
+      ],
+      "selected_component_ids": [
+        185,
+        199,
+        201
+      ],
+      "selected_pixel_sha256": "a6c3621139e60af43e6b8a00c51a85751c81da8173f7c68ef3800efb4e8985c9",
+      "selected_pixels": 4604
+    },
+    {
+      "fit_statuses": [
+        "pass"
+      ],
+      "proposal_ids": [
+        "reviewed_bbox_xywh|global_exclusive"
+      ],
+      "selected_component_ids": [
+        172,
+        185,
+        187,
+        189,
+        198,
+        199,
+        201
+      ],
+      "selected_pixel_sha256": "ba7b435ff85eda6373d9514c52ed22f2f2211acdadc64dc3f4ab97124f348639",
+      "selected_pixels": 6299
+    },
+    {
+      "fit_statuses": [
+        "pass",
+        "pass",
+        "pass",
+        "pass"
+      ],
+      "proposal_ids": [
+        "transcript_bbox_xywh|global_exclusive",
+        "transcript_bbox_xywh|line_locator_strip",
+        "transcript_bbox_xywh|line_midpoint_centroid",
+        "transcript_bbox_xywh|line_valley_centroid"
+      ],
+      "selected_component_ids": [
+        185,
+        192,
+        199,
+        201,
+        202
+      ],
+      "selected_pixel_sha256": "eace3e7cf252f5f56366fbbcc8f0507fe8b1b61eca82e70c801b05bd4129f580",
+      "selected_pixels": 7364
+    },
+    {
+      "fit_statuses": [
+        "pass",
+        "pass"
+      ],
+      "proposal_ids": [
+        "reviewed_bbox_xywh|line_locator_strip",
+        "reviewed_bbox_xywh|line_midpoint_centroid"
+      ],
+      "selected_component_ids": [
+        185,
+        187,
+        189,
+        198,
+        199,
+        201
+      ],
+      "selected_pixel_sha256": "f7cb8fbee64b20662a07ade9c524c0c51b66da7d9caef1b6db83989f82a4734a",
+      "selected_pixels": 4614
+    }
+  ],
+  "evidence": {
+    "proposal_grid": {
+      "file_sha256": "9916784e5322423a7196bea34034011996eaa4449955206a604d25430edc2aac",
+      "path": "packets/case-08-body-11-u04/proposal-grid.jpg"
+    },
+    "source_context": {
+      "file_sha256": "e94fd93cd12fb31bab125124396a537745d344acba24c4872820aa231326d56f",
+      "path": "packets/case-08-body-11-u04/source-context.jpg"
+    }
+  },
+  "evidence_role": "acting_only_source_clean_line_and_frozen_proposals",
+  "instructions": [
+    "Select only the ink belonging to the named unit.",
+    "Use the centerline for vertical context and component IDs for exact ownership edits.",
+    "Do not claim a component merely because it increases recovered ink.",
+    "Consider neighboring words and defer when a whole component cannot express the boundary."
+  ],
+  "neighbor_units": [
+    {
+      "text": "bored",
+      "unit_id": "body-11-U03",
+      "word_order": 3
+    },
+    {
+      "text": "trying",
+      "unit_id": "body-11-U04",
+      "word_order": 4
+    },
+    {
+      "text": "to",
+      "unit_id": "body-11-U05",
+      "word_order": 5
+    }
+  ],
+  "packet_id": "case-08-body-11-u04",
+  "packet_sha256": "53883fc444d0a9b6d6c6e042e87cf9c4e2e83cd536484b40a9403b3b477e93a6",
+  "provenance": {
+    "clean_pixel_sha256": "3283b1d85cedbf6479f865f3ad2f97b014cc28176862f0a964821bf015c8ed66",
+    "frozen_candidate_file_sha256": "1a6158990dd367fcf137e3629a158d2b61be759c2455d2533a85aadaf4fc26ef",
+    "frozen_candidate_set_sha256": "d4d9777c6c2d14fd8f792a2d729ceec24a42b8ac2cbfc20d2d68c27837542510"
+  },
+  "schema_version": "line-choice-agent-work-packet.v1",
+  "selection_reason": {
+    "acting_gate_disagrees": true,
+    "disagreement_pixels": 4455,
+    "disputed_component_count": 6,
+    "distinct_proposal_count": 4,
+    "policy": "software_disagreement_only"
+  },
+  "toggleable_components": [
+    {
+      "bbox_xywh": [
+        1445,
+        1952,
+        124,
+        78
+      ],
+      "component_id": 172,
+      "pixels": 1685
+    },
+    {
+      "bbox_xywh": [
+        1498,
+        2052,
+        150,
+        86
+      ],
+      "component_id": 185,
+      "pixels": 2172
+    },
+    {
+      "bbox_xywh": [
+        1449,
+        2060,
+        2,
+        2
+      ],
+      "component_id": 187,
+      "pixels": 3
+    },
+    {
+      "bbox_xywh": [
+        1450,
+        2065,
+        3,
+        3
+      ],
+      "component_id": 189,
+      "pixels": 6
+    },
+    {
+      "bbox_xywh": [
+        1769,
+        2079,
+        17,
+        15
+      ],
+      "component_id": 192,
+      "pixels": 160
+    },
+    {
+      "bbox_xywh": [
+        1437,
+        2084,
+        1,
+        1
+      ],
+      "component_id": 198,
+      "pixels": 1
+    },
+    {
+      "bbox_xywh": [
+        1570,
+        2087,
+        120,
+        113
+      ],
+      "component_id": 199,
+      "pixels": 2431
+    },
+    {
+      "bbox_xywh": [
+        1533,
+        2091,
+        1,
+        1
+      ],
+      "component_id": 201,
+      "pixels": 1
+    },
+    {
+      "bbox_xywh": [
+        1722,
+        2102,
+        138,
+        122
+      ],
+      "component_id": 202,
+      "pixels": 2600
+    }
+  ],
+  "unit": {
+    "line_id": "body-11",
+    "text": "trying",
+    "unit_id": "body-11-U04",
+    "word_order": 4
+  },
+  "visual_legend": {
+    "amber_box_and_number": "toggleable component in the union of proposals",
+    "cyan_box": "transcript rough locator",
+    "green": "component selected by that proposal",
+    "purple_box": "reviewed/Kraken rough locator",
+    "red_line": "fitted body centerline"
+  }
+}
+

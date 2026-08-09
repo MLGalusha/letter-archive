@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "candidate-word-agent-decision-v1.schema.json",
+  "title": "Candidate word agent decision v1",
+  "type": "object",
+  "properties": {
+    "schema_version": {"const": "candidate-word-agent-decision.v1"},
+    "crop_state": {
+      "enum": [
+        "one_complete_word",
+        "clipped_word",
+        "multiple_words",
+        "partial_letters_only",
+        "wrong_region",
+        "shared_or_touching_ink",
+        "uncertain"
+      ]
+    },
+    "difficulty": {"enum": ["routine", "attention_needed", "hard", "blocked"]},
+    "struggle_flags": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "crop_clips_target",
+          "crop_contains_neighbor",
+          "detached_mark_uncertain",
+          "ink_touches_neighbor",
+          "reading_uncertain",
+          "orientation_difficult",
+          "proposal_on_wrong_line",
+          "insufficient_context",
+          "tool_did_not_help"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "evidence_used": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1, "maxLength": 80},
+      "uniqueItems": true
+    },
+    "decision_summary": {"type": "string", "minLength": 1, "maxLength": 500},
+    "confidence": {"enum": ["high", "medium", "low"]},
+    "action": {"type": "object"}
+  },
+  "required": [
+    "schema_version",
+    "crop_state",
+    "difficulty",
+    "struggle_flags",
+    "evidence_used",
+    "decision_summary",
+    "confidence",
+    "action"
+  ],
+  "additionalProperties": false
+}

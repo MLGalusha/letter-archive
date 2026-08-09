@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Line batch word selection v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "line_id", "visible_words"],
+  "properties": {
+    "schema_version": {"const": "line-batch-word-selection.v1"},
+    "line_id": {"type": "string", "minLength": 1},
+    "visible_words": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["word_order", "proposal_ids", "seed_points_xy"],
+        "properties": {
+          "word_order": {"type": "integer", "minimum": 1},
+          "proposal_ids": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "seed_points_xy": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "array",
+              "prefixItems": [
+                {"type": "integer", "minimum": 0},
+                {"type": "integer", "minimum": 0}
+              ],
+              "items": false
+            }
+          }
+        }
+      }
+    }
+  }
+}

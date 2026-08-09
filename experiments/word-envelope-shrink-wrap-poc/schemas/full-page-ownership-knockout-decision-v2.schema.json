@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "full-page-ownership-knockout-decision-v2.schema.json",
+  "title": "Full-page ownership knockout decision v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "trial_id", "page_id", "model_tier", "source_sha256",
+    "pass1_decision_file_sha256", "pass1_decision_canonical_sha256",
+    "knockout_manifest_file_sha256", "knockout_manifest_sha256",
+    "residual_region_manifest_file_sha256", "residual_region_manifest_sha256",
+    "hidden_prior_answer_access", "machine_status", "production_status",
+    "production_pending_reason", "lines", "residual_groups",
+    "missing_word_candidates", "detached_target_ink_reopenings"
+  ],
+  "properties": {
+    "schema_version": {"const": "full-page-ownership-knockout-decision.v2"},
+    "trial_id": {"const": "full-page-supervisor-trial-v2"},
+    "page_id": {"enum": ["007-p02", "014-p04"]},
+    "model_tier": {"enum": ["terra", "sol"]},
+    "source_sha256": {"$ref": "#/$defs/sha256"},
+    "pass1_decision_file_sha256": {"$ref": "#/$defs/sha256"},
+    "pass1_decision_canonical_sha256": {"$ref": "#/$defs/sha256"},
+    "knockout_manifest_file_sha256": {"$ref": "#/$defs/sha256"},
+    "knockout_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "residual_region_manifest_file_sha256": {"$ref": "#/$defs/sha256"},
+    "residual_region_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "hidden_prior_answer_access": {"const": false},
+    "machine_status": {"const": "machine_complete"},
+    "production_status": {"const": "not_production_complete"},
+    "production_pending_reason": {
+      "enum": ["pending_human_review", "pending_sol_review", "pending_bbox_reopen", "pending_production_gate"]
+    },
+    "lines": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/line"}},
+    "residual_groups": {"type": "array", "items": {"$ref": "#/$defs/residual_group"}},
+    "missing_word_candidates": {"type": "array", "items": {"$ref": "#/$defs/missing_word"}},
+    "detached_target_ink_reopenings": {"type": "array", "items": {"$ref": "#/$defs/detached_reopening"}}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "bbox": {
+      "type": "array", "prefixItems": [
+        {"type": "integer", "minimum": 0}, {"type": "integer", "minimum": 0},
+        {"type": "integer", "minimum": 1}, {"type": "integer", "minimum": 1}
+      ], "items": false, "minItems": 4, "maxItems": 4
+    },
+    "model_claim": {"const": "model_proposal_not_software_fact"},
+    "file_ref": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "file_sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "file_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "inspection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["claim_scope", "source_crop_reviewed", "ownership_board_reviewed", "exact_subtraction_reviewed", "box_fill_reviewed", "coverage_overlay_reviewed", "source_crop", "ownership_board", "exact_subtraction", "box_fill", "coverage_overlay", "evidence_note"],
+      "properties": {
+        "claim_scope": {"const": "model_attestation_not_software_fact"},
+        "source_crop_reviewed": {"const": true},
+        "ownership_board_reviewed": {"const": true},
+        "exact_subtraction_reviewed": {"const": true},
+        "box_fill_reviewed": {"const": true},
+        "coverage_overlay_reviewed": {"const": true},
+        "source_crop": {"$ref": "#/$defs/file_ref"},
+        "ownership_board": {"$ref": "#/$defs/file_ref"},
+        "exact_subtraction": {"$ref": "#/$defs/file_ref"},
+        "box_fill": {"$ref": "#/$defs/file_ref"},
+        "coverage_overlay": {"$ref": "#/$defs/file_ref"},
+        "evidence_note": {"type": "string", "minLength": 1}
+      }
+    },
+    "follow_up": {
+      "type": "object", "additionalProperties": false,
+      "required": ["follow_up_id", "action", "source_bbox_xywh", "evidence_group_ids", "evidence_note"],
+      "properties": {
+        "follow_up_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"},
+        "action": {"enum": ["regenerate_unit_candidate", "create_unit_candidate", "sol_review", "human_review"]},
+        "source_bbox_xywh": {"$ref": "#/$defs/bbox"},
+        "target_unit_id": {"type": "string", "minLength": 1},
+        "target_line_id": {"type": "string", "minLength": 1},
+        "evidence_group_ids": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "escalation": {"$ref": "#/$defs/escalation"},
+        "evidence_note": {"type": "string", "minLength": 1}
+      }
+    },
+    "approved_mask": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "file_sha256", "pixel_sha256", "pixel_count"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "file_sha256": {"$ref": "#/$defs/sha256"},
+        "pixel_sha256": {"$ref": "#/$defs/sha256"},
+        "pixel_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "escalation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["target", "issue", "requested_decision"],
+      "properties": {
+        "target": {"enum": ["sol", "human"]},
+        "issue": {"type": "string", "minLength": 1},
+        "requested_decision": {"type": "string", "minLength": 1}
+      }
+    },
+    "unit_decision": {
+      "type": "object", "additionalProperties": false,
+      "required": ["unit_id", "action", "claim_scope", "reason"],
+      "properties": {
+        "unit_id": {"type": "string", "minLength": 1},
+        "action": {"enum": ["approve_candidate_mask", "reopen_bbox", "sol_review", "human_review"]},
+        "claim_scope": {"$ref": "#/$defs/model_claim"},
+        "reason": {"type": "string", "minLength": 1},
+        "approved_candidate_mask": {"$ref": "#/$defs/approved_mask"},
+        "reopen_bbox_source_xywh": {"$ref": "#/$defs/bbox"},
+        "escalation": {"$ref": "#/$defs/escalation"},
+        "follow_up": {"$ref": "#/$defs/follow_up"}
+      }
+    },
+    "line": {
+      "type": "object", "additionalProperties": false,
+      "required": ["line_id", "line_reading_order", "inspection_evidence", "unit_decisions", "line_status", "line_evidence_note"],
+      "properties": {
+        "line_id": {"type": "string", "minLength": 1},
+        "line_reading_order": {"type": "integer", "minimum": 1},
+        "inspection_evidence": {"$ref": "#/$defs/inspection"},
+        "unit_decisions": {"type": "array", "items": {"$ref": "#/$defs/unit_decision"}},
+        "line_status": {"enum": ["routine_masks_approved_pending_production", "pending_reopen", "pending_sol", "pending_human"]},
+        "line_evidence_note": {"type": "string", "minLength": 1}
+      }
+    },
+    "residual_selector": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "component_ids": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "all_components_with_area_at_most_px": {"type": "integer", "minimum": 1, "maximum": 3}
+      },
+      "oneOf": [
+        {"required": ["component_ids"]},
+        {"required": ["all_components_with_area_at_most_px"]}
+      ]
+    },
+    "residual_group": {
+      "type": "object", "additionalProperties": false,
+      "required": ["group_id", "claim_scope", "source_region_ids", "bbox_source_xywh", "selector", "group_kind", "disposition", "evidence_note"],
+      "properties": {
+        "group_id": {"type": "string", "minLength": 1},
+        "claim_scope": {"$ref": "#/$defs/model_claim"},
+        "source_region_ids": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "bbox_source_xywh": {"$ref": "#/$defs/bbox"},
+        "selector": {"$ref": "#/$defs/residual_selector"},
+        "group_kind": {"enum": ["likely_missing_word", "detached_target_ink", "non_text_artifact", "unresolved_ink", "software_speck_group"]},
+        "disposition": {"enum": ["add_missing_word_candidate", "reopen_existing_unit", "sol_review", "human_review", "non_text_keep_residual", "software_speck_policy"]},
+        "target_unit_id": {"type": "string", "minLength": 1},
+        "missing_word_candidate_ids": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "software_speck_max_area_px": {"type": "integer", "minimum": 1, "maximum": 3},
+        "escalation": {"$ref": "#/$defs/escalation"},
+        "evidence_note": {"type": "string", "minLength": 1}
+      }
+    },
+    "missing_word": {
+      "type": "object", "additionalProperties": false,
+      "required": ["candidate_id", "claim_scope", "source_bbox_xywh", "tentative_text", "origin_group_ids", "route", "follow_up", "evidence_note"],
+      "properties": {
+        "candidate_id": {"type": "string", "minLength": 1},
+        "claim_scope": {"$ref": "#/$defs/model_claim"},
+        "source_bbox_xywh": {"$ref": "#/$defs/bbox"},
+        "tentative_text": {"type": "string", "minLength": 1},
+        "origin_group_ids": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "route": {"enum": ["reopen_bbox", "sol_review", "human_review"]},
+        "follow_up": {"$ref": "#/$defs/follow_up"},
+        "evidence_note": {"type": "string", "minLength": 1}
+      }
+    },
+    "detached_reopening": {
+      "type": "object", "additionalProperties": false,
+      "required": ["reopening_id", "claim_scope", "unit_id", "origin_group_ids", "source_bbox_xywh", "route", "follow_up", "reason"],
+      "properties": {
+        "reopening_id": {"type": "string", "minLength": 1},
+        "claim_scope": {"$ref": "#/$defs/model_claim"},
+        "unit_id": {"type": "string", "minLength": 1},
+        "origin_group_ids": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "source_bbox_xywh": {"$ref": "#/$defs/bbox"},
+        "route": {"enum": ["reopen_bbox", "sol_review", "human_review"]},
+        "follow_up": {"$ref": "#/$defs/follow_up"},
+        "reason": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

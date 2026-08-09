@@ -1,0 +1,2419 @@
+{
+  "adjudication": {
+    "decisions_file_sha256": "a76462ed16c37693ae2b04eaea11655bfac849c619bc80bd2d21964a3c82371b",
+    "decisions_path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/semantic-binding-adjudication-v1/007-p02-completed-evaluator-v1/adjudication-decisions.json",
+    "excluded_unit_count": 6,
+    "protocol": "sealed_visual_line_board_review.v1",
+    "role": "sealed_evaluator_only",
+    "scorable_unit_count": 71,
+    "unbound_mask_count": 3
+  },
+  "adjudication_sha256": "bdfd80d9eafe4568d192d4e426e5f5dd933123ebe4d77d84e0abd5c95bb62c97",
+  "body_human_word_number_window": {
+    "count": 77,
+    "end": 99,
+    "start": 23,
+    "status": "strong_geometry_hypothesis_not_semantic_truth"
+  },
+  "contract": {
+    "commit_rule": "complete every line, validate no human mask is assigned twice, then hash the adjudicated record before metric recomputation",
+    "human_mask_cardinality": "zero_or_one_semantic_unit; unbound masks remain residual/artifact",
+    "missing_target": "empty target_human_word_numbers plus an explicit missing note",
+    "unit_target_cardinality": "zero_or_more_human_masks"
+  },
+  "evidence_role": "sealed_evaluator_only_never_acting_input",
+  "inputs": {
+    "centerlines": {
+      "file_sha256": "c4ecb680941048900562e4a4090761398536a40701fc36a67f371ee8578ba474",
+      "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/component-line-field-cross-dispute-v2/007-p02-body77-min50/acting-centerlines.json",
+      "record_sha256": "a26f19eeb1a63d877a402afb84e9dee1f2fb1b4ad165ec9f10c6599599d90aee"
+    },
+    "experiment": {
+      "experiment_sha256": "ebb8d735d4d32bd97a42b2448af44e9c1b4652506997980e7d3ba143d875feee",
+      "file_sha256": "ea30421d995e79751b664db72b5562b68c1a0825bd8edf1a728278a26f1bcfdd",
+      "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed/experiment.json"
+    },
+    "human_run": {
+      "latest_state_file_sha256": "90a60fe1e635a14ae858852edf02191a19dd9b92af9481b2cbeb1f8ee0de3505",
+      "latest_state_path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/source-color-selector-v2/007-p02-next-iteration-reset-23c97df1a695-reset-ba7be47e2edc/revisions/r000103/state.json",
+      "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/source-color-selector-v2/007-p02-next-iteration-reset-23c97df1a695-reset-ba7be47e2edc"
+    },
+    "source": {
+      "file_sha256": "0bce0fe0b8c4a578b846bf004a36cc7774ecf7cbaeebe4f12106a1b962490312",
+      "path": "/Users/masongalusha/Workspace/projects/letter-archive/backend/storage/collections/007/19430411/L01/007-19430411-L01-02.jpg"
+    }
+  },
+  "lines": [
+    {
+      "board": {
+        "file_sha256": "39d3a89f7f53f41539f45acd3ff265dacedc5da036c18a83443e75529c00d446",
+        "path": "body-01-binding-review.jpg"
+      },
+      "declared_unit_count": 6,
+      "line_id": "body-01",
+      "line_note": "",
+      "nearby_human_mask_count": 6,
+      "nearby_human_masks": [
+        {
+          "bbox_xywh": [
+            426,
+            471,
+            284,
+            172
+          ],
+          "human_word_number": 99,
+          "pixel_sha256": "0ac23a6bf291f2d240a75284918c94ad74e8eb1794058564cf2007a5e5ddf3ca",
+          "pixels": 7237
+        },
+        {
+          "bbox_xywh": [
+            788,
+            497,
+            144,
+            42
+          ],
+          "human_word_number": 98,
+          "pixel_sha256": "5403bacc86a96766a41fdea7c5fe1cb566b1a42abfbc8f76f42ddeaaa014ecbd",
+          "pixels": 2535
+        },
+        {
+          "bbox_xywh": [
+            981,
+            488,
+            410,
+            140
+          ],
+          "human_word_number": 97,
+          "pixel_sha256": "67d7f8bf607d423fd87216f3961560d1c8b31ebd79c583dfde248d82d3516d3c",
+          "pixels": 7964
+        },
+        {
+          "bbox_xywh": [
+            1450,
+            442,
+            372,
+            91
+          ],
+          "human_word_number": 96,
+          "pixel_sha256": "9ae81a17ee92b900d1dc687c7647c7264fb8359d0204cbc054b24176963989a2",
+          "pixels": 6382
+        },
+        {
+          "bbox_xywh": [
+            1896,
+            461,
+            133,
+            62
+          ],
+          "human_word_number": 95,
+          "pixel_sha256": "42f455e2761b949e28726ce2eae2530b452a223579329fc80547a41f561fb669",
+          "pixels": 2780
+        },
+        {
+          "bbox_xywh": [
+            1958,
+            500,
+            407,
+            118
+          ],
+          "human_word_number": 94,
+          "pixel_sha256": "b9431b58f0e0d845a2f1c9344aa8d22692551d444182318267cb6b0fc7d14f01",
+          "pixels": 7272
+        }
+      ],
+      "unbound_human_word_numbers": [],
+      "units": [
+        {
+          "line_order": 1,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            99
+          ],
+          "text": "You",
+          "transcript_bbox_xywh": [
+            433,
+            469,
+            311,
+            122
+          ],
+          "unit_id": "body-01-U01",
+          "word_order": 1
+        },
+        {
+          "line_order": 1,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            98
+          ],
+          "text": "so",
+          "transcript_bbox_xywh": [
+            744,
+            491,
+            201,
+            53
+          ],
+          "unit_id": "body-01-U02",
+          "word_order": 2
+        },
+        {
+          "line_order": 1,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            97
+          ],
+          "text": "many",
+          "transcript_bbox_xywh": [
+            945,
+            483,
+            456,
+            104
+          ],
+          "unit_id": "body-01-U03",
+          "word_order": 3
+        },
+        {
+          "line_order": 1,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            96
+          ],
+          "text": "times.",
+          "transcript_bbox_xywh": [
+            1401,
+            443,
+            390,
+            95
+          ],
+          "unit_id": "body-01-U04",
+          "word_order": 4
+        },
+        {
+          "line_order": 1,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            95
+          ],
+          "text": "I",
+          "transcript_bbox_xywh": [
+            1791,
+            511,
+            93,
+            23
+          ],
+          "unit_id": "body-01-U05",
+          "word_order": 5
+        },
+        {
+          "line_order": 1,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            94
+          ],
+          "text": "guess",
+          "transcript_bbox_xywh": [
+            1884,
+            455,
+            484,
+            136
+          ],
+          "unit_id": "body-01-U06",
+          "word_order": 6
+        }
+      ]
+    },
+    {
+      "board": {
+        "file_sha256": "7d0faf6a39e7682196913dd066f2023e81346483f738512c4bf94cbda4384c5c",
+        "path": "body-02-binding-review.jpg"
+      },
+      "declared_unit_count": 6,
+      "line_id": "body-02",
+      "line_note": "",
+      "nearby_human_mask_count": 6,
+      "nearby_human_masks": [
+        {
+          "bbox_xywh": [
+            418,
+            572,
+            162,
+            146
+          ],
+          "human_word_number": 93,
+          "pixel_sha256": "8f5b31c186cea9f69509821f8961412fe67768e82c4bad98c59baaec8997423f",
+          "pixels": 4719
+        },
+        {
+          "bbox_xywh": [
+            640,
+            619,
+            298,
+            49
+          ],
+          "human_word_number": 92,
+          "pixel_sha256": "319fb9faf3bf8192db373fbd7e07e6dc75ed644c754c9895fe25c64b6afeab58",
+          "pixels": 4760
+        },
+        {
+          "bbox_xywh": [
+            911,
+            612,
+            262,
+            129
+          ],
+          "human_word_number": 91,
+          "pixel_sha256": "9fc25297dacc29d791af632e86734b1a36ff323547b7f91c1bbe24551ea955d3",
+          "pixels": 5022
+        },
+        {
+          "bbox_xywh": [
+            1273,
+            599,
+            359,
+            83
+          ],
+          "human_word_number": 90,
+          "pixel_sha256": "1e82fd3f14524042436a25977658ce7c14d44bf77557f31802791badfb94da5c",
+          "pixels": 6476
+        },
+        {
+          "bbox_xywh": [
+            1739,
+            584,
+            253,
+            95
+          ],
+          "human_word_number": 89,
+          "pixel_sha256": "89996a267d1b77af4d935b5b598c621ffd3987440033aae18149b4b1cecbd9e1",
+          "pixels": 6532
+        },
+        {
+          "bbox_xywh": [
+            2061,
+            596,
+            219,
+            105
+          ],
+          "human_word_number": 88,
+          "pixel_sha256": "7f7876380d29891daf1fe70541cfad019ea9135c060f08b1480ee9beba147453",
+          "pixels": 6084
+        }
+      ],
+      "unbound_human_word_numbers": [],
+      "units": [
+        {
+          "line_order": 2,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            93
+          ],
+          "text": "By",
+          "transcript_bbox_xywh": [
+            415,
+            579,
+            182,
+            136
+          ],
+          "unit_id": "body-02-U01",
+          "word_order": 1
+        },
+        {
+          "line_order": 2,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            92
+          ],
+          "text": "now",
+          "transcript_bbox_xywh": [
+            597,
+            614,
+            258,
+            56
+          ],
+          "unit_id": "body-02-U02",
+          "word_order": 2
+        },
+        {
+          "line_order": 2,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            91
+          ],
+          "text": "you",
+          "transcript_bbox_xywh": [
+            855,
+            606,
+            330,
+            115
+          ],
+          "unit_id": "body-02-U03",
+          "word_order": 3
+        },
+        {
+          "line_order": 2,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            90
+          ],
+          "text": "know",
+          "transcript_bbox_xywh": [
+            1185,
+            583,
+            477,
+            104
+          ],
+          "unit_id": "body-02-U04",
+          "word_order": 4
+        },
+        {
+          "line_order": 2,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            89
+          ],
+          "text": "that",
+          "transcript_bbox_xywh": [
+            1662,
+            582,
+            345,
+            101
+          ],
+          "unit_id": "body-02-U05",
+          "word_order": 5
+        },
+        {
+          "line_order": 2,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            88
+          ],
+          "text": "this",
+          "transcript_bbox_xywh": [
+            2007,
+            589,
+            280,
+            115
+          ],
+          "unit_id": "body-02-U06",
+          "word_order": 6
+        }
+      ]
+    },
+    {
+      "board": {
+        "file_sha256": "548103bfa8889eac1e944acc5d637192c542e20a142f75c58b7cf27401a8e301",
+        "path": "body-03-binding-review.jpg"
+      },
+      "declared_unit_count": 5,
+      "line_id": "body-03",
+      "line_note": "",
+      "nearby_human_mask_count": 6,
+      "nearby_human_masks": [
+        {
+          "bbox_xywh": [
+            397,
+            700,
+            335,
+            137
+          ],
+          "human_word_number": 87,
+          "pixel_sha256": "a2a8279e567b58a5e8bf11372a19a7f6ea944974d1be2d773319dd734071d484",
+          "pixels": 11457
+        },
+        {
+          "bbox_xywh": [
+            672,
+            729,
+            163,
+            165
+          ],
+          "human_word_number": 86,
+          "pixel_sha256": "ec2bb63d40cd63cc83b767224666ca909e1e64cfdf00b01ed1ccf3dacf06a511",
+          "pixels": 4481
+        },
+        {
+          "bbox_xywh": [
+            871,
+            744,
+            410,
+            85
+          ],
+          "human_word_number": 85,
+          "pixel_sha256": "46921b0c9b40b603513200b9e20339864e37b34ad5143b4a47599ca67d45ece8",
+          "pixels": 7138
+        },
+        {
+          "bbox_xywh": [
+            1302,
+            735,
+            270,
+            113
+          ],
+          "human_word_number": 84,
+          "pixel_sha256": "e352b827a602e2f7a4fb8259e022324e07f0dfbafe09d81d8e28e232abef7215",
+          "pixels": 6849
+        },
+        {
+          "bbox_xywh": [
+            1643,
+            752,
+            162,
+            112
+          ],
+          "human_word_number": 83,
+          "pixel_sha256": "fd958ebc04d419fa2328113b57d347f20861905034d2cfd01a2bdf9fa5293c96",
+          "pixels": 4684
+        },
+        {
+          "bbox_xywh": [
+            1799,
+            769,
+            278,
+            168
+          ],
+          "human_word_number": 82,
+          "pixel_sha256": "bb512cf7aa4bc4c649dfbe8c6fc26a0da7f0da84afdd6db771c78ce1d44a0ae3",
+          "pixels": 6544
+        }
+      ],
+      "unbound_human_word_numbers": [],
+      "units": [
+        {
+          "line_order": 3,
+          "note": "Dolly is represented by two disjoint completed masks.",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            87,
+            86
+          ],
+          "text": "Dolly",
+          "transcript_bbox_xywh": [
+            396,
+            716,
+            449,
+            141
+          ],
+          "unit_id": "body-03-U01",
+          "word_order": 1
+        },
+        {
+          "line_order": 3,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            85
+          ],
+          "text": "won't",
+          "transcript_bbox_xywh": [
+            845,
+            723,
+            446,
+            113
+          ],
+          "unit_id": "body-03-U02",
+          "word_order": 2
+        },
+        {
+          "line_order": 3,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            84
+          ],
+          "text": "take",
+          "transcript_bbox_xywh": [
+            1291,
+            735,
+            340,
+            120
+          ],
+          "unit_id": "body-03-U03",
+          "word_order": 3
+        },
+        {
+          "line_order": 3,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            83
+          ],
+          "text": "No",
+          "transcript_bbox_xywh": [
+            1631,
+            745,
+            207,
+            128
+          ],
+          "unit_id": "body-03-U04",
+          "word_order": 4
+        },
+        {
+          "line_order": 3,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            82
+          ],
+          "text": "for",
+          "transcript_bbox_xywh": [
+            1838,
+            762,
+            244,
+            120
+          ],
+          "unit_id": "body-03-U05",
+          "word_order": 5
+        }
+      ]
+    },
+    {
+      "board": {
+        "file_sha256": "186814021233a1b5e6a46f6833be28ebea1bd4beb80d385192e66db269917e23",
+        "path": "body-04-binding-review.jpg"
+      },
+      "declared_unit_count": 5,
+      "line_id": "body-04",
+      "line_note": "H73 is deliberately unbound because it merges two semantic units.",
+      "nearby_human_mask_count": 4,
+      "nearby_human_masks": [
+        {
+          "bbox_xywh": [
+            450,
+            910,
+            136,
+            49
+          ],
+          "human_word_number": 81,
+          "pixel_sha256": "a1678afe1500378c6cd2c6d530f2c2863463acf34f35e6b11b55b1c3bdb843fc",
+          "pixels": 2825
+        },
+        {
+          "bbox_xywh": [
+            657,
+            914,
+            493,
+            55
+          ],
+          "human_word_number": 80,
+          "pixel_sha256": "5286733a0238019a871ee9381bde8951d82485c83565fb974997f5ec8077c349",
+          "pixels": 9148
+        },
+        {
+          "bbox_xywh": [
+            1193,
+            867,
+            724,
+            182
+          ],
+          "human_word_number": 73,
+          "pixel_sha256": "9a1c9dc24c291e50897546041036bda8d273443f521d7bc4b236319642b7f7dd",
+          "pixels": 16977
+        },
+        {
+          "bbox_xywh": [
+            1946,
+            982,
+            294,
+            129
+          ],
+          "human_word_number": 79,
+          "pixel_sha256": "2b6e1e329c391054af2b328303e09f5d847a4d4e88949e750bc8e3bcc2ebcf43",
+          "pixels": 4270
+        }
+      ],
+      "unbound_human_word_numbers": [
+        73
+      ],
+      "units": [
+        {
+          "line_order": 4,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            81
+          ],
+          "text": "a",
+          "transcript_bbox_xywh": [
+            453,
+            902,
+            149,
+            117
+          ],
+          "unit_id": "body-04-U01",
+          "word_order": 1
+        },
+        {
+          "line_order": 4,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            80
+          ],
+          "text": "answer.",
+          "transcript_bbox_xywh": [
+            602,
+            867,
+            555,
+            173
+          ],
+          "unit_id": "body-04-U02",
+          "word_order": 2
+        },
+        {
+          "line_order": 4,
+          "note": "H73 visibly spans Sure and that; no exact per-word target exists without editing the sealed partition.",
+          "status": "excluded_merged",
+          "target_human_word_numbers": [],
+          "text": "Sure",
+          "transcript_bbox_xywh": [
+            1157,
+            877,
+            189,
+            111
+          ],
+          "unit_id": "body-04-U03",
+          "word_order": 3
+        },
+        {
+          "line_order": 4,
+          "note": "H73 visibly spans Sure and that; no exact per-word target exists without editing the sealed partition.",
+          "status": "excluded_merged",
+          "target_human_word_numbers": [],
+          "text": "that",
+          "transcript_bbox_xywh": [
+            1346,
+            887,
+            576,
+            145
+          ],
+          "unit_id": "body-04-U04",
+          "word_order": 4
+        },
+        {
+          "line_order": 4,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            79
+          ],
+          "text": "you",
+          "transcript_bbox_xywh": [
+            1922,
+            972,
+            321,
+            83
+          ],
+          "unit_id": "body-04-U05",
+          "word_order": 5
+        }
+      ]
+    },
+    {
+      "board": {
+        "file_sha256": "b9d5934368c2c080c1857ede3308d7bfb155b38d50db37c45833a1ecfb5c5e28",
+        "path": "body-05-binding-review.jpg"
+      },
+      "declared_unit_count": 6,
+      "line_id": "body-05",
+      "line_note": "H76 is deliberately unbound because it merges two semantic units.",
+      "nearby_human_mask_count": 5,
+      "nearby_human_masks": [
+        {
+          "bbox_xywh": [
+            412,
+            981,
+            339,
+            139
+          ],
+          "human_word_number": 78,
+          "pixel_sha256": "0160a481f5e1a0befc0a1be68e8550c3f3941fc8b9807d64e55659fd58f61052",
+          "pixels": 9098
+        },
+        {
+          "bbox_xywh": [
+            782,
+            1021,
+            326,
+            141
+          ],
+          "human_word_number": 77,
+          "pixel_sha256": "5f97769dea7e309694fe25eda3f80d1d6699d4b01e40fc548849ecc97fac8cad",
+          "pixels": 7014
+        },
+        {
+          "bbox_xywh": [
+            1163,
+            1049,
+            681,
+            125
+          ],
+          "human_word_number": 76,
+          "pixel_sha256": "036dee9ec430c6e620bbc746ed6cddd8a26c096fb63cb1f232054b10da16f3b3",
+          "pixels": 10593
+        },
+        {
+          "bbox_xywh": [
+            1869,
+            1127,
+            118,
+            66
+          ],
+          "human_word_number": 75,
+          "pixel_sha256": "d9ffb23289bcb1ff9d638b0d64b48fb05b80fb0334dae77d0a75a87f6587ac83",
+          "pixels": 1977
+        },
+        {
+          "bbox_xywh": [
+            1998,
+            1130,
+            169,
+            85
+          ],
+          "human_word_number": 74,
+          "pixel_sha256": "5ce61b1c4ade96ff6a2b2168b85dbc7779b1888e1b915d3ee814744281f2bebc",
+          "pixels": 3604
+        }
+      ],
+      "unbound_human_word_numbers": [
+        76
+      ],
+      "units": [
+        {
+          "line_order": 5,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            78
+          ],
+          "text": "don't",
+          "transcript_bbox_xywh": [
+            412,
+            1021,
+            338,
+            152
+          ],
+          "unit_id": "body-05-U01",
+          "word_order": 1
+        },
+        {
+          "line_order": 5,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            77
+          ],
+          "text": "realize",
+          "transcript_bbox_xywh": [
+            750,
+            1024,
+            429,
+            149
+          ],
+          "unit_id": "body-05-U02",
+          "word_order": 2
+        },
+        {
+          "line_order": 5,
+          "note": "H76 visibly spans how and much; no exact per-word target exists without editing the sealed partition.",
+          "status": "excluded_merged",
+          "target_human_word_numbers": [],
+          "text": "how",
+          "transcript_bbox_xywh": [
+            1179,
+            1040,
+            273,
+            109
+          ],
+          "unit_id": "body-05-U03",
+          "word_order": 3
+        },
+        {
+          "line_order": 5,
+          "note": "H76 visibly spans how and much; no exact per-word target exists without editing the sealed partition.",
+          "status": "excluded_merged",
+          "target_human_word_numbers": [],
+          "text": "much",
+          "transcript_bbox_xywh": [
+            1452,
+            1104,
+            408,
+            77
+          ],
+          "unit_id": "body-05-U04",
+          "word_order": 4
+        },
+        {
+          "line_order": 5,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            75
+          ],
+          "text": "I",
+          "transcript_bbox_xywh": [
+            1860,
+            1066,
+            133,
+            137
+          ],
+          "unit_id": "body-05-U05",
+          "word_order": 5
+        },
+        {
+          "line_order": 5,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            74
+          ],
+          "text": "do",
+          "transcript_bbox_xywh": [
+            1993,
+            1117,
+            180,
+            109
+          ],
+          "unit_id": "body-05-U06",
+          "word_order": 6
+        }
+      ]
+    },
+    {
+      "board": {
+        "file_sha256": "ac1dd6a5854dd716f768a2e5ae829ac773328ce578301e39f37148ef0eaf5f72",
+        "path": "body-06-binding-review.jpg"
+      },
+      "declared_unit_count": 5,
+      "line_id": "body-06",
+      "line_note": "",
+      "nearby_human_mask_count": 6,
+      "nearby_human_masks": [
+        {
+          "bbox_xywh": [
+            431,
+            1140,
+            214,
+            144
+          ],
+          "human_word_number": 72,
+          "pixel_sha256": "319da028f49ff1fabfe52083f430ed3953108957345435c97565b578293514ef",
+          "pixels": 7179
+        },
+        {
+          "bbox_xywh": [
+            621,
+            1186,
+            266,
+            154
+          ],
+          "human_word_number": 71,
+          "pixel_sha256": "091b8c788ff54d43bfa88688f28f6aca7b9212df0c9f87b8c3f12692528d7807",
+          "pixels": 4649
+        },
+        {
+          "bbox_xywh": [
+            989,
+            1202,
+            143,
+            80
+          ],
+          "human_word_number": 70,
+          "pixel_sha256": "efe482a216b0de86f0d3572733211e5070ed9579ef796c3b5b551e8f9a6ee1de",
+          "pixels": 2355
+        },
+        {
+          "bbox_xywh": [
+            1058,
+            1245,
+            359,
+            117
+          ],
+          "human_word_number": 69,
+          "pixel_sha256": "6e6db3b02eed7f773527034da20d81d318686b27af752343c795368b82e6554b",
+          "pixels": 5877
+        },
+        {
+          "bbox_xywh": [
+            1440,
+            1259,
+            264,
+            123
+          ],
+          "human_word_number": 68,
+          "pixel_sha256": "1e4ecd262c56b78b6b94c59a4d1c143df38bd588531a50dfdf55798f5c96eeb3",
+          "pixels": 3915
+        },
+        {
+          "bbox_xywh": [
+            1801,
+            1250,
+            372,
+            97
+          ],
+          "human_word_number": 67,
+          "pixel_sha256": "3a935390f36f748a8bcf70592771cd7c9e1ffa7d42a6a3ae7bf45c004e690343",
+          "pixels": 6190
+        }
+      ],
+      "unbound_human_word_numbers": [],
+      "units": [
+        {
+          "line_order": 6,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            72
+          ],
+          "text": "Love",
+          "transcript_bbox_xywh": [
+            428,
+            1204,
+            431,
+            138
+          ],
+          "unit_id": "body-06-U01",
+          "word_order": 1
+        },
+        {
+          "line_order": 6,
+          "note": "you. is represented by the main word mask plus a detached punctuation/stroke mask.",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            71,
+            70
+          ],
+          "text": "you.",
+          "transcript_bbox_xywh": [
+            859,
+            1258,
+            105,
+            28
+          ],
+          "unit_id": "body-06-U02",
+          "word_order": 2
+        },
+        {
+          "line_order": 6,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            69
+          ],
+          "text": "I",
+          "transcript_bbox_xywh": [
+            964,
+            1209,
+            464,
+            154
+          ],
+          "unit_id": "body-06-U03",
+          "word_order": 3
+        },
+        {
+          "line_order": 6,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            68
+          ],
+          "text": "guess",
+          "transcript_bbox_xywh": [
+            1428,
+            1251,
+            319,
+            127
+          ],
+          "unit_id": "body-06-U04",
+          "word_order": 4
+        },
+        {
+          "line_order": 6,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            67
+          ],
+          "text": "you",
+          "transcript_bbox_xywh": [
+            1747,
+            1242,
+            430,
+            104
+          ],
+          "unit_id": "body-06-U05",
+          "word_order": 5
+        }
+      ]
+    },
+    {
+      "board": {
+        "file_sha256": "b1e4e0f6ad68d936bf9f37b34585c5d4a9b11cede3d6780171aa54458ad952f5",
+        "path": "body-07-binding-review.jpg"
+      },
+      "declared_unit_count": 7,
+      "line_id": "body-07",
+      "line_note": "",
+      "nearby_human_mask_count": 7,
+      "nearby_human_masks": [
+        {
+          "bbox_xywh": [
+            441,
+            1338,
+            320,
+            96
+          ],
+          "human_word_number": 66,
+          "pixel_sha256": "7d56b8bc03dd42ff1dcc56106cc0bf0decb36074483a9a2c7f9ce17c0e86e873",
+          "pixels": 9249
+        },
+        {
+          "bbox_xywh": [
+            764,
+            1341,
+            121,
+            83
+          ],
+          "human_word_number": 65,
+          "pixel_sha256": "93c3fda48c2344c4546e72a45a71bc06271da3bb709a0b24befad8d208937767",
+          "pixels": 2598
+        },
+        {
+          "bbox_xywh": [
+            889,
+            1384,
+            268,
+            55
+          ],
+          "human_word_number": 64,
+          "pixel_sha256": "632c4236763fae97e86a8071fb474cfb1d43422a64da98d0534bd52a3d53ea6e",
+          "pixels": 4380
+        },
+        {
+          "bbox_xywh": [
+            1193,
+            1398,
+            156,
+            50
+          ],
+          "human_word_number": 63,
+          "pixel_sha256": "d50f321f11f19c77d963a8151ba23094593ff37fd9114a205a3138d24a04a26c",
+          "pixels": 2892
+        },
+        {
+          "bbox_xywh": [
+            1351,
+            1379,
+            219,
+            141
+          ],
+          "human_word_number": 62,
+          "pixel_sha256": "0709de5ddc1f1e5f44c388574914f84d765c73e895467d8eee4c5fde7a0d2a28",
+          "pixels": 5647
+        },
+        {
+          "bbox_xywh": [
+            1624,
+            1427,
+            223,
+            128
+          ],
+          "human_word_number": 61,
+          "pixel_sha256": "accd40d6d82ac03eb6c219186fdfe3791f47fc0c516ef49675ce8e35cd871a7e",
+          "pixels": 5086
+        },
+        {
+          "bbox_xywh": [
+            1943,
+            1419,
+            276,
+            81
+          ],
+          "human_word_number": 60,
+          "pixel_sha256": "410537028291004ff1cb8445e40c9d34e4030a08783209022e30828dc71e359e",
+          "pixels": 5493
+        }
+      ],
+      "unbound_human_word_numbers": [],
+      "units": [
+        {
+          "line_order": 7,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            66
+          ],
+          "text": "that",
+          "transcript_bbox_xywh": [
+            441,
+            1345,
+            317,
+            104
+          ],
+          "unit_id": "body-07-U01",
+          "word_order": 1
+        },
+        {
+          "line_order": 7,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            65
+          ],
+          "text": "I",
+          "transcript_bbox_xywh": [
+            758,
+            1352,
+            130,
+            79
+          ],
+          "unit_id": "body-07-U02",
+          "word_order": 2
+        },
+        {
+          "line_order": 7,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            64
+          ],
+          "text": "am",
+          "transcript_bbox_xywh": [
+            888,
+            1376,
+            275,
+            69
+          ],
+          "unit_id": "body-07-U03",
+          "word_order": 3
+        },
+        {
+          "line_order": 7,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            63
+          ],
+          "text": "so",
+          "transcript_bbox_xywh": [
+            1163,
+            1388,
+            192,
+            67
+          ],
+          "unit_id": "body-07-U04",
+          "word_order": 4
+        },
+        {
+          "line_order": 7,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            62
+          ],
+          "text": "far",
+          "transcript_bbox_xywh": [
+            1355,
+            1362,
+            225,
+            153
+          ],
+          "unit_id": "body-07-U05",
+          "word_order": 5
+        },
+        {
+          "line_order": 7,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            61
+          ],
+          "text": "away",
+          "transcript_bbox_xywh": [
+            1580,
+            1417,
+            351,
+            95
+          ],
+          "unit_id": "body-07-U06",
+          "word_order": 6
+        },
+        {
+          "line_order": 7,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            60
+          ],
+          "text": "that",
+          "transcript_bbox_xywh": [
+            1931,
+            1410,
+            293,
+            99
+          ],
+          "unit_id": "body-07-U07",
+          "word_order": 7
+        }
+      ]
+    },
+    {
+      "board": {
+        "file_sha256": "5f7985f4beb00b2db35675cda299671d6d6ff122f7929d090c386f947cd209b8",
+        "path": "body-08-binding-review.jpg"
+      },
+      "declared_unit_count": 5,
+      "line_id": "body-08",
+      "line_note": "",
+      "nearby_human_mask_count": 6,
+      "nearby_human_masks": [
+        {
+          "bbox_xywh": [
+            464,
+            1508,
+            123,
+            78
+          ],
+          "human_word_number": 59,
+          "pixel_sha256": "236dd0c5dc4652c4984c9ce528e1ae72a12895033733d5f51d0c23384c084272",
+          "pixels": 3202
+        },
+        {
+          "bbox_xywh": [
+            579,
+            1510,
+            397,
+            88
+          ],
+          "human_word_number": 58,
+          "pixel_sha256": "da45cfd4efeb932ce6807869689b15c8340433518078767fb89d68c69f016821",
+          "pixels": 8903
+        },
+        {
+          "bbox_xywh": [
+            957,
+            1514,
+            327,
+            93
+          ],
+          "human_word_number": 57,
+          "pixel_sha256": "7930e5ba2045dc6f8419d58daad9dfb385a217840dcd70cf1c39d52710e4654a",
+          "pixels": 7140
+        },
+        {
+          "bbox_xywh": [
+            1348,
+            1565,
+            189,
+            134
+          ],
+          "human_word_number": 56,
+          "pixel_sha256": "bd2d49281606a6b890a6ac3035b66c60f9c17c4c734b8fd2f8e8c480bb6c0766",
+          "pixels": 4127
+        },
+        {
+          "bbox_xywh": [
+            1580,
+            1553,
+            240,
+            147
+          ],
+          "human_word_number": 55,
+          "pixel_sha256": "4f85167068e4b504a4ca38d5d0e46e54445472519957294949ae125123a0bb2e",
+          "pixels": 5450
+        },
+        {
+          "bbox_xywh": [
+            1861,
+            1562,
+            266,
+            93
+          ],
+          "human_word_number": 54,
+          "pixel_sha256": "6b47be98183b80ae9341b93f652836c553b43a29332723c2b4e74f6d4243dfaa",
+          "pixels": 5027
+        }
+      ],
+      "unbound_human_word_numbers": [],
+      "units": [
+        {
+          "line_order": 8,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            59
+          ],
+          "text": "I",
+          "transcript_bbox_xywh": [
+            464,
+            1495,
+            120,
+            101
+          ],
+          "unit_id": "body-08-U01",
+          "word_order": 1
+        },
+        {
+          "line_order": 8,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            58
+          ],
+          "text": "will",
+          "transcript_bbox_xywh": [
+            584,
+            1522,
+            137,
+            82
+          ],
+          "unit_id": "body-08-U02",
+          "word_order": 2
+        },
+        {
+          "line_order": 8,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            57
+          ],
+          "text": "write",
+          "transcript_bbox_xywh": [
+            721,
+            1491,
+            570,
+            134
+          ],
+          "unit_id": "body-08-U03",
+          "word_order": 3
+        },
+        {
+          "line_order": 8,
+          "note": "any is represented by two disjoint completed masks.",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            56,
+            55
+          ],
+          "text": "any",
+          "transcript_bbox_xywh": [
+            1291,
+            1509,
+            561,
+            181
+          ],
+          "unit_id": "body-08-U04",
+          "word_order": 4
+        },
+        {
+          "line_order": 8,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            54
+          ],
+          "text": "thing,",
+          "transcript_bbox_xywh": [
+            1852,
+            1555,
+            281,
+            111
+          ],
+          "unit_id": "body-08-U05",
+          "word_order": 5
+        }
+      ]
+    },
+    {
+      "board": {
+        "file_sha256": "02b4b2b5c0bd9f34ae6ac9793bd9d6e5a5dc735f923b922148d29a3421059c10",
+        "path": "body-09-binding-review.jpg"
+      },
+      "declared_unit_count": 7,
+      "line_id": "body-09",
+      "line_note": "H52 is deliberately unbound because it merges two semantic units.",
+      "nearby_human_mask_count": 6,
+      "nearby_human_masks": [
+        {
+          "bbox_xywh": [
+            432,
+            1644,
+            102,
+            86
+          ],
+          "human_word_number": 53,
+          "pixel_sha256": "91744294885d2d364598ce86ddcb3beafe2625b999a8791705205d2c02dc5f19",
+          "pixels": 2705
+        },
+        {
+          "bbox_xywh": [
+            550,
+            1689,
+            560,
+            76
+          ],
+          "human_word_number": 52,
+          "pixel_sha256": "ff266ce784e5f1bf59bd42b34c7332362cf59c2c1e1156342189b5785708822b",
+          "pixels": 9171
+        },
+        {
+          "bbox_xywh": [
+            1180,
+            1687,
+            155,
+            85
+          ],
+          "human_word_number": 51,
+          "pixel_sha256": "f382caf92d6e7be79c90397ed731017bee01b54a766fb5d03739ce453f525889",
+          "pixels": 3437
+        },
+        {
+          "bbox_xywh": [
+            1338,
+            1727,
+            242,
+            60
+          ],
+          "human_word_number": 50,
+          "pixel_sha256": "1aca4cdf8fca8a964de1ba065ee5c79a8ce9603fb1557e90807c30115aa3cf2f",
+          "pixels": 4264
+        },
+        {
+          "bbox_xywh": [
+            1661,
+            1730,
+            343,
+            79
+          ],
+          "human_word_number": 49,
+          "pixel_sha256": "26e405af946fcd5f831d162973efe1a6b1444beb9af219ac7b9e6d97fb8390c7",
+          "pixels": 6064
+        },
+        {
+          "bbox_xywh": [
+            1998,
+            1761,
+            258,
+            133
+          ],
+          "human_word_number": 48,
+          "pixel_sha256": "59f62cf2bbeb6c77386a86464f802e2695253a255506c4aadd51c6e7a9791007",
+          "pixels": 4547
+        }
+      ],
+      "unbound_human_word_numbers": [
+        52
+      ],
+      "units": [
+        {
+          "line_order": 9,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            53
+          ],
+          "text": "I",
+          "transcript_bbox_xywh": [
+            433,
+            1659,
+            113,
+            80
+          ],
+          "unit_id": "body-09-U01",
+          "word_order": 1
+        },
+        {
+          "line_order": 9,
+          "note": "H52 visibly spans mean and it.; no exact per-word target exists without editing the sealed partition.",
+          "status": "excluded_merged",
+          "target_human_word_numbers": [],
+          "text": "mean",
+          "transcript_bbox_xywh": [
+            546,
+            1660,
+            570,
+            157
+          ],
+          "unit_id": "body-09-U02",
+          "word_order": 2
+        },
+        {
+          "line_order": 9,
+          "note": "H52 visibly spans mean and it.; no exact per-word target exists without editing the sealed partition.",
+          "status": "excluded_merged",
+          "target_human_word_numbers": [],
+          "text": "it.",
+          "transcript_bbox_xywh": [
+            1116,
+            1733,
+            69,
+            30
+          ],
+          "unit_id": "body-09-U03",
+          "word_order": 3
+        },
+        {
+          "line_order": 9,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            51
+          ],
+          "text": "I",
+          "transcript_bbox_xywh": [
+            1185,
+            1680,
+            153,
+            102
+          ],
+          "unit_id": "body-09-U04",
+          "word_order": 4
+        },
+        {
+          "line_order": 9,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            50
+          ],
+          "text": "sure",
+          "transcript_bbox_xywh": [
+            1338,
+            1678,
+            315,
+            117
+          ],
+          "unit_id": "body-09-U05",
+          "word_order": 5
+        },
+        {
+          "line_order": 9,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            49
+          ],
+          "text": "wish",
+          "transcript_bbox_xywh": [
+            1653,
+            1717,
+            360,
+            97
+          ],
+          "unit_id": "body-09-U06",
+          "word_order": 6
+        },
+        {
+          "line_order": 9,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            48
+          ],
+          "text": "you",
+          "transcript_bbox_xywh": [
+            2013,
+            1752,
+            226,
+            83
+          ],
+          "unit_id": "body-09-U07",
+          "word_order": 7
+        }
+      ]
+    },
+    {
+      "board": {
+        "file_sha256": "7b18590f96aa91cadbaeef3ccde230c8dd0a48aa38b9bd832a4eaf7683b61315",
+        "path": "body-10-binding-review.jpg"
+      },
+      "declared_unit_count": 7,
+      "line_id": "body-10",
+      "line_note": "",
+      "nearby_human_mask_count": 7,
+      "nearby_human_masks": [
+        {
+          "bbox_xywh": [
+            414,
+            1781,
+            310,
+            171
+          ],
+          "human_word_number": 47,
+          "pixel_sha256": "9fd928b8dc0fa4b6aa573218f2b0e24b08731b61e9c77232593ac43030507d1d",
+          "pixels": 10117
+        },
+        {
+          "bbox_xywh": [
+            685,
+            1818,
+            260,
+            86
+          ],
+          "human_word_number": 46,
+          "pixel_sha256": "ae7ca6da2f6aea8524b42b3239ffe8ee5c69acee5a83df7eaf17add641a88eb4",
+          "pixels": 6078
+        },
+        {
+          "bbox_xywh": [
+            985,
+            1833,
+            152,
+            83
+          ],
+          "human_word_number": 45,
+          "pixel_sha256": "debf0188870dada8a5258e3ee86c6ad12e4d1d41eb48e0503ace412851026f67",
+          "pixels": 2996
+        },
+        {
+          "bbox_xywh": [
+            1136,
+            1846,
+            164,
+            88
+          ],
+          "human_word_number": 44,
+          "pixel_sha256": "9ec1d739529d5e9ffacb9bfbd319edaa35d6051e72356ded7239442413b07b34",
+          "pixels": 3793
+        },
+        {
+          "bbox_xywh": [
+            1370,
+            1865,
+            157,
+            78
+          ],
+          "human_word_number": 43,
+          "pixel_sha256": "a652657002c620ca4a6c10ddab36ed1a2fb023e4c5b48704a1701b32b73d442b",
+          "pixels": 3192
+        },
+        {
+          "bbox_xywh": [
+            1445,
+            1917,
+            373,
+            113
+          ],
+          "human_word_number": 42,
+          "pixel_sha256": "95b1a4dcbace54b08583ff96c334c47acc73265da8ece98f7899b40b09d4d81e",
+          "pixels": 5558
+        },
+        {
+          "bbox_xywh": [
+            1795,
+            1930,
+            360,
+            126
+          ],
+          "human_word_number": 41,
+          "pixel_sha256": "bc5386d4706b6fbcef3ae020f02fad3e9992d8a0644eab5b740b7fd884c8c3b0",
+          "pixels": 5698
+        }
+      ],
+      "unbound_human_word_numbers": [],
+      "units": [
+        {
+          "line_order": 10,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            47
+          ],
+          "text": "felt",
+          "transcript_bbox_xywh": [
+            440,
+            1792,
+            512,
+            161
+          ],
+          "unit_id": "body-10-U01",
+          "word_order": 1
+        },
+        {
+          "line_order": 10,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            46
+          ],
+          "text": "like",
+          "transcript_bbox_xywh": [
+            952,
+            1817,
+            324,
+            122
+          ],
+          "unit_id": "body-10-U02",
+          "word_order": 2
+        },
+        {
+          "line_order": 10,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            45
+          ],
+          "text": "I",
+          "transcript_bbox_xywh": [
+            1276,
+            1908,
+            81,
+            37
+          ],
+          "unit_id": "body-10-U03",
+          "word_order": 3
+        },
+        {
+          "line_order": 10,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            44
+          ],
+          "text": "do.",
+          "transcript_bbox_xywh": [
+            1357,
+            1851,
+            168,
+            102
+          ],
+          "unit_id": "body-10-U04",
+          "word_order": 4
+        },
+        {
+          "line_order": 10,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            43
+          ],
+          "text": "I",
+          "transcript_bbox_xywh": [
+            1525,
+            1875,
+            69,
+            112
+          ],
+          "unit_id": "body-10-U05",
+          "word_order": 5
+        },
+        {
+          "line_order": 10,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            42
+          ],
+          "text": "mean",
+          "transcript_bbox_xywh": [
+            1594,
+            1909,
+            252,
+            73
+          ],
+          "unit_id": "body-10-U06",
+          "word_order": 6
+        },
+        {
+          "line_order": 10,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            41
+          ],
+          "text": "you",
+          "transcript_bbox_xywh": [
+            1846,
+            1868,
+            242,
+            129
+          ],
+          "unit_id": "body-10-U07",
+          "word_order": 7
+        }
+      ]
+    },
+    {
+      "board": {
+        "file_sha256": "1abc9b8960adf31db504a1662f084447eff100cdf69fd39eac8c3c46d605b0ba",
+        "path": "body-11-binding-review.jpg"
+      },
+      "declared_unit_count": 5,
+      "line_id": "body-11",
+      "line_note": "",
+      "nearby_human_mask_count": 5,
+      "nearby_human_masks": [
+        {
+          "bbox_xywh": [
+            419,
+            1998,
+            179,
+            63
+          ],
+          "human_word_number": 40,
+          "pixel_sha256": "e6883b1b3a81550cca07399eb8a158097194bafa546176b4a1e2abdc87e97abf",
+          "pixels": 4437
+        },
+        {
+          "bbox_xywh": [
+            603,
+            1993,
+            450,
+            166
+          ],
+          "human_word_number": 39,
+          "pixel_sha256": "1db0ebaf457c6f3c6cfa9ef5f6dc4f6f60cca981dbb27c40db2a0cf0111509a2",
+          "pixels": 11331
+        },
+        {
+          "bbox_xywh": [
+            1108,
+            2003,
+            368,
+            131
+          ],
+          "human_word_number": 38,
+          "pixel_sha256": "7b4b0c3904d6247e052a56dfd930a36236b5034179a7ae3150dd58b74b078e13",
+          "pixels": 7741
+        },
+        {
+          "bbox_xywh": [
+            1498,
+            2052,
+            362,
+            172
+          ],
+          "human_word_number": 37,
+          "pixel_sha256": "6e9a037b6ca0a4589b0b59e6ec492d1e7ff3421c9ac4ceddfca83c87906a2917",
+          "pixels": 7363
+        },
+        {
+          "bbox_xywh": [
+            1916,
+            2064,
+            152,
+            99
+          ],
+          "human_word_number": 36,
+          "pixel_sha256": "c9ba849b99650589f70327b8c9cdfe97a09a2fb3ce29bfcef7cf7ddc0344e638",
+          "pixels": 2513
+        }
+      ],
+      "unbound_human_word_numbers": [],
+      "units": [
+        {
+          "line_order": 11,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            40
+          ],
+          "text": "are",
+          "transcript_bbox_xywh": [
+            421,
+            1990,
+            182,
+            78
+          ],
+          "unit_id": "body-11-U01",
+          "word_order": 1
+        },
+        {
+          "line_order": 11,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            39
+          ],
+          "text": "getting",
+          "transcript_bbox_xywh": [
+            603,
+            1981,
+            486,
+            173
+          ],
+          "unit_id": "body-11-U02",
+          "word_order": 2
+        },
+        {
+          "line_order": 11,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            38
+          ],
+          "text": "bored",
+          "transcript_bbox_xywh": [
+            1089,
+            1990,
+            404,
+            148
+          ],
+          "unit_id": "body-11-U03",
+          "word_order": 3
+        },
+        {
+          "line_order": 11,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            37
+          ],
+          "text": "trying",
+          "transcript_bbox_xywh": [
+            1493,
+            2005,
+            418,
+            159
+          ],
+          "unit_id": "body-11-U04",
+          "word_order": 4
+        },
+        {
+          "line_order": 11,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            36
+          ],
+          "text": "to",
+          "transcript_bbox_xywh": [
+            1911,
+            2056,
+            160,
+            109
+          ],
+          "unit_id": "body-11-U05",
+          "word_order": 5
+        }
+      ]
+    },
+    {
+      "board": {
+        "file_sha256": "19f39f55f494feb7e5dcd61eedd0d8ecf7630d7f05940eb17257eb8f5e50a188",
+        "path": "body-12-binding-review.jpg"
+      },
+      "declared_unit_count": 6,
+      "line_id": "body-12",
+      "line_note": "",
+      "nearby_human_mask_count": 6,
+      "nearby_human_masks": [
+        {
+          "bbox_xywh": [
+            399,
+            2144,
+            345,
+            180
+          ],
+          "human_word_number": 35,
+          "pixel_sha256": "1a632e1e38e2e93a561cb60e4c404938c8d9497f52a57c2994e94187b45c3bfd",
+          "pixels": 9580
+        },
+        {
+          "bbox_xywh": [
+            804,
+            2162,
+            240,
+            95
+          ],
+          "human_word_number": 34,
+          "pixel_sha256": "fcc928b5dedc2994bd69c2f7a16d1013c9b732b3620227611e2ccc16068cbd14",
+          "pixels": 6612
+        },
+        {
+          "bbox_xywh": [
+            1103,
+            2214,
+            244,
+            95
+          ],
+          "human_word_number": 33,
+          "pixel_sha256": "5c5928b5002e321fb0b441931533be364322837c37d82676f842417588a8f785",
+          "pixels": 3441
+        },
+        {
+          "bbox_xywh": [
+            1379,
+            2205,
+            128,
+            71
+          ],
+          "human_word_number": 32,
+          "pixel_sha256": "17f566b1454443e9bd931ef6410ff6a2aa7c5fddf722c9cd272388e43b71699b",
+          "pixels": 2298
+        },
+        {
+          "bbox_xywh": [
+            1513,
+            2213,
+            349,
+            74
+          ],
+          "human_word_number": 31,
+          "pixel_sha256": "651c5a2df80064f96559bc279906c9f2bbe3328f47c049ae9add4b899a98d2f4",
+          "pixels": 6002
+        },
+        {
+          "bbox_xywh": [
+            1872,
+            2216,
+            200,
+            78
+          ],
+          "human_word_number": 30,
+          "pixel_sha256": "a6d6ffbe95f9ab51b3e1a8e65551a5f6673b784dfb5c0b1363269672066f4dea",
+          "pixels": 3443
+        }
+      ],
+      "unbound_human_word_numbers": [],
+      "units": [
+        {
+          "line_order": 12,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            35
+          ],
+          "text": "read",
+          "transcript_bbox_xywh": [
+            396,
+            2141,
+            365,
+            168
+          ],
+          "unit_id": "body-12-U01",
+          "word_order": 1
+        },
+        {
+          "line_order": 12,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            34
+          ],
+          "text": "this,",
+          "transcript_bbox_xywh": [
+            761,
+            2154,
+            333,
+            111
+          ],
+          "unit_id": "body-12-U02",
+          "word_order": 2
+        },
+        {
+          "line_order": 12,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            33
+          ],
+          "text": "so,",
+          "transcript_bbox_xywh": [
+            1094,
+            2205,
+            279,
+            109
+          ],
+          "unit_id": "body-12-U03",
+          "word_order": 3
+        },
+        {
+          "line_order": 12,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            32
+          ],
+          "text": "I",
+          "transcript_bbox_xywh": [
+            1373,
+            2196,
+            137,
+            87
+          ],
+          "unit_id": "body-12-U04",
+          "word_order": 4
+        },
+        {
+          "line_order": 12,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            31
+          ],
+          "text": "will",
+          "transcript_bbox_xywh": [
+            1510,
+            2168,
+            356,
+            129
+          ],
+          "unit_id": "body-12-U05",
+          "word_order": 5
+        },
+        {
+          "line_order": 12,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            30
+          ],
+          "text": "be",
+          "transcript_bbox_xywh": [
+            1866,
+            2207,
+            212,
+            91
+          ],
+          "unit_id": "body-12-U06",
+          "word_order": 6
+        }
+      ]
+    },
+    {
+      "board": {
+        "file_sha256": "e91dc04d3408d3d573e0670cb0a0b6effd344f2ceb1bacab86b0ebe6e34da2ab",
+        "path": "body-13-binding-review.jpg"
+      },
+      "declared_unit_count": 4,
+      "line_id": "body-13",
+      "line_note": "",
+      "nearby_human_mask_count": 4,
+      "nearby_human_masks": [
+        {
+          "bbox_xywh": [
+            428,
+            2312,
+            658,
+            204
+          ],
+          "human_word_number": 29,
+          "pixel_sha256": "695958141ff230139a2dbc00e6397936f3f0970ca753898e8a8ee0b6d2548318",
+          "pixels": 13569
+        },
+        {
+          "bbox_xywh": [
+            1125,
+            2398,
+            299,
+            82
+          ],
+          "human_word_number": 28,
+          "pixel_sha256": "8e8c61e4eb3ce4d0929d3c7d7c7159766a4330db3b4a6417b62705c47442fc9e",
+          "pixels": 5678
+        },
+        {
+          "bbox_xywh": [
+            1474,
+            2372,
+            365,
+            169
+          ],
+          "human_word_number": 27,
+          "pixel_sha256": "e5761c1b68ff25381c1a525799045bfa62102e79226e75a3be6a63b10e030a24",
+          "pixels": 8674
+        },
+        {
+          "bbox_xywh": [
+            1914,
+            2416,
+            329,
+            126
+          ],
+          "human_word_number": 26,
+          "pixel_sha256": "11fbb9e2bef5fab335f231ecac835963c6e2fa98997c053f79a0dab1622ebdce",
+          "pixels": 4091
+        }
+      ],
+      "unbound_human_word_numbers": [],
+      "units": [
+        {
+          "line_order": 13,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            29
+          ],
+          "text": "thinking",
+          "transcript_bbox_xywh": [
+            422,
+            2325,
+            692,
+            173
+          ],
+          "unit_id": "body-13-U01",
+          "word_order": 1
+        },
+        {
+          "line_order": 13,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            28
+          ],
+          "text": "and",
+          "transcript_bbox_xywh": [
+            1114,
+            2384,
+            321,
+            104
+          ],
+          "unit_id": "body-13-U02",
+          "word_order": 2
+        },
+        {
+          "line_order": 13,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            27
+          ],
+          "text": "loving",
+          "transcript_bbox_xywh": [
+            1435,
+            2360,
+            501,
+            148
+          ],
+          "unit_id": "body-13-U03",
+          "word_order": 3
+        },
+        {
+          "line_order": 13,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            26
+          ],
+          "text": "you",
+          "transcript_bbox_xywh": [
+            1936,
+            2410,
+            310,
+            103
+          ],
+          "unit_id": "body-13-U04",
+          "word_order": 4
+        }
+      ]
+    },
+    {
+      "board": {
+        "file_sha256": "e0db80bd3e4ac7e70e98123a1054070ad1ba72c56709c205ebc24708aa5d2de7",
+        "path": "body-14-binding-review.jpg"
+      },
+      "declared_unit_count": 3,
+      "line_id": "body-14",
+      "line_note": "",
+      "nearby_human_mask_count": 3,
+      "nearby_human_masks": [
+        {
+          "bbox_xywh": [
+            398,
+            2512,
+            344,
+            54
+          ],
+          "human_word_number": 25,
+          "pixel_sha256": "9644eb84e54ea40ccfaafbc243756346630ec5fdc6342717106381b3781cd63c",
+          "pixels": 5107
+        },
+        {
+          "bbox_xywh": [
+            817,
+            2522,
+            363,
+            73
+          ],
+          "human_word_number": 24,
+          "pixel_sha256": "d210a1739c9edb29f1dbffb87bf42fe74a91659461d009842120100bbed40817",
+          "pixels": 6775
+        },
+        {
+          "bbox_xywh": [
+            1187,
+            2496,
+            342,
+            194
+          ],
+          "human_word_number": 23,
+          "pixel_sha256": "671c08dd271336fa5e997cea82ad2e037bf9e08e5dc53df12e80d7eaaddb8c56",
+          "pixels": 10087
+        }
+      ],
+      "unbound_human_word_numbers": [],
+      "units": [
+        {
+          "line_order": 14,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            25
+          ],
+          "text": "more",
+          "transcript_bbox_xywh": [
+            391,
+            2504,
+            422,
+            65
+          ],
+          "unit_id": "body-14-U01",
+          "word_order": 1
+        },
+        {
+          "line_order": 14,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            24
+          ],
+          "text": "each",
+          "transcript_bbox_xywh": [
+            813,
+            2494,
+            627,
+            127
+          ],
+          "unit_id": "body-14-U02",
+          "word_order": 2
+        },
+        {
+          "line_order": 14,
+          "note": "",
+          "status": "assigned",
+          "target_human_word_numbers": [
+            23
+          ],
+          "text": "day-",
+          "transcript_bbox_xywh": [
+            1440,
+            2491,
+            531,
+            125
+          ],
+          "unit_id": "body-14-U03",
+          "word_order": 3
+        }
+      ]
+    }
+  ],
+  "schema_version": "semantic-binding-adjudication-template.v1",
+  "status": "complete",
+  "template_sha256": "e0a49e3218ff8058ca2c3c6a4861e8ee39fa07a61f20e4891dbc34a5f82ee1af",
+  "visual_legend": {
+    "colored_H_number": "completed-page mask and selector number",
+    "cyan_U_text": "acting transcript unit and rough box",
+    "red_line": "acting fitted centerline"
+  }
+}

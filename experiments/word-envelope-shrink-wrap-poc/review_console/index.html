@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <meta name="theme-color" content="#f5ede1">
+    <title>Letter Archive · Word Review</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='5' y='3' width='22' height='26' rx='4' fill='%23fffaf2' stroke='%236d5f51'/%3E%3Cpath d='M10 11h12M10 16h12' stroke='%236d5f51'/%3E%3Ccircle cx='21' cy='23' r='3' fill='%231f6d7a'/%3E%3C/svg%3E">
+    <link rel="stylesheet" href="/app.css">
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#evidence-content">Skip to current evidence</a>
+
+    <div class="app" id="app" data-mobile-view="evidence" data-state="loading">
+      <header class="app-header">
+        <div class="brand-lockup" aria-label="Letter Archive word review">
+          <span class="brand-mark" aria-hidden="true">
+            <span></span><span></span><span></span>
+          </span>
+          <div>
+            <p class="eyebrow">Letter Archive</p>
+            <p class="brand-title">Word review</p>
+          </div>
+        </div>
+
+        <div class="header-current" id="header-current" aria-live="polite">
+          <span class="status-dot status-dot--loading" aria-hidden="true"></span>
+          <span>Opening the current word…</span>
+        </div>
+
+        <div class="header-actions">
+          <button class="quiet-button" id="open-guide" type="button">
+            <span aria-hidden="true">?</span>
+            <span>Guide</span>
+          </button>
+          <button class="quiet-button note-shortcut" id="open-notebook" type="button">
+            <span aria-hidden="true">✎</span>
+            <span>Notebook</span>
+            <span class="count-badge" id="header-note-count" aria-label="0 notes">0</span>
+          </button>
+        </div>
+      </header>
+
+      <nav class="mobile-section-nav" aria-label="Review sections">
+        <button type="button" data-mobile-target="progress">Progress</button>
+        <button type="button" data-mobile-target="evidence" aria-current="page">Evidence</button>
+        <button type="button" data-mobile-target="decision">Decision</button>
+        <button type="button" data-mobile-target="agent">Agent</button>
+        <button type="button" data-mobile-target="notes">Notes</button>
+      </nav>
+
+      <main class="workspace" id="workspace">
+        <aside class="pipeline-rail" aria-labelledby="pipeline-heading">
+          <div class="rail-inner" id="pipeline-content">
+            <div class="skeleton skeleton--rail" aria-hidden="true"></div>
+          </div>
+        </aside>
+
+        <section class="evidence-pane" id="evidence-content" aria-labelledby="current-word-heading" tabindex="-1">
+          <div class="center-lane" id="center-content">
+            <div class="loading-stage" role="status">
+              <div class="skeleton skeleton--line"></div>
+              <div class="skeleton skeleton--title"></div>
+              <div class="skeleton skeleton--image"></div>
+              <span class="sr-only">Loading the current word and its evidence</span>
+            </div>
+          </div>
+        </section>
+
+        <aside class="control-pane" aria-label="Decision and notebook controls">
+          <div class="control-tabs" role="tablist" aria-label="Control panel">
+            <button id="decision-tab" role="tab" aria-selected="true" aria-controls="decision-panel" type="button">
+              Decision
+            </button>
+            <button id="notes-tab" role="tab" aria-selected="false" aria-controls="notes-panel" type="button">
+              Notebook <span class="count-badge" id="tab-note-count">0</span>
+            </button>
+            <button id="agent-tab" role="tab" aria-selected="false" aria-controls="agent-panel" type="button">
+              Agent view
+            </button>
+          </div>
+
+          <section class="control-panel" id="decision-panel" role="tabpanel" aria-labelledby="decision-tab">
+            <div class="panel-loading" role="status">
+              <div class="skeleton skeleton--line"></div>
+              <div class="skeleton skeleton--block"></div>
+              <div class="skeleton skeleton--block"></div>
+              <span class="sr-only">Loading legal actions</span>
+            </div>
+          </section>
+
+          <section class="control-panel notes-panel" id="notes-panel" role="tabpanel" aria-labelledby="notes-tab" hidden>
+            <div class="notebook-intro">
+              <p class="eyebrow">Field notebook</p>
+              <h2>Document what the workflow needs</h2>
+              <p>Notes stay attached to this exact word and evidence version. Saving one never completes or skips the word.</p>
+            </div>
+
+            <div class="draft-warning" id="historical-draft-warning" role="status" hidden></div>
+
+            <form id="note-form" class="note-form" novalidate>
+              <div class="field-grid field-grid--two">
+                <label class="field">
+                  <span>Category</span>
+                  <select name="category" required>
+                    <option value="confusing_step">Confusing step</option>
+                    <option value="missing_tool">Missing tool</option>
+                    <option value="visual_evidence">Visual evidence</option>
+                    <option value="wrong_result">Wrong result</option>
+                    <option value="time_waste">Time waster</option>
+                    <option value="idea">Improvement idea</option>
+                    <option value="observation">Other observation</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Severity</span>
+                  <select name="severity" required>
+                    <option value="low">Minor</option>
+                    <option value="medium" selected>Noticeable</option>
+                    <option value="high">Serious</option>
+                    <option value="blocker">Blocked me</option>
+                  </select>
+                </label>
+              </div>
+
+              <label class="field">
+                <span>What happened, or what was missing?</span>
+                <textarea name="text" rows="5" required maxlength="5000" placeholder="Write it as you experience it. For example: I could not tell whether component 8 was the dot above this word or part of the word above."></textarea>
+                <span class="field-hint"><span id="note-character-count">0</span> / 5,000</span>
+              </label>
+
+              <label class="field">
+                <span>Evidence visible when this happened</span>
+                <select name="evidence_ref" id="note-evidence-select">
+                  <option value="">Current review packet</option>
+                </select>
+              </label>
+
+              <div class="field">
+                <span>Optional screenshot</span>
+                <label class="drop-zone" id="screenshot-drop-zone">
+                  <input class="sr-only" id="screenshot-input" name="screenshot" type="file" accept="image/png,image/jpeg,image/webp">
+                  <span class="drop-zone-icon" aria-hidden="true">＋</span>
+                  <span><strong>Choose or drop an image</strong><br>Paste also works while the notebook is open.</span>
+                </label>
+                <p class="field-hint" id="upload-constraints">PNG, JPEG, or WebP. Files remain only in this open tab until the note is saved.</p>
+              </div>
+
+              <div class="screenshot-preview" id="screenshot-preview" hidden>
+                <img alt="Screenshot ready to attach">
+                <div>
+                  <strong id="screenshot-name"></strong>
+                  <span id="screenshot-size"></span>
+                </div>
+                <button class="icon-button" id="remove-screenshot" type="button" aria-label="Remove screenshot">×</button>
+              </div>
+
+              <p class="form-message" id="note-form-message" role="alert" hidden></p>
+              <button class="primary-button primary-button--teal" id="save-note" type="submit">
+                Save note without moving on
+              </button>
+            </form>
+
+            <div class="notes-history">
+              <div class="section-heading-row">
+                <div>
+                  <p class="eyebrow">Review log</p>
+                  <h3>Notes from this run</h3>
+                </div>
+              </div>
+              <div class="note-list" id="note-list">
+                <p class="empty-copy">No notes yet. Capture friction the moment you feel it.</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="control-panel agent-panel" id="agent-panel" role="tabpanel" aria-labelledby="agent-tab" hidden>
+            <div id="agent-content"></div>
+          </section>
+        </aside>
+      </main>
+    </div>
+
+    <dialog class="guide-dialog" id="guide-dialog" aria-labelledby="guide-title">
+      <form method="dialog">
+        <div class="dialog-topline">
+          <p class="eyebrow">First-use guide</p>
+          <button class="icon-button" value="cancel" aria-label="Close guide">×</button>
+        </div>
+        <h2 id="guide-title">You are taking the agent’s seat</h2>
+        <p class="dialog-lead">Software proposes the next word region. Your job is to make that viewport contain one complete word, select its exact ink, fit the envelope, and only then erase it.</p>
+
+        <ol class="guide-steps">
+          <li>
+            <span>1</span>
+            <div><strong>Orient yourself.</strong><p>Confirm the page, line, word, model tier, and revision at the top. The left rail always names the current and next step.</p></div>
+          </li>
+          <li>
+            <span>2</span>
+            <div><strong>Judge the proposal.</strong><p>The rectangle is only a starting viewport. Decide whether it contains one complete word, a clipped word, several words, partial letters, or touching ink.</p></div>
+          </li>
+          <li>
+            <span>3</span>
+            <div><strong>Select approximate, then refine.</strong><p>Compare the original, clean ink, and strong ink in identical coordinates. Drag around the word for the first selection, then click individual pieces to add or remove them until exactly one word remains.</p></div>
+          </li>
+          <li>
+            <span>4</span>
+            <div><strong>Fit, inspect, erase.</strong><p>Run the deterministic envelope, inspect its safety metrics, then approve it. The claimed word disappears from the remaining-page view before software loads the next proposal.</p></div>
+          </li>
+        </ol>
+
+        <div class="guide-legend" aria-label="Evidence color legend">
+          <span><i class="legend-swatch legend-swatch--red"></i>Unselected ink</span>
+          <span><i class="legend-swatch legend-swatch--green"></i>Selected ink</span>
+          <span><i class="legend-swatch legend-swatch--orange"></i>Original box</span>
+          <span><i class="legend-swatch legend-swatch--blue"></i>Your selection</span>
+        </div>
+
+        <div class="dialog-actions">
+          <button class="primary-button primary-button--teal" id="finish-guide" value="default">Start reviewing</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-title">
+      <div class="dialog-topline">
+        <p class="eyebrow">Confirm one move</p>
+        <button class="icon-button" id="close-confirm" type="button" aria-label="Cancel and close">×</button>
+      </div>
+      <h2 id="confirm-title">Confirm this decision</h2>
+      <p class="confirm-summary" id="confirm-summary"></p>
+      <div class="effect-box" id="confirm-effect"></div>
+      <p class="confirm-binding" id="confirm-binding"></p>
+      <p class="form-message" id="confirm-message" role="alert" hidden></p>
+      <div class="dialog-actions dialog-actions--split">
+        <button class="secondary-button" id="cancel-confirm" type="button">Keep editing</button>
+        <button class="primary-button primary-button--teal" id="submit-confirm" type="button">Confirm this move</button>
+      </div>
+    </dialog>
+
+    <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
+    <div class="sr-only" id="selection-announcer" aria-live="polite"></div>
+  </body>
+</html>

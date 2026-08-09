@@ -1,0 +1,86 @@
+{
+  "blocked_markers": [
+    "human-ground-truth",
+    "source-color-selector-v2",
+    "archived-evaluation",
+    "sealed-component",
+    "sealed-recovery",
+    "hidden-target",
+    "neighbor-truth",
+    "target-mask",
+    "human_pixel_sha256",
+    "evaluation_human_word_number",
+    "foreign_human_word_pixels",
+    "\"evaluation\":"
+  ],
+  "files": [
+    {
+      "bytes": 2116,
+      "file_sha256": "ce253030152d91e4e111426b0e2cebf0fc1829ab3a3e0fcd4fbaf1092f62287e",
+      "path": "clean-ink-selection-crop.png"
+    },
+    {
+      "bytes": 1953,
+      "file_sha256": "2b5bc92b0274a8f617bc19c463fce1760fda0f1cca8586c48283f9902fb1c074",
+      "path": "component-label-map.png"
+    },
+    {
+      "bytes": 376243,
+      "file_sha256": "06c6abd0d7d8f67745b71807d2cb952f9f282368404c46a816125ab05f79f9ac",
+      "path": "decision-collage.jpg"
+    },
+    {
+      "bytes": 2272,
+      "file_sha256": "90bdc78987a828f4c5f6bb5c7d62efc221edaddf61b74d7707988f4a1c0fe3c7",
+      "path": "ink-selection-crop.png"
+    },
+    {
+      "bytes": 253119,
+      "file_sha256": "e254791787416f629f316a79417811e33e8fbf5dfbcf86c73c550814e794e729",
+      "path": "numbered-components.jpg"
+    },
+    {
+      "bytes": 231891,
+      "file_sha256": "4520d0180618ad0162fcda271df1ceec78719aa0df6dd78beae9ccea2baa7db0",
+      "path": "prior-owned-red-overlay.jpg"
+    },
+    {
+      "bytes": 344839,
+      "file_sha256": "0912813dd5a33ddff8fe4352c45f8d9bfab860bde7430b4f6fbb2826fee451c4",
+      "path": "residual-page.jpg"
+    },
+    {
+      "bytes": 231891,
+      "file_sha256": "4520d0180618ad0162fcda271df1ceec78719aa0df6dd78beae9ccea2baa7db0",
+      "path": "source-context.jpg"
+    },
+    {
+      "bytes": 231891,
+      "file_sha256": "4520d0180618ad0162fcda271df1ceec78719aa0df6dd78beae9ccea2baa7db0",
+      "path": "upright-context.jpg"
+    },
+    {
+      "bytes": 253119,
+      "file_sha256": "e254791787416f629f316a79417811e33e8fbf5dfbcf86c73c550814e794e729",
+      "path": "upright-numbered-components.jpg"
+    },
+    {
+      "bytes": 37384,
+      "file_sha256": "120228e6328431bea6f9645f319949425e5078e0cdec7aa5be9232fe34f6c086",
+      "path": "work-crop.jpg"
+    },
+    {
+      "bytes": 37802,
+      "file_sha256": "1f0779ad4176e99dd5d9a463785305ad5d80914b229ece2b05b8b767e9c6e606",
+      "path": "work-packet.json"
+    }
+  ],
+  "packet_dir": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/full-page-sequential-ownership-v2/007-p02-accuracy-v2-v4-sample10/packets/r000000-u000000-t0000",
+  "passed": true,
+  "run_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/full-page-sequential-ownership-v2/007-p02-accuracy-v2-v4-sample10",
+  "schema_version": "acting-packet-boundary-validation.v1",
+  "validation_sha256": "842c3d5c70a42ae8e8df2c88fc32f84a92b8079dbe6e4af6b7e467969b832041",
+  "violation_count": 0,
+  "violations": []
+}
+

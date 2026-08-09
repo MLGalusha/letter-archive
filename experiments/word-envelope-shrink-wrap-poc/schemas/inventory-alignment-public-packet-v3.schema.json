@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "inventory-alignment-public-packet-v3.schema.json",
+  "title": "Software-issued public packet for inventory/alignment v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "protocol_version", "trial_id", "page_id", "state_revision",
+    "state_sha256", "current", "source", "legal_actions", "stage_contract",
+    "evidence", "packet_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "inventory-alignment-public-packet.v3"},
+    "protocol_version": {"const": "inventory-alignment-two-turn.v3"},
+    "trial_id": {"type": "string", "minLength": 1},
+    "page_id": {"type": "string", "minLength": 1},
+    "state_revision": {"type": "integer", "minimum": 0},
+    "state_sha256": {"$ref": "#/$defs/sha256"},
+    "current": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage", "line_id", "line_reading_order"],
+      "properties": {
+        "stage": {"enum": ["stage_a_visible_inventory", "stage_b_graph_alignment"]},
+        "line_id": {"type": "string", "minLength": 1},
+        "line_reading_order": {"type": "integer", "minimum": 1}
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["page_id", "sha256", "size"],
+      "properties": {
+        "page_id": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "size": {
+          "type": "array",
+          "prefixItems": [
+            {"type": "integer", "minimum": 1},
+            {"type": "integer", "minimum": 1}
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        }
+      }
+    },
+    "legal_actions": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"enum": ["submit_visible_inventory", "submit_alignment_graph", "defer_line"]}
+    },
+    "stage_contract": {"type": "object"},
+    "evidence": {"type": "object"},
+    "withheld_from_acting_stage": {"type": "object"},
+    "stage_a_binding": {"type": "object"},
+    "revealed_rejectable_transcript": {"type": "object"},
+    "revealed_untrusted_detector": {"type": "object"},
+    "software_allocated_ids": {"type": "object"},
+    "exact_accounting_policy": {"type": "object"},
+    "packet_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "current": {
+          "properties": {"stage": {"const": "stage_a_visible_inventory"}}
+        },
+        "legal_actions": {
+          "const": ["submit_visible_inventory", "defer_line"]
+        }
+      },
+      "required": ["withheld_from_acting_stage"],
+      "not": {
+        "anyOf": [
+          {"required": ["stage_a_binding"]},
+          {"required": ["revealed_rejectable_transcript"]},
+          {"required": ["revealed_untrusted_detector"]},
+          {"required": ["software_allocated_ids"]},
+          {"required": ["exact_accounting_policy"]}
+        ]
+      }
+    },
+    {
+      "properties": {
+        "current": {
+          "properties": {"stage": {"const": "stage_b_graph_alignment"}}
+        },
+        "legal_actions": {
+          "const": ["submit_alignment_graph", "defer_line"]
+        }
+      },
+      "required": [
+        "stage_a_binding", "revealed_rejectable_transcript", "revealed_untrusted_detector",
+        "software_allocated_ids", "exact_accounting_policy"
+      ],
+      "not": {"required": ["withheld_from_acting_stage"]}
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

@@ -1,0 +1,984 @@
+{
+  "schema_version": "handwriting-research-artifact-registry.v1",
+  "scope": "2026-08-08 onward agent-first word ink ownership iteration",
+  "policy": "Append immutable entries. If a result is superseded, add a successor and preserve the prior entry. primary_record.file_sha256 binds the exact on-disk record; identity_sha256 binds the experiment's own canonical identity when available.",
+  "entries": [
+    {
+      "record_id": "20260808-research-map",
+      "title": "Cross-worktree research map",
+      "evidence_role": "navigation",
+      "decision": "index",
+      "acting_visibility": "not_applicable",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive/docs/research/handwriting-pipeline",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive/docs/research/handwriting-pipeline/RESEARCH-MAP.md",
+        "file_sha256": "6e144cb7230ed16c0aefe5c57c2640ab5a364454a40d36270781b2a56bc088f8"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": [],
+      "summary": "Agent navigation across refs, worktrees, storage roots, technique ordering, evidence boundaries, and negative results."
+    },
+    {
+      "record_id": "20260808-auto-selection-failure-atlas-v1",
+      "title": "Automatic-selection failure atlas",
+      "evidence_role": "post_freeze_mixed",
+      "decision": "diagnostic",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/auto-selection-failure-atlas-v1/007-p02-transcript-margin0",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/auto-selection-failure-atlas-v1/007-p02-transcript-margin0/analysis.json",
+        "file_sha256": "c19a8f3975c85723f311ef1915363f074f08c4b876cceeaedfbed74cc9fb3744"
+      },
+      "identity_sha256": "45de0c5634a6301408dce925d3c01957b4851df969b2b519c7d854a5e9f56aa",
+      "predecessor_ids": [],
+      "summary": "Twelve false easy approvals; nine selected separable foreign components."
+    },
+    {
+      "record_id": "20260808-recovery-conditioning-sweep-v1-invalid",
+      "title": "Recovery-conditioning sweep v1 invalid wiring",
+      "evidence_role": "invalid",
+      "decision": "invalid",
+      "acting_visibility": "not_applicable",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/recovery-conditioning-sweep-v1/007-p02-ten-word-mixed",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/recovery-conditioning-sweep-v1/007-p02-ten-word-mixed/INVALID-FOR-DECISION.md",
+        "file_sha256": "f23dcee1527eb0ff49608107461c7a79987dce7421451281b5cf56f5f80207a4"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": [],
+      "summary": "Preserved interpretation-wiring failure; never use for a decision."
+    },
+    {
+      "record_id": "20260808-recovery-conditioning-sweep-v2",
+      "title": "Ownership-independent recovery-conditioning sweep v2",
+      "evidence_role": "post_freeze_mixed",
+      "decision": "diagnostic",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/recovery-conditioning-sweep-v2/007-p02-ten-word-mixed",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/recovery-conditioning-sweep-v2/007-p02-ten-word-mixed/experiment.json",
+        "file_sha256": "3c8091eaadef134f9876c2c97e3c9c56b2a41ce455023debede975a8f4575853"
+      },
+      "identity_sha256": "a717715d65ee771f34866a3bff0bc059b59651adacaa89136fae27468174a7c7",
+      "predecessor_ids": ["20260808-recovery-conditioning-sweep-v1-invalid"],
+      "summary": "Larger conditioning added much more foreign than target evidence; demand-trigger only."
+    },
+    {
+      "record_id": "20260808-disjoint-component-ownership-v1",
+      "title": "Disjoint component ownership v1",
+      "evidence_role": "post_freeze_mixed",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/disjoint-component-ownership-v1/007-p02-body77",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/disjoint-component-ownership-v1/007-p02-body77/experiment.json",
+        "file_sha256": "394a96ef0273ba9eeb5b198db1a1a83d8ec01362686e8062e5d2d2eca125eff0"
+      },
+      "identity_sha256": "84f39f029e3bef70afa50a76b21434019acfb32fa992f9d0617764fd20c04a78",
+      "predecessor_ids": ["20260808-auto-selection-failure-atlas-v1"],
+      "summary": "Transcript global-exclusive assignment yielded 56/77 high-quality and zero duplicate claims; suggestion only."
+    },
+    {
+      "record_id": "20260808-component-score-weight-sweep-v1",
+      "title": "Component score-weight sweep v1",
+      "evidence_role": "post_freeze_mixed",
+      "decision": "rejected",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/component-score-weight-sweep-v1/007-p02-body77",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/component-score-weight-sweep-v1/007-p02-body77/experiment.json",
+        "file_sha256": "2dbb05ec04d847b84d77f25e4bc4dac59bb93cdf3e45d85adbc739cdf3292e69"
+      },
+      "identity_sha256": "2712be6fc410da927fd69e44a86eeadc32135a6ce94a2c4eb61a4365e6a98ade",
+      "predecessor_ids": ["20260808-disjoint-component-ownership-v1"],
+      "summary": "Fragile one-word gain; line-held-out selection fell to 51/77."
+    },
+    {
+      "record_id": "20260808-cross-line-component-abstention-v1",
+      "title": "Cross-line component abstention v1",
+      "evidence_role": "post_freeze_mixed",
+      "decision": "rejected",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/cross-line-component-abstention-v1/007-p02-body77",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/cross-line-component-abstention-v1/007-p02-body77/experiment.json",
+        "file_sha256": "d9a11c6b3c60650bb78e3f8f6b91ab9899d42fb6f8991d6b22efb2c51f952f3e"
+      },
+      "identity_sha256": "4ccaa7b76cdfb4fc3841eddca8b810381dfb522b73b89ab8e96ba2bd19ee0cab",
+      "predecessor_ids": ["20260808-disjoint-component-ownership-v1"],
+      "summary": "Blanket cross-line penalty corrected one foreign component but caused more misses."
+    },
+    {
+      "record_id": "20260808-global-line-field-v1",
+      "title": "Global acting-only ink line field v1",
+      "evidence_role": "post_freeze_mixed",
+      "decision": "rejected",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/component-line-field-sweep-v1/007-p02-body77",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/component-line-field-sweep-v1/007-p02-body77/experiment.json",
+        "file_sha256": "b55d736c0155ec0cd8f1d97c39bbe9754d49a87a835e6497b83bd22f9f0ae6e4"
+      },
+      "identity_sha256": "26539ffb110e532602768e03323187891522e8db2ab81b5b0064cccbcbd74c5d",
+      "predecessor_ids": ["20260808-cross-line-component-abstention-v1"],
+      "summary": "Acting-only line geometry was coherent, but global blending broke same-line word now."
+    },
+    {
+      "record_id": "20260808-cross-dispute-line-field-v2",
+      "title": "Conservative cross-dispute ink line field v2",
+      "evidence_role": "post_freeze_mixed",
+      "decision": "candidate_heldout",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/component-line-field-cross-dispute-v2/007-p02-body77-min50",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/component-line-field-cross-dispute-v2/007-p02-body77-min50/experiment.json",
+        "file_sha256": "0a79d8b44b066e8d3925bcd563d6de8e92351672e389025822ffcdf3d430741d"
+      },
+      "identity_sha256": "1e50e2968089ad44d0a3260232d76b714bbc513bd62d47a13f2b6bf8127814e8",
+      "predecessor_ids": ["20260808-global-line-field-v1"],
+      "summary": "Fixed conservative guard changed only answer., improving 56 to 57 high-quality; held-out validation required."
+    },
+    {
+      "record_id": "20260808-accuracy-v2-full-run-rev0",
+      "title": "Accuracy-v2 explicit V4 full run revision 0",
+      "evidence_role": "run_state",
+      "decision": "blocked",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/full-page-sequential-ownership-v2/007-p02-accuracy-v2-v4",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/full-page-sequential-ownership-v2/007-p02-accuracy-v2-v4/run-manifest.json",
+        "file_sha256": "a80ddecea68175cdaf9aa5eea0c665f8bdeb40031e1bf396be52d91c6c21dd05"
+      },
+      "identity_sha256": null,
+      "run_id": "007-p02--3099f5674cf0d4e1",
+      "predecessor_ids": ["20260808-disjoint-component-ownership-v1"],
+      "summary": "Correct explicit Clean/High Recall bindings, initialized and unchanged at revision 0."
+    },
+    {
+      "record_id": "20260808-accuracy-v2-sample10-rev0",
+      "title": "Accuracy-v2 isolated ten-word sample revision 0",
+      "evidence_role": "run_state",
+      "decision": "blocked",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/full-page-sequential-ownership-v2/007-p02-accuracy-v2-v4-sample10",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/full-page-sequential-ownership-v2/007-p02-accuracy-v2-v4-sample10/run-manifest.json",
+        "file_sha256": "e3606f2336ce2e09ef1f3854c90e72bdeb2148ba68fd7ae2644d70ebb39ff8be"
+      },
+      "identity_sha256": null,
+      "run_id": "007-p02--8f3566796a3283ca",
+      "predecessor_ids": ["20260808-accuracy-v2-full-run-rev0"],
+      "summary": "Ten canonical difficult/easy words; no model action applied because isolated routes are unavailable."
+    },
+    {
+      "record_id": "20260808-sample10-boundary-validation-r0",
+      "title": "Sample10 acting-packet boundary validation",
+      "evidence_role": "boundary_receipt",
+      "decision": "diagnostic",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/full-page-sequential-ownership-v2/007-p02-accuracy-v2-v4-sample10",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/full-page-sequential-ownership-v2/007-p02-accuracy-v2-v4-sample10/boundary-validation-r000000-u000000-t0000.json",
+        "file_sha256": "b4d0d5570f674cae7faf4838873a5647d3c7eb3104944e5e005ba2dad6de34d9"
+      },
+      "identity_sha256": "842c3d5c70a42ae8e8df2c88fc32f84a92b8079dbe6e4af6b7e467969b832041",
+      "predecessor_ids": ["20260808-accuracy-v2-sample10-rev0"],
+      "summary": "All 12 packet files passed containment, marker, existence, and evidence-hash checks."
+    },
+    {
+      "record_id": "20260808-line-coordinate-v1-memory-invalid",
+      "title": "Line-coordinate ownership v1 incomplete memory run",
+      "evidence_role": "invalid",
+      "decision": "invalid",
+      "acting_visibility": "not_applicable",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v1/007-p02-body77",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v1/007-p02-body77/INCOMPLETE-RUN.md",
+        "file_sha256": "c58e3cb261b8d19dfa9d01711d76863f9509dd6d992caab24666b0f616180a4f"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260808-disjoint-component-ownership-v1"],
+      "summary": "Retained 1,232 page masks and was stopped before freeze; no sealed evaluation opened."
+    },
+    {
+      "record_id": "20260808-line-coordinate-v2-spacing-invalid",
+      "title": "Line-coordinate ownership v2 outer-line spacing failure",
+      "evidence_role": "invalid",
+      "decision": "invalid",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v2/007-p02-body77-bounded-memory",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v2/007-p02-body77-bounded-memory/experiment.json",
+        "file_sha256": "f5a98194752cd1ae3ab3cbd23c50dd26b4b8cac77d2ef33c56756fb7b92588dd"
+      },
+      "identity_sha256": "d2947510d3217d511c10ec1a65acc6301d1a8f9dc6ec703f84026ca67747eb4c",
+      "predecessor_ids": ["20260808-line-coordinate-v1-memory-invalid"],
+      "summary": "Bounded memory succeeded, but outer fitted lines absorbed page number/signature components."
+    },
+    {
+      "record_id": "20260808-line-coordinate-v3-spacing-fixed",
+      "title": "Line-coordinate ownership v3 spacing-fixed sweep",
+      "evidence_role": "post_freeze_mixed",
+      "decision": "diagnostic",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed/experiment.json",
+        "file_sha256": "ea30421d995e79751b664db72b5562b68c1a0825bd8edf1a728278a26f1bcfdd"
+      },
+      "identity_sha256": "ebb8d735d4d32bd97a42b2448af44e9c1b4652506997980e7d3ba143d875feee",
+      "predecessor_ids": ["20260808-line-coordinate-v2-spacing-invalid"],
+      "summary": "Transcript line plus rough span improved 56 to 58 high-quality while reducing foreign and missed pixels."
+    },
+    {
+      "record_id": "20260808-line-choice-cross-locator-oracle-invalid",
+      "title": "First cross-locator line-choice oracle",
+      "evidence_role": "invalid",
+      "decision": "invalid",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed/choice-affordance-analysis.json",
+        "file_sha256": "4aeb36096fc02eee1223119e5186f5ed4094eb1d67511c8281e1e1f57c756716"
+      },
+      "identity_sha256": "f1430dd5f62a563e92c96e6f455323d5137c28f72ccc1b39219ee793fd388459",
+      "predecessor_ids": ["20260808-line-coordinate-v3-spacing-fixed"],
+      "summary": "Invalid 68/77 oracle mixed locator families independently bound to different target words."
+    },
+    {
+      "record_id": "20260808-line-coordinate-canonical-binding-audit",
+      "title": "Canonical-binding line-coordinate reevaluation",
+      "evidence_role": "post_freeze_mixed",
+      "decision": "diagnostic",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed/canonical-binding-reevaluation.json",
+        "file_sha256": "da4aa97a45122303533be86a2df909ebe93070a5a56e3f8325bcd145ab662c4b"
+      },
+      "identity_sha256": "266f6c44007ed1458c9365c198dc9808690e77f1a915eac35927620a85aaa3f0",
+      "predecessor_ids": ["20260808-line-coordinate-v3-spacing-fixed", "20260808-line-choice-cross-locator-oracle-invalid"],
+      "summary": "Recorded 72 mismatch receipts and produced a consistent 64/77 proxy; later physical audit proved the binding is not semantic truth."
+    },
+    {
+      "record_id": "20260808-line-choice-one-toggle-audit",
+      "title": "Canonical line-choice plus one-component-toggle audit",
+      "evidence_role": "post_freeze_mixed",
+      "decision": "diagnostic",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed/canonical-both-one-toggle-affordance-analysis.json",
+        "file_sha256": "0d4703e84ddbd4148b9d65d8ad9c2aeb876fec15c93823edc51186a7a27d7ec5"
+      },
+      "identity_sha256": "82af6c04dd628089828015788810d88bf208853eb8493ed891a3dd86f48aa14a",
+      "predecessor_ids": ["20260808-line-coordinate-canonical-binding-audit"],
+      "summary": "Interaction-capacity proxy only: choice reached 64/77 and one edit 70/77 under an unadjudicated one-to-one target binding."
+    },
+    {
+      "record_id": "20260808-exclusive-component-transfer-audit",
+      "title": "Exclusive same-line component-transfer audit",
+      "evidence_role": "post_freeze_mixed",
+      "decision": "diagnostic",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed/exclusive-component-transfer-audit.json",
+        "file_sha256": "8da3c852c636412c6b628a2e137b384f69138b152b84f4f4a629632a9e719995"
+      },
+      "identity_sha256": "1a025f55a44b419a42c55c14b25f4afbd8b715594b0565f1e948b8a5fb09f247",
+      "predecessor_ids": ["20260808-line-coordinate-canonical-binding-audit"],
+      "summary": "Geometry-proxy transfer audit; direction/gain counts are not semantic evidence until many-to-many target adjudication."
+    },
+    {
+      "record_id": "20260808-line-choice-agent-packets-v1",
+      "title": "Acting-only line-choice and component-toggle packets v1",
+      "evidence_role": "run_state",
+      "decision": "blocked",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-choice-agent-packets-v1/007-p02-acting-only-disagreement8",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-choice-agent-packets-v1/007-p02-acting-only-disagreement8/run-manifest.json",
+        "file_sha256": "e9eaa02426ee8e433821a13e44b1ed16ed8f6d3fdeb581ead3e45d093a70e4be"
+      },
+      "identity_sha256": "e1337c4183ee150a9db50b3749bf9208dcf2800b91d45fbeeb41e0cc01895ba8",
+      "predecessor_ids": ["20260808-line-coordinate-v3-spacing-fixed"],
+      "summary": "Eight software-disagreement packets are frozen; isolated model execution is infrastructure-blocked."
+    },
+    {
+      "record_id": "20260808-line-choice-packet-boundary-summary",
+      "title": "Line-choice packet boundary validation summary",
+      "evidence_role": "boundary_receipt",
+      "decision": "diagnostic",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-choice-agent-packets-v1/007-p02-acting-only-disagreement8",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-choice-agent-packets-v1/007-p02-acting-only-disagreement8/boundary-validation-summary.json",
+        "file_sha256": "2027ada84066f19f8c76808defc52675f62dfb81fb2b38d8e0b69d45c598d50e"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260808-line-choice-agent-packets-v1"],
+      "summary": "All eight packet directories passed structural boundary checks with zero violations."
+    },
+    {
+      "record_id": "20260808-reading-order-binding-invalid",
+      "title": "Contiguous mask-number reading-order binding",
+      "evidence_role": "invalid",
+      "decision": "invalid",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed/reading-order-binding-reevaluation.json",
+        "file_sha256": "c4d838e9ec03693fcd18b050a454e08b5df10e6e1eb4a4d27a1a286d5ce1bb45"
+      },
+      "identity_sha256": "f714c75da4fc423f7ca2b1b2c38137194eb529082f528574db30776f42c59d64",
+      "predecessor_ids": ["20260808-line-coordinate-canonical-binding-audit"],
+      "summary": "Strongly identified masks 23-99 as the body window but failed left-to-right monotonicity on three lines."
+    },
+    {
+      "record_id": "20260808-capacity-line-binding-invalid",
+      "title": "Capacity-constrained fitted-line binding",
+      "evidence_role": "invalid",
+      "decision": "invalid",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-coordinate-word-ownership-v3/007-p02-body77-spacing-fixed/capacity-line-binding-reevaluation.json",
+        "file_sha256": "5265ca063bd1f9a13b3a9106381b5e07e6ed16a8ee668578a587374921199c5e"
+      },
+      "identity_sha256": "fa1fa4afdd7324c5cd38c240fdc166ecc174300c2edea9bd019bd88494726524",
+      "predecessor_ids": ["20260808-reading-order-binding-invalid"],
+      "summary": "Selected the same body window but exact line capacities forced detached/combined masks into wrong semantic tokens."
+    },
+    {
+      "record_id": "20260808-semantic-binding-adjudication-pending",
+      "title": "Sealed many-to-many semantic binding adjudication",
+      "evidence_role": "run_state",
+      "decision": "blocked",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/semantic-binding-adjudication-v1/007-p02-pending",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/semantic-binding-adjudication-v1/007-p02-pending/run-manifest.json",
+        "file_sha256": "92918491c40deb60360d4b34887050c60d64a7d0c9dcd4858f9bf20761d3d888"
+      },
+      "identity_sha256": "1541e96b953607210f663a2b69b70c41f3804ad777bd7e6389aebe315b30a44a",
+      "predecessor_ids": ["20260808-capacity-line-binding-invalid"],
+      "summary": "Fourteen sealed evaluator boards and a zero-or-more-mask token ledger are ready; adjudication is incomplete."
+    },
+    {
+      "record_id": "20260808-semantic-binding-validation-negative-control",
+      "title": "Semantic binding completion-gate negative control",
+      "evidence_role": "boundary_receipt",
+      "decision": "diagnostic",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/semantic-binding-validation-v1/007-p02-template-negative-control",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/semantic-binding-validation-v1/007-p02-template-negative-control/validation.json",
+        "file_sha256": "383248305322a8aac3395a310d28145b99a624bdba3a5e8246ba92052f254592"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260808-semantic-binding-adjudication-pending"],
+      "summary": "The strict gate correctly rejects the untouched ledger with 92 explicit incompleteness violations."
+    },
+    {
+      "record_id": "20260808-semantic-binding-adjudication-completed",
+      "title": "Completed sealed many-to-many semantic binding ledger",
+      "evidence_role": "post_freeze_mixed",
+      "decision": "diagnostic",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/semantic-binding-adjudication-v1/007-p02-completed-evaluator-v1",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/semantic-binding-adjudication-v1/007-p02-completed-evaluator-v1/adjudicated-ledger.json",
+        "file_sha256": "3c9030c7aaa08c457bc24dfa76ff367429e20d51e6152c1c8776459468f26a5e"
+      },
+      "identity_sha256": "bdfd80d9eafe4568d192d4e426e5f5dd933123ebe4d77d84e0abd5c95bb62c97",
+      "predecessor_ids": ["20260808-semantic-binding-adjudication-pending", "20260808-semantic-binding-validation-negative-control"],
+      "summary": "First sealed evaluator ledger: 71 scorable units, 6 merged-mask exclusions, 77/77 body masks resolved, zero validation violations."
+    },
+    {
+      "record_id": "20260808-semantic-binding-line-candidate-reevaluation",
+      "title": "Many-to-many line-candidate reevaluation",
+      "evidence_role": "post_freeze_mixed",
+      "decision": "diagnostic",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/semantic-binding-reevaluation-v1/007-p02-scorable71",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/semantic-binding-reevaluation-v1/007-p02-scorable71/reevaluation.json",
+        "file_sha256": "70b8030a334e1557a678aab2ca7eb2fb4edec41406c30e47fb7158455916ac9b"
+      },
+      "identity_sha256": "87a3d20c92c4def8e45a90bc481701d3dcf34f61f636bf08c133d98aa0100667",
+      "predecessor_ids": ["20260808-line-coordinate-v3-spacing-fixed", "20260808-semantic-binding-adjudication-completed"],
+      "summary": "Trustworthy scorable-unit results: transcript global 55/71, line strip 57/71, proposal choice 65/71, one toggle 68/71; two toggles add zero."
+    },
+    {
+      "record_id": "20260808-line-component-pool-expansion-frozen",
+      "title": "Acting-safe fitted-line component pool expansion",
+      "evidence_role": "run_state",
+      "decision": "candidate_heldout",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-component-pool-expansion-v1/007-p02-scorable71",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-component-pool-expansion-v1/007-p02-scorable71/frozen-pools.json",
+        "file_sha256": "c6b48709d543623c62ede95864ea1db4705ed4608f108639094f4841ca0072a3"
+      },
+      "identity_sha256": "fb37b590a54803bf6608b9e81f172751483098e56ad157224bc680444e77965c",
+      "predecessor_ids": ["20260808-line-coordinate-v3-spacing-fixed"],
+      "summary": "Human-free fitted-line component pools frozen at six along-line margins before sealed evaluation."
+    },
+    {
+      "record_id": "20260808-line-component-pool-expansion-evaluation",
+      "title": "Sealed fitted-line pool availability and distraction sweep",
+      "evidence_role": "post_freeze_mixed",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-component-pool-expansion-v1/007-p02-scorable71",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-component-pool-expansion-v1/007-p02-scorable71/evaluation.json",
+        "file_sha256": "6b02b77e76b11c395a8a718a1c4b8f89756bacc8a1c32481c20ee2b5a071d096"
+      },
+      "identity_sha256": "2ca2d687f6b54c53096a4f3a92d23f6187a1efaa8477a2f022ff909cc439eecc",
+      "predecessor_ids": ["20260808-line-component-pool-expansion-frozen", "20260808-semantic-binding-adjudication-completed"],
+      "summary": "Promotes staged pools: 0-15% compact default and 45% recovery ceiling; larger pools add distraction without availability gain."
+    },
+    {
+      "record_id": "20260808-semantic-exclusive-component-transfer-audit",
+      "title": "Target-directed semantic exclusive component transfer audit",
+      "evidence_role": "post_freeze_mixed",
+      "decision": "diagnostic",
+      "acting_visibility": "mixed_do_not_expose",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/semantic-exclusive-component-transfer-v1/007-p02-scorable71",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/semantic-exclusive-component-transfer-v1/007-p02-scorable71/audit.json",
+        "file_sha256": "d0aa2fd577894fed3b1d58bdcd648e99aa3e66d6062f246a50b29d8b1cfd78cc"
+      },
+      "identity_sha256": "27c8e13201bd9e359c339a1ed115b1b366995488a3715fe2247ef453a3014a96",
+      "predecessor_ids": ["20260808-semantic-binding-line-candidate-reevaluation"],
+      "summary": "Beneficial target-directed transfers occur both earlier and later; provisional exclusive ownership is supported, fixed direction is not."
+    },
+    {
+      "record_id": "20260808-semantic-binding-audit",
+      "title": "Completed-page semantic binding audit",
+      "evidence_role": "navigation",
+      "decision": "index",
+      "acting_visibility": "not_applicable",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive/docs/research/handwriting-pipeline",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive/docs/research/handwriting-pipeline/BINDING-AUDIT-2026-08-08.md",
+        "file_sha256": "9d840a5452ae23724bef87702e01036c0cc197fa14db6ddf8281f4842cb645e1"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260808-reading-order-binding-invalid", "20260808-capacity-line-binding-invalid", "20260808-semantic-binding-adjudication-pending", "20260808-semantic-binding-validation-negative-control", "20260808-semantic-binding-adjudication-completed"],
+      "summary": "Quarantines all one-to-one page-007 HQ counts and defines the required sealed many-to-many target contract."
+    },
+    {
+      "record_id": "20260808-line-coordinate-ownership-checkpoint",
+      "title": "Line-coordinate ownership durable checkpoint",
+      "evidence_role": "navigation",
+      "decision": "index",
+      "acting_visibility": "not_applicable",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive/docs/research/handwriting-pipeline",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive/docs/research/handwriting-pipeline/CHECKPOINT-2026-08-08-LINE-COORDINATE-OWNERSHIP.md",
+        "file_sha256": "8fcb58dceafc1f9c5031aeff337d2732259b216d8c03e814015e95cbe70484ae"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260808-line-coordinate-canonical-binding-audit", "20260808-line-choice-one-toggle-audit", "20260808-exclusive-component-transfer-audit", "20260808-line-choice-packet-boundary-summary", "20260808-semantic-binding-audit"],
+      "summary": "Exact failures, proxy metrics, packet hashes, tests, blocker, and a superseding warning that semantic target binding is pending."
+    },
+    {
+      "record_id": "20260808-semantic-binding-line-pools-checkpoint",
+      "title": "Semantic binding and fitted-line pool durable checkpoint",
+      "evidence_role": "navigation",
+      "decision": "index",
+      "acting_visibility": "not_applicable",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive/docs/research/handwriting-pipeline",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive/docs/research/handwriting-pipeline/CHECKPOINT-2026-08-08-SEMANTIC-BINDING-LINE-POOLS.md",
+        "file_sha256": "f297521c513f138f6ac11501806df5f1c5e28e608b6233112d7cfa2b570c4faa"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260808-semantic-binding-adjudication-completed", "20260808-semantic-binding-line-candidate-reevaluation", "20260808-line-component-pool-expansion-evaluation", "20260808-semantic-exclusive-component-transfer-audit"],
+      "summary": "Exact semantic ledger, trustworthy proposal metrics, staged pool tradeoff, corrected order audit, guardrails, and next experiments."
+    },
+    {
+      "record_id": "20260809-sbb-binarization-trial",
+      "title": "SBB Binarization 2021 acting-safe faint-page trial",
+      "evidence_role": "run_state",
+      "decision": "candidate_heldout",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/sbb-binarization-trial-20260809/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/sbb-binarization-trial-20260809/003-18860314-L01-01/experiment.json",
+        "file_sha256": "d101588b19463d5e0db2cddfcb75d7c42fbad2b53ece674df214a78c2193dd1b"
+      },
+      "identity_sha256": "fe60435a8ad962c9bae002b399d8f152e87a7681bf402bbc8cd972142055a3b9",
+      "predecessor_ids": [],
+      "summary": "SBB produced coherent, low-noise handwriting evidence on one acting-safe faint page but omitted faint word portions; proposal evidence only."
+    },
+    {
+      "record_id": "20260809-sbb-probability-sweep",
+      "title": "SBB 2021 foreground-probability preservation and threshold sweep",
+      "evidence_role": "run_state",
+      "decision": "candidate_heldout",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/sbb-probability-sweep-20260809/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/sbb-probability-sweep-20260809/003-18860314-L01-01/experiment.json",
+        "file_sha256": "01b1d2e6c3d3236abb5349176c3e604b97576a0615d5f4288cb5f87405f9210c"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-sbb-binarization-trial"],
+      "summary": "Preserved two-channel probability exactly reproduces hard output at 0.50; 0.20 adds 25,170 mostly stroke-adjacent pixels but does not recover whole near-zero-probability words."
+    },
+    {
+      "record_id": "20260809-eynollah-hybrid-binarization-cohort",
+      "title": "Eynollah/SBB hybrid CNN-Transformer three-page acting-safe cohort",
+      "evidence_role": "run_state",
+      "decision": "candidate_heldout",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-hybrid-binarization-trial-20260809",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-hybrid-binarization-trial-20260809/cohort-summary.json",
+        "file_sha256": "f9b91f76033d6f37b03dda0006716a7f8a663babbd923be925042420751a510e"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-sbb-probability-sweep"],
+      "summary": "The hybrid retained 96.93% of old p0.50 ink and added 159,697 coherent pixels on faint page 003, generalized strongly to folded page 002, and exposed high-confidence glass-ring/page-edge false foreground on 001. Promote probability for geometry-conditioned testing, not as handwriting or ownership truth."
+    },
+    {
+      "record_id": "20260809-eynollah-kraken-line-conditioning-v1",
+      "title": "Eynollah hybrid whole-component admission by Kraken line geometry",
+      "evidence_role": "run_state",
+      "decision": "candidate_heldout",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-line-conditioning-v1/001-18881103-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-line-conditioning-v1/001-18881103-L01-01/experiment.json",
+        "file_sha256": "a7f80b1b74927b694239ad4dc27d3f6d98d15d89c0de0fb234fc287969cb4df1"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-eynollah-hybrid-binarization-cohort"],
+      "summary": "Pixel clipping removed non-text but broke strokes. A 30px line corridor with whole-component overlap >=25% retained 82.21% of hybrid ink while visually excluding both glass rings and the page edge; hold for independent-page testing with residual safeguards."
+    },
+    {
+      "record_id": "20260809-eynollah-kraken-line-conditioning-002-heldout",
+      "title": "Frozen hybrid whole-component line admission on independent folded page 002",
+      "evidence_role": "run_state",
+      "decision": "candidate_heldout",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-line-conditioning-v1/002-19001113-L01-02",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-line-conditioning-v1/002-19001113-L01-02/experiment.json",
+        "file_sha256": "e446932ee08c4b83c26912b519165aade7ca1f5150c0f7ed3a9f20785caa4b21"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-eynollah-kraken-line-conditioning-v1"],
+      "summary": "The unchanged 30px/25% policy retained 99.9166% of hybrid ink and rejected only 264 top-boundary pixels outside the photographed paper; recall-safe on an already-clean independent page."
+    },
+    {
+      "record_id": "20260809-hybrid-seed-page-recovery-v1-rejected",
+      "title": "Hybrid-seeded full-page source recovery",
+      "evidence_role": "run_state",
+      "decision": "rejected",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/hybrid-seed-page-recovery-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/hybrid-seed-page-recovery-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "20097c01de878a658e336f87cd13693297b579a6f9e93023307f984a209f4c18"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-eynollah-hybrid-binarization-cohort"],
+      "summary": "Page-wide source adaptation recovered near-zero-probability writing but also ruling, folds, borders, texture, and thousands of fragments. Reject every page-wide profile; retain as negative evidence for geometry-local recovery."
+    },
+    {
+      "record_id": "20260809-hybrid-seed-local-recovery-v1",
+      "title": "Hybrid-seeded local word/line-crop source recovery",
+      "evidence_role": "run_state",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/hybrid-seed-local-recovery-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/hybrid-seed-local-recovery-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "1862c907b31f7d2ffaa60c72c4593d30d22e76b87d1e2e6903e347b99dca72bf"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-hybrid-seed-page-recovery-v1-rejected", "20260809-eynollah-kraken-line-conditioning-v1"],
+      "summary": "Conservative local recovery reconnects some faint source-visible strokes that hybrid scored below 0.01. Use tight+conservative first, expand along line on defer, offer balanced second; maximum recall and wholesale selection are rejected."
+    },
+    {
+      "record_id": "20260809-eynollah-crop-multiscale-v1-rejected",
+      "title": "Eynollah hybrid crop/context/multiscale inference",
+      "evidence_role": "run_state",
+      "decision": "rejected",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-crop-multiscale-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-crop-multiscale-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "963d15a5b77e4345be4e753d846c5fbb3ac877eefe32f294b95dcd9f17459247"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-eynollah-hybrid-binarization-cohort"],
+      "summary": "Tight black-padded and enlarged crop inference substantially lost full-page hybrid ink on three frozen probes. Native real context produced occasional useful disagreement but failed the almost-erased word; keep the full-page probability as anchor."
+    },
+    {
+      "record_id": "20260809-eynollah-crop-preprocessing-v1",
+      "title": "Native-scale Eynollah crop preprocessing",
+      "evidence_role": "run_state",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-crop-preprocessing-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-crop-preprocessing-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "e0f6f778fedcd94f9e0d8760ad81870e753f76b83e2754e6bf814b758a4f5975"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-eynollah-crop-multiscale-v1-rejected"],
+      "summary": "CLAHE 1.5 exposed plausible moderate-faint continuations but also thickened ink and selected non-writing; paper flattening improved human visibility without reliable model recovery. Offer CLAHE only as a distinct component-gated proposal layer."
+    },
+    {
+      "record_id": "20260809-clahe-recovery-component-gate-v1",
+      "title": "CLAHE-Eynollah proposals gated by local source-recovery evidence",
+      "evidence_role": "run_state",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/clahe-recovery-component-gate-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/clahe-recovery-component-gate-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "d07e8701b1f199e1be1f76e074c8e3300df595b66bd4e57aa8115227c8f5aa7a"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-eynollah-crop-preprocessing-v1", "20260809-hybrid-seed-local-recovery-v1"],
+      "summary": "Whole-component agreement with independent local source recovery reduces CLAHE proposal fragmentation and concentrates moderate-faint candidates. It remains optional evidence and does not reconstruct the almost-erased word."
+    },
+    {
+      "record_id": "20260809-page-adaptive-vector-ink-v1",
+      "title": "Page-adaptive source-feature vector ink",
+      "evidence_role": "run_state",
+      "decision": "diagnostic",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/page-adaptive-vector-ink-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/page-adaptive-vector-ink-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "18e4db46a57ee23af4db4a8e77fcdfb290aa52c95663da28195b2d5f57341c19"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-hybrid-seed-local-recovery-v1"],
+      "summary": "Page-local source-feature prototypes are the first tested method to expose most disconnected near-erased writing, but the ungated mask floods paper texture and is diagnostic only. Pseudo-label AUC was actively misleading; clean seed-bound graph methods did not recover the disconnected word."
+    },
+    {
+      "record_id": "20260809-line-conditioned-vector-ink-v1",
+      "title": "Positive-unknown rough-line-conditioned vector ink",
+      "evidence_role": "run_state",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-conditioned-vector-ink-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-conditioned-vector-ink-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "3f5f6213120731016fb3bedc60032bccb06f37efc2750db38a4046d0938d95d2"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-page-adaptive-vector-ink-v1"],
+      "summary": "Treating low-confidence pixels inside the rough line as unknown instead of negative reduced the near-erased-word proposal from 24,625 to 7,502 pixels and from 2,946 to 239 components while retaining most visible word structure. Promote only as optional high-recall proposal evidence."
+    },
+    {
+      "record_id": "20260809-fitted-line-vector-gate-v1-rejected",
+      "title": "Unconditional fitted-line gate over vector proposals",
+      "evidence_role": "run_state",
+      "decision": "rejected",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/fitted-line-vector-gate-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/fitted-line-vector-gate-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "0432cc43313d66f80ee3661618033a5154c8448dd069fc4e497132cd7c8d7048"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-line-conditioned-vector-ink-v1"],
+      "summary": "Reject unconditional fitted-line clipping. A sparse five-bin anchor produced an invented -0.1597 slope and deleted most of the newly recovered word, demonstrating that geometry must abstain when its evidence is weak."
+    },
+    {
+      "record_id": "20260809-fitted-line-quality-gate-v1",
+      "title": "Fitted-line quality and abstention gate",
+      "evidence_role": "run_state",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/fitted-line-quality-gate-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/fitted-line-quality-gate-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "55980ff36faecc7ee21417f76bd3909a08a94fffbbca9f171416bf52578e7949"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-fitted-line-vector-gate-v1-rejected"],
+      "summary": "A frozen evidence-quality gate correctly abstained on the destructive sparse fit and preserved all 7,502 upstream proposal pixels. It accepted one strong fit and conservatively rejected another near threshold; target-line retention needs refinement before precision use."
+    },
+    {
+      "record_id": "20260809-line-conditioned-vector-heldout-v1",
+      "title": "Line-conditioned vector proposal same-page held-out check",
+      "evidence_role": "run_state",
+      "decision": "candidate_heldout",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-conditioned-vector-heldout-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-conditioned-vector-heldout-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "cd8361638592e9247933fbe148136ba1dbee11161ea2ff61ac7d4dd2f10099c6"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-line-conditioned-vector-ink-v1"],
+      "summary": "The unchanged proposal policy recovered coherent faint middle-phrase structure on a distinct same-page line, adding 5,966 pixels and 431 components. This supports the mechanism but is not cross-page or cross-collection generalization evidence."
+    },
+    {
+      "record_id": "20260809-vector-proposal-tiers-v1",
+      "title": "Three-tier vector component review surface",
+      "evidence_role": "run_state",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/vector-proposal-tiers-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/vector-proposal-tiers-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "9884a5874899703a4ab7ad9f7d057f9fa621c086350913db2640eb31926b778d"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-line-conditioned-vector-ink-v1", "20260809-line-conditioned-vector-heldout-v1", "20260809-hybrid-seed-local-recovery-v1"],
+      "summary": "Partition vector components into strong, likely, and exploratory tiers by independent local-recovery support. The tiers are a review order, not labels: the near-erased word remains mainly exploratory precisely because every earlier method missed it, so exploratory evidence must never be silently discarded."
+    },
+    {
+      "record_id": "20260809-kraken-line-vector-crosspage-v1",
+      "title": "Automatic Kraken-line vector proposals across pages",
+      "evidence_role": "run_state",
+      "decision": "candidate_heldout",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/kraken-line-vector-crosspage-v1",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/kraken-line-vector-crosspage-v1/experiment.json",
+        "file_sha256": "b1fcd2b1deeb37b60155babfe7605511649091376be7b8bcb0995027b01b8230"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-line-conditioned-vector-ink-v1", "20260809-eynollah-kraken-line-conditioning-002-heldout"],
+      "summary": "Kraken boundaries automatically centered six software-selected lines on two independent pages, and unchanged vector proposals stayed concentrated on stroke gaps without catastrophic paper flooding. Fragment burden remains 259-652 additions per line with median area one pixel, so geometry is promoted only as a search corridor."
+    },
+    {
+      "record_id": "20260809-vector-fragment-grouping-v1",
+      "title": "Exact-pixel vector fragment grouping",
+      "evidence_role": "run_state",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/vector-fragment-grouping-v1",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/vector-fragment-grouping-v1/experiment.json",
+        "file_sha256": "742b8d5a1179675013a7149a49f03c65c89a4514c34949a536bd55e277620cf5"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-kraken-line-vector-crosspage-v1"],
+      "summary": "Balanced anisotropic grouping reduced 36-168 raw evidence components to 10-22 editable left-to-right colour groups while preserving every exact ink pixel. Visual word alignment is promising, but tight splits marks and broad merges neighbors; expose all as correction challengers rather than ownership truth."
+    },
+    {
+      "record_id": "20260809-natural-faint-word-enhancement-v1",
+      "title": "Natural near-erased-word enhancement",
+      "evidence_role": "run_state",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/natural-faint-word-enhancement-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/natural-faint-word-enhancement-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "3a1fa7967c64d156030302a73b103805ab77b1e1fbb9aed34f3ae9bf9af9f703"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-page-adaptive-vector-ink-v1", "20260809-line-conditioned-vector-ink-v1"],
+      "summary": "A page-specific LAB ink-direction transform doubled faint-proxy contrast with no clipping; ridge gating delivered a quieter 1.55x gain. Generic sharpening and blunt darkening strengthened paper too, so only ink-vector variants advance to model reinference."
+    },
+    {
+      "record_id": "20260809-enhanced-eynollah-reinference-v1",
+      "title": "Enhanced Eynollah real-context reinference",
+      "evidence_role": "run_state",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/enhanced-eynollah-reinference-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/enhanced-eynollah-reinference-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "e0ad9207ec3e74cbe959cfd1ccab36b6d9c6159494c5415a20d58043ade0e4ac"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-natural-faint-word-enhancement-v1", "20260809-eynollah-crop-preprocessing-v1"],
+      "summary": "Page-ink-vector context raised Eynollah p0.50 faint-proxy selection from 0.97% to 34.77% while retaining 90.65% of the full-page anchor and activating zero conservative paper-proxy pixels. Promote as an optional secondary proposal; fragmentation and neighboring-line recovery still require geometry and human ownership review."
+    },
+    {
+      "record_id": "20260809-faint-ink-fragment-repair-v1",
+      "title": "Faint-ink fragment repair inputs",
+      "evidence_role": "run_state",
+      "decision": "diagnostic",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/faint-ink-fragment-repair-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/faint-ink-fragment-repair-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "5c0a880f9c33a3870a66543aca23f9b9fa467ac32c91548e6f8034537604ba3b"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-enhanced-eynollah-reinference-v1"],
+      "summary": "A raw-vector bridge precursor visibly webbed paper and was rejected before inference. The bounded replacement uses p0.50 Eynollah seeds propagated only through p0.20 source-supported pixels in a centered line corridor; bridge pixels are hash-bound scaffolding that must be removed before geometry or training export."
+    },
+    {
+      "record_id": "20260809-fragment-repaired-eynollah-reinference-v1",
+      "title": "Fragment-repaired Eynollah reinference",
+      "evidence_role": "run_state",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/fragment-repaired-eynollah-reinference-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/fragment-repaired-eynollah-reinference-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "dd1354f4d086c4f81daa2d330bd17d4a412dd913ab7c2adf6b90e4ac36257dd6"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-faint-ink-fragment-repair-v1", "20260809-enhanced-eynollah-reinference-v1"],
+      "summary": "Source-only 3x7 reconnect improved p0.50 faint-proxy recall from 34.77% to 52.17%, full-page retention from 90.65% to 96.00%, kept the paper proxy at zero, and reduced exact-source components from 54 to 38. Temporary bridge variants recovered less exact source ink after scaffold removal and are rejected."
+    },
+    {
+      "record_id": "20260809-one-pass-composite-ink-v1",
+      "title": "One-pass Eynollah core plus source algorithms and valley-bounded grouping",
+      "evidence_role": "run_state",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/one-pass-composite-ink-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/one-pass-composite-ink-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "ceefdd83895f6e69ce60f1f78bd3a56c6db0730a8a17488fb25b956cd6991ee9"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-enhanced-eynollah-reinference-v1", "20260809-hybrid-seed-local-recovery-v1", "20260809-line-conditioned-vector-ink-v1", "20260809-vector-fragment-grouping-v1"],
+      "summary": "No new model inference: reuse one Eynollah core, score the naturally darkened source, combine local and positive-unknown vector evidence in explicit tiers, and group exact pixels. A projection-valley boundary fixed the major enough-word merge and correctly split the acknowledgement line; the folded crop found no trustworthy valley and abstained."
+    },
+    {
+      "record_id": "20260809-best-ink-pipeline-cohort-v1",
+      "title": "Frozen seven-page best ink pipeline cohort",
+      "evidence_role": "run_state",
+      "decision": "diagnostic",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/best-ink-pipeline-cohort-v1",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/best-ink-pipeline-cohort-v1/manifest.json",
+        "file_sha256": "214e646c2864e2ea680d17974812124239009008feb6541a6b0f2c1359dd4f91"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-eynollah-hybrid-binarization-cohort", "20260809-one-pass-composite-ink-v1"],
+      "summary": "Seven predeclared source-only pages show strong Eynollah p0.50 and p0.20-support generalization, but also semantic foreground failures on rings, page edges, and fold/external structure. The first full-page source gate is too conservative and the all-in-one execution overloaded 8 GiB memory, so bounded model-only then model-free page processes are mandatory."
+    },
+    {
+      "record_id": "20260809-faint-ink-classical-challengers-v1",
+      "title": "Near-erased-word classical challenger consensus",
+      "evidence_role": "run_state",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/faint-ink-classical-challengers-v1/003-18860314-L01-01/enough-tight",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/faint-ink-classical-challengers-v1/003-18860314-L01-01/enough-tight/experiment.json",
+        "file_sha256": "1fc1dd2228bba3c908a774c02211a90b420881f821bc9f4788f86bd3fa2ee010"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-natural-faint-word-enhancement-v1", "20260809-fragment-repaired-eynollah-reinference-v1", "20260809-one-pass-composite-ink-v1"],
+      "summary": "Su local contrast independently recovered 79.58% of the frozen faint proxy with two paper-proxy pixels. A four-method conservative/balanced consensus reached 83.79%/97.60% with 3/12 paper pixels; Retinex alone catastrophically flooded. The prior one-pass vector mask remains stronger, so use classical agreement as confidence/challenger evidence rather than an automatic union."
+    },
+    {
+      "record_id": "20260809-eynollah-offset-grid-comparison-v1",
+      "title": "Eynollah half-stride tile-grid causal comparison",
+      "evidence_role": "run_state",
+      "decision": "diagnostic",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-offset-grid-comparison-v1/012-18630108-L01-04/offset-180-180",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-offset-grid-comparison-v1/012-18630108-L01-04/offset-180-180/experiment.json",
+        "file_sha256": "fc772aa12912ef65125469dae36906a54226a42f18d7e51982d532bf82f139d7"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-best-ink-pipeline-cohort-v1"],
+      "summary": "Moving the 448px Eynollah tile grid by half the 360px stride recovered 60,117 pixels but lost 58,654; damage moved rather than disappeared. A blind union is unsafe. Source-consensus seam recovery added 3,608 pixels with zero additions outside the automatic source candidate, but remains review-only."
+    },
+    {
+      "record_id": "20260809-body-corridor-recovery-v1",
+      "title": "Inherited body-margin corridor ablation",
+      "evidence_role": "run_state",
+      "decision": "rejected",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/body-corridor-recovery-v1/012-18630108-L01-04",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/body-corridor-recovery-v1/012-18630108-L01-04/experiment.json",
+        "file_sha256": "55329089a61a1909291fc64bd663c97253b0ae9bcb7e4713e373eed550099f43"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-best-ink-pipeline-cohort-v1"],
+      "summary": "The original line corridor began where Eynollah began and excluded faint left line starts. Inheriting x=282 from neighboring lines added 252,587 search pixels, but unchanged evidence admitted only 22 pixels and zero in the target crop. The gate was circular but not the principal miss cause."
+    },
+    {
+      "record_id": "20260809-page-specific-local-ink-reference-v3",
+      "title": "Page-specific local-paper ink reference vector",
+      "evidence_role": "run_state",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/page-specific-local-ink-reference-v3/012-18630108-L01-04/top-left",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/page-specific-local-ink-reference-v3/012-18630108-L01-04/top-left/experiment.json",
+        "file_sha256": "e50e1d3fb8bf2693c3b771777e9b3741c8d294e75c7b3b911b6d78c6c3d63668"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-best-ink-pipeline-cohort-v1", "20260809-body-corridor-recovery-v1"],
+      "summary": "A 15-feature local-paper residual and stroke vector learned from Eynollah pseudo-ink visibly finds the missing top-left words, including pixels at Eynollah p<0.01. Pixel thresholds remain fragmented and trade recall against page texture; treat the score as proposal evidence, not a mask."
+    },
+    {
+      "record_id": "20260809-reference-seeded-grabcut-v1",
+      "title": "Reference-seeded GrabCut negative control",
+      "evidence_role": "run_state",
+      "decision": "rejected",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/reference-seeded-grabcut-v1/012-18630108-L01-04/top-left",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/reference-seeded-grabcut-v1/012-18630108-L01-04/top-left/experiment.json",
+        "file_sha256": "550a550a51bfbb338dca100754342accf6c90e1dbc4f5e9f4b8be6475db2f356"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-page-specific-local-ink-reference-v3"],
+      "summary": "Color-mixture spatial optimization is rejected: one iteration thickened strokes into blobs; five iterations added 707,658 pixels and swallowed most of the paper region. Aged paper and faint ink overlap too strongly for unconstrained GrabCut smoothness."
+    },
+    {
+      "record_id": "20260809-kraken7-layout-page012-v1",
+      "title": "Upright Kraken 7 layout for faint page 012",
+      "evidence_role": "run_state",
+      "decision": "candidate_heldout",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/kraken7-layout-page012-v1/012-18630108-L01-04",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/kraken7-layout-page012-v1/012-18630108-L01-04/experiment.json",
+        "file_sha256": "82ddcde07a20d38493e0f33df2bb955336d1f70b02d704856c8a70076cd44344"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-best-ink-pipeline-cohort-v1"],
+      "summary": "The raw JPEG's EXIF orientation produced an invalid 4000x3000/116-line run. A lossless EXIF-transposed raster exactly matched Eynollah/OpenCV pixels and yielded 53 lines. The first six body polygons reach the faint left starts, supporting Kraken only as search/line-ownership geometry."
+    },
+    {
+      "record_id": "20260809-kraken-stroke-adaptive-recovery-v3-m55",
+      "title": "Kraken-line Eynollah-stroke adaptive faint-fragment grouping",
+      "evidence_role": "run_state",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/Kraken-stroke-adaptive-recovery-v3-m55/012-18630108-L01-04/top-left",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/Kraken-stroke-adaptive-recovery-v3-m55/012-18630108-L01-04/top-left/experiment.json",
+        "file_sha256": "1bc4d60ec58477e623b38358cde636e0e9d87bc4dabd279a6e1b422ac91b6c1d"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-page-specific-local-ink-reference-v3", "20260809-kraken7-layout-page012-v1", "20260809-vector-fragment-grouping-v1"],
+      "summary": "Eynollah core measured 4.0/5.6/6.4px median/q75/q90 stroke width. Kraken line ownership plus core-and-vector exact pixels, grouped through temporary 5x35 support, retained 24,646 review additions and reduced the six-line crop to 72 groups. No bridge pixel entered the mask. Wider 5x45 saved only five groups and raised merge risk; 5x35 is the current review preset, not autonomous truth."
+    },
+    {
+      "record_id": "20260809-eynollah-taught-group-ranking-v1",
+      "title": "Eynollah-taught one-class recovered-group triage",
+      "evidence_role": "run_state",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-taught-group-ranking-v1/012-18630108-L01-04/top-left",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-taught-group-ranking-v1/012-18630108-L01-04/top-left/experiment.json",
+        "file_sha256": "3c8444c8b34119fa6be010019f4bb2fa7838412eaa2a8eaddafca129c219313e"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-kraken-stroke-adaptive-recovery-v3-m55"],
+      "summary": "A robust one-class prototype learned only from substantive Eynollah-core-backed groups and ranked existing exact-pixel groups without changing the mask. Of 72 groups, 54/75,199 pixels were anchor-backed; only 18/623 pixels were wholly new. Ten new groups were micro-fragments (35 pixels), two needed crop context (282), one was elongated-risk (13), and five substantive faint candidates remained (293). Use this to focus review, never as calibrated truth or automatic deletion."
+    }
+  ]
+}

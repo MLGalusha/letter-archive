@@ -874,6 +874,111 @@
       "identity_sha256": null,
       "predecessor_ids": ["20260809-natural-faint-word-enhancement-v1", "20260809-fragment-repaired-eynollah-reinference-v1", "20260809-one-pass-composite-ink-v1"],
       "summary": "Su local contrast independently recovered 79.58% of the frozen faint proxy with two paper-proxy pixels. A four-method conservative/balanced consensus reached 83.79%/97.60% with 3/12 paper pixels; Retinex alone catastrophically flooded. The prior one-pass vector mask remains stronger, so use classical agreement as confidence/challenger evidence rather than an automatic union."
+    },
+    {
+      "record_id": "20260809-eynollah-offset-grid-comparison-v1",
+      "title": "Eynollah half-stride tile-grid causal comparison",
+      "evidence_role": "run_state",
+      "decision": "diagnostic",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-offset-grid-comparison-v1/012-18630108-L01-04/offset-180-180",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-offset-grid-comparison-v1/012-18630108-L01-04/offset-180-180/experiment.json",
+        "file_sha256": "fc772aa12912ef65125469dae36906a54226a42f18d7e51982d532bf82f139d7"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-best-ink-pipeline-cohort-v1"],
+      "summary": "Moving the 448px Eynollah tile grid by half the 360px stride recovered 60,117 pixels but lost 58,654; damage moved rather than disappeared. A blind union is unsafe. Source-consensus seam recovery added 3,608 pixels with zero additions outside the automatic source candidate, but remains review-only."
+    },
+    {
+      "record_id": "20260809-body-corridor-recovery-v1",
+      "title": "Inherited body-margin corridor ablation",
+      "evidence_role": "run_state",
+      "decision": "rejected",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/body-corridor-recovery-v1/012-18630108-L01-04",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/body-corridor-recovery-v1/012-18630108-L01-04/experiment.json",
+        "file_sha256": "55329089a61a1909291fc64bd663c97253b0ae9bcb7e4713e373eed550099f43"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-best-ink-pipeline-cohort-v1"],
+      "summary": "The original line corridor began where Eynollah began and excluded faint left line starts. Inheriting x=282 from neighboring lines added 252,587 search pixels, but unchanged evidence admitted only 22 pixels and zero in the target crop. The gate was circular but not the principal miss cause."
+    },
+    {
+      "record_id": "20260809-page-specific-local-ink-reference-v3",
+      "title": "Page-specific local-paper ink reference vector",
+      "evidence_role": "run_state",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/page-specific-local-ink-reference-v3/012-18630108-L01-04/top-left",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/page-specific-local-ink-reference-v3/012-18630108-L01-04/top-left/experiment.json",
+        "file_sha256": "e50e1d3fb8bf2693c3b771777e9b3741c8d294e75c7b3b911b6d78c6c3d63668"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-best-ink-pipeline-cohort-v1", "20260809-body-corridor-recovery-v1"],
+      "summary": "A 15-feature local-paper residual and stroke vector learned from Eynollah pseudo-ink visibly finds the missing top-left words, including pixels at Eynollah p<0.01. Pixel thresholds remain fragmented and trade recall against page texture; treat the score as proposal evidence, not a mask."
+    },
+    {
+      "record_id": "20260809-reference-seeded-grabcut-v1",
+      "title": "Reference-seeded GrabCut negative control",
+      "evidence_role": "run_state",
+      "decision": "rejected",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/reference-seeded-grabcut-v1/012-18630108-L01-04/top-left",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/reference-seeded-grabcut-v1/012-18630108-L01-04/top-left/experiment.json",
+        "file_sha256": "550a550a51bfbb338dca100754342accf6c90e1dbc4f5e9f4b8be6475db2f356"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-page-specific-local-ink-reference-v3"],
+      "summary": "Color-mixture spatial optimization is rejected: one iteration thickened strokes into blobs; five iterations added 707,658 pixels and swallowed most of the paper region. Aged paper and faint ink overlap too strongly for unconstrained GrabCut smoothness."
+    },
+    {
+      "record_id": "20260809-kraken7-layout-page012-v1",
+      "title": "Upright Kraken 7 layout for faint page 012",
+      "evidence_role": "run_state",
+      "decision": "candidate_heldout",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/kraken7-layout-page012-v1/012-18630108-L01-04",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/kraken7-layout-page012-v1/012-18630108-L01-04/experiment.json",
+        "file_sha256": "82ddcde07a20d38493e0f33df2bb955336d1f70b02d704856c8a70076cd44344"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-best-ink-pipeline-cohort-v1"],
+      "summary": "The raw JPEG's EXIF orientation produced an invalid 4000x3000/116-line run. A lossless EXIF-transposed raster exactly matched Eynollah/OpenCV pixels and yielded 53 lines. The first six body polygons reach the faint left starts, supporting Kraken only as search/line-ownership geometry."
+    },
+    {
+      "record_id": "20260809-kraken-stroke-adaptive-recovery-v3-m55",
+      "title": "Kraken-line Eynollah-stroke adaptive faint-fragment grouping",
+      "evidence_role": "run_state",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/Kraken-stroke-adaptive-recovery-v3-m55/012-18630108-L01-04/top-left",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/Kraken-stroke-adaptive-recovery-v3-m55/012-18630108-L01-04/top-left/experiment.json",
+        "file_sha256": "1bc4d60ec58477e623b38358cde636e0e9d87bc4dabd279a6e1b422ac91b6c1d"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-page-specific-local-ink-reference-v3", "20260809-kraken7-layout-page012-v1", "20260809-vector-fragment-grouping-v1"],
+      "summary": "Eynollah core measured 4.0/5.6/6.4px median/q75/q90 stroke width. Kraken line ownership plus core-and-vector exact pixels, grouped through temporary 5x35 support, retained 24,646 review additions and reduced the six-line crop to 72 groups. No bridge pixel entered the mask. Wider 5x45 saved only five groups and raised merge risk; 5x35 is the current review preset, not autonomous truth."
+    },
+    {
+      "record_id": "20260809-eynollah-taught-group-ranking-v1",
+      "title": "Eynollah-taught one-class recovered-group triage",
+      "evidence_role": "run_state",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-taught-group-ranking-v1/012-18630108-L01-04/top-left",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-taught-group-ranking-v1/012-18630108-L01-04/top-left/experiment.json",
+        "file_sha256": "3c8444c8b34119fa6be010019f4bb2fa7838412eaa2a8eaddafca129c219313e"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-kraken-stroke-adaptive-recovery-v3-m55"],
+      "summary": "A robust one-class prototype learned only from substantive Eynollah-core-backed groups and ranked existing exact-pixel groups without changing the mask. Of 72 groups, 54/75,199 pixels were anchor-backed; only 18/623 pixels were wholly new. Ten new groups were micro-fragments (35 pixels), two needed crop context (282), one was elongated-risk (13), and five substantive faint candidates remained (293). Use this to focus review, never as calibrated truth or automatic deletion."
     }
   ]
 }

@@ -58,6 +58,7 @@ layer contains synthetic bridge pixels; the actor still owns the semantic choice
 | V3–V6b cleanup series | Aggressive cleanup can look cleaner while destroying faint writing. V6b improved one fold case but still did not make Kraken detect it. | Preserve Clean and High Recall views simultaneously; do not delete uncertain ink before agent review. |
 | Page 014 line→word hierarchy | Line rhythm and local whitespace produced useful word proposals; rotated margins/signatures need separate orientation groups. | Software proposals are starting viewports, not ownership answers. |
 | Kraken duplicate-crop A/B | Context duplication changes detections but does not generalize as a default; different passes find complementary ink. | Kraken remains proposal evidence; source-coordinate fusion and residual ink audit remain required. |
+| Page-012 Eynollah-reference adaptive grouping | Eynollah's conservative core can teach page-specific ink appearance and stroke width, while upright Kraken supplies independent line search geometry. Temporary stroke-width-scaled joins recovered coherent faint fragments without adding bridge pixels; a `5×35` association kernel retained 24,646 review additions in 72 inspectable groups. | Human-review preset only: Eynollah core stays fixed, additions remain exact source pixels, and colored groups expose merges, splits, edge fragments, and speckle. |
 | Consensus residual word boxes | OCR ranges are representative anchors, not exact word boxes; boundary-crossing residual ink is an ambiguity cue. | Never stretch a box to satisfy transcript text; preserve residual components. |
 | Sequential ownership and knockout experiments | Token queues alone skip visible omissions; exact residual accounting and global disjoint ownership are required. | One software-owned cursor, append-only claims, and a final residual gate. |
 | Line-coordinate ownership and semantic binding | Fitted lines produce useful exclusive proposals. A sealed many-to-many ledger leaves 71 exactly scorable units: transcript global is 55/71, line + rough span is 57/71, eight-way frozen choice is 65/71, and one component edit is 68/71. A staged fitted-line pool reaches complete target-component availability at 45% along-line expansion, but with much more distraction. | Start with a 0–15% component pool, escalate to 45% only on defer/missing ink, preserve provisional exclusive ownership and transfer, and never select the expanded pool wholesale. |
@@ -85,6 +86,10 @@ layer contains synthetic bridge pixels; the actor still owns the semantic choice
 - Eynollah capability audit, three-page hybrid CNN-Transformer trial, page-adaptive
   vector/graph recovery design, and bounded integration sequence:
   [`EYNOLLAH-CAPABILITY-AND-HYBRID-BINARIZATION-2026-08-09.md`](EYNOLLAH-CAPABILITY-AND-HYBRID-BINARIZATION-2026-08-09.md)
+- Page-012 missed-ink causal tests, Eynollah-taught local ink model, upright
+  Kraken line coverage, learned stroke-width grouping, rejected flooding paths,
+  and exact artifact hashes:
+  [`PAGE-012-MISSED-INK-REFERENCE-AND-ADAPTIVE-GROUPING-2026-08-09.md`](PAGE-012-MISSED-INK-REFERENCE-AND-ADAPTIVE-GROUPING-2026-08-09.md)
 - Machine-readable current-iteration registry:
   [`ARTIFACT-REGISTRY.json`](ARTIFACT-REGISTRY.json) with
   `validate_artifact_registry.py`

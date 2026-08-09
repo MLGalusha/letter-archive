@@ -301,6 +301,105 @@ larger conditioning exposes more target evidence and much more foreign evidence.
 The new result adds an important qualifier: Eynollah supplies a substantially
 better anchor, but the same geometry/scale discipline remains necessary.
 
+## Crop, scale, and source-preprocessing probes
+
+The next acting-safe experiment asked whether the frozen 2022 hybrid checkpoint
+could recover faint writing better when it saw a crop rather than a full page.
+Three source-coordinate crops were frozen before inference:
+
+- `folded-write-to-you`: fold/rule contamination plus moderately faint writing;
+- `enough-tight`: an almost-erased word tail;
+- `acknowledgement-tight`: a longer faint continuation.
+
+Every crop candidate was projected back to the same source coordinates and
+compared with the preserved full-page probability. No completed human page or
+sealed ownership evidence was opened. Candidate-only pixels were treated as
+disagreement evidence, not recovered truth.
+
+The multiscale result rejects tight or enlarged crop inference as the default:
+
+- the released tight-crop path surrounds a 300–350 px-high crop with black to
+  reach the model's 448 px input height; it retained only 63.70%, 0.00%, and
+  45.47% of the full-page `p0.50` ink on the three probes;
+- adding 160 px of real source context was safer, but on `enough-tight` it still
+  retained only 8.91%;
+- 2× enlargement retained only 44.65%, 1.04%, and 12.32%, showing that making
+  strokes visually larger moved them away from this checkpoint's learned scale;
+- native real-context inference on `acknowledgement-tight` retained 90.34% and
+  proposed 4,608 extra pixels. Some followed faint writing; some merely
+  thickened already-found strokes.
+
+The exact multiscale record is
+`artifacts/eynollah-crop-multiscale-v1/003-18860314-L01-01/experiment.json`
+(SHA-256
+`963d15a5b77e4345be4e753d846c5fbb3ac877eefe32f294b95dcd9f17459247`;
+64.91 s crop inference plus 4.86 s model load on CPU).
+
+A second frozen experiment kept native scale and changed only the source
+presentation inside the same real-context windows:
+
+- LAB CLAHE, clip limit 1.5;
+- paper-background flattening with gains 1.0, 1.5, and 2.0;
+- unaltered RGB context as the crop baseline.
+
+CLAHE was the only consistent challenger. At `p0.50` it retained 93.28%,
+99.12%, and 94.52% of the full-page anchor while proposing 3,605, 7,051, and
+6,262 additional pixels. Visual review found plausible continuations on the two
+moderately faint probes, but also stroke thickening and responses to non-writing
+marks. On the almost-erased `enough` tail, the raw mask mostly recovered
+stronger neighboring strokes; the target remained fragmentary at both `p0.50`
+and `p0.20`.
+
+Paper flattening made the source easier for a human to inspect but did not make
+this model reliably select the nearly erased writing. This is evidence of a
+model-confidence cliff, not merely a display-contrast failure.
+
+The exact preprocessing record is
+`artifacts/eynollah-crop-preprocessing-v1/003-18860314-L01-01/experiment.json`
+(SHA-256
+`e0f6f778fedcd94f9e0d8760ad81870e753f76b83e2754e6bf814b758a4f5975`;
+42.24 s crop inference plus 4.50 s model load on CPU).
+
+Decision:
+
+- retain the full-page hybrid probability as the primary anchor;
+- do not silently union tight-crop, enlarged-crop, CLAHE, or flattened outputs;
+- expose native-scale CLAHE only as a distinct optional proposal layer;
+- gate CLAHE-only components with source darkness/ridge continuity and fitted
+  line/word geometry before offering them for one-click acceptance;
+- use the unaltered source raster for final ownership and fitted geometry.
+
+### CLAHE × source-recovery component gate
+
+A third acting-safe experiment composed the two independent proposal mechanisms
+without unioning their pixels. It formed CLAHE-only `p0.50` components, dilated
+the conservative or balanced local source-recovery additions by one pixel, and
+kept a whole CLAHE component only when 10% or 25% overlapped that evidence.
+
+The conservative gate materially reduced proposal burden on moderately faint
+writing:
+
+- `acknowledgement-tight`: 6,262 CLAHE-only pixels in 638 fragments became
+  4,077 pixels in 31 whole components;
+- `folded-write-to-you`: the 25% policy kept 1,783/3,605 pixels in 17
+  components while removing many unsupported specks;
+- `enough-tight`: the same policy reduced 7,051 pixels to 1,429 in five
+  components, but those components were still mainly stronger neighboring
+  letters and did not reconstruct the nearly erased middle.
+
+On `acknowledgement` the 10% and 25% thresholds were identical, and on the
+folded crop they were nearly identical, because supported components already had
+substantial overlap. The evidence therefore supports conservative whole-component
+gating as an optional moderate-faint proposal layer; it does not support a
+globally optimized overlap threshold or claim to solve near-erasure.
+
+Exact record:
+`artifacts/clahe-recovery-component-gate-v1/003-18860314-L01-01/experiment.json`
+(SHA-256
+`d07e8701b1f199e1be1f76e074c8e3300df595b66bd4e57aa8115227c8f5aa7a`;
+2.96 s CPU). The record preserves every connected-component box, area, evidence
+overlap, admission decision, mask hash, and review board.
+
 ## The page-adaptive “vector” idea
 
 The user's vector idea is technically plausible if “vector” means an embedding
@@ -425,17 +524,21 @@ version and exact proposal that the human corrected.
 2. Compose the local conservative recovery with a fitted line and rough word
    corridor. Sweep only along-line expansion while keeping across-line reach
    fixed, and compare correction effort rather than added-pixel count.
-3. Build a seed-driven embedding/graph propagation challenger and compare it
+3. Compose full-page hybrid, native-scale CLAHE proposals, source-colour/ridge
+   continuity, and fitted-line geometry. Preserve agreement states and abstain
+   rather than unioning every layer.
+4. Build a seed-driven embedding/graph propagation challenger and compare it
    with the now-frozen local source-colour recovery baseline.
-4. Download and hash the current Eynollah 2023 default hybrid checkpoint; repeat
+5. Download and hash the current Eynollah 2023 default hybrid checkpoint; repeat
    the exact frozen cohort without changing thresholds or evidence.
-5. Add a fourth acting-safe failure page with mixed ink/pencil or severe shadow.
-6. Expose hybrid anchor plus conservative/balanced local additions as distinct
+6. Add a fourth acting-safe failure page with mixed ink/pencil or severe shadow.
+7. Expose hybrid anchor, CLAHE-only candidates, and conservative/balanced local
+   additions as distinct
    optional selector layers and measure
    human corrections and seconds per completed word.
-7. After enough fully residual-audited pages exist, freeze letter/writer-level
+8. After enough fully residual-audited pages exist, freeze letter/writer-level
    train/development/test splits and fine-tune the extractor.
-8. Use the exact per-word masks to train/evaluate line-local unique ownership;
+9. Use the exact per-word masks to train/evaluate line-local unique ownership;
    keep the fitted envelope deterministic.
 
 The next implementation should be geometry-conditioned hybrid ink, because it

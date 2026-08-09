@@ -604,6 +604,51 @@
       "identity_sha256": null,
       "predecessor_ids": ["20260809-hybrid-seed-page-recovery-v1-rejected", "20260809-eynollah-kraken-line-conditioning-v1"],
       "summary": "Conservative local recovery reconnects some faint source-visible strokes that hybrid scored below 0.01. Use tight+conservative first, expand along line on defer, offer balanced second; maximum recall and wholesale selection are rejected."
+    },
+    {
+      "record_id": "20260809-eynollah-crop-multiscale-v1-rejected",
+      "title": "Eynollah hybrid crop/context/multiscale inference",
+      "evidence_role": "run_state",
+      "decision": "rejected",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-crop-multiscale-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-crop-multiscale-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "963d15a5b77e4345be4e753d846c5fbb3ac877eefe32f294b95dcd9f17459247"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-eynollah-hybrid-binarization-cohort"],
+      "summary": "Tight black-padded and enlarged crop inference substantially lost full-page hybrid ink on three frozen probes. Native real context produced occasional useful disagreement but failed the almost-erased word; keep the full-page probability as anchor."
+    },
+    {
+      "record_id": "20260809-eynollah-crop-preprocessing-v1",
+      "title": "Native-scale Eynollah crop preprocessing",
+      "evidence_role": "run_state",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-crop-preprocessing-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-crop-preprocessing-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "e0f6f778fedcd94f9e0d8760ad81870e753f76b83e2754e6bf814b758a4f5975"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-eynollah-crop-multiscale-v1-rejected"],
+      "summary": "CLAHE 1.5 exposed plausible moderate-faint continuations but also thickened ink and selected non-writing; paper flattening improved human visibility without reliable model recovery. Offer CLAHE only as a distinct component-gated proposal layer."
+    },
+    {
+      "record_id": "20260809-clahe-recovery-component-gate-v1",
+      "title": "CLAHE-Eynollah proposals gated by local source-recovery evidence",
+      "evidence_role": "run_state",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/clahe-recovery-component-gate-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/clahe-recovery-component-gate-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "d07e8701b1f199e1be1f76e074c8e3300df595b66bd4e57aa8115227c8f5aa7a"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-eynollah-crop-preprocessing-v1", "20260809-hybrid-seed-local-recovery-v1"],
+      "summary": "Whole-component agreement with independent local source recovery reduces CLAHE proposal fragmentation and concentrates moderate-faint candidates. It remains optional evidence and does not reconstruct the almost-erased word."
     }
   ]
 }

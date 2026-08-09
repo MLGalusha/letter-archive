@@ -1,0 +1,129 @@
+{
+  "board": {
+    "file": "probability-threshold-board.png",
+    "file_sha256": "e8c84bc76b36a35cc399eea073328aa498414fee719058649004700865c10b35"
+  },
+  "review_visuals": {
+    "main_body_threshold_review": {
+      "file": "main-body-threshold-review.png",
+      "file_sha256": "d8d7b76c73928337e068b46e84d6ab5c92059364679fd8fe37c2e67506d92d45"
+    },
+    "source_overlay": {
+      "encoding": "cyan = p >= 0.50 core; red = pixels added by p >= 0.20",
+      "file": "source-overlay-p050-core-p020-additions.png",
+      "file_sha256": "8a766f2251a0f0b6eab492aecce8fc4ecdfa398290f173bcc181d99fb7cf9ca8"
+    },
+    "visual_observation": "The 25,170 p=0.20 additions mostly thicken or reconnect partial strokes and add small marks. They do not recover the whole faint words that the checkpoint assigned near-zero foreground probability. No global threshold is promoted from this acting-only page."
+  },
+  "hard_reference_check": {
+    "file_sha256": "604a4dcb8dee2264c1f09538909f4ed9fb71f632f9d1ab884d626dbf457bedb4",
+    "p50_disagreement_pixels": 0,
+    "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/sbb-binarization-trial-20260809/003-18860314-L01-01/sbb-2021-03-09.png"
+  },
+  "inference": {
+    "probability_dtype": "float16 on disk; float32 during inference and thresholding",
+    "released_decision": "argmax over two softmax channels",
+    "stitching": "released SBB 10%-of-model-width overlap discard"
+  },
+  "input": {
+    "file_sha256": "ac21aa38dbff33823d08e156b214355d85a55a3c8bbdccc0228738b70e41d027",
+    "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/workspaces/word-ink-ground-truth-v1/collections/003/18860314/L01/pages/003-18860314-L01-01/runs/run-4111a8cd75be/source/working.png",
+    "size_wh": [
+      2834,
+      3780
+    ]
+  },
+  "model": {
+    "architecture_observed": "ResNet-50 encoder with convolutional upsampling/skip decoder; no transformer layers observed",
+    "foreground_channel": 1,
+    "input_shape": [
+      null,
+      224,
+      448,
+      3
+    ],
+    "name": "model_2",
+    "output_shape": [
+      null,
+      224,
+      448,
+      2
+    ],
+    "parameters": 38211210,
+    "path": "/tmp/sbb-binarization-trial.NkJrG6/models/saved_model_2021_03_09",
+    "release": "2021-03-09"
+  },
+  "page_id": "003-18860314-L01-01",
+  "probability": {
+    "file": "foreground-probability.float16.npy",
+    "file_sha256": "2d51efa3943b7ef6d5521b5003ac99543eb2012ff085e73d1e1b168bcb818ebc",
+    "max": 0.9999995231628418,
+    "mean": 0.01188869308680296,
+    "min": 8.108553828378717e-09,
+    "quantiles": {
+      "0.5": 2.927901914517861e-05,
+      "0.9": 7.634766297996973e-05,
+      "0.95": 0.00013288891059346484,
+      "0.99": 0.7380299758911155,
+      "0.995": 0.9892409247159952,
+      "0.999": 0.9997227787971497
+    }
+  },
+  "runtime": {
+    "device": "CPU",
+    "host_arch": "arm64",
+    "tensorflow": "2.12.0",
+    "wall_seconds": 49.84220662500593
+  },
+  "schema_version": "sbb-probability-sweep.v1",
+  "sealed_human_evidence_used": false,
+  "thresholds": {
+    "0.20": {
+      "components": 234,
+      "components_ge_3px": 180,
+      "components_ge_8px": 154,
+      "file": "foreground-p0.20.png",
+      "file_sha256": "b3f131b779bb54bbbd9af82bd0c8915c4b9b658d21bd9534ebd56516ba76e03b",
+      "mask_pixel_sha256": "aff6fb19dd63b75c8eaf936743bbc666c2e9986901295d5b18f9604d2eacab41",
+      "median_component_pixels": 46.0,
+      "page_fraction": 0.014081467292476467,
+      "pixels": 150848,
+      "pixels_added_vs_previous_threshold": 9907
+    },
+    "0.30": {
+      "components": 207,
+      "components_ge_3px": 175,
+      "components_ge_8px": 151,
+      "file": "foreground-p0.30.png",
+      "file_sha256": "7b17fb32f309fa4af6762875fb64f1fa53eb7e2655ff26ce8cc494b3010778b1",
+      "mask_pixel_sha256": "d0c0450df44c2e840f0c4dc1e46d97b62fd5a6d516a649eb52cbad5a9811605b",
+      "median_component_pixels": 131.0,
+      "page_fraction": 0.013156661551156964,
+      "pixels": 140941,
+      "pixels_added_vs_previous_threshold": 8060
+    },
+    "0.40": {
+      "components": 220,
+      "components_ge_3px": 178,
+      "components_ge_8px": 151,
+      "file": "foreground-p0.40.png",
+      "file_sha256": "1885c49347a8872d0e83fc3466ce64a094744619db6bf9cae310461934e259ab",
+      "mask_pixel_sha256": "9aa3935b70ab64860739283e9c24f894f1c38117889dd960bc2f670b65565926",
+      "median_component_pixels": 115.5,
+      "page_fraction": 0.012404270890509423,
+      "pixels": 132881,
+      "pixels_added_vs_previous_threshold": 7203
+    },
+    "0.50": {
+      "components": 207,
+      "components_ge_3px": 165,
+      "components_ge_8px": 150,
+      "file": "foreground-p0.50.png",
+      "file_sha256": "6fffd87d9ab61cc639474078db3c93975c139cfdf2ac7be62a385e08707ad63d",
+      "mask_pixel_sha256": "2f6208570626e6b83c5c68c9e46f3fc3f9ad27d4a716b8be999dfae3f540b97a",
+      "median_component_pixels": 160.0,
+      "page_fraction": 0.011731880080503933,
+      "pixels": 125678
+    }
+  }
+}

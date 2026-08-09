@@ -829,6 +829,21 @@
       "identity_sha256": null,
       "predecessor_ids": ["20260809-faint-ink-fragment-repair-v1", "20260809-enhanced-eynollah-reinference-v1"],
       "summary": "Source-only 3x7 reconnect improved p0.50 faint-proxy recall from 34.77% to 52.17%, full-page retention from 90.65% to 96.00%, kept the paper proxy at zero, and reduced exact-source components from 54 to 38. Temporary bridge variants recovered less exact source ink after scaffold removal and are rejected."
+    },
+    {
+      "record_id": "20260809-one-pass-composite-ink-v1",
+      "title": "One-pass Eynollah core plus source algorithms and valley-bounded grouping",
+      "evidence_role": "run_state",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/one-pass-composite-ink-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/one-pass-composite-ink-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "ceefdd83895f6e69ce60f1f78bd3a56c6db0730a8a17488fb25b956cd6991ee9"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-enhanced-eynollah-reinference-v1", "20260809-hybrid-seed-local-recovery-v1", "20260809-line-conditioned-vector-ink-v1", "20260809-vector-fragment-grouping-v1"],
+      "summary": "No new model inference: reuse one Eynollah core, score the naturally darkened source, combine local and positive-unknown vector evidence in explicit tiers, and group exact pixels. A projection-valley boundary fixed the major enough-word merge and correctly split the acknowledgement line; the folded crop found no trustworthy valley and abstained."
     }
   ]
 }

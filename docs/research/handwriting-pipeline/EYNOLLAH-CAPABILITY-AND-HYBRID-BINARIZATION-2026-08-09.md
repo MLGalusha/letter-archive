@@ -768,8 +768,10 @@ Visual inspection agrees with the measurements: source-only strengthening makes
 more of the faint center stroke coherent, while explicit bridges do not cause the
 model to recover more exact source ink after the scaffolding is removed. Reject
 synthetic bridges and promote source-only reconnect as a bounded preprocessing
-candidate. This is not word-ownership proof: neighboring fragments remain at the
-crop edges and still require line-conditioned unique ownership or human review.
+challenger. A later one-pass composition experiment showed that reinference is
+not required in the default architecture. This is not word-ownership proof:
+neighboring fragments remain at the crop edges and still require line-conditioned
+unique ownership or human review.
 
 Exact preparation manifest SHA-256:
 `5c0a880f9c33a3870a66543aca23f9b9fa467ac32c91548e6f8034537604ba3b`.
@@ -777,6 +779,58 @@ Exact reinference manifest SHA-256:
 `dd1354f4d086c4f81daa2d330bd17d4a412dd913ab7c2adf6b90e4ac36257dd6`.
 Five model variants ran in 12.59 s CPU after a 3.94 s model load. No sealed human
 page or answer was opened.
+
+## One-pass Eynollah core plus source algorithms
+
+The next frozen experiment tested the more efficient architecture directly on
+the same three acting-safe crops and ran **no new model inference**. It composed:
+
+1. the saved full-page Eynollah p0.50 core as a noise-suppressed seed;
+2. page-ink-vector darkening as a visibility and scoring transform;
+3. conservative source-colour recovery;
+4. positive–unknown vector evidence gated by both darkening response and ridge
+   response;
+5. an exploratory vector tier rather than silently discarding disagreement;
+6. exact-pixel anisotropic grouping; temporary support changed labels only.
+
+The darkening made faint writing substantially easier to inspect, while the
+composed masks retained source-coordinate pixels and upstream provenance. The
+three crop results were:
+
+| Crop | Eynollah core | Composed exact pixels | Raw components | Tight groups | Balanced groups | Conservative paper-proxy hits |
+|---|---:|---:|---:|---:|---:|---:|
+| `enough-tight` | 2,188 | 9,695 | 164 | 16 | 4 | 1 |
+| `acknowledgement-tight` | 11,490 | 17,840 | 139 | 14 | 8 | 0 |
+| `folded-write-to-you` | 8,132 | 13,942 | 151 | 31 | 21 | 1 |
+
+The global balanced grouping exposed the next failure: on `enough`, four groups
+looked numerically efficient but the largest spanned 94.83% of the crop and merged
+the left neighbor with the recovered target. A frozen projection-valley challenger
+smoothed exact-ink column density with sigma 5, used the lowest 10% as potential
+space, required a 10-pixel interior valley, and prohibited grouping across its
+midpoint.
+
+- `enough`: one 17-pixel valley at x 141–158 separated the left neighbor. The
+  result had five groups and reduced the largest width fraction to 69.50%; the
+  recovered faint target remained coherent.
+- `acknowledgement`: two 10-pixel valleys at x 68–78 and 279–289 visibly
+  separated the clipped left fragment, short middle word/punctuation, and long
+  main word. The result had ten groups and a 59.33% maximum width.
+- folded writing: no trustworthy valley was found. The method abstained and left
+  21 groups instead of forcing a merge.
+
+This supports the user's proposed default architecture: run Eynollah once, use
+its clean core to condition page-local source algorithms, organize exact recovered
+pixels using line/rough-word geometry, correct ownership, then fit the deterministic
+perimeter. Enhanced Eynollah reinference remains a measured optional challenger,
+not a required loop. The next step is to replace projection-only spans with Kraken
+or transcript rough word corridors when available and prohibit low-confidence ink
+from bridging those corridors.
+
+Exact manifest SHA-256:
+`ceefdd83895f6e69ce60f1f78bd3a56c6db0730a8a17488fb25b956cd6991ee9`.
+All 36 bound output files re-hashed with zero violations. Runtime was 10.76 s CPU;
+no completed human page or sealed answer was opened.
 
 ## What to train, and in what order
 

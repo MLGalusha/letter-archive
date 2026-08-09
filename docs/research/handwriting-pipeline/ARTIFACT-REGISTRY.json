@@ -559,6 +559,51 @@
       "identity_sha256": null,
       "predecessor_ids": ["20260809-eynollah-hybrid-binarization-cohort"],
       "summary": "Pixel clipping removed non-text but broke strokes. A 30px line corridor with whole-component overlap >=25% retained 82.21% of hybrid ink while visually excluding both glass rings and the page edge; hold for independent-page testing with residual safeguards."
+    },
+    {
+      "record_id": "20260809-eynollah-kraken-line-conditioning-002-heldout",
+      "title": "Frozen hybrid whole-component line admission on independent folded page 002",
+      "evidence_role": "run_state",
+      "decision": "candidate_heldout",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-line-conditioning-v1/002-19001113-L01-02",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-line-conditioning-v1/002-19001113-L01-02/experiment.json",
+        "file_sha256": "e446932ee08c4b83c26912b519165aade7ca1f5150c0f7ed3a9f20785caa4b21"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-eynollah-kraken-line-conditioning-v1"],
+      "summary": "The unchanged 30px/25% policy retained 99.9166% of hybrid ink and rejected only 264 top-boundary pixels outside the photographed paper; recall-safe on an already-clean independent page."
+    },
+    {
+      "record_id": "20260809-hybrid-seed-page-recovery-v1-rejected",
+      "title": "Hybrid-seeded full-page source recovery",
+      "evidence_role": "run_state",
+      "decision": "rejected",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/hybrid-seed-page-recovery-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/hybrid-seed-page-recovery-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "20097c01de878a658e336f87cd13693297b579a6f9e93023307f984a209f4c18"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-eynollah-hybrid-binarization-cohort"],
+      "summary": "Page-wide source adaptation recovered near-zero-probability writing but also ruling, folds, borders, texture, and thousands of fragments. Reject every page-wide profile; retain as negative evidence for geometry-local recovery."
+    },
+    {
+      "record_id": "20260809-hybrid-seed-local-recovery-v1",
+      "title": "Hybrid-seeded local word/line-crop source recovery",
+      "evidence_role": "run_state",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/hybrid-seed-local-recovery-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/hybrid-seed-local-recovery-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "1862c907b31f7d2ffaa60c72c4593d30d22e76b87d1e2e6903e347b99dca72bf"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-hybrid-seed-page-recovery-v1-rejected", "20260809-eynollah-kraken-line-conditioning-v1"],
+      "summary": "Conservative local recovery reconnects some faint source-visible strokes that hybrid scored below 0.01. Use tight+conservative first, expand along line on defer, offer balanced second; maximum recall and wholesale selection are rejected."
     }
   ]
 }

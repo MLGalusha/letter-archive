@@ -212,6 +212,95 @@ residual/alternate-orientation stream. It must not be deleted simply for being
 outside the main line union. The `30 px / 25%` policy is promoted only as a
 held-out candidate for pages with independently frozen line geometry.
 
+### Frozen-policy check on independent page 002
+
+The unchanged `30 px / 25%` whole-component policy was then applied to page
+`002-19001113-L01-02`. The frozen Kraken layout has 37 lines. Its prepared image
+and the human-workspace source are byte-different PNG files but decode to exactly
+the same RGB pixel array (`a9db0757...`), so no coordinate reprojection or visual
+approximation was used.
+
+Result:
+
+- raw hybrid: 316,630 pixels in 544 components;
+- accepted: 316,366 pixels in 541 components;
+- retained: 99.9166%;
+- rejected: three components totaling 264 pixels;
+- all rejected pixels lie at the extreme top image boundary, outside the
+  photographed paper;
+- no missing word or long stroke is visible at full-page review scale;
+- thresholds 10%, 25%, and 50% all made the same decision on this page.
+
+This is independent recall-safety evidence on an already-clean page. It is not a
+second specificity win because page 002 contained no glass/page-edge foreground
+like page 001. Page 003 had no matching independently frozen line layout and was
+correctly excluded instead of deriving circular line evidence from the hybrid
+mask itself.
+
+## Hybrid-seeded page and local source recovery
+
+The next experiment reused the existing Letter Archive local recovery algorithm.
+It learns source colour residual, local/broad paper-normalized darkness, Sato
+ridge response, proximity, principal writing direction, and straight-artifact
+penalties from an accepted ink anchor. The hybrid `p0.50` mask replaced the older
+generic seed.
+
+### Full-page conditioning: rejected
+
+Artifact root:
+
+`/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/hybrid-seed-page-recovery-v1/003-18860314-L01-01`
+
+| Profile | Added pixels | Addition components | Added pixels where hybrid p < 0.01 | Result |
+| --- | ---: | ---: | ---: | --- |
+| Conservative | 17,289 | 793 | 12,200 | Some useful faint fragments, but ruling/fold/page-border evidence and specks |
+| Balanced | 63,721 | 3,901 | 45,238 | More faint structure, much more fragmentation and physical-page evidence |
+| Maximum recall | 138,948 | 11,237 | 103,842 | Unacceptable page-edge, fold, ruling, texture, and component explosion |
+
+The run took 145.55 CPU seconds. It proves that source recovery can find evidence
+the hybrid gave almost no probability, but one page-wide appearance model is too
+broad. It also confirms that this work belongs in precomputed/cached page layers,
+not the per-click interaction loop.
+
+### Local conditioning: promising optional assistance
+
+Artifact root:
+
+`/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/hybrid-seed-local-recovery-v1/003-18860314-L01-01`
+
+The same algorithm was frozen over four broad difficult crops plus tighter
+counterparts for `enough` and `acknowledgement`. Six crops completed in 4.94 CPU
+seconds. No human answer or sealed completed-page evidence was used.
+
+Acting-safe visual review found:
+
+- conservative local recovery reconnects multiple faint source-visible word
+  fragments, including evidence with hybrid probability below `0.01`;
+- balanced recovery often exposes more real faint letter structure but also more
+  disconnected debris and local foreign evidence;
+- maximum recall is consistently too noisy;
+- the fold-crossing crop still attracts some fold/rule evidence, proving that
+  local scope helps but does not replace line/word geometry;
+- a tight `enough` crop reduced conservative additions 2,805→457 (83.71%) and
+  balanced 7,042→1,520 (78.42%), but restored only fragments of the extremely
+  faint tail;
+- a tight `acknowledgement` crop reduced conservative additions 2,132→1,705
+  (20.03%) while preserving several useful gap continuations.
+
+This promotes a staged proposal policy rather than a global recovery mask:
+
+1. begin with a tight rough word box and conservative recovery;
+2. preserve the hybrid anchor separately from red recovered candidates;
+3. if incomplete, expand primarily along the fitted line;
+4. offer balanced evidence only after conservative remains incomplete;
+5. never select the recovery pool wholesale;
+6. preserve residual/outside-line evidence for omitted words and marginalia.
+
+This independently converges with the earlier page-007 conditioning sweep:
+larger conditioning exposes more target evidence and much more foreign evidence.
+The new result adds an important qualifier: Eynollah supplies a substantially
+better anchor, but the same geometry/scale discipline remains necessary.
+
 ## The page-adaptive “vector” idea
 
 The user's vector idea is technically plausible if “vector” means an embedding
@@ -330,19 +419,23 @@ version and exact proposal that the human corrected.
 
 ## Next bounded experiments
 
-1. Freeze the `30 px / 25%` whole-component line policy on independent pages with
-   existing line geometry. Preserve a separate residual stream for writing not
-   represented by any detected line.
-2. Build a seed-driven page-adaptive graph propagation baseline and compare it
-   with unrestricted source-color growth and threshold `0.20`.
-3. Download and hash the current Eynollah 2023 default hybrid checkpoint; repeat
+1. Freeze the `30 px / 25%` whole-component line policy on more independent noisy
+   pages with exact prepared-coordinate geometry. Preserve a separate residual
+   stream for writing not represented by any detected line.
+2. Compose the local conservative recovery with a fitted line and rough word
+   corridor. Sweep only along-line expansion while keeping across-line reach
+   fixed, and compare correction effort rather than added-pixel count.
+3. Build a seed-driven embedding/graph propagation challenger and compare it
+   with the now-frozen local source-colour recovery baseline.
+4. Download and hash the current Eynollah 2023 default hybrid checkpoint; repeat
    the exact frozen cohort without changing thresholds or evidence.
-4. Add a fourth acting-safe failure page with mixed ink/pencil or severe shadow.
-5. Expose the best frozen candidate as an optional selector layer and measure
+5. Add a fourth acting-safe failure page with mixed ink/pencil or severe shadow.
+6. Expose hybrid anchor plus conservative/balanced local additions as distinct
+   optional selector layers and measure
    human corrections and seconds per completed word.
-6. After enough fully residual-audited pages exist, freeze letter/writer-level
+7. After enough fully residual-audited pages exist, freeze letter/writer-level
    train/development/test splits and fine-tune the extractor.
-7. Use the exact per-word masks to train/evaluate line-local unique ownership;
+8. Use the exact per-word masks to train/evaluate line-local unique ownership;
    keep the fitted envelope deterministic.
 
 The next implementation should be geometry-conditioned hybrid ink, because it

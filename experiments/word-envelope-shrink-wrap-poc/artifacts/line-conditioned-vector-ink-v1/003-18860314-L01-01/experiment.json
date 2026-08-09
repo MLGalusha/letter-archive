@@ -1,0 +1,570 @@
+{
+  "crops": {
+    "acknowledgement-tight": {
+      "anchor_pixels": 19552,
+      "bbox_xywh": [
+        1750,
+        3100,
+        900,
+        300
+      ],
+      "methods": {
+        "line-hist-gradient-boosting": {
+          "addition_components": 1004,
+          "addition_pixels": 9155,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 964,
+            "hybrid_p_0.05_to_0.20": 1237,
+            "hybrid_p_ge_0.20": 1461,
+            "hybrid_p_lt_0.01": 5493
+          },
+          "score_float32_pixel_sha256": "a4d6f9015133e09e7bcc6a26cb824fd2aea9c71456f92f64acb9deac60381036",
+          "score_quantiles": {
+            "0.5": 0.0002917292877100408,
+            "0.9": 0.032430581748485565,
+            "0.95": 0.9986962676048279,
+            "0.99": 0.9991041421890259,
+            "0.995": 0.9991041421890259
+          },
+          "selected_pixels": 20215,
+          "selection_mask_pixel_sha256": "f7aa4b3f21d8edd28388ce0da0cba6dbc80c6e027a8f96d8c4bfaec6b600a825",
+          "threshold": 0.8
+        },
+        "line-prototype": {
+          "addition_components": 695,
+          "addition_pixels": 7555,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 822,
+            "hybrid_p_0.05_to_0.20": 990,
+            "hybrid_p_ge_0.20": 1179,
+            "hybrid_p_lt_0.01": 4564
+          },
+          "score_float32_pixel_sha256": "52ac0cd3ba40f918f4e5da56f76587e92b59bc7a11a2edd18cb54b6a11410e23",
+          "score_quantiles": {
+            "0.5": 0.015559593215584755,
+            "0.9": 0.49045589566230774,
+            "0.95": 0.9103406667709351,
+            "0.99": 0.9986901879310608,
+            "0.995": 0.9996471405029297
+          },
+          "selected_pixels": 17606,
+          "selection_mask_pixel_sha256": "eca690c35c8332f622570d64618924d2c6029a9cbd6450ee2f4cfe04b601a92f",
+          "threshold": 0.8
+        },
+        "prototype-classifier-agreement": {
+          "addition_components": 466,
+          "addition_pixels": 6349,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 731,
+            "hybrid_p_0.05_to_0.20": 899,
+            "hybrid_p_ge_0.20": 1151,
+            "hybrid_p_lt_0.01": 3568
+          },
+          "score_float32_pixel_sha256": "f845856f2ddb52d6dabc5ea10a8403d778b3c00755de6b5318b64730bb5913c2",
+          "score_quantiles": {
+            "0.5": 0.0,
+            "0.9": 0.0,
+            "0.95": 1.0,
+            "0.99": 1.0,
+            "0.995": 1.0
+          },
+          "selected_pixels": 16298,
+          "selection_mask_pixel_sha256": "3f5766a6a2c811cf563567e31ec334a91e200f829a4c30f57848e2c9c4509c39",
+          "threshold": 0.8
+        },
+        "structured-line-prototype": {
+          "addition_components": 455,
+          "addition_pixels": 6886,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 813,
+            "hybrid_p_0.05_to_0.20": 987,
+            "hybrid_p_ge_0.20": 1178,
+            "hybrid_p_lt_0.01": 3908
+          },
+          "score_float32_pixel_sha256": "23e986be39a26791b98d79be198ea060832e27f4323832818b5a1630591a916b",
+          "score_quantiles": {
+            "0.5": 0.0,
+            "0.9": 0.0,
+            "0.95": 0.9054007530212402,
+            "0.99": 0.998689591884613,
+            "0.995": 0.9996471405029297
+          },
+          "selected_pixels": 16857,
+          "selection_mask_pixel_sha256": "725b43f7312844c64a863900e8be975f5457be8d7ac535480c34db2bdea28224",
+          "threshold": 0.8
+        }
+      },
+      "outputs": {
+        "line-hist-gradient-boosting": {
+          "mask_file": "line-hist-gradient-boosting.p080.png",
+          "mask_file_sha256": "824c8e2e04578de6a139c7b7d0f7b48ab04ac5b34df25833211bf24c1deec291",
+          "score_file": "line-hist-gradient-boosting.score.float16.npy",
+          "score_file_sha256": "cf893efcbdc0ec0819661afa158910fdbe21163786846c30bde1a0e30b11a156"
+        },
+        "line-prototype": {
+          "mask_file": "line-prototype.p080.png",
+          "mask_file_sha256": "febce8d41ce71b64aef6b7df9850fc8c42de6834d3bda47a0d8af095fadc4399",
+          "score_file": "line-prototype.score.float16.npy",
+          "score_file_sha256": "9a7eed9b8b8f776757953688b308da9064b093211cc62e2eaf436eada7f79dcb"
+        },
+        "prototype-classifier-agreement": {
+          "mask_file": "prototype-classifier-agreement.p080.png",
+          "mask_file_sha256": "e64cdbc54de899eb2fddfce626485e873e35baa17d7e4a513b5cc34d9361a88c",
+          "score_file": "prototype-classifier-agreement.score.float16.npy",
+          "score_file_sha256": "08329fac5e7ef808b5335139839b1eee04e464f3685f150de54e5bb896e6f995"
+        },
+        "structured-line-prototype": {
+          "mask_file": "structured-line-prototype.p080.png",
+          "mask_file_sha256": "1d66cc15554a24a071f36478aa778017e163cfabec85a9a8e9dc5d266313ac64",
+          "score_file": "structured-line-prototype.score.float16.npy",
+          "score_file_sha256": "0b2229ffd9446f48f164a561c68f9720451ea92aff733728d97cc4b686f28cc0"
+        }
+      },
+      "review_board": {
+        "file": "line-conditioned-vector-review.png",
+        "file_sha256": "db172040741577a206534d772b7f7e512393ca6336a7ffbbb1409879b6be1f4b"
+      },
+      "role_frozen_before_inference": "long faint continuation",
+      "rough_line_corridor_local_bbox_xywh": [
+        0,
+        66,
+        900,
+        168
+      ],
+      "rough_line_corridor_rule": [
+        0.22,
+        0.78
+      ],
+      "runtime_seconds": 1.2373217079948517,
+      "seed_definitions": {
+        "flat_negative": "bright low-model low-darkness low-ridge low-texture source pixels",
+        "hard_paper_negative": "hybrid <=0.0001 outside corridor, moderate darkness/texture, below positive median ridge and gradient",
+        "inside_corridor_low_probability": "unknown; never labelled background",
+        "positive": "hybrid >=0.95 inside rough line corridor"
+      },
+      "seed_stats": {
+        "flat_negative_pixels": 21832,
+        "hard_paper_negative_pixels": 35463,
+        "negative_mask_pixel_sha256": "477113743866ea482df3f9ce750396761c1d5efe83fc2528aa02f9d3acdc57b2",
+        "negative_pixels": 56298,
+        "positive_gradient_median": 0.03073054738342762,
+        "positive_mask_pixel_sha256": "5fc9baca9fb2126077c369be487cd80cd2c9b698ce613a01e1524db6db5c8b88",
+        "positive_pixels": 6611,
+        "positive_ridge_median": 0.03054843097925186
+      },
+      "structured_filter": {
+        "directional_kernel_hw": [
+          5,
+          25
+        ],
+        "group_closing_hw": [
+          3,
+          9
+        ],
+        "minimum_directional_density": 0.08,
+        "minimum_group_height": 2,
+        "minimum_group_width": 6,
+        "minimum_original_pixels_per_group": 12,
+        "raw_candidate_pixels": 17606,
+        "retained_fraction": 0.9574576848801545,
+        "retained_pixels": 16857
+      },
+      "training": {
+        "prototype_margin_center": -0.3209175169467926,
+        "prototype_margin_iqr": 1.2599897384643555,
+        "pseudo_label_holdout_balanced_accuracy_at_0.5": 0.9989925589836661,
+        "pseudo_label_holdout_roc_auc": 0.9999967332123413,
+        "sampled_negative": 20000,
+        "sampled_positive": 6611,
+        "warning": "Metrics reproduce software-derived seeds; they are not human ink accuracy."
+      }
+    },
+    "enough-tight": {
+      "anchor_pixels": 3176,
+      "bbox_xywh": [
+        2050,
+        2100,
+        600,
+        300
+      ],
+      "methods": {
+        "line-hist-gradient-boosting": {
+          "addition_components": 329,
+          "addition_pixels": 8287,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 328,
+            "hybrid_p_0.05_to_0.20": 255,
+            "hybrid_p_ge_0.20": 365,
+            "hybrid_p_lt_0.01": 7339
+          },
+          "score_float32_pixel_sha256": "52eb29c6acfb4fb95e4ca875dd970f7ead9b81f67b3e35e26198d350450e25a1",
+          "score_quantiles": {
+            "0.5": 8.17107138573192e-05,
+            "0.9": 0.0004854295402765274,
+            "0.95": 0.8593540787696838,
+            "0.99": 0.9959846138954163,
+            "0.995": 0.9959846138954163
+          },
+          "selected_pixels": 10048,
+          "selection_mask_pixel_sha256": "e28795dd1b02ed5722144b590d02fd2937ab4c742fd2cd338b9f57e026b339b9",
+          "threshold": 0.8
+        },
+        "line-prototype": {
+          "addition_components": 428,
+          "addition_pixels": 8636,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 413,
+            "hybrid_p_0.05_to_0.20": 402,
+            "hybrid_p_ge_0.20": 492,
+            "hybrid_p_lt_0.01": 7329
+          },
+          "score_float32_pixel_sha256": "45fa4027861901dfce7eae1624013fa0f26475a88d671ad8a7c42626bedccffb",
+          "score_quantiles": {
+            "0.5": 1.682886713966069e-17,
+            "0.9": 3.1079312456938624e-09,
+            "0.95": 0.9995049238204956,
+            "0.99": 1.0,
+            "0.995": 1.0
+          },
+          "selected_pixels": 10484,
+          "selection_mask_pixel_sha256": "4a55cb3c7d4311cd369bd96c967a5f7062d0d0db9e293140379d48389ce46fd6",
+          "threshold": 0.8
+        },
+        "prototype-classifier-agreement": {
+          "addition_components": 239,
+          "addition_pixels": 7502,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 306,
+            "hybrid_p_0.05_to_0.20": 259,
+            "hybrid_p_ge_0.20": 366,
+            "hybrid_p_lt_0.01": 6571
+          },
+          "score_float32_pixel_sha256": "01357def7e61a2450315e480cab76f0f6a1ac6ca76667403f1b5db7c1c1f1194",
+          "score_quantiles": {
+            "0.5": 0.0,
+            "0.9": 0.0,
+            "0.95": 1.0,
+            "0.99": 1.0,
+            "0.995": 1.0
+          },
+          "selected_pixels": 9197,
+          "selection_mask_pixel_sha256": "60d5ecbb80ac854ff1f859c707effc84c49c016c013de7d7740380f99420f2f9",
+          "threshold": 0.8
+        },
+        "structured-line-prototype": {
+          "addition_components": 254,
+          "addition_pixels": 8268,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 409,
+            "hybrid_p_0.05_to_0.20": 392,
+            "hybrid_p_ge_0.20": 477,
+            "hybrid_p_lt_0.01": 6990
+          },
+          "score_float32_pixel_sha256": "f38e3185fdeca4694b61107bb7fd51115719a1e1ead02880fbeb03391d715f30",
+          "score_quantiles": {
+            "0.5": 0.0,
+            "0.9": 0.0,
+            "0.95": 0.9985323548316956,
+            "0.99": 1.0,
+            "0.995": 1.0
+          },
+          "selected_pixels": 10074,
+          "selection_mask_pixel_sha256": "17efc5684073a65cb309572cc7688b4912bc6ffe5a912fdac522afa1e72d7264",
+          "threshold": 0.8
+        }
+      },
+      "outputs": {
+        "line-hist-gradient-boosting": {
+          "mask_file": "line-hist-gradient-boosting.p080.png",
+          "mask_file_sha256": "eb3ea5426040df7673a87035691113ea6cda58350bc124b7c974d6035fea62ef",
+          "score_file": "line-hist-gradient-boosting.score.float16.npy",
+          "score_file_sha256": "034d5f6687aac6ffeee2d09cf97a4dbd215691a9059de5f18e46bec05dac369b"
+        },
+        "line-prototype": {
+          "mask_file": "line-prototype.p080.png",
+          "mask_file_sha256": "63a2fc3262a5ff89b9f69ea256e15ffdd5e11cdc74fbe87420fb4b4ea95d6df3",
+          "score_file": "line-prototype.score.float16.npy",
+          "score_file_sha256": "22ac2ab1777691a0a9a6e9761f36537bd2d55df8316e243fb294b6fa82af1245"
+        },
+        "prototype-classifier-agreement": {
+          "mask_file": "prototype-classifier-agreement.p080.png",
+          "mask_file_sha256": "fb524a18af88402a51471ee854d1cc3a16d9934bacb1a8536334bf9176cbb834",
+          "score_file": "prototype-classifier-agreement.score.float16.npy",
+          "score_file_sha256": "0a4e047ce9c2f5fff164079c90d7c65a0a6a3949ae845a1db3ba0362139dd66b"
+        },
+        "structured-line-prototype": {
+          "mask_file": "structured-line-prototype.p080.png",
+          "mask_file_sha256": "ac869c436a9c5935a344a3d5bd69a01ff5bfa515acbbfa79a26b9bd0479591b7",
+          "score_file": "structured-line-prototype.score.float16.npy",
+          "score_file_sha256": "c9b4317cf74534c4096a674746f8bc91113300451c47f7daa28f7e9e8a88f6fe"
+        }
+      },
+      "review_board": {
+        "file": "line-conditioned-vector-review.png",
+        "file_sha256": "65b57bc59f2bb79f141cee1e27ee4535288877bae62f2094ad8085bac18674f4"
+      },
+      "role_frozen_before_inference": "almost-erased disconnected word tail",
+      "rough_line_corridor_local_bbox_xywh": [
+        0,
+        66,
+        600,
+        168
+      ],
+      "rough_line_corridor_rule": [
+        0.22,
+        0.78
+      ],
+      "runtime_seconds": 0.834491916000843,
+      "seed_definitions": {
+        "flat_negative": "bright low-model low-darkness low-ridge low-texture source pixels",
+        "hard_paper_negative": "hybrid <=0.0001 outside corridor, moderate darkness/texture, below positive median ridge and gradient",
+        "inside_corridor_low_probability": "unknown; never labelled background",
+        "positive": "hybrid >=0.95 inside rough line corridor"
+      },
+      "seed_stats": {
+        "flat_negative_pixels": 13178,
+        "hard_paper_negative_pixels": 29812,
+        "negative_mask_pixel_sha256": "9b926812801f436fa64aa9842593c253f51c781a08ec6a2ee884fcdaddbf5c90",
+        "negative_pixels": 41632,
+        "positive_gradient_median": 0.02438945695757866,
+        "positive_mask_pixel_sha256": "9da6eabe8b6b969b859f359a3e10d30e85654de6a29ee657ba7a77a6e6293deb",
+        "positive_pixels": 464,
+        "positive_ridge_median": 0.030631478875875473
+      },
+      "structured_filter": {
+        "directional_kernel_hw": [
+          5,
+          25
+        ],
+        "group_closing_hw": [
+          3,
+          9
+        ],
+        "minimum_directional_density": 0.08,
+        "minimum_group_height": 2,
+        "minimum_group_width": 6,
+        "minimum_original_pixels_per_group": 12,
+        "raw_candidate_pixels": 10484,
+        "retained_fraction": 0.9608927890118275,
+        "retained_pixels": 10074
+      },
+      "training": {
+        "prototype_margin_center": -0.9222719669342041,
+        "prototype_margin_iqr": 0.8705883026123047,
+        "pseudo_label_holdout_balanced_accuracy_at_0.5": 1.0,
+        "pseudo_label_holdout_roc_auc": 1.0,
+        "sampled_negative": 20000,
+        "sampled_positive": 464,
+        "warning": "Metrics reproduce software-derived seeds; they are not human ink accuracy."
+      }
+    },
+    "folded-write-to-you": {
+      "anchor_pixels": 12497,
+      "bbox_xywh": [
+        1700,
+        1875,
+        1000,
+        350
+      ],
+      "methods": {
+        "line-hist-gradient-boosting": {
+          "addition_components": 1028,
+          "addition_pixels": 13536,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 409,
+            "hybrid_p_0.05_to_0.20": 607,
+            "hybrid_p_ge_0.20": 844,
+            "hybrid_p_lt_0.01": 11676
+          },
+          "score_float32_pixel_sha256": "1cba3946d9f436df1b535bbe770fbde59d9492025ee6136586b95cb29cfe435a",
+          "score_quantiles": {
+            "0.5": 0.0002638832957018167,
+            "0.9": 0.0008919540559872985,
+            "0.95": 0.9943554997444153,
+            "0.99": 0.9990200400352478,
+            "0.995": 0.9990200400352478
+          },
+          "selected_pixels": 21093,
+          "selection_mask_pixel_sha256": "9395fdcc7ed4269c2d84781a56810329eec2c9d5b45819fba9a9aacefb71d261",
+          "threshold": 0.8
+        },
+        "line-prototype": {
+          "addition_components": 604,
+          "addition_pixels": 6628,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 381,
+            "hybrid_p_0.05_to_0.20": 480,
+            "hybrid_p_ge_0.20": 627,
+            "hybrid_p_lt_0.01": 5140
+          },
+          "score_float32_pixel_sha256": "43532bfff7d357ef4c2809d1ca5addb5314f1e6d1a32fc37ec2720410e1f1c8f",
+          "score_quantiles": {
+            "0.5": 0.0017515699146315455,
+            "0.9": 0.12077821791172028,
+            "0.95": 0.5759896636009216,
+            "0.99": 0.999784529209137,
+            "0.995": 0.9999960660934448
+          },
+          "selected_pixels": 13593,
+          "selection_mask_pixel_sha256": "551276c9f7904281dd5d3c8267ef164aefaa160ec916545fe82d48720f632f3f",
+          "threshold": 0.8
+        },
+        "prototype-classifier-agreement": {
+          "addition_components": 426,
+          "addition_pixels": 5810,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 319,
+            "hybrid_p_0.05_to_0.20": 431,
+            "hybrid_p_ge_0.20": 573,
+            "hybrid_p_lt_0.01": 4487
+          },
+          "score_float32_pixel_sha256": "18f39038502a9692705108f22a48ce51391f126ae596ad8b93c0955eaf34333e",
+          "score_quantiles": {
+            "0.5": 0.0,
+            "0.9": 0.0,
+            "0.95": 0.0,
+            "0.99": 1.0,
+            "0.995": 1.0
+          },
+          "selected_pixels": 12629,
+          "selection_mask_pixel_sha256": "133eee7a58926b7f73f20bffcf5898b9c1e9b8b2d51664f8d3010129cc99cf67",
+          "threshold": 0.8
+        },
+        "structured-line-prototype": {
+          "addition_components": 425,
+          "addition_pixels": 6156,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 378,
+            "hybrid_p_0.05_to_0.20": 475,
+            "hybrid_p_ge_0.20": 604,
+            "hybrid_p_lt_0.01": 4699
+          },
+          "score_float32_pixel_sha256": "5d357f68cc39d3d07c7890e6b64dcffb466f72fb8b19c89518fe19ece7429218",
+          "score_quantiles": {
+            "0.5": 0.0,
+            "0.9": 0.0,
+            "0.95": 0.0,
+            "0.99": 0.9997623562812805,
+            "0.995": 0.9999958276748657
+          },
+          "selected_pixels": 13005,
+          "selection_mask_pixel_sha256": "c9116f6a61051a085687c436d156f1ee994c170e9ca0504ff8ea9da0d66d21b8",
+          "threshold": 0.8
+        }
+      },
+      "outputs": {
+        "line-hist-gradient-boosting": {
+          "mask_file": "line-hist-gradient-boosting.p080.png",
+          "mask_file_sha256": "576c56c6afb8ae12b3864ff17a1580939aeb9c08b0f4c9e8f7cef6fe5ff011e2",
+          "score_file": "line-hist-gradient-boosting.score.float16.npy",
+          "score_file_sha256": "1999db75bef6eb90763acb8eb39fa0b999757d7483ebac91a7972a998ecb87d5"
+        },
+        "line-prototype": {
+          "mask_file": "line-prototype.p080.png",
+          "mask_file_sha256": "e46cd048c3bc62413f5601af70aba38272ab3c60059af8db21555b9414522eee",
+          "score_file": "line-prototype.score.float16.npy",
+          "score_file_sha256": "b7a6e839cbdcc605b67eaa61a181a37924a677355d6da5c0da2b75042dac364b"
+        },
+        "prototype-classifier-agreement": {
+          "mask_file": "prototype-classifier-agreement.p080.png",
+          "mask_file_sha256": "5e0b7d8a5859c36e869891f3adfdb4fcf1c2a416f1d0c6b16c8b501f493a685b",
+          "score_file": "prototype-classifier-agreement.score.float16.npy",
+          "score_file_sha256": "69ec0a5638dab20d6817c39867dfb9d580516008769ebd7d9fb7f918186ecd4d"
+        },
+        "structured-line-prototype": {
+          "mask_file": "structured-line-prototype.p080.png",
+          "mask_file_sha256": "36c670af52b5ac0200fcbd0680d56c3714bb55e32ec23241fda5dd1bbfd2a650",
+          "score_file": "structured-line-prototype.score.float16.npy",
+          "score_file_sha256": "540ca0b4ed82eb6aa96fb2388eb83279cd00c6b08dfcaeac14eb6b3c3b7e8411"
+        }
+      },
+      "review_board": {
+        "file": "line-conditioned-vector-review.png",
+        "file_sha256": "a9769447e8a7af05026fc2aadc7d39d9af61bcae204aa07cbc4ad3d634206a89"
+      },
+      "role_frozen_before_inference": "moderately faint writing near fold/rule evidence",
+      "rough_line_corridor_local_bbox_xywh": [
+        0,
+        77,
+        1000,
+        196
+      ],
+      "rough_line_corridor_rule": [
+        0.22,
+        0.78
+      ],
+      "runtime_seconds": 1.6956867499975488,
+      "seed_definitions": {
+        "flat_negative": "bright low-model low-darkness low-ridge low-texture source pixels",
+        "hard_paper_negative": "hybrid <=0.0001 outside corridor, moderate darkness/texture, below positive median ridge and gradient",
+        "inside_corridor_low_probability": "unknown; never labelled background",
+        "positive": "hybrid >=0.95 inside rough line corridor"
+      },
+      "seed_stats": {
+        "flat_negative_pixels": 22748,
+        "hard_paper_negative_pixels": 55726,
+        "negative_mask_pixel_sha256": "303106252ed6ba97303b064589df9dbf5a6f01cdd78bf940037f4c3219752af5",
+        "negative_pixels": 77449,
+        "positive_gradient_median": 0.035485826432704926,
+        "positive_mask_pixel_sha256": "2907d87269dde8910f2f95b89d740062f145fcc009c0234036ccdca2c530d67b",
+        "positive_pixels": 5262,
+        "positive_ridge_median": 0.035213321447372437
+      },
+      "structured_filter": {
+        "directional_kernel_hw": [
+          5,
+          25
+        ],
+        "group_closing_hw": [
+          3,
+          9
+        ],
+        "minimum_directional_density": 0.08,
+        "minimum_group_height": 2,
+        "minimum_group_width": 6,
+        "minimum_original_pixels_per_group": 12,
+        "raw_candidate_pixels": 13593,
+        "retained_fraction": 0.95674244096226,
+        "retained_pixels": 13005
+      },
+      "training": {
+        "prototype_margin_center": -0.11561165750026703,
+        "prototype_margin_iqr": 0.7168236970901489,
+        "pseudo_label_holdout_balanced_accuracy_at_0.5": 0.9978003039513678,
+        "pseudo_label_holdout_roc_auc": 0.9998896656534955,
+        "sampled_negative": 20000,
+        "sampled_positive": 5262,
+        "warning": "Metrics reproduce software-derived seeds; they are not human ink accuracy."
+      }
+    }
+  },
+  "experiment_status": "acting_safe_visual_review_complete",
+  "hard_negative_change": "Add paper-texture negatives only outside the rough target-line corridor; leave its low-model pixels unknown.",
+  "hybrid_probability": {
+    "file_sha256": "d2a6d6ba6f158dcc8f3a8fc710b513295e9f9c5679d23c8457ffc84ac2b74e65",
+    "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-hybrid-binarization-trial-20260809/003-18860314-L01-01/foreground-probability.float16.npy"
+  },
+  "interpretation_guardrail": "The corridor is rough geometry, not human ownership truth. Low-probability pixels inside it remain unknown. Outputs are optional proposals and are not optimized by pixel count or pseudo-label accuracy.",
+  "post_run_acting_safe_visual_review": {
+    "decision": "promote_prototype_classifier_agreement_as_optional_high_recall_line_local_proposal",
+    "observations": [
+      "On enough-tight, hard paper negatives outside the rough line reduced the first prototype from 24,625 additions/2,946 components to 7,502/239 for prototype-classifier agreement while preserving most visible near-erased word structure.",
+      "Of the 7,502 enough-tight additions, 6,571 occur where the frozen hybrid probability is below 0.01; this is disconnected source-appearance recovery, not threshold lowering.",
+      "The same agreement produced coherent moderate-faint continuations on folded-write-to-you and acknowledgement-tight, with 5,810 and 6,349 additions respectively.",
+      "The fixed directional structure filter removed only about four percent of raw prototype pixels and did not materially solve paper-texture ambiguity. It is not promoted separately.",
+      "The layer remains too noisy for automatic clean ink but is the strongest tested proposal source for near-erased handwriting."
+    ],
+    "sealed_human_evidence_used": false
+  },
+  "page_id": "003-18860314-L01-01",
+  "runtime_seconds": 3.782699165996746,
+  "schema_version": "line-conditioned-vector-ink.v1",
+  "sealed_human_evidence_used": false,
+  "selection_rule": "Reuse the three previously frozen acting-safe crops; freeze a centered 22%-78% rough line corridor before model fitting.",
+  "source": {
+    "file_sha256": "ac21aa38dbff33823d08e156b214355d85a55a3c8bbdccc0228738b70e41d027",
+    "path": "experiments/word-envelope-shrink-wrap-poc/workspaces/word-ink-ground-truth-v1/collections/003/18860314/L01/pages/003-18860314-L01-01/runs/run-4111a8cd75be/source/working.png"
+  },
+  "structure_change": "Retain original vector-selected source positions only when they have directional line support and belong to a sufficiently large grouped component.",
+  "upstream_code": "experiment_page_adaptive_vector_ink.py source-only ten-feature stack"
+}

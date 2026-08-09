@@ -1,0 +1,281 @@
+{
+  "crops": {
+    "acknowledgement-tight": {
+      "bbox_xywh": [
+        1750,
+        3100,
+        900,
+        300
+      ],
+      "line_fit": {
+        "anchor_pixels_inside_band": 10623,
+        "anchor_retention": 0.5433203764320785,
+        "band_mask_pixel_sha256": "da633b0547ea57414a5d75e6f8744de6dfda8b5b1bb9083c58a4409ccdeee0ea",
+        "band_median_height": 96,
+        "initial_anchor_half_height": 54,
+        "inlier_bins": 19,
+        "intercept": 189.31490631660353,
+        "occupied_bins": 23,
+        "residual_lower": -66.54412841796875,
+        "residual_upper": 28.11237335205078,
+        "rough_row_density_peak_y": 171,
+        "slope": -0.033497368157873374,
+        "x_bin_width": 37
+      },
+      "outputs": {
+        "quality-gated": {
+          "file": "quality-gated.additions.png",
+          "file_sha256": "22974fff4f47d9ac557557f2f7e1d72c020d74e30cc02d6bd9a2fce052a22fcf"
+        },
+        "quality-gated-area2": {
+          "file": "quality-gated-area2.additions.png",
+          "file_sha256": "676cb9b26883b955930d162692ae60ecd245e6233c8b2c80be532ec90f5566c7"
+        }
+      },
+      "quality": {
+        "absolute_slope": 0.033497368157873374,
+        "accepted": false,
+        "anchor_retention": 0.5433203764320785,
+        "failure_reasons": [
+          "insufficient_anchor_retention"
+        ],
+        "inlier_fraction": 0.8260869565217391,
+        "occupied_bins": 23
+      },
+      "quality_gated": {
+        "components": 466,
+        "mask_pixel_sha256": "7b136b06212ce8e1683faa87715c689c2b661f6705bd057beb7e1cda6e12e171",
+        "p_lt_0.01_pixels": 3568,
+        "pixels": 6349,
+        "removed_pixels": 0,
+        "retained_fraction_of_upstream": 1.0
+      },
+      "quality_gated_area2": {
+        "components": 298,
+        "mask_pixel_sha256": "368de6229cb8cfc1dc42ab735f11744ca5917d6ff9b94b09404b68bd13a9b43a",
+        "p_lt_0.01_pixels": 3527,
+        "pixels": 6181,
+        "removed_pixels": 168,
+        "retained_fraction_of_upstream": 0.9735391400220507
+      },
+      "review_board": {
+        "file": "fitted-line-quality-gate-review.png",
+        "file_sha256": "cce469b25845040f6d0fd27844cd559be170d04b06d2cce7019b2e0e184b1a82"
+      },
+      "unguarded_fitted_line": {
+        "components": 436,
+        "mask_pixel_sha256": "a1ad20c8a8c0e153b170da0f9abcb235897c8e003e9a72353c507ae5da5270be",
+        "p_lt_0.01_pixels": 2913,
+        "pixels": 5470,
+        "removed_pixels": 879,
+        "retained_fraction_of_upstream": 0.8615530004725154
+      },
+      "upstream": {
+        "components": 466,
+        "mask_pixel_sha256": "7b136b06212ce8e1683faa87715c689c2b661f6705bd057beb7e1cda6e12e171",
+        "p_lt_0.01_pixels": 3568,
+        "pixels": 6349,
+        "removed_pixels": 0,
+        "retained_fraction_of_upstream": 1.0
+      }
+    },
+    "enough-tight": {
+      "bbox_xywh": [
+        2050,
+        2100,
+        600,
+        300
+      ],
+      "line_fit": {
+        "anchor_pixels_inside_band": 1659,
+        "anchor_retention": 0.5223551637279596,
+        "band_mask_pixel_sha256": "649e2c5157078bd696f57e13d1c6e2251e09515814743135840686c43720d1b8",
+        "band_median_height": 74,
+        "initial_anchor_half_height": 54,
+        "inlier_bins": 5,
+        "intercept": 171.77640222334512,
+        "occupied_bins": 5,
+        "residual_lower": -44.890071868896484,
+        "residual_upper": 27.785743713378906,
+        "rough_row_density_peak_y": 170,
+        "slope": -0.15967660434562914,
+        "x_bin_width": 25
+      },
+      "outputs": {
+        "quality-gated": {
+          "file": "quality-gated.additions.png",
+          "file_sha256": "b8ca0f7578a0ea83d2017a5da4d5200b6ec40e665bf801c8c4f8a64d455f395e"
+        },
+        "quality-gated-area2": {
+          "file": "quality-gated-area2.additions.png",
+          "file_sha256": "61308bca2ae37474cc05532335697013f673625bde8128ef0d2d2b3b87d68741"
+        }
+      },
+      "quality": {
+        "absolute_slope": 0.15967660434562914,
+        "accepted": false,
+        "anchor_retention": 0.5223551637279596,
+        "failure_reasons": [
+          "insufficient_occupied_bins",
+          "implausible_absolute_slope",
+          "insufficient_anchor_retention"
+        ],
+        "inlier_fraction": 1.0,
+        "occupied_bins": 5
+      },
+      "quality_gated": {
+        "components": 239,
+        "mask_pixel_sha256": "326d0787384e0431a6b098867eae3827857b6778b4f5dedadab15d9d2448c16a",
+        "p_lt_0.01_pixels": 6571,
+        "pixels": 7502,
+        "removed_pixels": 0,
+        "retained_fraction_of_upstream": 1.0
+      },
+      "quality_gated_area2": {
+        "components": 158,
+        "mask_pixel_sha256": "0ac56d12f71594723e8279310a4e328b43a3277de1404090b6436c121ec6757f",
+        "p_lt_0.01_pixels": 6531,
+        "pixels": 7421,
+        "removed_pixels": 81,
+        "retained_fraction_of_upstream": 0.9892028792322047
+      },
+      "review_board": {
+        "file": "fitted-line-quality-gate-review.png",
+        "file_sha256": "2b66849a110288fd4c2d9d115ef9764bd6c08d0bf4b895186430839fb6be7488"
+      },
+      "unguarded_fitted_line": {
+        "components": 124,
+        "mask_pixel_sha256": "7b298ce2507ae0a10e37f501c8f6a61fc5dca7b619cca675d0cbff4ac514b3d8",
+        "p_lt_0.01_pixels": 1125,
+        "pixels": 1797,
+        "removed_pixels": 5705,
+        "retained_fraction_of_upstream": 0.23953612370034658
+      },
+      "upstream": {
+        "components": 239,
+        "mask_pixel_sha256": "326d0787384e0431a6b098867eae3827857b6778b4f5dedadab15d9d2448c16a",
+        "p_lt_0.01_pixels": 6571,
+        "pixels": 7502,
+        "removed_pixels": 0,
+        "retained_fraction_of_upstream": 1.0
+      }
+    },
+    "folded-write-to-you": {
+      "bbox_xywh": [
+        1700,
+        1875,
+        1000,
+        350
+      ],
+      "line_fit": {
+        "anchor_pixels_inside_band": 7730,
+        "anchor_retention": 0.6185484516283908,
+        "band_mask_pixel_sha256": "c2122241801cdd79954f420d9e6f589a87a1ea5f981f5c78d20d02ffbaec3ab3",
+        "band_median_height": 120,
+        "initial_anchor_half_height": 63,
+        "inlier_bins": 10,
+        "intercept": 218.74133632124725,
+        "occupied_bins": 13,
+        "residual_lower": -61.270912170410156,
+        "residual_upper": 58.19512176513672,
+        "rough_row_density_peak_y": 227,
+        "slope": 0.011625397558949908,
+        "x_bin_width": 41
+      },
+      "outputs": {
+        "quality-gated": {
+          "file": "quality-gated.additions.png",
+          "file_sha256": "4ebc226ae17b790977b1ba1d135efeefc9d115351410f12da85d0847a0cb4d52"
+        },
+        "quality-gated-area2": {
+          "file": "quality-gated-area2.additions.png",
+          "file_sha256": "83862e83ba10028437d837858c471026409f0b851b18b6790101fb3187a146e8"
+        }
+      },
+      "quality": {
+        "absolute_slope": 0.011625397558949908,
+        "accepted": true,
+        "anchor_retention": 0.6185484516283908,
+        "failure_reasons": [],
+        "inlier_fraction": 0.7692307692307693,
+        "occupied_bins": 13
+      },
+      "quality_gated": {
+        "components": 383,
+        "mask_pixel_sha256": "2c46da8a2213361abe8cc44e27f09a8d6dbfaa7d9cc8645e3c63735936dd1390",
+        "p_lt_0.01_pixels": 3677,
+        "pixels": 4808,
+        "removed_pixels": 1002,
+        "retained_fraction_of_upstream": 0.827538726333907
+      },
+      "quality_gated_area2": {
+        "components": 224,
+        "mask_pixel_sha256": "6d0a88d6f0a4271369e6032354efc41075d9fb068fd29705f1a2c66b68bd1094",
+        "p_lt_0.01_pixels": 3652,
+        "pixels": 4649,
+        "removed_pixels": 1161,
+        "retained_fraction_of_upstream": 0.8001721170395869
+      },
+      "review_board": {
+        "file": "fitted-line-quality-gate-review.png",
+        "file_sha256": "0e80c3d7b3fd6e051a2a9ab0c05740357b6635e5e3704becf52c36898536e85f"
+      },
+      "unguarded_fitted_line": {
+        "components": 383,
+        "mask_pixel_sha256": "2c46da8a2213361abe8cc44e27f09a8d6dbfaa7d9cc8645e3c63735936dd1390",
+        "p_lt_0.01_pixels": 3677,
+        "pixels": 4808,
+        "removed_pixels": 1002,
+        "retained_fraction_of_upstream": 0.827538726333907
+      },
+      "upstream": {
+        "components": 426,
+        "mask_pixel_sha256": "b4b78b6689d0a65cd04e9b184577ea580184606bab14e50a5b48252ac60f0a8d",
+        "p_lt_0.01_pixels": 4487,
+        "pixels": 5810,
+        "removed_pixels": 0,
+        "retained_fraction_of_upstream": 1.0
+      }
+    }
+  },
+  "experiment_status": "acting_safe_visual_review_complete",
+  "fallback": "Preserve frozen upstream prototype-classifier agreement and mark line unresolved.",
+  "hybrid_probability": {
+    "file_sha256": "d2a6d6ba6f158dcc8f3a8fc710b513295e9f9c5679d23c8457ffc84ac2b74e65",
+    "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-hybrid-binarization-trial-20260809/003-18860314-L01-01/foreground-probability.float16.npy"
+  },
+  "interpretation_guardrail": "A rejected fit preserves the broader upstream proposal and emits explicit line-unresolved state. It does not imply upstream pixels are clean or owned.",
+  "post_run_acting_safe_visual_review": {
+    "decision": "promote_explicit_fit_abstention; refine_target_anchor_retention_before_precision_use",
+    "observations": [
+      "The frozen quality gate rejected enough-tight for five occupied bins, absolute slope 0.1597, and 52.24% all-crop anchor retention, preserving all 7,502 upstream proposal pixels instead of the destructive 1,797-pixel fit.",
+      "It accepted folded-write-to-you and reduced 5,810 upstream pixels to 4,808 fitted-line pixels.",
+      "It conservatively rejected acknowledgement because all-crop anchor retention was 54.33%, just below 55%, although its slope/bin evidence and visual fit were plausible.",
+      "The safety behavior is promoted; all-crop anchor retention is too broad for precision selection and should be replaced by target-line anchor retention before using this gate to optimize accepted fits."
+    ],
+    "sealed_human_evidence_used": false
+  },
+  "page_id": "003-18860314-L01-01",
+  "runtime_seconds": 0.6946605419943808,
+  "schema_version": "fitted-line-quality-gate.v1",
+  "sealed_human_evidence_used": false,
+  "selection_rule": "Quality thresholds frozen after observing the specific sparse-anchor failure; apply unchanged to all three previously frozen crops.",
+  "source": {
+    "file_sha256": "ac21aa38dbff33823d08e156b214355d85a55a3c8bbdccc0228738b70e41d027",
+    "path": "experiments/word-envelope-shrink-wrap-poc/workspaces/word-ink-ground-truth-v1/collections/003/18860314/L01/pages/003-18860314-L01-01/runs/run-4111a8cd75be/source/working.png"
+  },
+  "thresholds": {
+    "maximum_absolute_slope": 0.08,
+    "minimum_anchor_retention": 0.55,
+    "minimum_inlier_fraction": 0.6,
+    "minimum_occupied_bins": 8
+  },
+  "upstream_line_manifest": {
+    "file_sha256": "ce92ade5571a61698ac29e426fa5cc51a7ca814c23814ac0d90c6c5ab7c02203",
+    "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/fitted-line-vector-gate-v1/003-18860314-L01-01/experiment.json"
+  },
+  "upstream_vector_manifest": {
+    "file_sha256": "817ecee67d5d7c61c091c564188d57ec3b209faabce30ca9eea9658b1a2eb1fe",
+    "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/line-conditioned-vector-ink-v1/003-18860314-L01-01/experiment.json"
+  }
+}

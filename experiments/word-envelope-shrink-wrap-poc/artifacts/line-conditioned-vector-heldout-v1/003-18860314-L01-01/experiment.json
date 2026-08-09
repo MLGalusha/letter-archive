@@ -1,0 +1,377 @@
+{
+  "crops": {
+    "know-enough-broad": {
+      "anchor_pixels": 26866,
+      "bbox_xywh": [
+        1450,
+        2100,
+        1200,
+        350
+      ],
+      "methods": {
+        "line-hist-gradient-boosting": {
+          "addition_components": 1207,
+          "addition_pixels": 14398,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 1175,
+            "hybrid_p_0.05_to_0.20": 1664,
+            "hybrid_p_ge_0.20": 2197,
+            "hybrid_p_lt_0.01": 9362
+          },
+          "score_float32_pixel_sha256": "6dfd8769007705f262d125ce21a2ab7198c96d5e2b49650674bcb11e90472825",
+          "score_quantiles": {
+            "0.5": 0.0002636198478285223,
+            "0.9": 0.007394308689981699,
+            "0.95": 0.9953071475028992,
+            "0.99": 0.9990355968475342,
+            "0.995": 0.9990355968475342
+          },
+          "selected_pixels": 26276,
+          "selection_mask_pixel_sha256": "6af64e51e9f4f9b2b5cf2a62a4d04419ba116b04b9a1f959e5de3e4e1d524fa5",
+          "threshold": 0.8
+        },
+        "line-prototype": {
+          "addition_components": 876,
+          "addition_pixels": 11176,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 932,
+            "hybrid_p_0.05_to_0.20": 1307,
+            "hybrid_p_ge_0.20": 1776,
+            "hybrid_p_lt_0.01": 7161
+          },
+          "score_float32_pixel_sha256": "422736eb4770e67e0012c97e480b436bda4faee5e575c317d597eb2702024075",
+          "score_quantiles": {
+            "0.5": 0.0020385286770761013,
+            "0.9": 0.14961880445480347,
+            "0.95": 0.8380304574966431,
+            "0.99": 0.9993515610694885,
+            "0.995": 0.9999505281448364
+          },
+          "selected_pixels": 22114,
+          "selection_mask_pixel_sha256": "61af0d4dcbad92a271c2c18432a118482bafb5c4f43255d6c35fe8dc04de837b",
+          "threshold": 0.8
+        },
+        "prototype-classifier-agreement": {
+          "addition_components": 677,
+          "addition_pixels": 9777,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 776,
+            "hybrid_p_0.05_to_0.20": 1138,
+            "hybrid_p_ge_0.20": 1632,
+            "hybrid_p_lt_0.01": 6231
+          },
+          "score_float32_pixel_sha256": "fc8d4eb1fc3abdf342c1acc6726c2cebab46099a178d7a79f701be047cc980af",
+          "score_quantiles": {
+            "0.5": 0.0,
+            "0.9": 0.0,
+            "0.95": 0.0,
+            "0.99": 1.0,
+            "0.995": 1.0
+          },
+          "selected_pixels": 20495,
+          "selection_mask_pixel_sha256": "3e31c4759cba4ac197b662223ecc9f51c477dbc935b6c400305da9510f3cbbdb",
+          "threshold": 0.8
+        },
+        "structured-line-prototype": {
+          "addition_components": 692,
+          "addition_pixels": 10596,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 911,
+            "hybrid_p_0.05_to_0.20": 1267,
+            "hybrid_p_ge_0.20": 1770,
+            "hybrid_p_lt_0.01": 6648
+          },
+          "score_float32_pixel_sha256": "aa5503b7f32c94c0d109740338b4daca7b1d0797bc6ef3199918e566de6e26a9",
+          "score_quantiles": {
+            "0.5": 0.0,
+            "0.9": 0.0,
+            "0.95": 0.8164212107658386,
+            "0.99": 0.9993402361869812,
+            "0.995": 0.9999480247497559
+          },
+          "selected_pixels": 21417,
+          "selection_mask_pixel_sha256": "02700eb27db3d91f83a08e4cf7e51b66c4a6549dc8c75e2274bfd7606e93eadc",
+          "threshold": 0.8
+        }
+      },
+      "outputs": {
+        "line-hist-gradient-boosting": {
+          "mask_file": "line-hist-gradient-boosting.p080.png",
+          "mask_file_sha256": "39e5830db5dda5d60b638f30d88878e6d38c329cb5cf187645239299825bafd9",
+          "score_file": "line-hist-gradient-boosting.score.float16.npy",
+          "score_file_sha256": "311fcbfb1993a111763bb494548d1a01afde1d210f2cc65a820d19d6ab39d8e2"
+        },
+        "line-prototype": {
+          "mask_file": "line-prototype.p080.png",
+          "mask_file_sha256": "c00a46642a26a826cd899dd814189cd3721b0a1cfed2f0932f1ae4b87d5b49a8",
+          "score_file": "line-prototype.score.float16.npy",
+          "score_file_sha256": "9700085c9d5e408ec0a17094145a027faeb31f4ad485b93470e7b9b46bf4784c"
+        },
+        "prototype-classifier-agreement": {
+          "mask_file": "prototype-classifier-agreement.p080.png",
+          "mask_file_sha256": "115066547235a8687622aa98b9827994a93559f7d5fd3ac2c3e04b94d030f30d",
+          "score_file": "prototype-classifier-agreement.score.float16.npy",
+          "score_file_sha256": "0ab0603dad630af9258b7fa4a358bd4704c3cf364b89c7a6d823c24b65515478"
+        },
+        "structured-line-prototype": {
+          "mask_file": "structured-line-prototype.p080.png",
+          "mask_file_sha256": "245402a122c3d5ec3222ed4dfa51d8109123f6c7fbc8e765ef0d2e7a5fa30c05",
+          "score_file": "structured-line-prototype.score.float16.npy",
+          "score_file_sha256": "575bd55eb05055daab1b29456347ef04eb1c9bea5b8c54a0687a010a6b838a0a"
+        }
+      },
+      "review_board": {
+        "file": "heldout-line-conditioned-vector-review.png",
+        "file_sha256": "6e044585de78fb5ba1bca4c16642bed6be02a1427f3e24ea837c316f2ee573da"
+      },
+      "role_frozen_before_this_experiment": "broader crop frozen in prior local-recovery experiment; overlaps enough-tight content",
+      "rough_line_corridor_local_bbox_xywh": [
+        0,
+        77,
+        1200,
+        196
+      ],
+      "runtime_seconds": 1.5154502910008887,
+      "seed_stats": {
+        "flat_negative_pixels": 21081,
+        "hard_paper_negative_pixels": 50595,
+        "negative_mask_pixel_sha256": "04c38dc8fed82407804594f19abe4b53b26fc5ec6bef7cc86ec9ea243af8aaf1",
+        "negative_pixels": 71269,
+        "positive_gradient_median": 0.030546342954039574,
+        "positive_mask_pixel_sha256": "7929f4de6082aeab47cd1123c2e2d9d2886224dac8e3822e428d195f5027a049",
+        "positive_pixels": 5471,
+        "positive_ridge_median": 0.031638696789741516
+      },
+      "structured_filter": {
+        "directional_kernel_hw": [
+          5,
+          25
+        ],
+        "group_closing_hw": [
+          3,
+          9
+        ],
+        "minimum_directional_density": 0.08,
+        "minimum_group_height": 2,
+        "minimum_group_width": 6,
+        "minimum_original_pixels_per_group": 12,
+        "raw_candidate_pixels": 22114,
+        "retained_fraction": 0.9684815049290042,
+        "retained_pixels": 21417
+      },
+      "training": {
+        "prototype_margin_center": -0.3063088059425354,
+        "prototype_margin_iqr": 0.8622266054153442,
+        "pseudo_label_holdout_balanced_accuracy_at_0.5": 0.9984380116959064,
+        "pseudo_label_holdout_roc_auc": 0.9999950292397661,
+        "sampled_negative": 20000,
+        "sampled_positive": 5471,
+        "warning": "Metrics reproduce software-derived seeds; they are not human ink accuracy."
+      }
+    },
+    "thank-you-for": {
+      "anchor_pixels": 25595,
+      "bbox_xywh": [
+        1450,
+        2600,
+        1200,
+        300
+      ],
+      "methods": {
+        "line-hist-gradient-boosting": {
+          "addition_components": 1221,
+          "addition_pixels": 13418,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 1517,
+            "hybrid_p_0.05_to_0.20": 1579,
+            "hybrid_p_ge_0.20": 1727,
+            "hybrid_p_lt_0.01": 8595
+          },
+          "score_float32_pixel_sha256": "a6f380fd36ec693a6c17bad6e8203713077c73024e9d5a2e7e1fb9606de62ea0",
+          "score_quantiles": {
+            "0.5": 0.0003485970082692802,
+            "0.9": 0.02903970144689083,
+            "0.95": 0.9991193413734436,
+            "0.99": 0.999217689037323,
+            "0.995": 0.999217689037323
+          },
+          "selected_pixels": 26339,
+          "selection_mask_pixel_sha256": "a4705f90fee153c3c6c007953405f2706a96af8851c169483c7bc25deecf3fcc",
+          "threshold": 0.8
+        },
+        "line-prototype": {
+          "addition_components": 565,
+          "addition_pixels": 6381,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 811,
+            "hybrid_p_0.05_to_0.20": 917,
+            "hybrid_p_ge_0.20": 1119,
+            "hybrid_p_lt_0.01": 3534
+          },
+          "score_float32_pixel_sha256": "11520bce07cb8a4debc5aa8d549e303892c16cb62fee588461039575701ad033",
+          "score_quantiles": {
+            "0.5": 0.06275055557489395,
+            "0.9": 0.4563724398612976,
+            "0.95": 0.7748317718505859,
+            "0.99": 0.9807589650154114,
+            "0.995": 0.9955205917358398
+          },
+          "selected_pixels": 16738,
+          "selection_mask_pixel_sha256": "0b272e86d3654c40f7c5393a479f856adbdd076ebdc4e3742c52fe9fc69929f7",
+          "threshold": 0.8
+        },
+        "prototype-classifier-agreement": {
+          "addition_components": 431,
+          "addition_pixels": 5966,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 768,
+            "hybrid_p_0.05_to_0.20": 900,
+            "hybrid_p_ge_0.20": 1106,
+            "hybrid_p_lt_0.01": 3192
+          },
+          "score_float32_pixel_sha256": "34e19523588b342ce961138f2db95f523ad89ebb6d6d8302b70d7afe380c7d38",
+          "score_quantiles": {
+            "0.5": 0.0,
+            "0.9": 0.0,
+            "0.95": 0.0,
+            "0.99": 1.0,
+            "0.995": 1.0
+          },
+          "selected_pixels": 16123,
+          "selection_mask_pixel_sha256": "9d26d478679c279dccabe27d05cef2607ebdad914832014a9e5d69586c627e09",
+          "threshold": 0.8
+        },
+        "structured-line-prototype": {
+          "addition_components": 431,
+          "addition_pixels": 6016,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 782,
+            "hybrid_p_0.05_to_0.20": 907,
+            "hybrid_p_ge_0.20": 1109,
+            "hybrid_p_lt_0.01": 3218
+          },
+          "score_float32_pixel_sha256": "fb9bb0c4b46fe9a91f47a9bc18be1c2eb1f0d907064a8b58b379a0f8c9ccee42",
+          "score_quantiles": {
+            "0.5": 0.0,
+            "0.9": 0.0,
+            "0.95": 0.0,
+            "0.99": 0.980471134185791,
+            "0.995": 0.9954824447631836
+          },
+          "selected_pixels": 16177,
+          "selection_mask_pixel_sha256": "32f819d68d866ed07688a77fcc61f92d3a44003441870f093ba8b5d31de23f97",
+          "threshold": 0.8
+        }
+      },
+      "outputs": {
+        "line-hist-gradient-boosting": {
+          "mask_file": "line-hist-gradient-boosting.p080.png",
+          "mask_file_sha256": "88c807800dc4b0b898573966f8b6c177801dc6aa3eba3040de8c4ecf85b2b4ee",
+          "score_file": "line-hist-gradient-boosting.score.float16.npy",
+          "score_file_sha256": "2071eaba1d8f649fcb7d919af402092a046e98f207e82f38ed5399b23294e0a8"
+        },
+        "line-prototype": {
+          "mask_file": "line-prototype.p080.png",
+          "mask_file_sha256": "1f97966444a588f75db616668a6bd7052dbc68551200497d762d9c1f7b6f6bb4",
+          "score_file": "line-prototype.score.float16.npy",
+          "score_file_sha256": "d374cb6be11137e003222f773dc39eda377d40031e9ac34bd178a8a89e15f1ca"
+        },
+        "prototype-classifier-agreement": {
+          "mask_file": "prototype-classifier-agreement.p080.png",
+          "mask_file_sha256": "3c9d5e309a46bd6d7dbcc51b7e481cef8704a1f5329b2007aaa3f1e6dc277beb",
+          "score_file": "prototype-classifier-agreement.score.float16.npy",
+          "score_file_sha256": "817e1bae0de409be2471aee54e53e1444d0753c6560b2bbc8883309460bdc675"
+        },
+        "structured-line-prototype": {
+          "mask_file": "structured-line-prototype.p080.png",
+          "mask_file_sha256": "8b3e65494863d7be21a634a1ce15f2373e52ed240138a386a729ee753387d23c",
+          "score_file": "structured-line-prototype.score.float16.npy",
+          "score_file_sha256": "133890173a4ad397e8d68ccd2f24ddd0b333f3ef8250903fed94a152c398f5ff"
+        }
+      },
+      "review_board": {
+        "file": "heldout-line-conditioned-vector-review.png",
+        "file_sha256": "b7963b9f2a6dd2936e58ac2776294c62c4813f88093cf4a95fdbe53f6f2a503b"
+      },
+      "role_frozen_before_this_experiment": "different faint line frozen in prior local-recovery experiment",
+      "rough_line_corridor_local_bbox_xywh": [
+        0,
+        66,
+        1200,
+        168
+      ],
+      "runtime_seconds": 1.503148042000248,
+      "seed_stats": {
+        "flat_negative_pixels": 25389,
+        "hard_paper_negative_pixels": 50775,
+        "negative_mask_pixel_sha256": "e93a6d29472bfcc49064bfe46f0f818fa312da36763a47d816e3eadd2de04623",
+        "negative_pixels": 74425,
+        "positive_gradient_median": 0.026777463033795357,
+        "positive_mask_pixel_sha256": "8cb44d3db194a2254705989d90f55bc299f2b9a62c374fec515390a02eec1dc4",
+        "positive_pixels": 8457,
+        "positive_ridge_median": 0.02641308307647705
+      },
+      "structured_filter": {
+        "directional_kernel_hw": [
+          5,
+          25
+        ],
+        "group_closing_hw": [
+          3,
+          9
+        ],
+        "minimum_directional_density": 0.08,
+        "minimum_group_height": 2,
+        "minimum_group_width": 6,
+        "minimum_original_pixels_per_group": 12,
+        "raw_candidate_pixels": 16738,
+        "retained_fraction": 0.9664834508304457,
+        "retained_pixels": 16177
+      },
+      "training": {
+        "prototype_margin_center": -0.261058509349823,
+        "prototype_margin_iqr": 1.6312453746795654,
+        "pseudo_label_holdout_balanced_accuracy_at_0.5": 0.9982809492973685,
+        "pseudo_label_holdout_roc_auc": 0.9999859063192091,
+        "sampled_negative": 20000,
+        "sampled_positive": 8457,
+        "warning": "Metrics reproduce software-derived seeds; they are not human ink accuracy."
+      }
+    }
+  },
+  "experiment_status": "acting_safe_visual_review_complete",
+  "frozen_code": {
+    "decision_threshold": 0.8,
+    "line_conditioned_script": "experiment_line_conditioned_vector_ink.py",
+    "methods": [
+      "line-prototype",
+      "line-hist-gradient-boosting",
+      "structured-line-prototype",
+      "prototype-classifier-agreement"
+    ]
+  },
+  "hybrid_probability": {
+    "file_sha256": "d2a6d6ba6f158dcc8f3a8fc710b513295e9f9c5679d23c8457ffc84ac2b74e65",
+    "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-hybrid-binarization-trial-20260809/003-18860314-L01-01/foreground-probability.float16.npy"
+  },
+  "independence_note": "thank-you-for is distinct content; know-enough-broad overlaps the earlier enough-tight content and tests crop-width/context stability, not independent visual generalization.",
+  "interpretation_guardrail": "No threshold or feature was changed after viewing these crops; pseudo-label metrics are not human truth and outputs remain proposals.",
+  "post_run_acting_safe_visual_review": {
+    "decision": "same_page_heldout_support_for_line_conditioned_vector_proposals",
+    "observations": [
+      "On distinct thank-you-for content, the unchanged prototype-classifier agreement recovered coherent missing middle-phrase structure with 5,966 additions/431 components; 3,192 pixels had hybrid probability below 0.01.",
+      "On the broader know-enough crop, the unchanged method preserved the difficult phrase result with 9,777 additions/677 components, supporting crop-width/context stability.",
+      "Both outputs still contain fragments and require ranking or human correction. This is same-page evidence only; it does not establish cross-page or cross-collection generalization."
+    ],
+    "sealed_human_evidence_used": false
+  },
+  "page_id": "003-18860314-L01-01",
+  "runtime_seconds": 3.0334995410012198,
+  "schema_version": "line-conditioned-vector-ink-heldout.v1",
+  "sealed_human_evidence_used": false,
+  "selection_rule": "Apply the already-frozen v1 line-conditioned vector parameters unchanged to two crops declared in the earlier local-recovery experiment.",
+  "source": {
+    "file_sha256": "ac21aa38dbff33823d08e156b214355d85a55a3c8bbdccc0228738b70e41d027",
+    "path": "experiments/word-envelope-shrink-wrap-poc/workspaces/word-ink-ground-truth-v1/collections/003/18860314/L01/pages/003-18860314-L01-01/runs/run-4111a8cd75be/source/working.png"
+  }
+}

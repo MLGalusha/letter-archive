@@ -1,0 +1,530 @@
+{
+  "crops": {
+    "acknowledgement-tight": {
+      "anchor_pixels": 19552,
+      "bbox_xywh": [
+        1750,
+        3100,
+        900,
+        300
+      ],
+      "methods": {
+        "hist-gradient-boosting": {
+          "addition_components": 2229,
+          "addition_pixels": 105482,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 3567,
+            "hybrid_p_0.05_to_0.20": 3487,
+            "hybrid_p_ge_0.20": 3290,
+            "hybrid_p_lt_0.01": 95138
+          },
+          "score_float32_pixel_sha256": "7b4942b2efd63dea03c397044cb40a3bcdabf503615eb419197d1f20597485b7",
+          "score_quantiles": {
+            "0.5": 0.42118263244628906,
+            "0.9": 0.9993868470191956,
+            "0.95": 0.9993868470191956,
+            "0.99": 0.9993868470191956,
+            "0.995": 0.9993868470191956
+          },
+          "selected_pixels": 124995,
+          "selection_mask_pixel_sha256": "943c1d4093bab1683f9a43d30261e85359e05c976f6fdea1e5fd23d587a23115",
+          "threshold": 0.8
+        },
+        "prototype": {
+          "addition_components": 1509,
+          "addition_pixels": 8356,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 720,
+            "hybrid_p_0.05_to_0.20": 919,
+            "hybrid_p_ge_0.20": 1230,
+            "hybrid_p_lt_0.01": 5487
+          },
+          "score_float32_pixel_sha256": "9a4d769a4493c440c598d50cbee1e2de95ae6470cef598152825af4fd0ba196f",
+          "score_quantiles": {
+            "0.5": 0.2907409369945526,
+            "0.9": 0.7657518982887268,
+            "0.95": 0.8906223177909851,
+            "0.99": 0.9808413982391357,
+            "0.995": 0.9887796640396118
+          },
+          "selected_pixels": 23427,
+          "selection_mask_pixel_sha256": "e591a42edffaf85510d66cbedda56f247bc4c6a254bcc83812e96b74a54fd6cc",
+          "threshold": 0.8
+        },
+        "random-walker": {
+          "addition_components": 231,
+          "addition_pixels": 15515,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 1869,
+            "hybrid_p_0.05_to_0.20": 1948,
+            "hybrid_p_ge_0.20": 2120,
+            "hybrid_p_lt_0.01": 9578
+          },
+          "score_float32_pixel_sha256": "4b1560d0968096b979316341ac0806f1eed658c6046645ddcc9a05d5c088be53",
+          "score_quantiles": {
+            "0.5": 0.006953866221010685,
+            "0.9": 0.9050918817520142,
+            "0.95": 0.9999977350234985,
+            "0.99": 1.0,
+            "0.995": 1.0
+          },
+          "selected_pixels": 33928,
+          "selection_mask_pixel_sha256": "6736415a287a6efe241cc6b02f6756134e43dc96da31f45ef830d875388ad0f9",
+          "threshold": 0.8
+        },
+        "two-of-three-consensus": {
+          "addition_components": 450,
+          "addition_pixels": 1493,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 170,
+            "hybrid_p_0.05_to_0.20": 319,
+            "hybrid_p_ge_0.20": 607,
+            "hybrid_p_lt_0.01": 397
+          },
+          "score_float32_pixel_sha256": "91261249e6ef944a6abd7e27aace9629b42ac1cab02dc41e54a20b737a925805",
+          "score_quantiles": {
+            "0.5": 0.0,
+            "0.9": 0.6666666865348816,
+            "0.95": 1.0,
+            "0.99": 1.0,
+            "0.995": 1.0
+          },
+          "selected_pixels": 15718,
+          "selection_mask_pixel_sha256": "8af837bfa005a5f45f63d3f1d4d0e622b2b61c666cfac3df4b52f5d84a67bbf6",
+          "threshold": 0.8
+        }
+      },
+      "outputs": {
+        "hist-gradient-boosting": {
+          "mask_file": "hist-gradient-boosting.p080.png",
+          "mask_file_sha256": "e6bf986de8cf9a4a490b3e90347de2bc94d5bb45937412f2424c61e2062b0353",
+          "score_file": "hist-gradient-boosting.score.float16.npy",
+          "score_file_sha256": "d960d68cc565ab94c0efa150552a52ad84b727bae733f5b50e7658bcad184a32"
+        },
+        "prototype": {
+          "mask_file": "prototype.p080.png",
+          "mask_file_sha256": "89be94dbd1aa041f2a1e288e3b843b843323fc6a016994ed5606d4d68520d4ba",
+          "score_file": "prototype.score.float16.npy",
+          "score_file_sha256": "f04fbcb6058b13988e0c0c2aad7eab370909d751d5f9313c8e24dd2c2f8162a9"
+        },
+        "random-walker": {
+          "mask_file": "random-walker.p080.png",
+          "mask_file_sha256": "14589650414adb6df3d04e3ed78cb38b034deb7019fd3e0164ae3789f04a9bdd",
+          "score_file": "random-walker.score.float16.npy",
+          "score_file_sha256": "c82ace8285ed0f553ce82f0b2b09783dc5639ae7c8d79eb1986f7853fbc18932"
+        },
+        "two-of-three-consensus": {
+          "mask_file": "two-of-three-consensus.p080.png",
+          "mask_file_sha256": "0e14697082d71278fecbe78611f300533af06621e8a1d6f2994a4e7d91405ebe",
+          "score_file": "two-of-three-consensus.score.float16.npy",
+          "score_file_sha256": "03ab54f6cd4b1119f869796b27d4d23ca5cd8365f83c7ece9f6a418b048f816e"
+        }
+      },
+      "review_board": {
+        "file": "vector-ink-review.png",
+        "file_sha256": "20f151c79cdbfb185837322ff95422401a0eeead3c36d2cbdb711455c9135052"
+      },
+      "role_frozen_before_inference": "long faint continuation",
+      "runtime_seconds": 1.9277087090013083,
+      "seed_limits": {
+        "darkness_q35": 0.0,
+        "gray_q75": 0.6369011998176575,
+        "local_std_q35": 0.016189856454730034,
+        "ridge_q40": 0.004056197125464678
+      },
+      "seeds": {
+        "negative_definition": "hybrid <= 0.0001 plus bright, low-darkness, low-ridge, low-texture source quantiles",
+        "negative_file": "safe-negative-seeds.png",
+        "negative_file_sha256": "b141cabcc293f1c92196491f1233c6e5d9213cdf696aaccb93171698a5fe14f5",
+        "negative_mask_pixel_sha256": "83544d475782840d3f533d8ca0f7786c105090390c3879d6913e8f78d5f75fa0",
+        "negative_pixels": 21832,
+        "positive_definition": "hybrid probability >= 0.95",
+        "positive_file": "safe-positive-seeds.png",
+        "positive_file_sha256": "4b41edb80b6c2c975744670609b9044be117e4eab0b899684b3292ab8c5c021c",
+        "positive_mask_pixel_sha256": "8826dab486bba10a6e6713da3d2151fed7e56a8dd5aeaef5fbb5b64890962f4c",
+        "positive_pixels": 11483
+      },
+      "training": {
+        "feature_count": 10,
+        "prototype_margin_center": -0.31961554288864136,
+        "prototype_margin_iqr": 2.422307252883911,
+        "prototype_negative_clusters": 8,
+        "prototype_positive_clusters": 6,
+        "pseudo_label_holdout_balanced_accuracy_at_0.5": 1.0,
+        "pseudo_label_holdout_roc_auc": 1.0,
+        "safe_negative_pixels": 21832,
+        "safe_positive_pixels": 11483,
+        "sampled_negative": 16000,
+        "sampled_positive": 11483,
+        "warning": "Holdout metrics reproduce software-derived safe seeds, not human ink truth."
+      }
+    },
+    "enough-tight": {
+      "anchor_pixels": 3176,
+      "bbox_xywh": [
+        2050,
+        2100,
+        600,
+        300
+      ],
+      "methods": {
+        "hist-gradient-boosting": {
+          "addition_components": 2870,
+          "addition_pixels": 58736,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 1493,
+            "hybrid_p_0.05_to_0.20": 1689,
+            "hybrid_p_ge_0.20": 1489,
+            "hybrid_p_lt_0.01": 54065
+          },
+          "score_float32_pixel_sha256": "2fd6e34c8a614004ab0b95e14bc0a8ef696f48925b073cca7a2d1129f25f4ee3",
+          "score_quantiles": {
+            "0.5": 0.00013332045637071133,
+            "0.9": 0.9981639385223389,
+            "0.95": 0.9981639385223389,
+            "0.99": 0.9981639385223389,
+            "0.995": 0.9981639385223389
+          },
+          "selected_pixels": 61909,
+          "selection_mask_pixel_sha256": "25d88e5b54efecd1186c3178683f5783c149ad632729374881a6c24fb3db2c2c",
+          "threshold": 0.8
+        },
+        "prototype": {
+          "addition_components": 2946,
+          "addition_pixels": 24625,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 737,
+            "hybrid_p_0.05_to_0.20": 900,
+            "hybrid_p_ge_0.20": 958,
+            "hybrid_p_lt_0.01": 22030
+          },
+          "score_float32_pixel_sha256": "eefbb4462eade2f5baef33666804bb6706894f46099d81880b3a6dbcec61db36",
+          "score_quantiles": {
+            "0.5": 0.0,
+            "0.9": 1.0,
+            "0.95": 1.0,
+            "0.99": 1.0,
+            "0.995": 1.0
+          },
+          "selected_pixels": 27464,
+          "selection_mask_pixel_sha256": "f7a353e356bf8f856d2ad23af1b8c28a28bef58c51659bc5bef5e2437b666918",
+          "threshold": 0.8
+        },
+        "random-walker": {
+          "addition_components": 91,
+          "addition_pixels": 1248,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 160,
+            "hybrid_p_0.05_to_0.20": 272,
+            "hybrid_p_ge_0.20": 381,
+            "hybrid_p_lt_0.01": 435
+          },
+          "score_float32_pixel_sha256": "ee8256e72f5376b173bbf25fc2466410721e67e8d1ed972e8feea832754de01a",
+          "score_quantiles": {
+            "0.5": 1.7557225118203235e-10,
+            "0.9": 0.00042459784890525043,
+            "0.95": 0.009940116666257381,
+            "0.99": 0.9998093247413635,
+            "0.995": 1.0
+          },
+          "selected_pixels": 3631,
+          "selection_mask_pixel_sha256": "9a50c861e51649aa1f586b46ad85b3d22f14a3d3f40496a8759f438a7bb69abe",
+          "threshold": 0.8
+        },
+        "two-of-three-consensus": {
+          "addition_components": 107,
+          "addition_pixels": 659,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 91,
+            "hybrid_p_0.05_to_0.20": 181,
+            "hybrid_p_ge_0.20": 305,
+            "hybrid_p_lt_0.01": 82
+          },
+          "score_float32_pixel_sha256": "29349d74a9f7c99c3673d3146b18fe7d89f3731a87329e52062c593b80d35b93",
+          "score_quantiles": {
+            "0.5": 0.0,
+            "0.9": 0.6666666865348816,
+            "0.95": 0.6666666865348816,
+            "0.99": 1.0,
+            "0.995": 1.0
+          },
+          "selected_pixels": 2933,
+          "selection_mask_pixel_sha256": "52251ee830f0ed4a0532f7c41f41b0b5c0cc078fae8be006a41350d8d5c8006d",
+          "threshold": 0.8
+        }
+      },
+      "outputs": {
+        "hist-gradient-boosting": {
+          "mask_file": "hist-gradient-boosting.p080.png",
+          "mask_file_sha256": "46884c0896badf5821d37dabeaaf8e10a897a871b896f5c89467428ac8e5801d",
+          "score_file": "hist-gradient-boosting.score.float16.npy",
+          "score_file_sha256": "c5bab8e91e1c6e6119f8bef496c07632695c825dfe4a8f817a6275a6b6529d9a"
+        },
+        "prototype": {
+          "mask_file": "prototype.p080.png",
+          "mask_file_sha256": "b1b32c902f00958e69412392f4f264d40feeddd0d30e681817f9526318b38971",
+          "score_file": "prototype.score.float16.npy",
+          "score_file_sha256": "260d0127c626d585e0a46c89fdd96ec91a10e266b30c71494437c275d7c796da"
+        },
+        "random-walker": {
+          "mask_file": "random-walker.p080.png",
+          "mask_file_sha256": "6dc07bdbb2c98645b577b651e3405396fec0110aff3c926aa266505fdf545b5c",
+          "score_file": "random-walker.score.float16.npy",
+          "score_file_sha256": "43eb0fb6b816fe4c97718813fd09fd1c8848acc225e57b9e8422cbf2687e19da"
+        },
+        "two-of-three-consensus": {
+          "mask_file": "two-of-three-consensus.p080.png",
+          "mask_file_sha256": "5f2987a782a2f25d979cccfd4b62dd325cdd742b59eb97d8a3fb77e3e348d031",
+          "score_file": "two-of-three-consensus.score.float16.npy",
+          "score_file_sha256": "250d88f2e323b1dbaf519fef204013004cee6ee936ef8f881ca813a421d49be3"
+        }
+      },
+      "review_board": {
+        "file": "vector-ink-review.png",
+        "file_sha256": "aec86a0f0727cf2fd8104871ea0a8411f45581f2b0066633fb24eae80ba07f3a"
+      },
+      "role_frozen_before_inference": "almost-erased disconnected word tail",
+      "runtime_seconds": 4.394477375004499,
+      "seed_limits": {
+        "darkness_q35": 0.0,
+        "gray_q75": 0.6626855134963989,
+        "local_std_q35": 0.011926713399589062,
+        "ridge_q40": 0.0030958508141338825
+      },
+      "seeds": {
+        "negative_definition": "hybrid <= 0.0001 plus bright, low-darkness, low-ridge, low-texture source quantiles",
+        "negative_file": "safe-negative-seeds.png",
+        "negative_file_sha256": "2e00dd69fefcfcc2207e88acf69e7aa60fbcb8dbadca82b70124ad39b8714859",
+        "negative_mask_pixel_sha256": "5d0045bab0cf19571284af56fcc35eec4e1c28b854c0d4138f61b97ac730a0f2",
+        "negative_pixels": 13178,
+        "positive_definition": "hybrid probability >= 0.95",
+        "positive_file": "safe-positive-seeds.png",
+        "positive_file_sha256": "75a7f6837a1fe31cbd72429db1ae8134e726d93777bc2815282dd3164710a7ea",
+        "positive_mask_pixel_sha256": "199c6c557078446ad40de3fcd2bef26ccdff8d8f248dbc678e733819dfb67d67",
+        "positive_pixels": 908
+      },
+      "training": {
+        "feature_count": 10,
+        "prototype_margin_center": -1.066732406616211,
+        "prototype_margin_iqr": 0.5316314697265625,
+        "prototype_negative_clusters": 8,
+        "prototype_positive_clusters": 6,
+        "pseudo_label_holdout_balanced_accuracy_at_0.5": 1.0,
+        "pseudo_label_holdout_roc_auc": 1.0,
+        "safe_negative_pixels": 13178,
+        "safe_positive_pixels": 908,
+        "sampled_negative": 13178,
+        "sampled_positive": 908,
+        "warning": "Holdout metrics reproduce software-derived safe seeds, not human ink truth."
+      }
+    },
+    "folded-write-to-you": {
+      "anchor_pixels": 12497,
+      "bbox_xywh": [
+        1700,
+        1875,
+        1000,
+        350
+      ],
+      "methods": {
+        "hist-gradient-boosting": {
+          "addition_components": 153,
+          "addition_pixels": 214990,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 3190,
+            "hybrid_p_0.05_to_0.20": 3199,
+            "hybrid_p_ge_0.20": 3050,
+            "hybrid_p_lt_0.01": 205551
+          },
+          "score_float32_pixel_sha256": "253f70cdca650373eb685bec520bd21d075571d07ab4d8926a5b7f1f88aa8cca",
+          "score_quantiles": {
+            "0.5": 0.9992496371269226,
+            "0.9": 0.9992496371269226,
+            "0.95": 0.9992496371269226,
+            "0.99": 0.9992496371269226,
+            "0.995": 0.9992496371269226
+          },
+          "selected_pixels": 227487,
+          "selection_mask_pixel_sha256": "800cc5dc7687bca1dac488133a402455edd8cefeffdb5394b54f6a9cea1aa529",
+          "threshold": 0.8
+        },
+        "prototype": {
+          "addition_components": 907,
+          "addition_pixels": 7521,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 487,
+            "hybrid_p_0.05_to_0.20": 775,
+            "hybrid_p_ge_0.20": 1007,
+            "hybrid_p_lt_0.01": 5252
+          },
+          "score_float32_pixel_sha256": "115a4f59b3b72be6d0bf00878963e0439b7233a07f7be0d98b12a138ef32b7d7",
+          "score_quantiles": {
+            "0.5": 0.24765309691429138,
+            "0.9": 0.6085220575332642,
+            "0.95": 0.7975456714630127,
+            "0.99": 0.9774158596992493,
+            "0.995": 0.9922846555709839
+          },
+          "selected_pixels": 17314,
+          "selection_mask_pixel_sha256": "b3abe6a671c9b72f28531aec20f081c5b596c03b90c2f0ea1ce68dde5167c49c",
+          "threshold": 0.8
+        },
+        "random-walker": {
+          "addition_components": 171,
+          "addition_pixels": 8354,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 834,
+            "hybrid_p_0.05_to_0.20": 873,
+            "hybrid_p_ge_0.20": 1080,
+            "hybrid_p_lt_0.01": 5567
+          },
+          "score_float32_pixel_sha256": "a0df8283379cbcf03d12b1a176a33177eeb7445292149ddd16b5dba6ffee429a",
+          "score_quantiles": {
+            "0.5": 2.203975964221172e-05,
+            "0.9": 0.37478184700012207,
+            "0.95": 0.8761752843856812,
+            "0.99": 1.0,
+            "0.995": 1.0
+          },
+          "selected_pixels": 19600,
+          "selection_mask_pixel_sha256": "6974c1ef6dcf0733fa933797726600dcd20927bbf921c62b9955911777a1385e",
+          "threshold": 0.8
+        },
+        "two-of-three-consensus": {
+          "addition_components": 220,
+          "addition_pixels": 451,
+          "addition_probability_bands": {
+            "hybrid_p_0.01_to_0.05": 42,
+            "hybrid_p_0.05_to_0.20": 108,
+            "hybrid_p_ge_0.20": 275,
+            "hybrid_p_lt_0.01": 26
+          },
+          "score_float32_pixel_sha256": "bbb70c13133d428ced4c763ebfeba465ced2583b58290f3ac008dc2f9047cfbd",
+          "score_quantiles": {
+            "0.5": 0.3333333432674408,
+            "0.9": 0.3333333432674408,
+            "0.95": 0.6666666865348816,
+            "0.99": 1.0,
+            "0.995": 1.0
+          },
+          "selected_pixels": 9483,
+          "selection_mask_pixel_sha256": "9b2e590802f41dc8972b80d3e8d19821ff85751249670bea49bb224607465081",
+          "threshold": 0.8
+        }
+      },
+      "outputs": {
+        "hist-gradient-boosting": {
+          "mask_file": "hist-gradient-boosting.p080.png",
+          "mask_file_sha256": "8f947b80243af896b56c3f15f2f72436679f1f2622dc481dc61d8244d08ce0c5",
+          "score_file": "hist-gradient-boosting.score.float16.npy",
+          "score_file_sha256": "86605080833da9161fd99830386b14efa4b6402924da65e4f9eaa603c52d133b"
+        },
+        "prototype": {
+          "mask_file": "prototype.p080.png",
+          "mask_file_sha256": "5440081afb3bd4a3c00c49b9ce6ec74b8da355f952dd002339c27ef3f2c799ce",
+          "score_file": "prototype.score.float16.npy",
+          "score_file_sha256": "c9b049f83ca0748be5d8b7eb2b13e2c60ca8f4e0d100c7bd1001ee5e23db6aef"
+        },
+        "random-walker": {
+          "mask_file": "random-walker.p080.png",
+          "mask_file_sha256": "298bf4e99f7b166f5f0137b7c8ec8e9398983209931374eef5b1f9603ef8864e",
+          "score_file": "random-walker.score.float16.npy",
+          "score_file_sha256": "2dc190d2841dd5d5b9d1030293ddd4a6ccbfa399804de998eb0fc9beb5316d6b"
+        },
+        "two-of-three-consensus": {
+          "mask_file": "two-of-three-consensus.p080.png",
+          "mask_file_sha256": "4b8bc31fcde151c3bfcdb77c7799cd171a814f2dbb4920ee434247b60461fc15",
+          "score_file": "two-of-three-consensus.score.float16.npy",
+          "score_file_sha256": "3567cc40d430d874f23229c6205eac33d25f592e4a880d8c1b8b2ecf5b500394"
+        }
+      },
+      "review_board": {
+        "file": "vector-ink-review.png",
+        "file_sha256": "c13930dd7ce3c5de6b83b53fdb74b500e1be8b21172f87dce630cfaa782aa31c"
+      },
+      "role_frozen_before_inference": "moderately faint writing near fold/rule evidence",
+      "runtime_seconds": 3.346729165998113,
+      "seed_limits": {
+        "darkness_q35": 0.0,
+        "gray_q75": 0.6716298460960388,
+        "local_std_q35": 0.012961314991116524,
+        "ridge_q40": 0.003335829358547926
+      },
+      "seeds": {
+        "negative_definition": "hybrid <= 0.0001 plus bright, low-darkness, low-ridge, low-texture source quantiles",
+        "negative_file": "safe-negative-seeds.png",
+        "negative_file_sha256": "cd35e5345eb66222b06e3f86a5db8bed94c6c69d75ac6ef0ded27bebb3f9cea0",
+        "negative_mask_pixel_sha256": "7d54a2b1f585f18c5dad0ab88675bfbf2def329e2c85f7151eab0a4f6043f798",
+        "negative_pixels": 22748,
+        "positive_definition": "hybrid probability >= 0.95",
+        "positive_file": "safe-positive-seeds.png",
+        "positive_file_sha256": "fc954926638d9d99edded0ef4cf4d5fad4ed5e90bc0252f91d40b89b3d6a14d2",
+        "positive_mask_pixel_sha256": "58442bba7bd2865c08ea58895c2f5997b6634331a70d7d4d27b1f605e43c2073",
+        "positive_pixels": 7859
+      },
+      "training": {
+        "feature_count": 10,
+        "prototype_margin_center": -0.29140374064445496,
+        "prototype_margin_iqr": 2.1311678886413574,
+        "prototype_negative_clusters": 8,
+        "prototype_positive_clusters": 6,
+        "pseudo_label_holdout_balanced_accuracy_at_0.5": 1.0,
+        "pseudo_label_holdout_roc_auc": 1.0,
+        "safe_negative_pixels": 22748,
+        "safe_positive_pixels": 7859,
+        "sampled_negative": 16000,
+        "sampled_positive": 7859,
+        "warning": "Holdout metrics reproduce software-derived safe seeds, not human ink truth."
+      }
+    }
+  },
+  "experiment_status": "acting_safe_visual_review_complete",
+  "features": {
+    "names": [
+      "Lab-L",
+      "Lab-a",
+      "Lab-b",
+      "gray",
+      "darkness-sigma3",
+      "darkness-sigma9",
+      "darkness-sigma25",
+      "Sato-ridge-1-2-3",
+      "Sobel-gradient",
+      "local-std-sigma3"
+    ],
+    "normalization": "RobustScaler 10th-90th percentiles fitted to sampled safe seeds per crop",
+    "source_only": true
+  },
+  "hybrid_probability": {
+    "file_sha256": "d2a6d6ba6f158dcc8f3a8fc710b513295e9f9c5679d23c8457ffc84ac2b74e65",
+    "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-hybrid-binarization-trial-20260809/003-18860314-L01-01/foreground-probability.float16.npy"
+  },
+  "interpretation_guardrail": "Pseudo-label metrics measure reproduction of software-derived safe seeds, not human truth. All selected pixels remain optional ink-appearance proposals; semantic ownership is out of scope.",
+  "post_run_acting_safe_visual_review": {
+    "decision": "prototype_is_high_recall_breakthrough_but_unusable_ungated; reject_boosted_and_consensus_defaults",
+    "observations": [
+      "The source-feature prototype exposed coherent structure through the nearly erased enough word even though 22,030 proposed pixels there had hybrid probability below 0.01. This is the first tested method to recover most of that disconnected source-visible word structure.",
+      "The same enough prototype produced 24,625 additions in 2,946 components, with pervasive paper-texture speckle. It is recall evidence, not usable clean ink.",
+      "HistGradientBoosting achieved pseudo-label holdout ROC AUC 1.0 on all crops but flooded them with 58,736 to 214,990 additions. This demonstrates pseudo-label reproduction is not human-ground-truth accuracy and the safe-negative distribution was too easy.",
+      "Random-walker outputs were much cleaner but stayed near existing seeds and largely missed disconnected near-erasure. Two-of-three consensus inherited that omission and discarded the prototype breakthrough.",
+      "Next test must introduce hard paper negatives outside the rough target-line corridor, leave low-probability pixels inside the line unknown, and use whole-component/stroke grouping rather than raw pixels."
+    ],
+    "sealed_human_evidence_used": false
+  },
+  "models": {
+    "consensus": "at least two of three method scores >=0.80",
+    "hist_gradient_boosting": "100 iterations, 15 leaves, depth inferred, l2=1.0",
+    "prototype": "6 positive and 8 negative MiniBatchKMeans prototypes; logisticized nearest-prototype distance margin",
+    "random_seed": 20260809,
+    "random_walker": "pixel graph over gray, broad darkness, ridge, and prototype score; beta=60; conjugate-gradient tolerance=1e-6; safe seeds clamped"
+  },
+  "page_id": "003-18860314-L01-01",
+  "runtime_seconds": 9.68423150000308,
+  "schema_version": "page-adaptive-vector-ink.v1",
+  "sealed_human_evidence_used": false,
+  "selection_rule": "Reuse the same three acting-safe crop roles and source bboxes frozen before earlier crop inference.",
+  "source": {
+    "file_sha256": "ac21aa38dbff33823d08e156b214355d85a55a3c8bbdccc0228738b70e41d027",
+    "path": "experiments/word-envelope-shrink-wrap-poc/workspaces/word-ink-ground-truth-v1/collections/003/18860314/L01/pages/003-18860314-L01-01/runs/run-4111a8cd75be/source/working.png"
+  }
+}

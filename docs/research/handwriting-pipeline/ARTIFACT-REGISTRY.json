@@ -754,6 +754,21 @@
       "identity_sha256": null,
       "predecessor_ids": ["20260809-line-conditioned-vector-ink-v1", "20260809-eynollah-kraken-line-conditioning-002-heldout"],
       "summary": "Kraken boundaries automatically centered six software-selected lines on two independent pages, and unchanged vector proposals stayed concentrated on stroke gaps without catastrophic paper flooding. Fragment burden remains 259-652 additions per line with median area one pixel, so geometry is promoted only as a search corridor."
+    },
+    {
+      "record_id": "20260809-vector-fragment-grouping-v1",
+      "title": "Exact-pixel vector fragment grouping",
+      "evidence_role": "run_state",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/vector-fragment-grouping-v1",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/vector-fragment-grouping-v1/experiment.json",
+        "file_sha256": "742b8d5a1179675013a7149a49f03c65c89a4514c34949a536bd55e277620cf5"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-kraken-line-vector-crosspage-v1"],
+      "summary": "Balanced anisotropic grouping reduced 36-168 raw evidence components to 10-22 editable left-to-right colour groups while preserving every exact ink pixel. Visual word alignment is promising, but tight splits marks and broad merges neighbors; expose all as correction challengers rather than ownership truth."
     }
   ]
 }

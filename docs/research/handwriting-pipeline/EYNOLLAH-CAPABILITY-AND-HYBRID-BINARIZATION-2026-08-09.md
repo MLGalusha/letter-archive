@@ -553,6 +553,38 @@ Exact cross-page record:
 `b1fcd2b1deeb37b60155babfe7605511649091376be7b8bcb0995027b01b8230`;
 10.36 s CPU).
 
+### Exact-pixel fragment grouping into editable colours
+
+The cross-page proposals exposed a human-interface problem: the ink is often
+visually coherent but stored as hundreds of tiny connected components. A
+follow-up changed no selected ink at all. It dilated only a temporary grouping
+support with three anisotropic kernels, assigned original pixels to resulting
+left-to-right groups, and discarded the temporary support. Every output label
+map was checked to contain exactly the same anchor-plus-proposal pixels.
+
+Across the same six automatically selected lines:
+
+- tight `3x7` grouping produced 12–30 review groups and often split dots,
+  ascenders, or broken letters from their word;
+- balanced `5x15` produced 10–22 groups, a 58.33%–92.26% reduction from the
+  36–168 raw eight-connected evidence components;
+- broad `7x25` produced 7–19 groups but visibly merged neighboring words,
+  including `thoroughly enjoying`.
+
+Balanced grouping was visibly word-like on multiple lines: `thoroughly`,
+`enjoying`, `yourself`, and `you` frequently became distinct colour groups. It
+still merged `forgetful brother` in one case and left isolated speck groups in
+others. Promote balanced as an editable first grouping, with tight/broad as
+split/merge challengers—not as final ownership. This is a potentially large
+human-effort improvement because correction becomes “split/merge/reassign a
+colour group” rather than clicking hundreds of fragments, while the eventual
+fitted envelope still consumes the exact reviewed ink pixels.
+
+Exact grouping record:
+`artifacts/vector-fragment-grouping-v1/experiment.json` (SHA-256
+`742b8d5a1179675013a7149a49f03c65c89a4514c34949a536bd55e277620cf5`;
+3.36 s CPU).
+
 ### Fitted-line gate and required abstention
 
 A RANSAC line was fitted from confident hybrid fragments inside the rough

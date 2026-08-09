@@ -1,0 +1,2198 @@
+{
+  "crops": {
+    "acknowledgement-tight": {
+      "bbox_xywh": [
+        1750,
+        3100,
+        900,
+        300
+      ],
+      "corridor_y_fraction": [
+        0.22,
+        0.78
+      ],
+      "enhancement": {
+        "darkening_response_floor": 0.05433647058823532,
+        "file": "page-ink-vector-darkened.png",
+        "file_sha256": "e4bcdc0324c8869ab775cba7b7fd842696671c5605845924bdeffe12ff2af1e4",
+        "rgb_pixel_sha256": "7b2681be9bb6f3fa5a2d1e7b9047ae9910d1ced369a58b8c7415aa386ae2619d",
+        "ridge_floor": 0.01018667871125018
+      },
+      "evidence": {
+        "components": 139,
+        "file": "composed-exact-source-evidence.png",
+        "file_sha256": "53563ca3547e2d5569458799849188304d40f6860e6a23baffd3bf335e82faef",
+        "mask_pixel_sha256": "853b9546f5ec8a4bb9ddc8e54bfc4b59cace78821d0392e8a80ada441724d412",
+        "pixels": 17840,
+        "tier_labels_file": "evidence-tier-labels.uint8.png",
+        "tier_labels_file_sha256": "58cff71f83ed33c35c0ad9f32ff52e85601abb80fd5f0be1e849d4a29850ffe0"
+      },
+      "grouping": {
+        "balanced-5x15": {
+          "component_to_group_reduction_fraction": 0.9424460431654677,
+          "exact_evidence_pixel_count": 17840,
+          "groups": [
+            {
+              "bbox_xyxy": [
+                0,
+                112,
+                40,
+                184
+              ],
+              "group_id": 1,
+              "pixels": 589,
+              "width_fraction": 0.044444444444444446
+            },
+            {
+              "bbox_xyxy": [
+                4,
+                151,
+                255,
+                211
+              ],
+              "group_id": 2,
+              "pixels": 3491,
+              "width_fraction": 0.2788888888888889
+            },
+            {
+              "bbox_xyxy": [
+                87,
+                66,
+                126,
+                103
+              ],
+              "group_id": 3,
+              "pixels": 544,
+              "width_fraction": 0.043333333333333335
+            },
+            {
+              "bbox_xyxy": [
+                166,
+                144,
+                171,
+                147
+              ],
+              "group_id": 4,
+              "pixels": 5,
+              "width_fraction": 0.005555555555555556
+            },
+            {
+              "bbox_xyxy": [
+                254,
+                83,
+                818,
+                208
+              ],
+              "group_id": 5,
+              "pixels": 12741,
+              "width_fraction": 0.6266666666666667
+            },
+            {
+              "bbox_xyxy": [
+                370,
+                228,
+                379,
+                232
+              ],
+              "group_id": 6,
+              "pixels": 9,
+              "width_fraction": 0.01
+            },
+            {
+              "bbox_xyxy": [
+                782,
+                161,
+                827,
+                180
+              ],
+              "group_id": 7,
+              "pixels": 443,
+              "width_fraction": 0.05
+            },
+            {
+              "bbox_xyxy": [
+                826,
+                188,
+                851,
+                193
+              ],
+              "group_id": 8,
+              "pixels": 18,
+              "width_fraction": 0.027777777777777776
+            }
+          ],
+          "ink_pixel_identity_preserved": true,
+          "kernel_hw": [
+            5,
+            15
+          ],
+          "labels_file": "balanced-5x15.labels.uint16.png",
+          "labels_file_sha256": "0cf0c7b28e7069e6c9fed77fd88345e52f31c61bc965d2ee92b7eb7cde14a4d0",
+          "labels_int32_pixel_sha256": "c3a849d5159af86c860e082f212cc2b4c08952aac3ca2b68381f5c0c054775ac",
+          "largest_group_width_fraction": 0.6266666666666667,
+          "raw_evidence_components": 139,
+          "review_groups": 8
+        },
+        "broad-7x25": {
+          "component_to_group_reduction_fraction": 0.9640287769784173,
+          "exact_evidence_pixel_count": 17840,
+          "groups": [
+            {
+              "bbox_xyxy": [
+                0,
+                83,
+                827,
+                211
+              ],
+              "group_id": 1,
+              "pixels": 17264,
+              "width_fraction": 0.9188888888888889
+            },
+            {
+              "bbox_xyxy": [
+                87,
+                66,
+                126,
+                103
+              ],
+              "group_id": 2,
+              "pixels": 544,
+              "width_fraction": 0.043333333333333335
+            },
+            {
+              "bbox_xyxy": [
+                166,
+                144,
+                171,
+                147
+              ],
+              "group_id": 3,
+              "pixels": 5,
+              "width_fraction": 0.005555555555555556
+            },
+            {
+              "bbox_xyxy": [
+                370,
+                228,
+                379,
+                232
+              ],
+              "group_id": 4,
+              "pixels": 9,
+              "width_fraction": 0.01
+            },
+            {
+              "bbox_xyxy": [
+                826,
+                188,
+                851,
+                193
+              ],
+              "group_id": 5,
+              "pixels": 18,
+              "width_fraction": 0.027777777777777776
+            }
+          ],
+          "ink_pixel_identity_preserved": true,
+          "kernel_hw": [
+            7,
+            25
+          ],
+          "labels_file": "broad-7x25.labels.uint16.png",
+          "labels_file_sha256": "8b2ead81f66f04f62288d1473eb6e41c27a7837142acddd075c04c766702906d",
+          "labels_int32_pixel_sha256": "c22b1ffd97b4526257281ab2811094880e4afb5488076040dd19fad0c647b9a1",
+          "largest_group_width_fraction": 0.9188888888888889,
+          "raw_evidence_components": 139,
+          "review_groups": 5
+        },
+        "tight-3x7": {
+          "component_to_group_reduction_fraction": 0.8992805755395683,
+          "exact_evidence_pixel_count": 17840,
+          "groups": [
+            {
+              "bbox_xyxy": [
+                0,
+                112,
+                40,
+                184
+              ],
+              "group_id": 1,
+              "pixels": 589,
+              "width_fraction": 0.044444444444444446
+            },
+            {
+              "bbox_xyxy": [
+                4,
+                156,
+                67,
+                211
+              ],
+              "group_id": 2,
+              "pixels": 964,
+              "width_fraction": 0.07
+            },
+            {
+              "bbox_xyxy": [
+                70,
+                203,
+                71,
+                206
+              ],
+              "group_id": 3,
+              "pixels": 3,
+              "width_fraction": 0.0011111111111111111
+            },
+            {
+              "bbox_xyxy": [
+                77,
+                151,
+                255,
+                210
+              ],
+              "group_id": 4,
+              "pixels": 2524,
+              "width_fraction": 0.19777777777777777
+            },
+            {
+              "bbox_xyxy": [
+                87,
+                66,
+                126,
+                103
+              ],
+              "group_id": 5,
+              "pixels": 544,
+              "width_fraction": 0.043333333333333335
+            },
+            {
+              "bbox_xyxy": [
+                166,
+                144,
+                171,
+                147
+              ],
+              "group_id": 6,
+              "pixels": 5,
+              "width_fraction": 0.005555555555555556
+            },
+            {
+              "bbox_xyxy": [
+                254,
+                180,
+                288,
+                201
+              ],
+              "group_id": 7,
+              "pixels": 144,
+              "width_fraction": 0.03777777777777778
+            },
+            {
+              "bbox_xyxy": [
+                295,
+                83,
+                818,
+                208
+              ],
+              "group_id": 8,
+              "pixels": 12596,
+              "width_fraction": 0.5811111111111111
+            },
+            {
+              "bbox_xyxy": [
+                370,
+                228,
+                379,
+                232
+              ],
+              "group_id": 9,
+              "pixels": 9,
+              "width_fraction": 0.01
+            },
+            {
+              "bbox_xyxy": [
+                732,
+                176,
+                733,
+                177
+              ],
+              "group_id": 10,
+              "pixels": 1,
+              "width_fraction": 0.0011111111111111111
+            },
+            {
+              "bbox_xyxy": [
+                782,
+                175,
+                783,
+                176
+              ],
+              "group_id": 11,
+              "pixels": 1,
+              "width_fraction": 0.0011111111111111111
+            },
+            {
+              "bbox_xyxy": [
+                784,
+                161,
+                827,
+                180
+              ],
+              "group_id": 12,
+              "pixels": 442,
+              "width_fraction": 0.04777777777777778
+            },
+            {
+              "bbox_xyxy": [
+                826,
+                188,
+                840,
+                193
+              ],
+              "group_id": 13,
+              "pixels": 13,
+              "width_fraction": 0.015555555555555555
+            },
+            {
+              "bbox_xyxy": [
+                848,
+                189,
+                851,
+                191
+              ],
+              "group_id": 14,
+              "pixels": 5,
+              "width_fraction": 0.0033333333333333335
+            }
+          ],
+          "ink_pixel_identity_preserved": true,
+          "kernel_hw": [
+            3,
+            7
+          ],
+          "labels_file": "tight-3x7.labels.uint16.png",
+          "labels_file_sha256": "0b7b8d92ab86537b84155ba85680bbbd8ac990127a1096affb8d04a354b26f91",
+          "labels_int32_pixel_sha256": "036245f3c0b22406e99e755093cbe80a1340ad6385fe72a85c4939b96e80b846",
+          "largest_group_width_fraction": 0.5811111111111111,
+          "raw_evidence_components": 139,
+          "review_groups": 14
+        },
+        "valley-bounded-balanced-5x15": {
+          "column_density_smoothing_sigma": 5.0,
+          "component_to_group_reduction_fraction": 0.9280575539568345,
+          "exact_evidence_pixel_count": 17840,
+          "groups": [
+            {
+              "bbox_xyxy": [
+                0,
+                112,
+                40,
+                184
+              ],
+              "group_id": 1,
+              "pixels": 589,
+              "width_fraction": 0.044444444444444446
+            },
+            {
+              "bbox_xyxy": [
+                4,
+                156,
+                71,
+                211
+              ],
+              "group_id": 2,
+              "pixels": 967,
+              "width_fraction": 0.07444444444444444
+            },
+            {
+              "bbox_xyxy": [
+                77,
+                151,
+                255,
+                210
+              ],
+              "group_id": 3,
+              "pixels": 2524,
+              "width_fraction": 0.19777777777777777
+            },
+            {
+              "bbox_xyxy": [
+                87,
+                66,
+                126,
+                103
+              ],
+              "group_id": 4,
+              "pixels": 544,
+              "width_fraction": 0.043333333333333335
+            },
+            {
+              "bbox_xyxy": [
+                166,
+                144,
+                171,
+                147
+              ],
+              "group_id": 5,
+              "pixels": 5,
+              "width_fraction": 0.005555555555555556
+            },
+            {
+              "bbox_xyxy": [
+                254,
+                182,
+                284,
+                201
+              ],
+              "group_id": 6,
+              "pixels": 133,
+              "width_fraction": 0.03333333333333333
+            },
+            {
+              "bbox_xyxy": [
+                284,
+                83,
+                818,
+                208
+              ],
+              "group_id": 7,
+              "pixels": 12608,
+              "width_fraction": 0.5933333333333334
+            },
+            {
+              "bbox_xyxy": [
+                370,
+                228,
+                379,
+                232
+              ],
+              "group_id": 8,
+              "pixels": 9,
+              "width_fraction": 0.01
+            },
+            {
+              "bbox_xyxy": [
+                782,
+                161,
+                827,
+                180
+              ],
+              "group_id": 9,
+              "pixels": 443,
+              "width_fraction": 0.05
+            },
+            {
+              "bbox_xyxy": [
+                826,
+                188,
+                851,
+                193
+              ],
+              "group_id": 10,
+              "pixels": 18,
+              "width_fraction": 0.027777777777777776
+            }
+          ],
+          "ink_pixel_identity_preserved": true,
+          "kernel_hw": [
+            5,
+            15
+          ],
+          "labels_file": "valley-bounded-balanced.labels.uint16.png",
+          "labels_file_sha256": "25b7d7c34445bd6754c1624e97a54058c858f6ea4176e19a3d87ba13d5b73cb6",
+          "labels_int32_pixel_sha256": "700fb3d37f3fa167ef0e64a64934867be0765091841651a6b8e72a5d9490d322",
+          "largest_group_width_fraction": 0.5933333333333334,
+          "low_density_quantile": 0.1,
+          "low_density_threshold": 3.038377285003662,
+          "minimum_valley_width": 10,
+          "raw_evidence_components": 139,
+          "review_groups": 10,
+          "valleys": [
+            {
+              "boundary_x": 73,
+              "minimum_smoothed_density": 1.525766372680664,
+              "width": 10,
+              "x0": 68,
+              "x1": 78
+            },
+            {
+              "boundary_x": 284,
+              "minimum_smoothed_density": 1.7862509489059448,
+              "width": 10,
+              "x0": 279,
+              "x1": 289
+            }
+          ]
+        }
+      },
+      "inputs": {
+        "local_recovery": {
+          "file_sha256": "7bec7641885dc1d7040d66fede4d880fce2bab01d4a56bc99e38d03c66e1205c",
+          "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/hybrid-seed-local-recovery-v1/003-18860314-L01-01/acknowledgement-tight/conservative.mask.png"
+        },
+        "vector_score": {
+          "file_sha256": "08329fac5e7ef808b5335139839b1eee04e464f3685f150de54e5bb896e6f995",
+          "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/line-conditioned-vector-ink-v1/003-18860314-L01-01/acknowledgement-tight/prototype-classifier-agreement.score.float16.npy"
+        }
+      },
+      "review_boards": {
+        "composition": {
+          "file": "one-pass-composite-review.png",
+          "file_sha256": "c50fc763745b8126d2986c959c56f4fd950a94dd2d3d201a324b64d84ec45a3d"
+        },
+        "grouping": {
+          "file": "one-pass-composite-grouping-review.png",
+          "file_sha256": "6a26581330e1dc2a36481c80dcd96651847a575b0ed38184b003e9bc033739c5"
+        },
+        "valley_bounded": {
+          "file": "one-pass-valley-bounded-grouping-review.png",
+          "file_sha256": "240fc6563bca25cf7fcfc78f22a35df286fd5a9e22fd70db327a46d5612566b3"
+        }
+      },
+      "role": "long faint continuation",
+      "runtime_seconds": 3.207601166999666,
+      "thresholds_frozen_before_output_review": {
+        "darkening_response_paper_quantile": 0.995,
+        "eynollah_core": 0.5,
+        "ridge_paper_quantile": 0.95,
+        "vector_score": 0.8
+      },
+      "tiers": {
+        "dark-vector agreement": {
+          "components": 557,
+          "mask_pixel_sha256": "8531a7dc0d3070b6f40e5c017dcf17e700ae3e7202ce0e46757958608d7e45bd",
+          "paper_proxy_pixels": 0,
+          "pixels": 3483
+        },
+        "exploratory vector": {
+          "components": 657,
+          "mask_pixel_sha256": "31c5f387909331f2ce67ca9cb786a997e87f8a0fb5431ff97c99790c9c66562b",
+          "paper_proxy_pixels": 0,
+          "pixels": 1583
+        },
+        "eynollah core": {
+          "components": 20,
+          "mask_pixel_sha256": "bc39d8fb713b04db1a7b2235f40f55b3a075022d58299f80754ad72d73284a14",
+          "paper_proxy_pixels": 0,
+          "pixels": 11490
+        },
+        "local source recovery": {
+          "components": 27,
+          "mask_pixel_sha256": "61efad1ae15202172400501ba01feae8704f81194b42144da2308f8d0bb48b16",
+          "paper_proxy_pixels": 0,
+          "pixels": 1284
+        }
+      }
+    },
+    "enough-tight": {
+      "bbox_xywh": [
+        2050,
+        2100,
+        600,
+        300
+      ],
+      "corridor_y_fraction": [
+        0.22,
+        0.78
+      ],
+      "enhancement": {
+        "darkening_response_floor": 0.039200784313725645,
+        "file": "page-ink-vector-darkened.png",
+        "file_sha256": "b5a70ec669ec3d66cfcd5e3836d25b7203f4e536c78799c07adc542c5a5a61b0",
+        "rgb_pixel_sha256": "6834d53b1027544e8520d528952fc55dbc4ded23879a0e11c97db62fe04a7bbf",
+        "ridge_floor": 0.007470811410642943
+      },
+      "evidence": {
+        "components": 164,
+        "file": "composed-exact-source-evidence.png",
+        "file_sha256": "8339a929ec47a0693f12410e152e8cf5a11b6d4bc6e7bbb3296d88b24079b84f",
+        "mask_pixel_sha256": "4a3d2bf2901c7d8f8270756b2805ad8d0a8763cca645440d7a9371a55526bf80",
+        "pixels": 9695,
+        "tier_labels_file": "evidence-tier-labels.uint8.png",
+        "tier_labels_file_sha256": "de1b30c5943ac30a3013db2f4ae13b6bc30d87d59d99f61ac041d63dc0e1745a"
+      },
+      "grouping": {
+        "balanced-5x15": {
+          "component_to_group_reduction_fraction": 0.975609756097561,
+          "exact_evidence_pixel_count": 9695,
+          "groups": [
+            {
+              "bbox_xyxy": [
+                0,
+                66,
+                569,
+                234
+              ],
+              "group_id": 1,
+              "pixels": 9132,
+              "width_fraction": 0.9483333333333334
+            },
+            {
+              "bbox_xyxy": [
+                0,
+                67,
+                38,
+                108
+              ],
+              "group_id": 2,
+              "pixels": 498,
+              "width_fraction": 0.06333333333333334
+            },
+            {
+              "bbox_xyxy": [
+                287,
+                66,
+                313,
+                82
+              ],
+              "group_id": 3,
+              "pixels": 61,
+              "width_fraction": 0.043333333333333335
+            },
+            {
+              "bbox_xyxy": [
+                406,
+                71,
+                408,
+                73
+              ],
+              "group_id": 4,
+              "pixels": 4,
+              "width_fraction": 0.0033333333333333335
+            }
+          ],
+          "ink_pixel_identity_preserved": true,
+          "kernel_hw": [
+            5,
+            15
+          ],
+          "labels_file": "balanced-5x15.labels.uint16.png",
+          "labels_file_sha256": "309ebaf18114fd18a777f150446bd2523cde1fe940bba3c16280ca15ed0db2c0",
+          "labels_int32_pixel_sha256": "5fcbf505c68ada5aa12db2d0c41987e7a47f8cd2294d85c2c0edd059cd78deb8",
+          "largest_group_width_fraction": 0.9483333333333334,
+          "raw_evidence_components": 164,
+          "review_groups": 4
+        },
+        "broad-7x25": {
+          "component_to_group_reduction_fraction": 0.975609756097561,
+          "exact_evidence_pixel_count": 9695,
+          "groups": [
+            {
+              "bbox_xyxy": [
+                0,
+                66,
+                569,
+                234
+              ],
+              "group_id": 1,
+              "pixels": 9132,
+              "width_fraction": 0.9483333333333334
+            },
+            {
+              "bbox_xyxy": [
+                0,
+                67,
+                38,
+                108
+              ],
+              "group_id": 2,
+              "pixels": 498,
+              "width_fraction": 0.06333333333333334
+            },
+            {
+              "bbox_xyxy": [
+                287,
+                66,
+                313,
+                82
+              ],
+              "group_id": 3,
+              "pixels": 61,
+              "width_fraction": 0.043333333333333335
+            },
+            {
+              "bbox_xyxy": [
+                406,
+                71,
+                408,
+                73
+              ],
+              "group_id": 4,
+              "pixels": 4,
+              "width_fraction": 0.0033333333333333335
+            }
+          ],
+          "ink_pixel_identity_preserved": true,
+          "kernel_hw": [
+            7,
+            25
+          ],
+          "labels_file": "broad-7x25.labels.uint16.png",
+          "labels_file_sha256": "309ebaf18114fd18a777f150446bd2523cde1fe940bba3c16280ca15ed0db2c0",
+          "labels_int32_pixel_sha256": "5fcbf505c68ada5aa12db2d0c41987e7a47f8cd2294d85c2c0edd059cd78deb8",
+          "largest_group_width_fraction": 0.9483333333333334,
+          "raw_evidence_components": 164,
+          "review_groups": 4
+        },
+        "tight-3x7": {
+          "component_to_group_reduction_fraction": 0.9024390243902439,
+          "exact_evidence_pixel_count": 9695,
+          "groups": [
+            {
+              "bbox_xyxy": [
+                0,
+                67,
+                38,
+                108
+              ],
+              "group_id": 1,
+              "pixels": 498,
+              "width_fraction": 0.06333333333333334
+            },
+            {
+              "bbox_xyxy": [
+                0,
+                96,
+                134,
+                191
+              ],
+              "group_id": 2,
+              "pixels": 2285,
+              "width_fraction": 0.22333333333333333
+            },
+            {
+              "bbox_xyxy": [
+                98,
+                87,
+                115,
+                93
+              ],
+              "group_id": 3,
+              "pixels": 21,
+              "width_fraction": 0.028333333333333332
+            },
+            {
+              "bbox_xyxy": [
+                105,
+                66,
+                135,
+                84
+              ],
+              "group_id": 4,
+              "pixels": 62,
+              "width_fraction": 0.05
+            },
+            {
+              "bbox_xyxy": [
+                107,
+                132,
+                118,
+                141
+              ],
+              "group_id": 5,
+              "pixels": 31,
+              "width_fraction": 0.018333333333333333
+            },
+            {
+              "bbox_xyxy": [
+                120,
+                168,
+                142,
+                179
+              ],
+              "group_id": 6,
+              "pixels": 129,
+              "width_fraction": 0.03666666666666667
+            },
+            {
+              "bbox_xyxy": [
+                132,
+                140,
+                141,
+                149
+              ],
+              "group_id": 7,
+              "pixels": 43,
+              "width_fraction": 0.015
+            },
+            {
+              "bbox_xyxy": [
+                152,
+                126,
+                359,
+                183
+              ],
+              "group_id": 8,
+              "pixels": 1738,
+              "width_fraction": 0.345
+            },
+            {
+              "bbox_xyxy": [
+                177,
+                135,
+                215,
+                153
+              ],
+              "group_id": 9,
+              "pixels": 188,
+              "width_fraction": 0.06333333333333334
+            },
+            {
+              "bbox_xyxy": [
+                225,
+                146,
+                238,
+                155
+              ],
+              "group_id": 10,
+              "pixels": 52,
+              "width_fraction": 0.021666666666666667
+            },
+            {
+              "bbox_xyxy": [
+                254,
+                141,
+                279,
+                159
+              ],
+              "group_id": 11,
+              "pixels": 169,
+              "width_fraction": 0.041666666666666664
+            },
+            {
+              "bbox_xyxy": [
+                287,
+                66,
+                313,
+                82
+              ],
+              "group_id": 12,
+              "pixels": 61,
+              "width_fraction": 0.043333333333333335
+            },
+            {
+              "bbox_xyxy": [
+                365,
+                137,
+                380,
+                175
+              ],
+              "group_id": 13,
+              "pixels": 216,
+              "width_fraction": 0.025
+            },
+            {
+              "bbox_xyxy": [
+                388,
+                86,
+                569,
+                234
+              ],
+              "group_id": 14,
+              "pixels": 4189,
+              "width_fraction": 0.3016666666666667
+            },
+            {
+              "bbox_xyxy": [
+                406,
+                71,
+                408,
+                73
+              ],
+              "group_id": 15,
+              "pixels": 4,
+              "width_fraction": 0.0033333333333333335
+            },
+            {
+              "bbox_xyxy": [
+                424,
+                154,
+                428,
+                157
+              ],
+              "group_id": 16,
+              "pixels": 9,
+              "width_fraction": 0.006666666666666667
+            }
+          ],
+          "ink_pixel_identity_preserved": true,
+          "kernel_hw": [
+            3,
+            7
+          ],
+          "labels_file": "tight-3x7.labels.uint16.png",
+          "labels_file_sha256": "bea4e5093f13dfb27fab7d9bf5656cdddc594be8e663b35bc10e0b74e0937331",
+          "labels_int32_pixel_sha256": "b41c2937529c7440e3008239929679564cbe498d8b1a6792b91a68ce063b7429",
+          "largest_group_width_fraction": 0.345,
+          "raw_evidence_components": 164,
+          "review_groups": 16
+        },
+        "valley-bounded-balanced-5x15": {
+          "column_density_smoothing_sigma": 5.0,
+          "component_to_group_reduction_fraction": 0.9695121951219512,
+          "exact_evidence_pixel_count": 9695,
+          "groups": [
+            {
+              "bbox_xyxy": [
+                0,
+                66,
+                142,
+                191
+              ],
+              "group_id": 1,
+              "pixels": 2571,
+              "width_fraction": 0.23666666666666666
+            },
+            {
+              "bbox_xyxy": [
+                0,
+                67,
+                38,
+                108
+              ],
+              "group_id": 2,
+              "pixels": 498,
+              "width_fraction": 0.06333333333333334
+            },
+            {
+              "bbox_xyxy": [
+                152,
+                86,
+                569,
+                234
+              ],
+              "group_id": 3,
+              "pixels": 6561,
+              "width_fraction": 0.695
+            },
+            {
+              "bbox_xyxy": [
+                287,
+                66,
+                313,
+                82
+              ],
+              "group_id": 4,
+              "pixels": 61,
+              "width_fraction": 0.043333333333333335
+            },
+            {
+              "bbox_xyxy": [
+                406,
+                71,
+                408,
+                73
+              ],
+              "group_id": 5,
+              "pixels": 4,
+              "width_fraction": 0.0033333333333333335
+            }
+          ],
+          "ink_pixel_identity_preserved": true,
+          "kernel_hw": [
+            5,
+            15
+          ],
+          "labels_file": "valley-bounded-balanced.labels.uint16.png",
+          "labels_file_sha256": "bb7bc1b26ed4d85a578f3fc68745f25675f120a7537220fa79043b78bb77f8f3",
+          "labels_int32_pixel_sha256": "26a19be3bee92efdbcc46341bace40e8102d1f272dbf3bb49afb33b48e47b958",
+          "largest_group_width_fraction": 0.695,
+          "low_density_quantile": 0.1,
+          "low_density_threshold": 4.689317226409912,
+          "minimum_valley_width": 10,
+          "raw_evidence_components": 164,
+          "review_groups": 5,
+          "valleys": [
+            {
+              "boundary_x": 150,
+              "minimum_smoothed_density": 1.126698613166809,
+              "width": 17,
+              "x0": 141,
+              "x1": 158
+            }
+          ]
+        }
+      },
+      "inputs": {
+        "local_recovery": {
+          "file_sha256": "28d4783afd2f9067f47200da12820c53d1b44e0d548315fec50b501f5b096598",
+          "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/hybrid-seed-local-recovery-v1/003-18860314-L01-01/enough-tight/conservative.mask.png"
+        },
+        "vector_score": {
+          "file_sha256": "0a4e047ce9c2f5fff164079c90d7c65a0a6a3949ae845a1db3ba0362139dd66b",
+          "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/line-conditioned-vector-ink-v1/003-18860314-L01-01/enough-tight/prototype-classifier-agreement.score.float16.npy"
+        }
+      },
+      "review_boards": {
+        "composition": {
+          "file": "one-pass-composite-review.png",
+          "file_sha256": "7ce890cd934d45d456c1bc25073becac574dc5a1d40afa2dc96301c6bd6f1846"
+        },
+        "grouping": {
+          "file": "one-pass-composite-grouping-review.png",
+          "file_sha256": "b8037e3a3b2ac318ed6975c24ebfe73f9a2f6c5c4d7afce96d4a62f0a8cee9f6"
+        },
+        "valley_bounded": {
+          "file": "one-pass-valley-bounded-grouping-review.png",
+          "file_sha256": "12081e4fe280e91d77b10560965ad7f36a49ae8419d0ccbb62bc56412b71963d"
+        }
+      },
+      "role": "extremely faint word tail",
+      "runtime_seconds": 2.314011250004114,
+      "thresholds_frozen_before_output_review": {
+        "darkening_response_paper_quantile": 0.995,
+        "eynollah_core": 0.5,
+        "ridge_paper_quantile": 0.95,
+        "vector_score": 0.8
+      },
+      "tiers": {
+        "dark-vector agreement": {
+          "components": 255,
+          "mask_pixel_sha256": "0ce1c653e1ad091a780987973f922435f9acd5327e92c79cb02c4bbe45e58996",
+          "paper_proxy_pixels": 1,
+          "pixels": 6940
+        },
+        "exploratory vector": {
+          "components": 130,
+          "mask_pixel_sha256": "e132f9ef2934f923be1707cfa486b81ef8c2f953d6de566b3db2c0b5af1008db",
+          "paper_proxy_pixels": 0,
+          "pixels": 219
+        },
+        "eynollah core": {
+          "components": 11,
+          "mask_pixel_sha256": "f0a64227251e51e801203f4c44d0cf529fe2ad68e74c8ad69a66bb65c82dd81a",
+          "paper_proxy_pixels": 0,
+          "pixels": 2188
+        },
+        "local source recovery": {
+          "components": 15,
+          "mask_pixel_sha256": "45fb30a8c6ea82a2cf2e271a2e9dd204ccb403d1c0766edb4dc89e71144c5038",
+          "paper_proxy_pixels": 0,
+          "pixels": 348
+        }
+      }
+    },
+    "folded-write-to-you": {
+      "bbox_xywh": [
+        1700,
+        1875,
+        1000,
+        350
+      ],
+      "corridor_y_fraction": [
+        0.22,
+        0.78
+      ],
+      "enhancement": {
+        "darkening_response_floor": 0.04732666666666674,
+        "file": "page-ink-vector-darkened.png",
+        "file_sha256": "41fb84f3c2a91fdff123b2f776559d94a25d3067c39c2bc16f5f377db59844c9",
+        "rgb_pixel_sha256": "5134559572337a73c939a0b01d58094cc66ff1cf3df9c6a85a4b49eb2ceffdd7",
+        "ridge_floor": 0.008016351365893895
+      },
+      "evidence": {
+        "components": 151,
+        "file": "composed-exact-source-evidence.png",
+        "file_sha256": "d0c35cc9d74b948255033a9437c2f86540746617c2436a271973f3b1eb75828c",
+        "mask_pixel_sha256": "7c675f1d1ed2937e6ff5f9b662d32937638be871dc62e263fc08c172749ce707",
+        "pixels": 13942,
+        "tier_labels_file": "evidence-tier-labels.uint8.png",
+        "tier_labels_file_sha256": "563b1881b9340b24a256762c52701324ac2e3bc97e5c73bdbee4da1cf751ca59"
+      },
+      "grouping": {
+        "balanced-5x15": {
+          "component_to_group_reduction_fraction": 0.8609271523178808,
+          "exact_evidence_pixel_count": 13942,
+          "groups": [
+            {
+              "bbox_xyxy": [
+                0,
+                135,
+                6,
+                143
+              ],
+              "group_id": 1,
+              "pixels": 29,
+              "width_fraction": 0.006
+            },
+            {
+              "bbox_xyxy": [
+                0,
+                135,
+                70,
+                197
+              ],
+              "group_id": 2,
+              "pixels": 895,
+              "width_fraction": 0.07
+            },
+            {
+              "bbox_xyxy": [
+                0,
+                201,
+                119,
+                248
+              ],
+              "group_id": 3,
+              "pixels": 2058,
+              "width_fraction": 0.119
+            },
+            {
+              "bbox_xyxy": [
+                131,
+                148,
+                265,
+                254
+              ],
+              "group_id": 4,
+              "pixels": 2514,
+              "width_fraction": 0.134
+            },
+            {
+              "bbox_xyxy": [
+                242,
+                172,
+                625,
+                251
+              ],
+              "group_id": 5,
+              "pixels": 5099,
+              "width_fraction": 0.383
+            },
+            {
+              "bbox_xyxy": [
+                424,
+                152,
+                441,
+                169
+              ],
+              "group_id": 6,
+              "pixels": 133,
+              "width_fraction": 0.017
+            },
+            {
+              "bbox_xyxy": [
+                481,
+                143,
+                517,
+                168
+              ],
+              "group_id": 7,
+              "pixels": 161,
+              "width_fraction": 0.036
+            },
+            {
+              "bbox_xyxy": [
+                486,
+                268,
+                496,
+                273
+              ],
+              "group_id": 8,
+              "pixels": 33,
+              "width_fraction": 0.01
+            },
+            {
+              "bbox_xyxy": [
+                498,
+                77,
+                555,
+                138
+              ],
+              "group_id": 9,
+              "pixels": 628,
+              "width_fraction": 0.057
+            },
+            {
+              "bbox_xyxy": [
+                571,
+                195,
+                590,
+                219
+              ],
+              "group_id": 10,
+              "pixels": 93,
+              "width_fraction": 0.019
+            },
+            {
+              "bbox_xyxy": [
+                613,
+                197,
+                666,
+                212
+              ],
+              "group_id": 11,
+              "pixels": 119,
+              "width_fraction": 0.053
+            },
+            {
+              "bbox_xyxy": [
+                615,
+                168,
+                635,
+                171
+              ],
+              "group_id": 12,
+              "pixels": 15,
+              "width_fraction": 0.02
+            },
+            {
+              "bbox_xyxy": [
+                656,
+                217,
+                728,
+                241
+              ],
+              "group_id": 13,
+              "pixels": 313,
+              "width_fraction": 0.072
+            },
+            {
+              "bbox_xyxy": [
+                657,
+                160,
+                670,
+                163
+              ],
+              "group_id": 14,
+              "pixels": 21,
+              "width_fraction": 0.013
+            },
+            {
+              "bbox_xyxy": [
+                667,
+                248,
+                698,
+                272
+              ],
+              "group_id": 15,
+              "pixels": 132,
+              "width_fraction": 0.031
+            },
+            {
+              "bbox_xyxy": [
+                689,
+                207,
+                695,
+                211
+              ],
+              "group_id": 16,
+              "pixels": 13,
+              "width_fraction": 0.006
+            },
+            {
+              "bbox_xyxy": [
+                706,
+                182,
+                723,
+                190
+              ],
+              "group_id": 17,
+              "pixels": 42,
+              "width_fraction": 0.017
+            },
+            {
+              "bbox_xyxy": [
+                722,
+                203,
+                743,
+                208
+              ],
+              "group_id": 18,
+              "pixels": 22,
+              "width_fraction": 0.021
+            },
+            {
+              "bbox_xyxy": [
+                744,
+                193,
+                890,
+                236
+              ],
+              "group_id": 19,
+              "pixels": 1187,
+              "width_fraction": 0.146
+            },
+            {
+              "bbox_xyxy": [
+                869,
+                149,
+                901,
+                194
+              ],
+              "group_id": 20,
+              "pixels": 422,
+              "width_fraction": 0.032
+            },
+            {
+              "bbox_xyxy": [
+                907,
+                222,
+                920,
+                225
+              ],
+              "group_id": 21,
+              "pixels": 13,
+              "width_fraction": 0.013
+            }
+          ],
+          "ink_pixel_identity_preserved": true,
+          "kernel_hw": [
+            5,
+            15
+          ],
+          "labels_file": "balanced-5x15.labels.uint16.png",
+          "labels_file_sha256": "a602fb2a45e3121a8b11f19541562a118f830b67c62a3d6adea31bb60cf3e3e8",
+          "labels_int32_pixel_sha256": "093693ad4ed15775714fd1f749f5795afb2a662ff0647d058d0342f8b0b7e01c",
+          "largest_group_width_fraction": 0.383,
+          "raw_evidence_components": 151,
+          "review_groups": 21
+        },
+        "broad-7x25": {
+          "component_to_group_reduction_fraction": 0.9205298013245033,
+          "exact_evidence_pixel_count": 13942,
+          "groups": [
+            {
+              "bbox_xyxy": [
+                0,
+                135,
+                6,
+                143
+              ],
+              "group_id": 1,
+              "pixels": 29,
+              "width_fraction": 0.006
+            },
+            {
+              "bbox_xyxy": [
+                0,
+                135,
+                70,
+                197
+              ],
+              "group_id": 2,
+              "pixels": 895,
+              "width_fraction": 0.07
+            },
+            {
+              "bbox_xyxy": [
+                0,
+                148,
+                265,
+                254
+              ],
+              "group_id": 3,
+              "pixels": 4572,
+              "width_fraction": 0.265
+            },
+            {
+              "bbox_xyxy": [
+                242,
+                172,
+                695,
+                251
+              ],
+              "group_id": 4,
+              "pixels": 5324,
+              "width_fraction": 0.453
+            },
+            {
+              "bbox_xyxy": [
+                424,
+                152,
+                441,
+                169
+              ],
+              "group_id": 5,
+              "pixels": 133,
+              "width_fraction": 0.017
+            },
+            {
+              "bbox_xyxy": [
+                481,
+                77,
+                555,
+                168
+              ],
+              "group_id": 6,
+              "pixels": 789,
+              "width_fraction": 0.074
+            },
+            {
+              "bbox_xyxy": [
+                486,
+                268,
+                496,
+                273
+              ],
+              "group_id": 7,
+              "pixels": 33,
+              "width_fraction": 0.01
+            },
+            {
+              "bbox_xyxy": [
+                615,
+                160,
+                670,
+                171
+              ],
+              "group_id": 8,
+              "pixels": 36,
+              "width_fraction": 0.055
+            },
+            {
+              "bbox_xyxy": [
+                656,
+                193,
+                920,
+                241
+              ],
+              "group_id": 9,
+              "pixels": 1535,
+              "width_fraction": 0.264
+            },
+            {
+              "bbox_xyxy": [
+                667,
+                248,
+                698,
+                272
+              ],
+              "group_id": 10,
+              "pixels": 132,
+              "width_fraction": 0.031
+            },
+            {
+              "bbox_xyxy": [
+                706,
+                182,
+                723,
+                190
+              ],
+              "group_id": 11,
+              "pixels": 42,
+              "width_fraction": 0.017
+            },
+            {
+              "bbox_xyxy": [
+                869,
+                149,
+                901,
+                194
+              ],
+              "group_id": 12,
+              "pixels": 422,
+              "width_fraction": 0.032
+            }
+          ],
+          "ink_pixel_identity_preserved": true,
+          "kernel_hw": [
+            7,
+            25
+          ],
+          "labels_file": "broad-7x25.labels.uint16.png",
+          "labels_file_sha256": "46b1eef082ec9b2541fd10b455fa7300e910167a5fa1b3163d1f83239ef5b989",
+          "labels_int32_pixel_sha256": "2bfb232d2fd53e1db6e6a1c1ac337ee184accfc81ec5c7b1521a32dc73fd16bc",
+          "largest_group_width_fraction": 0.453,
+          "raw_evidence_components": 151,
+          "review_groups": 12
+        },
+        "tight-3x7": {
+          "component_to_group_reduction_fraction": 0.794701986754967,
+          "exact_evidence_pixel_count": 13942,
+          "groups": [
+            {
+              "bbox_xyxy": [
+                0,
+                135,
+                6,
+                143
+              ],
+              "group_id": 1,
+              "pixels": 29,
+              "width_fraction": 0.006
+            },
+            {
+              "bbox_xyxy": [
+                0,
+                135,
+                70,
+                197
+              ],
+              "group_id": 2,
+              "pixels": 895,
+              "width_fraction": 0.07
+            },
+            {
+              "bbox_xyxy": [
+                0,
+                201,
+                119,
+                248
+              ],
+              "group_id": 3,
+              "pixels": 2058,
+              "width_fraction": 0.119
+            },
+            {
+              "bbox_xyxy": [
+                131,
+                148,
+                265,
+                254
+              ],
+              "group_id": 4,
+              "pixels": 2514,
+              "width_fraction": 0.134
+            },
+            {
+              "bbox_xyxy": [
+                242,
+                247,
+                247,
+                251
+              ],
+              "group_id": 5,
+              "pixels": 15,
+              "width_fraction": 0.005
+            },
+            {
+              "bbox_xyxy": [
+                257,
+                172,
+                549,
+                248
+              ],
+              "group_id": 6,
+              "pixels": 4656,
+              "width_fraction": 0.292
+            },
+            {
+              "bbox_xyxy": [
+                424,
+                152,
+                441,
+                169
+              ],
+              "group_id": 7,
+              "pixels": 133,
+              "width_fraction": 0.017
+            },
+            {
+              "bbox_xyxy": [
+                481,
+                143,
+                517,
+                168
+              ],
+              "group_id": 8,
+              "pixels": 161,
+              "width_fraction": 0.036
+            },
+            {
+              "bbox_xyxy": [
+                486,
+                268,
+                496,
+                273
+              ],
+              "group_id": 9,
+              "pixels": 33,
+              "width_fraction": 0.01
+            },
+            {
+              "bbox_xyxy": [
+                498,
+                77,
+                555,
+                138
+              ],
+              "group_id": 10,
+              "pixels": 628,
+              "width_fraction": 0.057
+            },
+            {
+              "bbox_xyxy": [
+                544,
+                221,
+                625,
+                240
+              ],
+              "group_id": 11,
+              "pixels": 428,
+              "width_fraction": 0.081
+            },
+            {
+              "bbox_xyxy": [
+                571,
+                195,
+                590,
+                219
+              ],
+              "group_id": 12,
+              "pixels": 93,
+              "width_fraction": 0.019
+            },
+            {
+              "bbox_xyxy": [
+                613,
+                203,
+                622,
+                212
+              ],
+              "group_id": 13,
+              "pixels": 20,
+              "width_fraction": 0.009
+            },
+            {
+              "bbox_xyxy": [
+                615,
+                168,
+                627,
+                171
+              ],
+              "group_id": 14,
+              "pixels": 13,
+              "width_fraction": 0.012
+            },
+            {
+              "bbox_xyxy": [
+                631,
+                197,
+                666,
+                208
+              ],
+              "group_id": 15,
+              "pixels": 99,
+              "width_fraction": 0.035
+            },
+            {
+              "bbox_xyxy": [
+                634,
+                168,
+                635,
+                170
+              ],
+              "group_id": 16,
+              "pixels": 2,
+              "width_fraction": 0.001
+            },
+            {
+              "bbox_xyxy": [
+                656,
+                223,
+                671,
+                231
+              ],
+              "group_id": 17,
+              "pixels": 48,
+              "width_fraction": 0.015
+            },
+            {
+              "bbox_xyxy": [
+                657,
+                160,
+                670,
+                163
+              ],
+              "group_id": 18,
+              "pixels": 21,
+              "width_fraction": 0.013
+            },
+            {
+              "bbox_xyxy": [
+                667,
+                248,
+                698,
+                272
+              ],
+              "group_id": 19,
+              "pixels": 132,
+              "width_fraction": 0.031
+            },
+            {
+              "bbox_xyxy": [
+                685,
+                217,
+                728,
+                241
+              ],
+              "group_id": 20,
+              "pixels": 265,
+              "width_fraction": 0.043
+            },
+            {
+              "bbox_xyxy": [
+                689,
+                207,
+                695,
+                211
+              ],
+              "group_id": 21,
+              "pixels": 13,
+              "width_fraction": 0.006
+            },
+            {
+              "bbox_xyxy": [
+                706,
+                182,
+                723,
+                190
+              ],
+              "group_id": 22,
+              "pixels": 42,
+              "width_fraction": 0.017
+            },
+            {
+              "bbox_xyxy": [
+                722,
+                203,
+                743,
+                208
+              ],
+              "group_id": 23,
+              "pixels": 22,
+              "width_fraction": 0.021
+            },
+            {
+              "bbox_xyxy": [
+                744,
+                209,
+                809,
+                231
+              ],
+              "group_id": 24,
+              "pixels": 420,
+              "width_fraction": 0.065
+            },
+            {
+              "bbox_xyxy": [
+                765,
+                199,
+                769,
+                203
+              ],
+              "group_id": 25,
+              "pixels": 10,
+              "width_fraction": 0.004
+            },
+            {
+              "bbox_xyxy": [
+                776,
+                193,
+                806,
+                210
+              ],
+              "group_id": 26,
+              "pixels": 158,
+              "width_fraction": 0.03
+            },
+            {
+              "bbox_xyxy": [
+                810,
+                195,
+                840,
+                216
+              ],
+              "group_id": 27,
+              "pixels": 148,
+              "width_fraction": 0.03
+            },
+            {
+              "bbox_xyxy": [
+                816,
+                217,
+                855,
+                236
+              ],
+              "group_id": 28,
+              "pixels": 305,
+              "width_fraction": 0.039
+            },
+            {
+              "bbox_xyxy": [
+                868,
+                216,
+                890,
+                229
+              ],
+              "group_id": 29,
+              "pixels": 146,
+              "width_fraction": 0.022
+            },
+            {
+              "bbox_xyxy": [
+                869,
+                149,
+                901,
+                194
+              ],
+              "group_id": 30,
+              "pixels": 422,
+              "width_fraction": 0.032
+            },
+            {
+              "bbox_xyxy": [
+                907,
+                222,
+                920,
+                225
+              ],
+              "group_id": 31,
+              "pixels": 13,
+              "width_fraction": 0.013
+            }
+          ],
+          "ink_pixel_identity_preserved": true,
+          "kernel_hw": [
+            3,
+            7
+          ],
+          "labels_file": "tight-3x7.labels.uint16.png",
+          "labels_file_sha256": "5f12ab93586cb3b13f0d75dd2961e7b96ae054bbc6491722991f653e90dbfeb0",
+          "labels_int32_pixel_sha256": "77bf28266a0220bb815a1c9f227fb3312afde05716bc15c3ab9b5090624b86da",
+          "largest_group_width_fraction": 0.292,
+          "raw_evidence_components": 151,
+          "review_groups": 31
+        },
+        "valley-bounded-balanced-5x15": {
+          "column_density_smoothing_sigma": 5.0,
+          "component_to_group_reduction_fraction": 0.8609271523178808,
+          "exact_evidence_pixel_count": 13942,
+          "groups": [
+            {
+              "bbox_xyxy": [
+                0,
+                135,
+                6,
+                143
+              ],
+              "group_id": 1,
+              "pixels": 29,
+              "width_fraction": 0.006
+            },
+            {
+              "bbox_xyxy": [
+                0,
+                135,
+                70,
+                197
+              ],
+              "group_id": 2,
+              "pixels": 895,
+              "width_fraction": 0.07
+            },
+            {
+              "bbox_xyxy": [
+                0,
+                201,
+                119,
+                248
+              ],
+              "group_id": 3,
+              "pixels": 2058,
+              "width_fraction": 0.119
+            },
+            {
+              "bbox_xyxy": [
+                131,
+                148,
+                265,
+                254
+              ],
+              "group_id": 4,
+              "pixels": 2514,
+              "width_fraction": 0.134
+            },
+            {
+              "bbox_xyxy": [
+                242,
+                172,
+                625,
+                251
+              ],
+              "group_id": 5,
+              "pixels": 5099,
+              "width_fraction": 0.383
+            },
+            {
+              "bbox_xyxy": [
+                424,
+                152,
+                441,
+                169
+              ],
+              "group_id": 6,
+              "pixels": 133,
+              "width_fraction": 0.017
+            },
+            {
+              "bbox_xyxy": [
+                481,
+                143,
+                517,
+                168
+              ],
+              "group_id": 7,
+              "pixels": 161,
+              "width_fraction": 0.036
+            },
+            {
+              "bbox_xyxy": [
+                486,
+                268,
+                496,
+                273
+              ],
+              "group_id": 8,
+              "pixels": 33,
+              "width_fraction": 0.01
+            },
+            {
+              "bbox_xyxy": [
+                498,
+                77,
+                555,
+                138
+              ],
+              "group_id": 9,
+              "pixels": 628,
+              "width_fraction": 0.057
+            },
+            {
+              "bbox_xyxy": [
+                571,
+                195,
+                590,
+                219
+              ],
+              "group_id": 10,
+              "pixels": 93,
+              "width_fraction": 0.019
+            },
+            {
+              "bbox_xyxy": [
+                613,
+                197,
+                666,
+                212
+              ],
+              "group_id": 11,
+              "pixels": 119,
+              "width_fraction": 0.053
+            },
+            {
+              "bbox_xyxy": [
+                615,
+                168,
+                635,
+                171
+              ],
+              "group_id": 12,
+              "pixels": 15,
+              "width_fraction": 0.02
+            },
+            {
+              "bbox_xyxy": [
+                656,
+                217,
+                728,
+                241
+              ],
+              "group_id": 13,
+              "pixels": 313,
+              "width_fraction": 0.072
+            },
+            {
+              "bbox_xyxy": [
+                657,
+                160,
+                670,
+                163
+              ],
+              "group_id": 14,
+              "pixels": 21,
+              "width_fraction": 0.013
+            },
+            {
+              "bbox_xyxy": [
+                667,
+                248,
+                698,
+                272
+              ],
+              "group_id": 15,
+              "pixels": 132,
+              "width_fraction": 0.031
+            },
+            {
+              "bbox_xyxy": [
+                689,
+                207,
+                695,
+                211
+              ],
+              "group_id": 16,
+              "pixels": 13,
+              "width_fraction": 0.006
+            },
+            {
+              "bbox_xyxy": [
+                706,
+                182,
+                723,
+                190
+              ],
+              "group_id": 17,
+              "pixels": 42,
+              "width_fraction": 0.017
+            },
+            {
+              "bbox_xyxy": [
+                722,
+                203,
+                743,
+                208
+              ],
+              "group_id": 18,
+              "pixels": 22,
+              "width_fraction": 0.021
+            },
+            {
+              "bbox_xyxy": [
+                744,
+                193,
+                890,
+                236
+              ],
+              "group_id": 19,
+              "pixels": 1187,
+              "width_fraction": 0.146
+            },
+            {
+              "bbox_xyxy": [
+                869,
+                149,
+                901,
+                194
+              ],
+              "group_id": 20,
+              "pixels": 422,
+              "width_fraction": 0.032
+            },
+            {
+              "bbox_xyxy": [
+                907,
+                222,
+                920,
+                225
+              ],
+              "group_id": 21,
+              "pixels": 13,
+              "width_fraction": 0.013
+            }
+          ],
+          "ink_pixel_identity_preserved": true,
+          "kernel_hw": [
+            5,
+            15
+          ],
+          "labels_file": "valley-bounded-balanced.labels.uint16.png",
+          "labels_file_sha256": "a602fb2a45e3121a8b11f19541562a118f830b67c62a3d6adea31bb60cf3e3e8",
+          "labels_int32_pixel_sha256": "093693ad4ed15775714fd1f749f5795afb2a662ff0647d058d0342f8b0b7e01c",
+          "largest_group_width_fraction": 0.383,
+          "low_density_quantile": 0.1,
+          "low_density_threshold": 0.8784173130989075,
+          "minimum_valley_width": 10,
+          "raw_evidence_components": 151,
+          "review_groups": 21,
+          "valleys": []
+        }
+      },
+      "inputs": {
+        "local_recovery": {
+          "file_sha256": "88fcaeff88e257823ee913250696e09acfc18b36d535288e3595faf0ce89ea0a",
+          "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/hybrid-seed-local-recovery-v1/003-18860314-L01-01/folded-write-to-you/conservative.mask.png"
+        },
+        "vector_score": {
+          "file_sha256": "69ec0a5638dab20d6817c39867dfb9d580516008769ebd7d9fb7f918186ecd4d",
+          "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/line-conditioned-vector-ink-v1/003-18860314-L01-01/folded-write-to-you/prototype-classifier-agreement.score.float16.npy"
+        }
+      },
+      "review_boards": {
+        "composition": {
+          "file": "one-pass-composite-review.png",
+          "file_sha256": "6e0b82661b0abb905915573a9dfc36f7ec548e4c731a32605c51c746f3b64791"
+        },
+        "grouping": {
+          "file": "one-pass-composite-grouping-review.png",
+          "file_sha256": "d82f40e4dfff7c82166123a36299dede34303f83bb08d41d3f67151370a21d1f"
+        },
+        "valley_bounded": {
+          "file": "one-pass-valley-bounded-grouping-review.png",
+          "file_sha256": "9dc6274fa725fe52cf99cac5ebb400b436873d3d593e75ccb709e7a79dc0c3c5"
+        }
+      },
+      "role": "fold/rule contamination and faint writing",
+      "runtime_seconds": 4.991387290996499,
+      "thresholds_frozen_before_output_review": {
+        "darkening_response_paper_quantile": 0.995,
+        "eynollah_core": 0.5,
+        "ridge_paper_quantile": 0.95,
+        "vector_score": 0.8
+      },
+      "tiers": {
+        "dark-vector agreement": {
+          "components": 441,
+          "mask_pixel_sha256": "c545b4fd80c803f9f06554c95a3ac0fafbf4045e328f85c427a56d502290f7dd",
+          "paper_proxy_pixels": 1,
+          "pixels": 5129
+        },
+        "exploratory vector": {
+          "components": 144,
+          "mask_pixel_sha256": "f28a58dabaf434a514097ee3fd8ae0f86a19f841d87f926acc47a2c7b4ce930e",
+          "paper_proxy_pixels": 0,
+          "pixels": 202
+        },
+        "eynollah core": {
+          "components": 17,
+          "mask_pixel_sha256": "a5a9b77956c7e703417515c7a11dbc9232b5bba8965f3e9190f782f0c76b293d",
+          "paper_proxy_pixels": 0,
+          "pixels": 8132
+        },
+        "local source recovery": {
+          "components": 20,
+          "mask_pixel_sha256": "dc6cc870901d526d874754cad210f9008da73ed79f4b78246e4f97319a11069e",
+          "paper_proxy_pixels": 0,
+          "pixels": 479
+        }
+      }
+    }
+  },
+  "experiment_status": "acting_safe_visual_review_complete",
+  "hybrid_probability": {
+    "file_sha256": "d2a6d6ba6f158dcc8f3a8fc710b513295e9f9c5679d23c8457ffc84ac2b74e65",
+    "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-hybrid-binarization-trial-20260809/003-18860314-L01-01/foreground-probability.float16.npy"
+  },
+  "interpretation_guardrail": "The union is a review surface, not an automatic word mask. Fewer components or more recovered pixels is not inherently better. Temporary grouping changes labels only and can never create final ink pixels.",
+  "post_run_visual_review": {
+    "architecture_decision": "prefer_one_pass_eynollah_core_then_source_algorithms",
+    "decision": "promote_tiered_exact_source_composition_and_valley_bounded_grouping_as_development_candidates",
+    "frozen_before_sealed_evaluation": false,
+    "findings": {
+      "acknowledgement-tight": "The darkened source makes the line substantially easier to inspect. Two automatic 10-pixel projection valleys at x 68-78 and 279-289 separate the clipped left fragment, the short middle word/punctuation, and the long main word. Valley-bounded grouping yields 10 groups and reduces the largest width fraction from 0.6267 to 0.5933 without changing ink pixels.",
+      "enough-tight": "The one-pass Eynollah core contains only 2188 pixels and visibly misses most of the faint center. The composed review surface contains 9695 exact source pixels. One 17-pixel projection valley at x 141-158 prevents the left neighbor from joining the recovered target; the largest group width falls from 0.9483 to 0.6950 while exact pixels remain unchanged.",
+      "folded-write-to-you": "The composition recovers visible faint tail fragments, but the fixed valley rule finds no trustworthy word gap. It leaves 21 balanced groups instead of forcing a merge; this crop requires rough Kraken/word geometry or human/agent ownership assistance."
+    },
+    "limitations": "All three crops are on one acting-safe page. Dark/vector and paper masks are software probes rather than truth. The union includes exploratory evidence and is not safe for automatic ownership. The result validates composition and abstention behavior, not corpus-wide accuracy.",
+    "second_pass_eynollah_role": "Keep enhanced Eynollah reinference as an optional measured challenger. On enough it regularized the source-only candidate to 9529 p0.50 pixels in 38 components, but the one-pass composition recovers comparable visible structure without another model call and retains tier provenance. Do not require iterative Eynollah in the default pipeline.",
+    "sealed_human_evidence_inspected": false
+  },
+  "runtime_seconds": 10.76303108400316,
+  "schema_version": "one-pass-composite-ink.v1",
+  "sealed_human_evidence_used": false,
+  "selection_rule": "Run no new model inference. Reuse one frozen full-page Eynollah probability as core/noise teacher; combine conservative source recovery with positive-unknown page-ink vector evidence gated by measured darkening and ridge response; preserve lower-confidence vector evidence as an exploratory tier; group exact pixels with three previously frozen anisotropic kernels. Also challenge global balanced grouping with a predeclared projection-valley rule: Gaussian sigma 5, lowest 10% smoothed column density, minimum 10-pixel interior valley, and no grouping across the valley midpoint.",
+  "source": {
+    "file_sha256": "ac21aa38dbff33823d08e156b214355d85a55a3c8bbdccc0228738b70e41d027",
+    "path": "experiments/word-envelope-shrink-wrap-poc/workspaces/word-ink-ground-truth-v1/collections/003/18860314/L01/pages/003-18860314-L01-01/runs/run-4111a8cd75be/source/working.png"
+  }
+}

@@ -844,6 +844,36 @@
       "identity_sha256": null,
       "predecessor_ids": ["20260809-enhanced-eynollah-reinference-v1", "20260809-hybrid-seed-local-recovery-v1", "20260809-line-conditioned-vector-ink-v1", "20260809-vector-fragment-grouping-v1"],
       "summary": "No new model inference: reuse one Eynollah core, score the naturally darkened source, combine local and positive-unknown vector evidence in explicit tiers, and group exact pixels. A projection-valley boundary fixed the major enough-word merge and correctly split the acknowledgement line; the folded crop found no trustworthy valley and abstained."
+    },
+    {
+      "record_id": "20260809-best-ink-pipeline-cohort-v1",
+      "title": "Frozen seven-page best ink pipeline cohort",
+      "evidence_role": "run_state",
+      "decision": "diagnostic",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/best-ink-pipeline-cohort-v1",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/best-ink-pipeline-cohort-v1/manifest.json",
+        "file_sha256": "214e646c2864e2ea680d17974812124239009008feb6541a6b0f2c1359dd4f91"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-eynollah-hybrid-binarization-cohort", "20260809-one-pass-composite-ink-v1"],
+      "summary": "Seven predeclared source-only pages show strong Eynollah p0.50 and p0.20-support generalization, but also semantic foreground failures on rings, page edges, and fold/external structure. The first full-page source gate is too conservative and the all-in-one execution overloaded 8 GiB memory, so bounded model-only then model-free page processes are mandatory."
+    },
+    {
+      "record_id": "20260809-faint-ink-classical-challengers-v1",
+      "title": "Near-erased-word classical challenger consensus",
+      "evidence_role": "run_state",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/faint-ink-classical-challengers-v1/003-18860314-L01-01/enough-tight",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/faint-ink-classical-challengers-v1/003-18860314-L01-01/enough-tight/experiment.json",
+        "file_sha256": "1fc1dd2228bba3c908a774c02211a90b420881f821bc9f4788f86bd3fa2ee010"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-natural-faint-word-enhancement-v1", "20260809-fragment-repaired-eynollah-reinference-v1", "20260809-one-pass-composite-ink-v1"],
+      "summary": "Su local contrast independently recovered 79.58% of the frozen faint proxy with two paper-proxy pixels. A four-method conservative/balanced consensus reached 83.79%/97.60% with 3/12 paper pixels; Retinex alone catastrophically flooded. The prior one-pass vector mask remains stronger, so use classical agreement as confidence/challenger evidence rather than an automatic union."
     }
   ]
 }

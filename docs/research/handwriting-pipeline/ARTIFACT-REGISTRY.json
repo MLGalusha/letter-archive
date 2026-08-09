@@ -529,6 +529,21 @@
       "identity_sha256": null,
       "predecessor_ids": ["20260809-sbb-binarization-trial"],
       "summary": "Preserved two-channel probability exactly reproduces hard output at 0.50; 0.20 adds 25,170 mostly stroke-adjacent pixels but does not recover whole near-zero-probability words."
+    },
+    {
+      "record_id": "20260809-eynollah-hybrid-binarization-cohort",
+      "title": "Eynollah/SBB hybrid CNN-Transformer three-page acting-safe cohort",
+      "evidence_role": "run_state",
+      "decision": "candidate_heldout",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-hybrid-binarization-trial-20260809",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-hybrid-binarization-trial-20260809/cohort-summary.json",
+        "file_sha256": "f9b91f76033d6f37b03dda0006716a7f8a663babbd923be925042420751a510e"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-sbb-probability-sweep"],
+      "summary": "The hybrid retained 96.93% of old p0.50 ink and added 159,697 coherent pixels on faint page 003, generalized strongly to folded page 002, and exposed high-confidence glass-ring/page-edge false foreground on 001. Promote probability for geometry-conditioned testing, not as handwriting or ownership truth."
     }
   ]
 }

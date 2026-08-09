@@ -82,6 +82,9 @@ layer contains synthetic bridge pixels; the actor still owns the semantic choice
 - SBB checkpoint architecture, training provenance, probability sweep, data plan,
   and recommended extractor → word ownership → deterministic fitter design:
   [`SBB-BINARIZATION-MODEL-RESEARCH-2026-08-09.md`](SBB-BINARIZATION-MODEL-RESEARCH-2026-08-09.md)
+- Eynollah capability audit, three-page hybrid CNN-Transformer trial, page-adaptive
+  vector/graph recovery design, and bounded integration sequence:
+  [`EYNOLLAH-CAPABILITY-AND-HYBRID-BINARIZATION-2026-08-09.md`](EYNOLLAH-CAPABILITY-AND-HYBRID-BINARIZATION-2026-08-09.md)
 - Machine-readable current-iteration registry:
   [`ARTIFACT-REGISTRY.json`](ARTIFACT-REGISTRY.json) with
   `validate_artifact_registry.py`

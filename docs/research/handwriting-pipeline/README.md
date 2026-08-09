@@ -79,6 +79,9 @@ layer contains synthetic bridge pixels; the actor still owns the semantic choice
   [`backend/benchmarks/ink-recovery/EXPERIMENT-LOG.md`](../../../backend/benchmarks/ink-recovery/EXPERIMENT-LOG.md)
 - Detailed experiment/source map: [`SOURCE-INDEX.md`](SOURCE-INDEX.md)
 - Cross-worktree research/navigation map: [`RESEARCH-MAP.md`](RESEARCH-MAP.md)
+- SBB checkpoint architecture, training provenance, probability sweep, data plan,
+  and recommended extractor → word ownership → deterministic fitter design:
+  [`SBB-BINARIZATION-MODEL-RESEARCH-2026-08-09.md`](SBB-BINARIZATION-MODEL-RESEARCH-2026-08-09.md)
 - Machine-readable current-iteration registry:
   [`ARTIFACT-REGISTRY.json`](ARTIFACT-REGISTRY.json) with
   `validate_artifact_registry.py`

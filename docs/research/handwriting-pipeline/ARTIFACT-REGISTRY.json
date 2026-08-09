@@ -1,6 +1,6 @@
 {
   "schema_version": "handwriting-research-artifact-registry.v1",
-  "scope": "2026-08-08 agent-first word ink ownership iteration",
+  "scope": "2026-08-08 onward agent-first word ink ownership iteration",
   "policy": "Append immutable entries. If a result is superseded, add a successor and preserve the prior entry. primary_record.file_sha256 binds the exact on-disk record; identity_sha256 binds the experiment's own canonical identity when available.",
   "entries": [
     {
@@ -499,6 +499,36 @@
       "identity_sha256": null,
       "predecessor_ids": ["20260808-semantic-binding-adjudication-completed", "20260808-semantic-binding-line-candidate-reevaluation", "20260808-line-component-pool-expansion-evaluation", "20260808-semantic-exclusive-component-transfer-audit"],
       "summary": "Exact semantic ledger, trustworthy proposal metrics, staged pool tradeoff, corrected order audit, guardrails, and next experiments."
+    },
+    {
+      "record_id": "20260809-sbb-binarization-trial",
+      "title": "SBB Binarization 2021 acting-safe faint-page trial",
+      "evidence_role": "run_state",
+      "decision": "candidate_heldout",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/sbb-binarization-trial-20260809/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/sbb-binarization-trial-20260809/003-18860314-L01-01/experiment.json",
+        "file_sha256": "d101588b19463d5e0db2cddfcb75d7c42fbad2b53ece674df214a78c2193dd1b"
+      },
+      "identity_sha256": "fe60435a8ad962c9bae002b399d8f152e87a7681bf402bbc8cd972142055a3b9",
+      "predecessor_ids": [],
+      "summary": "SBB produced coherent, low-noise handwriting evidence on one acting-safe faint page but omitted faint word portions; proposal evidence only."
+    },
+    {
+      "record_id": "20260809-sbb-probability-sweep",
+      "title": "SBB 2021 foreground-probability preservation and threshold sweep",
+      "evidence_role": "run_state",
+      "decision": "candidate_heldout",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/sbb-probability-sweep-20260809/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/sbb-probability-sweep-20260809/003-18860314-L01-01/experiment.json",
+        "file_sha256": "01b1d2e6c3d3236abb5349176c3e604b97576a0615d5f4288cb5f87405f9210c"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-sbb-binarization-trial"],
+      "summary": "Preserved two-channel probability exactly reproduces hard output at 0.50; 0.20 adds 25,170 mostly stroke-adjacent pixels but does not recover whole near-zero-probability words."
     }
   ]
 }

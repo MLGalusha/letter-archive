@@ -1,0 +1,3406 @@
+{
+  "experiment_status": "acting_safe_visual_review_complete",
+  "interpretation_guardrail": "Fewer groups is not automatically better. A grouping that merges neighboring words or unrelated strokes is a regression even when review count falls.",
+  "pages": {
+    "001-18881103-L01-01": {
+      "lines": {
+        "high-0006": {
+          "anchor_pixels": 21233,
+          "bbox_xyxy": [
+            422,
+            1925,
+            2253,
+            2260
+          ],
+          "exact_evidence_mask_pixel_sha256": "d2af331227602eaa1064f0001c49e5d00e122a2c1c4b27768bc9c57df61a1764",
+          "exact_evidence_pixels": 21594,
+          "proposal_pixels": 361,
+          "review_board": {
+            "file": "001-18881103-L01-01/high-0006/vector-fragment-grouping-review.png",
+            "file_sha256": "d7b6da59f3babd1f193c41e12493a0763c5a09cb02c65f9aa109bc02406a7b91"
+          },
+          "upstream_corridor": {
+            "file_sha256": "7ad9628839ed4420b326962319b3f5b1a1bffe72d6a5fe8455bda751a69df0c9",
+            "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/kraken-line-vector-crosspage-v1/001-18881103-L01-01/high-0006/kraken-corridor.png"
+          },
+          "upstream_mask": {
+            "file_sha256": "66695f2315158b0c82e031b064f6bd9c5fa9c32e090ad60df0208820a52fbe85",
+            "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/kraken-line-vector-crosspage-v1/001-18881103-L01-01/high-0006/prototype-classifier-agreement.p080.png"
+          },
+          "variants": {
+            "balanced-5x15": {
+              "component_to_group_reduction_fraction": 0.7234042553191489,
+              "exact_evidence_pixel_count": 21594,
+              "groups": [
+                {
+                  "bbox_xyxy": [
+                    103,
+                    91,
+                    337,
+                    205
+                  ],
+                  "group_id": 1,
+                  "pixels": 1368,
+                  "width_fraction": 0.127799016930639
+                },
+                {
+                  "bbox_xyxy": [
+                    127,
+                    253,
+                    156,
+                    275
+                  ],
+                  "group_id": 2,
+                  "pixels": 226,
+                  "width_fraction": 0.015838339705079193
+                },
+                {
+                  "bbox_xyxy": [
+                    160,
+                    102,
+                    188,
+                    131
+                  ],
+                  "group_id": 3,
+                  "pixels": 157,
+                  "width_fraction": 0.015292190060076462
+                },
+                {
+                  "bbox_xyxy": [
+                    189,
+                    125,
+                    318,
+                    202
+                  ],
+                  "group_id": 4,
+                  "pixels": 1509,
+                  "width_fraction": 0.07045330420535227
+                },
+                {
+                  "bbox_xyxy": [
+                    226,
+                    254,
+                    230,
+                    257
+                  ],
+                  "group_id": 5,
+                  "pixels": 10,
+                  "width_fraction": 0.002184598580010923
+                },
+                {
+                  "bbox_xyxy": [
+                    259,
+                    120,
+                    557,
+                    265
+                  ],
+                  "group_id": 6,
+                  "pixels": 3292,
+                  "width_fraction": 0.16275259421081376
+                },
+                {
+                  "bbox_xyxy": [
+                    386,
+                    85,
+                    406,
+                    94
+                  ],
+                  "group_id": 7,
+                  "pixels": 68,
+                  "width_fraction": 0.010922992900054615
+                },
+                {
+                  "bbox_xyxy": [
+                    520,
+                    195,
+                    545,
+                    211
+                  ],
+                  "group_id": 8,
+                  "pixels": 102,
+                  "width_fraction": 0.013653741125068269
+                },
+                {
+                  "bbox_xyxy": [
+                    589,
+                    159,
+                    790,
+                    248
+                  ],
+                  "group_id": 9,
+                  "pixels": 1746,
+                  "width_fraction": 0.10977607864554888
+                },
+                {
+                  "bbox_xyxy": [
+                    829,
+                    121,
+                    1077,
+                    192
+                  ],
+                  "group_id": 10,
+                  "pixels": 2562,
+                  "width_fraction": 0.13544511196067724
+                },
+                {
+                  "bbox_xyxy": [
+                    870,
+                    103,
+                    881,
+                    109
+                  ],
+                  "group_id": 11,
+                  "pixels": 22,
+                  "width_fraction": 0.006007646095030038
+                },
+                {
+                  "bbox_xyxy": [
+                    1072,
+                    108,
+                    1753,
+                    234
+                  ],
+                  "group_id": 12,
+                  "pixels": 10263,
+                  "width_fraction": 0.3719279082468596
+                },
+                {
+                  "bbox_xyxy": [
+                    1406,
+                    69,
+                    1432,
+                    102
+                  ],
+                  "group_id": 13,
+                  "pixels": 269,
+                  "width_fraction": 0.014199890770071
+                }
+              ],
+              "ink_pixel_identity_preserved": true,
+              "kernel_hw": [
+                5,
+                15
+              ],
+              "labels_file": "balanced-5x15.labels.uint16.png",
+              "labels_file_sha256": "a71ae1df54a6441e94c6ab30ece64e43304547b6535234dfde50efa86c5a7fba",
+              "labels_int32_pixel_sha256": "c4c596b64f6ad8ab4bb8114a38105771a543d0ba9f92290c53ade85a0e316977",
+              "largest_group_width_fraction": 0.3719279082468596,
+              "raw_evidence_components": 47,
+              "review_groups": 13
+            },
+            "broad-7x25": {
+              "component_to_group_reduction_fraction": 0.7872340425531915,
+              "exact_evidence_pixel_count": 21594,
+              "groups": [
+                {
+                  "bbox_xyxy": [
+                    103,
+                    91,
+                    337,
+                    205
+                  ],
+                  "group_id": 1,
+                  "pixels": 1525,
+                  "width_fraction": 0.127799016930639
+                },
+                {
+                  "bbox_xyxy": [
+                    127,
+                    253,
+                    156,
+                    275
+                  ],
+                  "group_id": 2,
+                  "pixels": 226,
+                  "width_fraction": 0.015838339705079193
+                },
+                {
+                  "bbox_xyxy": [
+                    189,
+                    120,
+                    557,
+                    265
+                  ],
+                  "group_id": 3,
+                  "pixels": 4801,
+                  "width_fraction": 0.2009830693610049
+                },
+                {
+                  "bbox_xyxy": [
+                    226,
+                    254,
+                    230,
+                    257
+                  ],
+                  "group_id": 4,
+                  "pixels": 10,
+                  "width_fraction": 0.002184598580010923
+                },
+                {
+                  "bbox_xyxy": [
+                    386,
+                    85,
+                    406,
+                    94
+                  ],
+                  "group_id": 5,
+                  "pixels": 68,
+                  "width_fraction": 0.010922992900054615
+                },
+                {
+                  "bbox_xyxy": [
+                    520,
+                    195,
+                    545,
+                    211
+                  ],
+                  "group_id": 6,
+                  "pixels": 102,
+                  "width_fraction": 0.013653741125068269
+                },
+                {
+                  "bbox_xyxy": [
+                    589,
+                    159,
+                    790,
+                    248
+                  ],
+                  "group_id": 7,
+                  "pixels": 1746,
+                  "width_fraction": 0.10977607864554888
+                },
+                {
+                  "bbox_xyxy": [
+                    829,
+                    108,
+                    1753,
+                    234
+                  ],
+                  "group_id": 8,
+                  "pixels": 12825,
+                  "width_fraction": 0.5046422719825232
+                },
+                {
+                  "bbox_xyxy": [
+                    870,
+                    103,
+                    881,
+                    109
+                  ],
+                  "group_id": 9,
+                  "pixels": 22,
+                  "width_fraction": 0.006007646095030038
+                },
+                {
+                  "bbox_xyxy": [
+                    1406,
+                    69,
+                    1432,
+                    102
+                  ],
+                  "group_id": 10,
+                  "pixels": 269,
+                  "width_fraction": 0.014199890770071
+                }
+              ],
+              "ink_pixel_identity_preserved": true,
+              "kernel_hw": [
+                7,
+                25
+              ],
+              "labels_file": "broad-7x25.labels.uint16.png",
+              "labels_file_sha256": "4c2b279dcbc968febe70e39b258e6e0e3de2aa482a99412036625b6731aafa4e",
+              "labels_int32_pixel_sha256": "afc05d0348dec32883097553150a62cc52de58885c3e32fb118a5a039b0f56d2",
+              "largest_group_width_fraction": 0.5046422719825232,
+              "raw_evidence_components": 47,
+              "review_groups": 10
+            },
+            "tight-3x7": {
+              "component_to_group_reduction_fraction": 0.5957446808510638,
+              "exact_evidence_pixel_count": 21594,
+              "groups": [
+                {
+                  "bbox_xyxy": [
+                    103,
+                    127,
+                    246,
+                    205
+                  ],
+                  "group_id": 1,
+                  "pixels": 624,
+                  "width_fraction": 0.0780993992353905
+                },
+                {
+                  "bbox_xyxy": [
+                    127,
+                    253,
+                    156,
+                    275
+                  ],
+                  "group_id": 2,
+                  "pixels": 226,
+                  "width_fraction": 0.015838339705079193
+                },
+                {
+                  "bbox_xyxy": [
+                    160,
+                    102,
+                    188,
+                    131
+                  ],
+                  "group_id": 3,
+                  "pixels": 157,
+                  "width_fraction": 0.015292190060076462
+                },
+                {
+                  "bbox_xyxy": [
+                    172,
+                    91,
+                    337,
+                    162
+                  ],
+                  "group_id": 4,
+                  "pixels": 744,
+                  "width_fraction": 0.09011469142545057
+                },
+                {
+                  "bbox_xyxy": [
+                    189,
+                    125,
+                    318,
+                    202
+                  ],
+                  "group_id": 5,
+                  "pixels": 1509,
+                  "width_fraction": 0.07045330420535227
+                },
+                {
+                  "bbox_xyxy": [
+                    226,
+                    254,
+                    230,
+                    257
+                  ],
+                  "group_id": 6,
+                  "pixels": 10,
+                  "width_fraction": 0.002184598580010923
+                },
+                {
+                  "bbox_xyxy": [
+                    259,
+                    250,
+                    281,
+                    265
+                  ],
+                  "group_id": 7,
+                  "pixels": 140,
+                  "width_fraction": 0.012015292190060076
+                },
+                {
+                  "bbox_xyxy": [
+                    289,
+                    120,
+                    557,
+                    253
+                  ],
+                  "group_id": 8,
+                  "pixels": 3090,
+                  "width_fraction": 0.14636810486073185
+                },
+                {
+                  "bbox_xyxy": [
+                    386,
+                    85,
+                    406,
+                    94
+                  ],
+                  "group_id": 9,
+                  "pixels": 68,
+                  "width_fraction": 0.010922992900054615
+                },
+                {
+                  "bbox_xyxy": [
+                    424,
+                    135,
+                    436,
+                    147
+                  ],
+                  "group_id": 10,
+                  "pixels": 62,
+                  "width_fraction": 0.006553795740032769
+                },
+                {
+                  "bbox_xyxy": [
+                    520,
+                    195,
+                    545,
+                    211
+                  ],
+                  "group_id": 11,
+                  "pixels": 102,
+                  "width_fraction": 0.013653741125068269
+                },
+                {
+                  "bbox_xyxy": [
+                    589,
+                    159,
+                    790,
+                    248
+                  ],
+                  "group_id": 12,
+                  "pixels": 1746,
+                  "width_fraction": 0.10977607864554888
+                },
+                {
+                  "bbox_xyxy": [
+                    829,
+                    121,
+                    965,
+                    191
+                  ],
+                  "group_id": 13,
+                  "pixels": 1531,
+                  "width_fraction": 0.07427635172037138
+                },
+                {
+                  "bbox_xyxy": [
+                    870,
+                    103,
+                    881,
+                    109
+                  ],
+                  "group_id": 14,
+                  "pixels": 22,
+                  "width_fraction": 0.006007646095030038
+                },
+                {
+                  "bbox_xyxy": [
+                    958,
+                    151,
+                    1077,
+                    192
+                  ],
+                  "group_id": 15,
+                  "pixels": 1031,
+                  "width_fraction": 0.06499180775532495
+                },
+                {
+                  "bbox_xyxy": [
+                    1072,
+                    108,
+                    1230,
+                    227
+                  ],
+                  "group_id": 16,
+                  "pixels": 2215,
+                  "width_fraction": 0.08629164391043145
+                },
+                {
+                  "bbox_xyxy": [
+                    1216,
+                    113,
+                    1509,
+                    234
+                  ],
+                  "group_id": 17,
+                  "pixels": 4544,
+                  "width_fraction": 0.1600218459858001
+                },
+                {
+                  "bbox_xyxy": [
+                    1406,
+                    69,
+                    1432,
+                    102
+                  ],
+                  "group_id": 18,
+                  "pixels": 269,
+                  "width_fraction": 0.014199890770071
+                },
+                {
+                  "bbox_xyxy": [
+                    1475,
+                    111,
+                    1753,
+                    180
+                  ],
+                  "group_id": 19,
+                  "pixels": 3504,
+                  "width_fraction": 0.15182960131075915
+                }
+              ],
+              "ink_pixel_identity_preserved": true,
+              "kernel_hw": [
+                3,
+                7
+              ],
+              "labels_file": "tight-3x7.labels.uint16.png",
+              "labels_file_sha256": "7d5660853358311384b2e06a5466230439d0f98920fbf09fe497fd8e8d7195d4",
+              "labels_int32_pixel_sha256": "ca63fdbf39e9c10c02ee631dde2dfbc1f6c1e271fbfb54a21b60dc55976c80b9",
+              "largest_group_width_fraction": 0.1600218459858001,
+              "raw_evidence_components": 47,
+              "review_groups": 19
+            }
+          }
+        },
+        "low-0014": {
+          "anchor_pixels": 24993,
+          "bbox_xyxy": [
+            346,
+            2948,
+            2107,
+            3388
+          ],
+          "exact_evidence_mask_pixel_sha256": "36ecfedf72aa2e3a88570ce1feb10285d6a6b5795f148f7ae3fcee82e1f70b4b",
+          "exact_evidence_pixels": 26193,
+          "proposal_pixels": 1200,
+          "review_board": {
+            "file": "001-18881103-L01-01/low-0014/vector-fragment-grouping-review.png",
+            "file_sha256": "9b0d4182b05530956fd06aaa1b05a7be31d43c966e2cb1b95bdbf6c434289e62"
+          },
+          "upstream_corridor": {
+            "file_sha256": "8b244ac337017355686378f652c69b0572b30b9b15df85b78628abdf15681c29",
+            "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/kraken-line-vector-crosspage-v1/001-18881103-L01-01/low-0014/kraken-corridor.png"
+          },
+          "upstream_mask": {
+            "file_sha256": "ac89f2401ef3f38aacdfd3b950307d79bfd41f28ed71b4605690db4607f18685",
+            "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/kraken-line-vector-crosspage-v1/001-18881103-L01-01/low-0014/prototype-classifier-agreement.p080.png"
+          },
+          "variants": {
+            "balanced-5x15": {
+              "component_to_group_reduction_fraction": 0.908256880733945,
+              "exact_evidence_pixel_count": 26193,
+              "groups": [
+                {
+                  "bbox_xyxy": [
+                    60,
+                    153,
+                    76,
+                    299
+                  ],
+                  "group_id": 1,
+                  "pixels": 667,
+                  "width_fraction": 0.009085746734809767
+                },
+                {
+                  "bbox_xyxy": [
+                    106,
+                    124,
+                    624,
+                    279
+                  ],
+                  "group_id": 2,
+                  "pixels": 9448,
+                  "width_fraction": 0.2941510505394662
+                },
+                {
+                  "bbox_xyxy": [
+                    628,
+                    180,
+                    1101,
+                    270
+                  ],
+                  "group_id": 3,
+                  "pixels": 5660,
+                  "width_fraction": 0.26859738784781373
+                },
+                {
+                  "bbox_xyxy": [
+                    847,
+                    136,
+                    859,
+                    150
+                  ],
+                  "group_id": 4,
+                  "pixels": 56,
+                  "width_fraction": 0.0068143100511073255
+                },
+                {
+                  "bbox_xyxy": [
+                    991,
+                    153,
+                    1002,
+                    166
+                  ],
+                  "group_id": 5,
+                  "pixels": 68,
+                  "width_fraction": 0.006246450880181715
+                },
+                {
+                  "bbox_xyxy": [
+                    1144,
+                    99,
+                    1514,
+                    252
+                  ],
+                  "group_id": 6,
+                  "pixels": 5251,
+                  "width_fraction": 0.21010789324247586
+                },
+                {
+                  "bbox_xyxy": [
+                    1465,
+                    173,
+                    1500,
+                    192
+                  ],
+                  "group_id": 7,
+                  "pixels": 124,
+                  "width_fraction": 0.019875070982396367
+                },
+                {
+                  "bbox_xyxy": [
+                    1505,
+                    150,
+                    1518,
+                    164
+                  ],
+                  "group_id": 8,
+                  "pixels": 87,
+                  "width_fraction": 0.0073821692220329355
+                },
+                {
+                  "bbox_xyxy": [
+                    1536,
+                    105,
+                    1696,
+                    221
+                  ],
+                  "group_id": 9,
+                  "pixels": 2625,
+                  "width_fraction": 0.09085746734809767
+                },
+                {
+                  "bbox_xyxy": [
+                    1669,
+                    169,
+                    1701,
+                    286
+                  ],
+                  "group_id": 10,
+                  "pixels": 2207,
+                  "width_fraction": 0.018171493469619535
+                }
+              ],
+              "ink_pixel_identity_preserved": true,
+              "kernel_hw": [
+                5,
+                15
+              ],
+              "labels_file": "balanced-5x15.labels.uint16.png",
+              "labels_file_sha256": "d82998cf80a78e54f6c273d917e56c5c648d1b893bdd4b1d75d86399b02b6ef7",
+              "labels_int32_pixel_sha256": "34fb145b0a0873f728f3b6d04fb45761be916c5a7f7d3c5b9026074090e59041",
+              "largest_group_width_fraction": 0.2941510505394662,
+              "raw_evidence_components": 109,
+              "review_groups": 10
+            },
+            "broad-7x25": {
+              "component_to_group_reduction_fraction": 0.9357798165137614,
+              "exact_evidence_pixel_count": 26193,
+              "groups": [
+                {
+                  "bbox_xyxy": [
+                    60,
+                    153,
+                    76,
+                    299
+                  ],
+                  "group_id": 1,
+                  "pixels": 667,
+                  "width_fraction": 0.009085746734809767
+                },
+                {
+                  "bbox_xyxy": [
+                    106,
+                    124,
+                    1101,
+                    279
+                  ],
+                  "group_id": 2,
+                  "pixels": 15108,
+                  "width_fraction": 0.5650198750709824
+                },
+                {
+                  "bbox_xyxy": [
+                    847,
+                    136,
+                    859,
+                    150
+                  ],
+                  "group_id": 3,
+                  "pixels": 56,
+                  "width_fraction": 0.0068143100511073255
+                },
+                {
+                  "bbox_xyxy": [
+                    991,
+                    153,
+                    1002,
+                    166
+                  ],
+                  "group_id": 4,
+                  "pixels": 68,
+                  "width_fraction": 0.006246450880181715
+                },
+                {
+                  "bbox_xyxy": [
+                    1144,
+                    99,
+                    1518,
+                    252
+                  ],
+                  "group_id": 5,
+                  "pixels": 5462,
+                  "width_fraction": 0.2123793299261783
+                },
+                {
+                  "bbox_xyxy": [
+                    1536,
+                    105,
+                    1696,
+                    221
+                  ],
+                  "group_id": 6,
+                  "pixels": 2625,
+                  "width_fraction": 0.09085746734809767
+                },
+                {
+                  "bbox_xyxy": [
+                    1669,
+                    169,
+                    1701,
+                    286
+                  ],
+                  "group_id": 7,
+                  "pixels": 2207,
+                  "width_fraction": 0.018171493469619535
+                }
+              ],
+              "ink_pixel_identity_preserved": true,
+              "kernel_hw": [
+                7,
+                25
+              ],
+              "labels_file": "broad-7x25.labels.uint16.png",
+              "labels_file_sha256": "6a524c025b7de6baf01973c61d0c2e9a24087eb232bbd35ff5f789250e7063d9",
+              "labels_int32_pixel_sha256": "ad93312fe66d8cc8803acd5cb36e77e5fcb9559c62a4b33a7e1f32595687f86e",
+              "largest_group_width_fraction": 0.5650198750709824,
+              "raw_evidence_components": 109,
+              "review_groups": 7
+            },
+            "tight-3x7": {
+              "component_to_group_reduction_fraction": 0.8899082568807339,
+              "exact_evidence_pixel_count": 26193,
+              "groups": [
+                {
+                  "bbox_xyxy": [
+                    60,
+                    153,
+                    76,
+                    299
+                  ],
+                  "group_id": 1,
+                  "pixels": 667,
+                  "width_fraction": 0.009085746734809767
+                },
+                {
+                  "bbox_xyxy": [
+                    106,
+                    124,
+                    624,
+                    279
+                  ],
+                  "group_id": 2,
+                  "pixels": 9419,
+                  "width_fraction": 0.2941510505394662
+                },
+                {
+                  "bbox_xyxy": [
+                    249,
+                    195,
+                    259,
+                    200
+                  ],
+                  "group_id": 3,
+                  "pixels": 29,
+                  "width_fraction": 0.0056785917092561046
+                },
+                {
+                  "bbox_xyxy": [
+                    628,
+                    228,
+                    636,
+                    231
+                  ],
+                  "group_id": 4,
+                  "pixels": 12,
+                  "width_fraction": 0.004542873367404884
+                },
+                {
+                  "bbox_xyxy": [
+                    640,
+                    180,
+                    1101,
+                    270
+                  ],
+                  "group_id": 5,
+                  "pixels": 5648,
+                  "width_fraction": 0.2617830777967064
+                },
+                {
+                  "bbox_xyxy": [
+                    847,
+                    136,
+                    859,
+                    150
+                  ],
+                  "group_id": 6,
+                  "pixels": 56,
+                  "width_fraction": 0.0068143100511073255
+                },
+                {
+                  "bbox_xyxy": [
+                    991,
+                    153,
+                    1002,
+                    166
+                  ],
+                  "group_id": 7,
+                  "pixels": 68,
+                  "width_fraction": 0.006246450880181715
+                },
+                {
+                  "bbox_xyxy": [
+                    1144,
+                    99,
+                    1514,
+                    252
+                  ],
+                  "group_id": 8,
+                  "pixels": 5251,
+                  "width_fraction": 0.21010789324247586
+                },
+                {
+                  "bbox_xyxy": [
+                    1465,
+                    173,
+                    1500,
+                    192
+                  ],
+                  "group_id": 9,
+                  "pixels": 124,
+                  "width_fraction": 0.019875070982396367
+                },
+                {
+                  "bbox_xyxy": [
+                    1505,
+                    150,
+                    1518,
+                    164
+                  ],
+                  "group_id": 10,
+                  "pixels": 87,
+                  "width_fraction": 0.0073821692220329355
+                },
+                {
+                  "bbox_xyxy": [
+                    1536,
+                    105,
+                    1696,
+                    221
+                  ],
+                  "group_id": 11,
+                  "pixels": 2625,
+                  "width_fraction": 0.09085746734809767
+                },
+                {
+                  "bbox_xyxy": [
+                    1669,
+                    169,
+                    1701,
+                    286
+                  ],
+                  "group_id": 12,
+                  "pixels": 2207,
+                  "width_fraction": 0.018171493469619535
+                }
+              ],
+              "ink_pixel_identity_preserved": true,
+              "kernel_hw": [
+                3,
+                7
+              ],
+              "labels_file": "tight-3x7.labels.uint16.png",
+              "labels_file_sha256": "9fe08df2d4fe58c96b2f38542aad45e6375c0c3a25ddcadd0969431b82c64741",
+              "labels_int32_pixel_sha256": "11c7b80929bbe61b154d4382a962b4ba26cbb7e34f6532c82ee4d9dd18a4e5c2",
+              "largest_group_width_fraction": 0.2941510505394662,
+              "raw_evidence_components": 109,
+              "review_groups": 12
+            }
+          }
+        },
+        "median-0012": {
+          "anchor_pixels": 16530,
+          "bbox_xyxy": [
+            364,
+            2712,
+            2222,
+            3063
+          ],
+          "exact_evidence_mask_pixel_sha256": "bb7e3c76c7c8a690e3028745419c6ad36dc51d19815f6573e7c6f08bac79805a",
+          "exact_evidence_pixels": 17715,
+          "proposal_pixels": 1185,
+          "review_board": {
+            "file": "001-18881103-L01-01/median-0012/vector-fragment-grouping-review.png",
+            "file_sha256": "451cb139a1aa4bbf186e3c96259035f82d87fa143755107923aa1b39df53209b"
+          },
+          "upstream_corridor": {
+            "file_sha256": "8ede3e8bfa6b991bc7fd7f54bb7d83df62a9edbc4b7acd1ee3fbab9387d02267",
+            "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/kraken-line-vector-crosspage-v1/001-18881103-L01-01/median-0012/kraken-corridor.png"
+          },
+          "upstream_mask": {
+            "file_sha256": "72d2012311722006b9e0c0b3b5a72fe5f784be49d9865032ec047c40f3340fbf",
+            "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/kraken-line-vector-crosspage-v1/001-18881103-L01-01/median-0012/prototype-classifier-agreement.p080.png"
+          },
+          "variants": {
+            "balanced-5x15": {
+              "component_to_group_reduction_fraction": 0.9226190476190477,
+              "exact_evidence_pixel_count": 17715,
+              "groups": [
+                {
+                  "bbox_xyxy": [
+                    100,
+                    127,
+                    659,
+                    259
+                  ],
+                  "group_id": 1,
+                  "pixels": 6049,
+                  "width_fraction": 0.3008611410118407
+                },
+                {
+                  "bbox_xyxy": [
+                    120,
+                    124,
+                    124,
+                    126
+                  ],
+                  "group_id": 2,
+                  "pixels": 6,
+                  "width_fraction": 0.002152852529601722
+                },
+                {
+                  "bbox_xyxy": [
+                    322,
+                    103,
+                    353,
+                    137
+                  ],
+                  "group_id": 3,
+                  "pixels": 291,
+                  "width_fraction": 0.016684607104413347
+                },
+                {
+                  "bbox_xyxy": [
+                    551,
+                    141,
+                    571,
+                    162
+                  ],
+                  "group_id": 4,
+                  "pixels": 151,
+                  "width_fraction": 0.010764262648008612
+                },
+                {
+                  "bbox_xyxy": [
+                    702,
+                    155,
+                    883,
+                    198
+                  ],
+                  "group_id": 5,
+                  "pixels": 1754,
+                  "width_fraction": 0.09741657696447793
+                },
+                {
+                  "bbox_xyxy": [
+                    893,
+                    119,
+                    1064,
+                    222
+                  ],
+                  "group_id": 6,
+                  "pixels": 2350,
+                  "width_fraction": 0.09203444564047362
+                },
+                {
+                  "bbox_xyxy": [
+                    1090,
+                    93,
+                    1507,
+                    204
+                  ],
+                  "group_id": 7,
+                  "pixels": 4744,
+                  "width_fraction": 0.22443487621097954
+                },
+                {
+                  "bbox_xyxy": [
+                    1150,
+                    252,
+                    1151,
+                    253
+                  ],
+                  "group_id": 8,
+                  "pixels": 1,
+                  "width_fraction": 0.0005382131324004305
+                },
+                {
+                  "bbox_xyxy": [
+                    1472,
+                    88,
+                    1474,
+                    89
+                  ],
+                  "group_id": 9,
+                  "pixels": 2,
+                  "width_fraction": 0.001076426264800861
+                },
+                {
+                  "bbox_xyxy": [
+                    1530,
+                    84,
+                    1726,
+                    208
+                  ],
+                  "group_id": 10,
+                  "pixels": 2002,
+                  "width_fraction": 0.1054897739504844
+                },
+                {
+                  "bbox_xyxy": [
+                    1641,
+                    102,
+                    1658,
+                    122
+                  ],
+                  "group_id": 11,
+                  "pixels": 116,
+                  "width_fraction": 0.00914962325080732
+                },
+                {
+                  "bbox_xyxy": [
+                    1674,
+                    82,
+                    1691,
+                    94
+                  ],
+                  "group_id": 12,
+                  "pixels": 89,
+                  "width_fraction": 0.00914962325080732
+                },
+                {
+                  "bbox_xyxy": [
+                    1744,
+                    132,
+                    1795,
+                    140
+                  ],
+                  "group_id": 13,
+                  "pixels": 160,
+                  "width_fraction": 0.02744886975242196
+                }
+              ],
+              "ink_pixel_identity_preserved": true,
+              "kernel_hw": [
+                5,
+                15
+              ],
+              "labels_file": "balanced-5x15.labels.uint16.png",
+              "labels_file_sha256": "3a9bbe8c73d6e7dbfb8a916e25f31e07c28d381f82f0e693c4fdb115f969749a",
+              "labels_int32_pixel_sha256": "81f21bae8212e45f6a25b2c555ec59635fd07feeb071ec70f516d64cabf70b8f",
+              "largest_group_width_fraction": 0.3008611410118407,
+              "raw_evidence_components": 168,
+              "review_groups": 13
+            },
+            "broad-7x25": {
+              "component_to_group_reduction_fraction": 0.9345238095238095,
+              "exact_evidence_pixel_count": 17715,
+              "groups": [
+                {
+                  "bbox_xyxy": [
+                    100,
+                    127,
+                    659,
+                    259
+                  ],
+                  "group_id": 1,
+                  "pixels": 6049,
+                  "width_fraction": 0.3008611410118407
+                },
+                {
+                  "bbox_xyxy": [
+                    120,
+                    124,
+                    124,
+                    126
+                  ],
+                  "group_id": 2,
+                  "pixels": 6,
+                  "width_fraction": 0.002152852529601722
+                },
+                {
+                  "bbox_xyxy": [
+                    322,
+                    103,
+                    353,
+                    137
+                  ],
+                  "group_id": 3,
+                  "pixels": 291,
+                  "width_fraction": 0.016684607104413347
+                },
+                {
+                  "bbox_xyxy": [
+                    551,
+                    141,
+                    571,
+                    162
+                  ],
+                  "group_id": 4,
+                  "pixels": 151,
+                  "width_fraction": 0.010764262648008612
+                },
+                {
+                  "bbox_xyxy": [
+                    702,
+                    155,
+                    883,
+                    198
+                  ],
+                  "group_id": 5,
+                  "pixels": 1754,
+                  "width_fraction": 0.09741657696447793
+                },
+                {
+                  "bbox_xyxy": [
+                    893,
+                    119,
+                    1064,
+                    222
+                  ],
+                  "group_id": 6,
+                  "pixels": 2350,
+                  "width_fraction": 0.09203444564047362
+                },
+                {
+                  "bbox_xyxy": [
+                    1090,
+                    84,
+                    1795,
+                    208
+                  ],
+                  "group_id": 7,
+                  "pixels": 6906,
+                  "width_fraction": 0.37944025834230355
+                },
+                {
+                  "bbox_xyxy": [
+                    1150,
+                    252,
+                    1151,
+                    253
+                  ],
+                  "group_id": 8,
+                  "pixels": 1,
+                  "width_fraction": 0.0005382131324004305
+                },
+                {
+                  "bbox_xyxy": [
+                    1472,
+                    88,
+                    1474,
+                    89
+                  ],
+                  "group_id": 9,
+                  "pixels": 2,
+                  "width_fraction": 0.001076426264800861
+                },
+                {
+                  "bbox_xyxy": [
+                    1641,
+                    102,
+                    1658,
+                    122
+                  ],
+                  "group_id": 10,
+                  "pixels": 116,
+                  "width_fraction": 0.00914962325080732
+                },
+                {
+                  "bbox_xyxy": [
+                    1674,
+                    82,
+                    1691,
+                    94
+                  ],
+                  "group_id": 11,
+                  "pixels": 89,
+                  "width_fraction": 0.00914962325080732
+                }
+              ],
+              "ink_pixel_identity_preserved": true,
+              "kernel_hw": [
+                7,
+                25
+              ],
+              "labels_file": "broad-7x25.labels.uint16.png",
+              "labels_file_sha256": "ca8c7532077cee0ae694a9d77e3a4b32a09559adf153da7d096b39eda7c95696",
+              "labels_int32_pixel_sha256": "1f881cc2b6a3f84c4a96fbf4d7c763187d1565f8431227a5f746e96d649984ba",
+              "largest_group_width_fraction": 0.37944025834230355,
+              "raw_evidence_components": 168,
+              "review_groups": 11
+            },
+            "tight-3x7": {
+              "component_to_group_reduction_fraction": 0.8869047619047619,
+              "exact_evidence_pixel_count": 17715,
+              "groups": [
+                {
+                  "bbox_xyxy": [
+                    100,
+                    173,
+                    350,
+                    259
+                  ],
+                  "group_id": 1,
+                  "pixels": 2850,
+                  "width_fraction": 0.13455328310010764
+                },
+                {
+                  "bbox_xyxy": [
+                    120,
+                    124,
+                    124,
+                    126
+                  ],
+                  "group_id": 2,
+                  "pixels": 6,
+                  "width_fraction": 0.002152852529601722
+                },
+                {
+                  "bbox_xyxy": [
+                    322,
+                    103,
+                    353,
+                    137
+                  ],
+                  "group_id": 3,
+                  "pixels": 291,
+                  "width_fraction": 0.016684607104413347
+                },
+                {
+                  "bbox_xyxy": [
+                    324,
+                    127,
+                    659,
+                    212
+                  ],
+                  "group_id": 4,
+                  "pixels": 3199,
+                  "width_fraction": 0.18030139935414424
+                },
+                {
+                  "bbox_xyxy": [
+                    551,
+                    141,
+                    571,
+                    162
+                  ],
+                  "group_id": 5,
+                  "pixels": 151,
+                  "width_fraction": 0.010764262648008612
+                },
+                {
+                  "bbox_xyxy": [
+                    702,
+                    155,
+                    883,
+                    198
+                  ],
+                  "group_id": 6,
+                  "pixels": 1754,
+                  "width_fraction": 0.09741657696447793
+                },
+                {
+                  "bbox_xyxy": [
+                    893,
+                    119,
+                    1064,
+                    222
+                  ],
+                  "group_id": 7,
+                  "pixels": 2350,
+                  "width_fraction": 0.09203444564047362
+                },
+                {
+                  "bbox_xyxy": [
+                    1090,
+                    93,
+                    1497,
+                    204
+                  ],
+                  "group_id": 8,
+                  "pixels": 4593,
+                  "width_fraction": 0.21905274488697524
+                },
+                {
+                  "bbox_xyxy": [
+                    1150,
+                    252,
+                    1151,
+                    253
+                  ],
+                  "group_id": 9,
+                  "pixels": 1,
+                  "width_fraction": 0.0005382131324004305
+                },
+                {
+                  "bbox_xyxy": [
+                    1290,
+                    174,
+                    1292,
+                    175
+                  ],
+                  "group_id": 10,
+                  "pixels": 2,
+                  "width_fraction": 0.001076426264800861
+                },
+                {
+                  "bbox_xyxy": [
+                    1472,
+                    88,
+                    1474,
+                    89
+                  ],
+                  "group_id": 11,
+                  "pixels": 2,
+                  "width_fraction": 0.001076426264800861
+                },
+                {
+                  "bbox_xyxy": [
+                    1478,
+                    161,
+                    1507,
+                    178
+                  ],
+                  "group_id": 12,
+                  "pixels": 149,
+                  "width_fraction": 0.015608180839612486
+                },
+                {
+                  "bbox_xyxy": [
+                    1530,
+                    84,
+                    1623,
+                    160
+                  ],
+                  "group_id": 13,
+                  "pixels": 1027,
+                  "width_fraction": 0.05005382131324004
+                },
+                {
+                  "bbox_xyxy": [
+                    1613,
+                    137,
+                    1636,
+                    156
+                  ],
+                  "group_id": 14,
+                  "pixels": 116,
+                  "width_fraction": 0.012378902045209902
+                },
+                {
+                  "bbox_xyxy": [
+                    1641,
+                    102,
+                    1658,
+                    122
+                  ],
+                  "group_id": 15,
+                  "pixels": 116,
+                  "width_fraction": 0.00914962325080732
+                },
+                {
+                  "bbox_xyxy": [
+                    1645,
+                    133,
+                    1685,
+                    157
+                  ],
+                  "group_id": 16,
+                  "pixels": 289,
+                  "width_fraction": 0.021528525296017224
+                },
+                {
+                  "bbox_xyxy": [
+                    1667,
+                    130,
+                    1726,
+                    208
+                  ],
+                  "group_id": 17,
+                  "pixels": 570,
+                  "width_fraction": 0.031754574811625406
+                },
+                {
+                  "bbox_xyxy": [
+                    1674,
+                    82,
+                    1691,
+                    94
+                  ],
+                  "group_id": 18,
+                  "pixels": 89,
+                  "width_fraction": 0.00914962325080732
+                },
+                {
+                  "bbox_xyxy": [
+                    1744,
+                    132,
+                    1795,
+                    140
+                  ],
+                  "group_id": 19,
+                  "pixels": 160,
+                  "width_fraction": 0.02744886975242196
+                }
+              ],
+              "ink_pixel_identity_preserved": true,
+              "kernel_hw": [
+                3,
+                7
+              ],
+              "labels_file": "tight-3x7.labels.uint16.png",
+              "labels_file_sha256": "d40724ff0dd441812dc30dee0eaad77cf4863ce8c8179e27e5e0ae53d24987fc",
+              "labels_int32_pixel_sha256": "9a5bd19a8cf69e6c3bb21b2b2e658fd7a69404c23ddfe8f791fdf124990f73a7",
+              "largest_group_width_fraction": 0.21905274488697524,
+              "raw_evidence_components": 168,
+              "review_groups": 19
+            }
+          }
+        }
+      }
+    },
+    "002-19001113-L01-02": {
+      "lines": {
+        "high-0035": {
+          "anchor_pixels": 10699,
+          "bbox_xyxy": [
+            1505,
+            2787,
+            2488,
+            3073
+          ],
+          "exact_evidence_mask_pixel_sha256": "c780547cbff14c6a74c0f6089608a1810274cf4648d47da717c491d9f7173538",
+          "exact_evidence_pixels": 11298,
+          "proposal_pixels": 599,
+          "review_board": {
+            "file": "002-19001113-L01-02/high-0035/vector-fragment-grouping-review.png",
+            "file_sha256": "f3853c77ddbb934b13d2ae9a8c692d2a3b9341c4d7732597655ef59ec036d785"
+          },
+          "upstream_corridor": {
+            "file_sha256": "b0e80f43210a03b6326b9369cc54b60444fdadcd1103f0a285a1e55b74982026",
+            "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/kraken-line-vector-crosspage-v1/002-19001113-L01-02/high-0035/kraken-corridor.png"
+          },
+          "upstream_mask": {
+            "file_sha256": "5a5e4bf4ab3be784a9bdb8a701b21bf90c5da6ef66790c9752124c5fb3eb76f7",
+            "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/kraken-line-vector-crosspage-v1/002-19001113-L01-02/high-0035/prototype-classifier-agreement.p080.png"
+          },
+          "variants": {
+            "balanced-5x15": {
+              "component_to_group_reduction_fraction": 0.5833333333333333,
+              "exact_evidence_pixel_count": 11298,
+              "groups": [
+                {
+                  "bbox_xyxy": [
+                    60,
+                    177,
+                    65,
+                    181
+                  ],
+                  "group_id": 1,
+                  "pixels": 12,
+                  "width_fraction": 0.00508646998982706
+                },
+                {
+                  "bbox_xyxy": [
+                    61,
+                    128,
+                    173,
+                    161
+                  ],
+                  "group_id": 2,
+                  "pixels": 968,
+                  "width_fraction": 0.11393692777212615
+                },
+                {
+                  "bbox_xyxy": [
+                    62,
+                    92,
+                    81,
+                    112
+                  ],
+                  "group_id": 3,
+                  "pixels": 149,
+                  "width_fraction": 0.019328585961342827
+                },
+                {
+                  "bbox_xyxy": [
+                    138,
+                    74,
+                    156,
+                    80
+                  ],
+                  "group_id": 4,
+                  "pixels": 59,
+                  "width_fraction": 0.018311291963377416
+                },
+                {
+                  "bbox_xyxy": [
+                    179,
+                    76,
+                    184,
+                    78
+                  ],
+                  "group_id": 5,
+                  "pixels": 8,
+                  "width_fraction": 0.00508646998982706
+                },
+                {
+                  "bbox_xyxy": [
+                    208,
+                    65,
+                    313,
+                    138
+                  ],
+                  "group_id": 6,
+                  "pixels": 645,
+                  "width_fraction": 0.10681586978636826
+                },
+                {
+                  "bbox_xyxy": [
+                    216,
+                    94,
+                    548,
+                    206
+                  ],
+                  "group_id": 7,
+                  "pixels": 3685,
+                  "width_fraction": 0.3377416073245168
+                },
+                {
+                  "bbox_xyxy": [
+                    360,
+                    60,
+                    438,
+                    83
+                  ],
+                  "group_id": 8,
+                  "pixels": 500,
+                  "width_fraction": 0.07934893184130214
+                },
+                {
+                  "bbox_xyxy": [
+                    381,
+                    201,
+                    391,
+                    206
+                  ],
+                  "group_id": 9,
+                  "pixels": 32,
+                  "width_fraction": 0.01017293997965412
+                },
+                {
+                  "bbox_xyxy": [
+                    458,
+                    183,
+                    529,
+                    219
+                  ],
+                  "group_id": 10,
+                  "pixels": 461,
+                  "width_fraction": 0.07222787385554426
+                },
+                {
+                  "bbox_xyxy": [
+                    488,
+                    67,
+                    548,
+                    83
+                  ],
+                  "group_id": 11,
+                  "pixels": 357,
+                  "width_fraction": 0.061037639877924724
+                },
+                {
+                  "bbox_xyxy": [
+                    573,
+                    197,
+                    611,
+                    218
+                  ],
+                  "group_id": 12,
+                  "pixels": 163,
+                  "width_fraction": 0.038657171922685654
+                },
+                {
+                  "bbox_xyxy": [
+                    581,
+                    76,
+                    806,
+                    170
+                  ],
+                  "group_id": 13,
+                  "pixels": 3197,
+                  "width_fraction": 0.2288911495422177
+                },
+                {
+                  "bbox_xyxy": [
+                    632,
+                    66,
+                    697,
+                    83
+                  ],
+                  "group_id": 14,
+                  "pixels": 310,
+                  "width_fraction": 0.06612410986775177
+                },
+                {
+                  "bbox_xyxy": [
+                    788,
+                    141,
+                    888,
+                    174
+                  ],
+                  "group_id": 15,
+                  "pixels": 752,
+                  "width_fraction": 0.1017293997965412
+                }
+              ],
+              "ink_pixel_identity_preserved": true,
+              "kernel_hw": [
+                5,
+                15
+              ],
+              "labels_file": "balanced-5x15.labels.uint16.png",
+              "labels_file_sha256": "1474a6dd8887fb2305c1f4287fea2fa40f94a68a32b2c86394fba30838ca0ed4",
+              "labels_int32_pixel_sha256": "03aff7f68d566c96c97f4de796f1b4a33a10d151876d6cf85b8ef1e560fa6943",
+              "largest_group_width_fraction": 0.3377416073245168,
+              "raw_evidence_components": 36,
+              "review_groups": 15
+            },
+            "broad-7x25": {
+              "component_to_group_reduction_fraction": 0.6388888888888888,
+              "exact_evidence_pixel_count": 11298,
+              "groups": [
+                {
+                  "bbox_xyxy": [
+                    60,
+                    177,
+                    65,
+                    181
+                  ],
+                  "group_id": 1,
+                  "pixels": 12,
+                  "width_fraction": 0.00508646998982706
+                },
+                {
+                  "bbox_xyxy": [
+                    61,
+                    128,
+                    173,
+                    161
+                  ],
+                  "group_id": 2,
+                  "pixels": 968,
+                  "width_fraction": 0.11393692777212615
+                },
+                {
+                  "bbox_xyxy": [
+                    62,
+                    92,
+                    81,
+                    112
+                  ],
+                  "group_id": 3,
+                  "pixels": 149,
+                  "width_fraction": 0.019328585961342827
+                },
+                {
+                  "bbox_xyxy": [
+                    138,
+                    74,
+                    184,
+                    80
+                  ],
+                  "group_id": 4,
+                  "pixels": 67,
+                  "width_fraction": 0.04679552390640895
+                },
+                {
+                  "bbox_xyxy": [
+                    208,
+                    65,
+                    313,
+                    138
+                  ],
+                  "group_id": 5,
+                  "pixels": 645,
+                  "width_fraction": 0.10681586978636826
+                },
+                {
+                  "bbox_xyxy": [
+                    216,
+                    94,
+                    548,
+                    206
+                  ],
+                  "group_id": 6,
+                  "pixels": 3717,
+                  "width_fraction": 0.3377416073245168
+                },
+                {
+                  "bbox_xyxy": [
+                    360,
+                    60,
+                    438,
+                    83
+                  ],
+                  "group_id": 7,
+                  "pixels": 500,
+                  "width_fraction": 0.07934893184130214
+                },
+                {
+                  "bbox_xyxy": [
+                    458,
+                    183,
+                    529,
+                    219
+                  ],
+                  "group_id": 8,
+                  "pixels": 461,
+                  "width_fraction": 0.07222787385554426
+                },
+                {
+                  "bbox_xyxy": [
+                    488,
+                    67,
+                    548,
+                    83
+                  ],
+                  "group_id": 9,
+                  "pixels": 357,
+                  "width_fraction": 0.061037639877924724
+                },
+                {
+                  "bbox_xyxy": [
+                    573,
+                    197,
+                    611,
+                    218
+                  ],
+                  "group_id": 10,
+                  "pixels": 163,
+                  "width_fraction": 0.038657171922685654
+                },
+                {
+                  "bbox_xyxy": [
+                    581,
+                    76,
+                    806,
+                    170
+                  ],
+                  "group_id": 11,
+                  "pixels": 3197,
+                  "width_fraction": 0.2288911495422177
+                },
+                {
+                  "bbox_xyxy": [
+                    632,
+                    66,
+                    697,
+                    83
+                  ],
+                  "group_id": 12,
+                  "pixels": 310,
+                  "width_fraction": 0.06612410986775177
+                },
+                {
+                  "bbox_xyxy": [
+                    788,
+                    141,
+                    888,
+                    174
+                  ],
+                  "group_id": 13,
+                  "pixels": 752,
+                  "width_fraction": 0.1017293997965412
+                }
+              ],
+              "ink_pixel_identity_preserved": true,
+              "kernel_hw": [
+                7,
+                25
+              ],
+              "labels_file": "broad-7x25.labels.uint16.png",
+              "labels_file_sha256": "4713039bcda734b4b68b0046ecb4d5934dbe4cbd339654cef270007f08061afe",
+              "labels_int32_pixel_sha256": "bdf2c80cfce12f64b48704c8b48f43ec4f9ac60dc61afa415381e0eeb283fea1",
+              "largest_group_width_fraction": 0.3377416073245168,
+              "raw_evidence_components": 36,
+              "review_groups": 13
+            },
+            "tight-3x7": {
+              "component_to_group_reduction_fraction": 0.5277777777777778,
+              "exact_evidence_pixel_count": 11298,
+              "groups": [
+                {
+                  "bbox_xyxy": [
+                    60,
+                    177,
+                    65,
+                    181
+                  ],
+                  "group_id": 1,
+                  "pixels": 12,
+                  "width_fraction": 0.00508646998982706
+                },
+                {
+                  "bbox_xyxy": [
+                    61,
+                    128,
+                    173,
+                    161
+                  ],
+                  "group_id": 2,
+                  "pixels": 968,
+                  "width_fraction": 0.11393692777212615
+                },
+                {
+                  "bbox_xyxy": [
+                    62,
+                    92,
+                    81,
+                    112
+                  ],
+                  "group_id": 3,
+                  "pixels": 149,
+                  "width_fraction": 0.019328585961342827
+                },
+                {
+                  "bbox_xyxy": [
+                    138,
+                    74,
+                    156,
+                    80
+                  ],
+                  "group_id": 4,
+                  "pixels": 59,
+                  "width_fraction": 0.018311291963377416
+                },
+                {
+                  "bbox_xyxy": [
+                    179,
+                    76,
+                    184,
+                    78
+                  ],
+                  "group_id": 5,
+                  "pixels": 8,
+                  "width_fraction": 0.00508646998982706
+                },
+                {
+                  "bbox_xyxy": [
+                    208,
+                    65,
+                    313,
+                    138
+                  ],
+                  "group_id": 6,
+                  "pixels": 645,
+                  "width_fraction": 0.10681586978636826
+                },
+                {
+                  "bbox_xyxy": [
+                    216,
+                    94,
+                    548,
+                    206
+                  ],
+                  "group_id": 7,
+                  "pixels": 3685,
+                  "width_fraction": 0.3377416073245168
+                },
+                {
+                  "bbox_xyxy": [
+                    360,
+                    60,
+                    430,
+                    83
+                  ],
+                  "group_id": 8,
+                  "pixels": 451,
+                  "width_fraction": 0.07121057985757884
+                },
+                {
+                  "bbox_xyxy": [
+                    381,
+                    201,
+                    391,
+                    206
+                  ],
+                  "group_id": 9,
+                  "pixels": 32,
+                  "width_fraction": 0.01017293997965412
+                },
+                {
+                  "bbox_xyxy": [
+                    423,
+                    74,
+                    438,
+                    82
+                  ],
+                  "group_id": 10,
+                  "pixels": 49,
+                  "width_fraction": 0.015259409969481181
+                },
+                {
+                  "bbox_xyxy": [
+                    458,
+                    183,
+                    529,
+                    219
+                  ],
+                  "group_id": 11,
+                  "pixels": 461,
+                  "width_fraction": 0.07222787385554426
+                },
+                {
+                  "bbox_xyxy": [
+                    488,
+                    67,
+                    548,
+                    83
+                  ],
+                  "group_id": 12,
+                  "pixels": 357,
+                  "width_fraction": 0.061037639877924724
+                },
+                {
+                  "bbox_xyxy": [
+                    573,
+                    197,
+                    611,
+                    218
+                  ],
+                  "group_id": 13,
+                  "pixels": 163,
+                  "width_fraction": 0.038657171922685654
+                },
+                {
+                  "bbox_xyxy": [
+                    581,
+                    76,
+                    806,
+                    170
+                  ],
+                  "group_id": 14,
+                  "pixels": 3197,
+                  "width_fraction": 0.2288911495422177
+                },
+                {
+                  "bbox_xyxy": [
+                    632,
+                    66,
+                    669,
+                    80
+                  ],
+                  "group_id": 15,
+                  "pixels": 188,
+                  "width_fraction": 0.03763987792472025
+                },
+                {
+                  "bbox_xyxy": [
+                    674,
+                    68,
+                    697,
+                    83
+                  ],
+                  "group_id": 16,
+                  "pixels": 122,
+                  "width_fraction": 0.023397761953204477
+                },
+                {
+                  "bbox_xyxy": [
+                    788,
+                    141,
+                    888,
+                    174
+                  ],
+                  "group_id": 17,
+                  "pixels": 752,
+                  "width_fraction": 0.1017293997965412
+                }
+              ],
+              "ink_pixel_identity_preserved": true,
+              "kernel_hw": [
+                3,
+                7
+              ],
+              "labels_file": "tight-3x7.labels.uint16.png",
+              "labels_file_sha256": "9c410ade61ef6597d3f06ecdf60f2780c779078d7130e76f7fabf0ec4761b205",
+              "labels_int32_pixel_sha256": "343ff508d3a8faae07a0052b375abbccdbed221320b97b3dc62faff31ad13892",
+              "largest_group_width_fraction": 0.3377416073245168,
+              "raw_evidence_components": 36,
+              "review_groups": 17
+            }
+          }
+        },
+        "low-0033": {
+          "anchor_pixels": 7832,
+          "bbox_xyxy": [
+            636,
+            2954,
+            1631,
+            3322
+          ],
+          "exact_evidence_mask_pixel_sha256": "e1de30ab18f6a183c7f823a02b4f1219e4f9edabd8476426217e5e42d1158bef",
+          "exact_evidence_pixels": 9511,
+          "proposal_pixels": 1679,
+          "review_board": {
+            "file": "002-19001113-L01-02/low-0033/vector-fragment-grouping-review.png",
+            "file_sha256": "6070553b5a13031a7c3c51c264a65333f6960739c2c5fae6ce274beb0c2d1027"
+          },
+          "upstream_corridor": {
+            "file_sha256": "8fec4d51535d25be3fea7a815b96ba2a338c7620242a9dc90e891571ed651a36",
+            "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/kraken-line-vector-crosspage-v1/002-19001113-L01-02/low-0033/kraken-corridor.png"
+          },
+          "upstream_mask": {
+            "file_sha256": "76f60366d9091f058fb27c7ede37cb1cc88b06f4f47dd57768dc13e6f90c0d75",
+            "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/kraken-line-vector-crosspage-v1/002-19001113-L01-02/low-0033/prototype-classifier-agreement.p080.png"
+          },
+          "variants": {
+            "balanced-5x15": {
+              "component_to_group_reduction_fraction": 0.8918918918918919,
+              "exact_evidence_pixel_count": 9511,
+              "groups": [
+                {
+                  "bbox_xyxy": [
+                    106,
+                    97,
+                    346,
+                    165
+                  ],
+                  "group_id": 1,
+                  "pixels": 2469,
+                  "width_fraction": 0.24120603015075376
+                },
+                {
+                  "bbox_xyxy": [
+                    186,
+                    205,
+                    195,
+                    208
+                  ],
+                  "group_id": 2,
+                  "pixels": 13,
+                  "width_fraction": 0.009045226130653266
+                },
+                {
+                  "bbox_xyxy": [
+                    193,
+                    62,
+                    251,
+                    74
+                  ],
+                  "group_id": 3,
+                  "pixels": 225,
+                  "width_fraction": 0.05829145728643216
+                },
+                {
+                  "bbox_xyxy": [
+                    257,
+                    77,
+                    304,
+                    105
+                  ],
+                  "group_id": 4,
+                  "pixels": 187,
+                  "width_fraction": 0.04723618090452261
+                },
+                {
+                  "bbox_xyxy": [
+                    330,
+                    81,
+                    539,
+                    210
+                  ],
+                  "group_id": 5,
+                  "pixels": 2441,
+                  "width_fraction": 0.2100502512562814
+                },
+                {
+                  "bbox_xyxy": [
+                    553,
+                    140,
+                    708,
+                    168
+                  ],
+                  "group_id": 6,
+                  "pixels": 1339,
+                  "width_fraction": 0.15577889447236182
+                },
+                {
+                  "bbox_xyxy": [
+                    713,
+                    158,
+                    732,
+                    179
+                  ],
+                  "group_id": 7,
+                  "pixels": 128,
+                  "width_fraction": 0.019095477386934675
+                },
+                {
+                  "bbox_xyxy": [
+                    737,
+                    105,
+                    907,
+                    211
+                  ],
+                  "group_id": 8,
+                  "pixels": 1806,
+                  "width_fraction": 0.1708542713567839
+                },
+                {
+                  "bbox_xyxy": [
+                    749,
+                    72,
+                    827,
+                    128
+                  ],
+                  "group_id": 9,
+                  "pixels": 612,
+                  "width_fraction": 0.07839195979899498
+                },
+                {
+                  "bbox_xyxy": [
+                    867,
+                    71,
+                    925,
+                    84
+                  ],
+                  "group_id": 10,
+                  "pixels": 227,
+                  "width_fraction": 0.05829145728643216
+                },
+                {
+                  "bbox_xyxy": [
+                    901,
+                    172,
+                    912,
+                    181
+                  ],
+                  "group_id": 11,
+                  "pixels": 46,
+                  "width_fraction": 0.011055276381909548
+                },
+                {
+                  "bbox_xyxy": [
+                    913,
+                    191,
+                    928,
+                    196
+                  ],
+                  "group_id": 12,
+                  "pixels": 18,
+                  "width_fraction": 0.01507537688442211
+                }
+              ],
+              "ink_pixel_identity_preserved": true,
+              "kernel_hw": [
+                5,
+                15
+              ],
+              "labels_file": "balanced-5x15.labels.uint16.png",
+              "labels_file_sha256": "d3d14a7385a052cb59eceefefef465b4e26cc9b6b68aac06632eedc5dbcad477",
+              "labels_int32_pixel_sha256": "55e681c3f2c322b348e61d527d056505695d66d34ddad431b334f03b12887de9",
+              "largest_group_width_fraction": 0.24120603015075376,
+              "raw_evidence_components": 111,
+              "review_groups": 12
+            },
+            "broad-7x25": {
+              "component_to_group_reduction_fraction": 0.9189189189189189,
+              "exact_evidence_pixel_count": 9511,
+              "groups": [
+                {
+                  "bbox_xyxy": [
+                    106,
+                    77,
+                    346,
+                    165
+                  ],
+                  "group_id": 1,
+                  "pixels": 2656,
+                  "width_fraction": 0.24120603015075376
+                },
+                {
+                  "bbox_xyxy": [
+                    186,
+                    205,
+                    195,
+                    208
+                  ],
+                  "group_id": 2,
+                  "pixels": 13,
+                  "width_fraction": 0.009045226130653266
+                },
+                {
+                  "bbox_xyxy": [
+                    193,
+                    62,
+                    251,
+                    74
+                  ],
+                  "group_id": 3,
+                  "pixels": 225,
+                  "width_fraction": 0.05829145728643216
+                },
+                {
+                  "bbox_xyxy": [
+                    330,
+                    81,
+                    539,
+                    210
+                  ],
+                  "group_id": 4,
+                  "pixels": 2441,
+                  "width_fraction": 0.2100502512562814
+                },
+                {
+                  "bbox_xyxy": [
+                    553,
+                    140,
+                    732,
+                    179
+                  ],
+                  "group_id": 5,
+                  "pixels": 1467,
+                  "width_fraction": 0.1798994974874372
+                },
+                {
+                  "bbox_xyxy": [
+                    737,
+                    105,
+                    912,
+                    211
+                  ],
+                  "group_id": 6,
+                  "pixels": 1852,
+                  "width_fraction": 0.17587939698492464
+                },
+                {
+                  "bbox_xyxy": [
+                    749,
+                    72,
+                    827,
+                    128
+                  ],
+                  "group_id": 7,
+                  "pixels": 612,
+                  "width_fraction": 0.07839195979899498
+                },
+                {
+                  "bbox_xyxy": [
+                    867,
+                    71,
+                    925,
+                    84
+                  ],
+                  "group_id": 8,
+                  "pixels": 227,
+                  "width_fraction": 0.05829145728643216
+                },
+                {
+                  "bbox_xyxy": [
+                    913,
+                    191,
+                    928,
+                    196
+                  ],
+                  "group_id": 9,
+                  "pixels": 18,
+                  "width_fraction": 0.01507537688442211
+                }
+              ],
+              "ink_pixel_identity_preserved": true,
+              "kernel_hw": [
+                7,
+                25
+              ],
+              "labels_file": "broad-7x25.labels.uint16.png",
+              "labels_file_sha256": "dd49f86edbdfaf6354637279f64aa18e489e255d414e54a31969f4c5edd448e2",
+              "labels_int32_pixel_sha256": "0acf60f38e38e9c8054e37df38c355fa32121b72c52b6fbd8a13a8d8fef00697",
+              "largest_group_width_fraction": 0.24120603015075376,
+              "raw_evidence_components": 111,
+              "review_groups": 9
+            },
+            "tight-3x7": {
+              "component_to_group_reduction_fraction": 0.8738738738738738,
+              "exact_evidence_pixel_count": 9511,
+              "groups": [
+                {
+                  "bbox_xyxy": [
+                    106,
+                    97,
+                    346,
+                    165
+                  ],
+                  "group_id": 1,
+                  "pixels": 2469,
+                  "width_fraction": 0.24120603015075376
+                },
+                {
+                  "bbox_xyxy": [
+                    186,
+                    205,
+                    195,
+                    208
+                  ],
+                  "group_id": 2,
+                  "pixels": 13,
+                  "width_fraction": 0.009045226130653266
+                },
+                {
+                  "bbox_xyxy": [
+                    193,
+                    62,
+                    222,
+                    74
+                  ],
+                  "group_id": 3,
+                  "pixels": 136,
+                  "width_fraction": 0.02914572864321608
+                },
+                {
+                  "bbox_xyxy": [
+                    232,
+                    62,
+                    251,
+                    71
+                  ],
+                  "group_id": 4,
+                  "pixels": 89,
+                  "width_fraction": 0.019095477386934675
+                },
+                {
+                  "bbox_xyxy": [
+                    257,
+                    77,
+                    304,
+                    105
+                  ],
+                  "group_id": 5,
+                  "pixels": 187,
+                  "width_fraction": 0.04723618090452261
+                },
+                {
+                  "bbox_xyxy": [
+                    330,
+                    81,
+                    539,
+                    210
+                  ],
+                  "group_id": 6,
+                  "pixels": 2441,
+                  "width_fraction": 0.2100502512562814
+                },
+                {
+                  "bbox_xyxy": [
+                    553,
+                    140,
+                    708,
+                    168
+                  ],
+                  "group_id": 7,
+                  "pixels": 1339,
+                  "width_fraction": 0.15577889447236182
+                },
+                {
+                  "bbox_xyxy": [
+                    713,
+                    158,
+                    732,
+                    179
+                  ],
+                  "group_id": 8,
+                  "pixels": 128,
+                  "width_fraction": 0.019095477386934675
+                },
+                {
+                  "bbox_xyxy": [
+                    737,
+                    105,
+                    907,
+                    211
+                  ],
+                  "group_id": 9,
+                  "pixels": 1806,
+                  "width_fraction": 0.1708542713567839
+                },
+                {
+                  "bbox_xyxy": [
+                    749,
+                    72,
+                    827,
+                    128
+                  ],
+                  "group_id": 10,
+                  "pixels": 612,
+                  "width_fraction": 0.07839195979899498
+                },
+                {
+                  "bbox_xyxy": [
+                    867,
+                    71,
+                    894,
+                    81
+                  ],
+                  "group_id": 11,
+                  "pixels": 112,
+                  "width_fraction": 0.027135678391959798
+                },
+                {
+                  "bbox_xyxy": [
+                    901,
+                    172,
+                    912,
+                    181
+                  ],
+                  "group_id": 12,
+                  "pixels": 46,
+                  "width_fraction": 0.011055276381909548
+                },
+                {
+                  "bbox_xyxy": [
+                    903,
+                    72,
+                    925,
+                    84
+                  ],
+                  "group_id": 13,
+                  "pixels": 115,
+                  "width_fraction": 0.022110552763819097
+                },
+                {
+                  "bbox_xyxy": [
+                    913,
+                    191,
+                    928,
+                    196
+                  ],
+                  "group_id": 14,
+                  "pixels": 18,
+                  "width_fraction": 0.01507537688442211
+                }
+              ],
+              "ink_pixel_identity_preserved": true,
+              "kernel_hw": [
+                3,
+                7
+              ],
+              "labels_file": "tight-3x7.labels.uint16.png",
+              "labels_file_sha256": "5f71ec4469de159eec31ea8ac711acd7f36586dcbf992abfdfbe7c933cbed20e",
+              "labels_int32_pixel_sha256": "8c265b19893f8e08d0e0ea7f17c06754c931f2f039a902228d22e99cb2b0ebf5",
+              "largest_group_width_fraction": 0.24120603015075376,
+              "raw_evidence_components": 111,
+              "review_groups": 14
+            }
+          }
+        },
+        "median-0017": {
+          "anchor_pixels": 17762,
+          "bbox_xyxy": [
+            692,
+            1772,
+            2611,
+            2084
+          ],
+          "exact_evidence_mask_pixel_sha256": "e7039ed771bfbe94445dda75f50fa96ff365cc8f8e98162bc2c88b298a5a8373",
+          "exact_evidence_pixels": 18241,
+          "proposal_pixels": 479,
+          "review_board": {
+            "file": "002-19001113-L01-02/median-0017/vector-fragment-grouping-review.png",
+            "file_sha256": "a353f1d54b1290ae1d252b59f6c81505e46d52467dc7c16751a782cff384689b"
+          },
+          "upstream_corridor": {
+            "file_sha256": "842f87734efefe4a9eb732542d867697d769cfbb23f3d974a7f2622905e1665d",
+            "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/kraken-line-vector-crosspage-v1/002-19001113-L01-02/median-0017/kraken-corridor.png"
+          },
+          "upstream_mask": {
+            "file_sha256": "0ac09e217407618d1cdf1755202d9c2c5058f0478ce64b8c9f3ccf7fe6af4a09",
+            "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/kraken-line-vector-crosspage-v1/002-19001113-L01-02/median-0017/prototype-classifier-agreement.p080.png"
+          },
+          "variants": {
+            "balanced-5x15": {
+              "component_to_group_reduction_fraction": 0.5925925925925926,
+              "exact_evidence_pixel_count": 18241,
+              "groups": [
+                {
+                  "bbox_xyxy": [
+                    110,
+                    99,
+                    394,
+                    162
+                  ],
+                  "group_id": 1,
+                  "pixels": 2026,
+                  "width_fraction": 0.14799374674309537
+                },
+                {
+                  "bbox_xyxy": [
+                    172,
+                    213,
+                    182,
+                    216
+                  ],
+                  "group_id": 2,
+                  "pixels": 19,
+                  "width_fraction": 0.005211047420531527
+                },
+                {
+                  "bbox_xyxy": [
+                    271,
+                    183,
+                    339,
+                    211
+                  ],
+                  "group_id": 3,
+                  "pixels": 415,
+                  "width_fraction": 0.03543512245961438
+                },
+                {
+                  "bbox_xyxy": [
+                    280,
+                    107,
+                    286,
+                    113
+                  ],
+                  "group_id": 4,
+                  "pixels": 24,
+                  "width_fraction": 0.003126628452318916
+                },
+                {
+                  "bbox_xyxy": [
+                    387,
+                    141,
+                    614,
+                    215
+                  ],
+                  "group_id": 5,
+                  "pixels": 1900,
+                  "width_fraction": 0.11829077644606566
+                },
+                {
+                  "bbox_xyxy": [
+                    402,
+                    220,
+                    405,
+                    221
+                  ],
+                  "group_id": 6,
+                  "pixels": 2,
+                  "width_fraction": 0.001563314226159458
+                },
+                {
+                  "bbox_xyxy": [
+                    635,
+                    146,
+                    808,
+                    175
+                  ],
+                  "group_id": 7,
+                  "pixels": 1225,
+                  "width_fraction": 0.09015112037519542
+                },
+                {
+                  "bbox_xyxy": [
+                    692,
+                    90,
+                    695,
+                    92
+                  ],
+                  "group_id": 8,
+                  "pixels": 5,
+                  "width_fraction": 0.001563314226159458
+                },
+                {
+                  "bbox_xyxy": [
+                    815,
+                    175,
+                    832,
+                    195
+                  ],
+                  "group_id": 9,
+                  "pixels": 75,
+                  "width_fraction": 0.008858780614903595
+                },
+                {
+                  "bbox_xyxy": [
+                    871,
+                    154,
+                    1119,
+                    182
+                  ],
+                  "group_id": 10,
+                  "pixels": 1876,
+                  "width_fraction": 0.12923397602918185
+                },
+                {
+                  "bbox_xyxy": [
+                    906,
+                    100,
+                    918,
+                    102
+                  ],
+                  "group_id": 11,
+                  "pixels": 17,
+                  "width_fraction": 0.006253256904637832
+                },
+                {
+                  "bbox_xyxy": [
+                    945,
+                    91,
+                    967,
+                    98
+                  ],
+                  "group_id": 12,
+                  "pixels": 67,
+                  "width_fraction": 0.011464304325169358
+                },
+                {
+                  "bbox_xyxy": [
+                    1012,
+                    87,
+                    1066,
+                    103
+                  ],
+                  "group_id": 13,
+                  "pixels": 193,
+                  "width_fraction": 0.028139656070870246
+                },
+                {
+                  "bbox_xyxy": [
+                    1164,
+                    126,
+                    1379,
+                    189
+                  ],
+                  "group_id": 14,
+                  "pixels": 2024,
+                  "width_fraction": 0.11203751954142782
+                },
+                {
+                  "bbox_xyxy": [
+                    1172,
+                    89,
+                    1223,
+                    113
+                  ],
+                  "group_id": 15,
+                  "pixels": 226,
+                  "width_fraction": 0.026576341844710787
+                },
+                {
+                  "bbox_xyxy": [
+                    1261,
+                    90,
+                    1279,
+                    94
+                  ],
+                  "group_id": 16,
+                  "pixels": 59,
+                  "width_fraction": 0.009379885356956748
+                },
+                {
+                  "bbox_xyxy": [
+                    1282,
+                    97,
+                    1330,
+                    111
+                  ],
+                  "group_id": 17,
+                  "pixels": 137,
+                  "width_fraction": 0.02501302761855133
+                },
+                {
+                  "bbox_xyxy": [
+                    1358,
+                    86,
+                    1477,
+                    132
+                  ],
+                  "group_id": 18,
+                  "pixels": 625,
+                  "width_fraction": 0.06201146430432517
+                },
+                {
+                  "bbox_xyxy": [
+                    1394,
+                    161,
+                    1452,
+                    189
+                  ],
+                  "group_id": 19,
+                  "pixels": 500,
+                  "width_fraction": 0.030224075039082855
+                },
+                {
+                  "bbox_xyxy": [
+                    1416,
+                    95,
+                    1821,
+                    238
+                  ],
+                  "group_id": 20,
+                  "pixels": 6676,
+                  "width_fraction": 0.21104742053152684
+                },
+                {
+                  "bbox_xyxy": [
+                    1508,
+                    223,
+                    1535,
+                    239
+                  ],
+                  "group_id": 21,
+                  "pixels": 85,
+                  "width_fraction": 0.014069828035435123
+                },
+                {
+                  "bbox_xyxy": [
+                    1674,
+                    231,
+                    1695,
+                    241
+                  ],
+                  "group_id": 22,
+                  "pixels": 65,
+                  "width_fraction": 0.010943199583116207
+                }
+              ],
+              "ink_pixel_identity_preserved": true,
+              "kernel_hw": [
+                5,
+                15
+              ],
+              "labels_file": "balanced-5x15.labels.uint16.png",
+              "labels_file_sha256": "ddf2952dca1dd620dad49e61e682dcf64ce9d8c70ddfad2b01d59eb65028b2db",
+              "labels_int32_pixel_sha256": "dc0b0fd219d48ee78ed718102dba8071f5aa875f7afaef643fd5c3fb66058c8f",
+              "largest_group_width_fraction": 0.21104742053152684,
+              "raw_evidence_components": 54,
+              "review_groups": 22
+            },
+            "broad-7x25": {
+              "component_to_group_reduction_fraction": 0.6481481481481481,
+              "exact_evidence_pixel_count": 18241,
+              "groups": [
+                {
+                  "bbox_xyxy": [
+                    110,
+                    99,
+                    394,
+                    162
+                  ],
+                  "group_id": 1,
+                  "pixels": 2050,
+                  "width_fraction": 0.14799374674309537
+                },
+                {
+                  "bbox_xyxy": [
+                    172,
+                    213,
+                    182,
+                    216
+                  ],
+                  "group_id": 2,
+                  "pixels": 19,
+                  "width_fraction": 0.005211047420531527
+                },
+                {
+                  "bbox_xyxy": [
+                    271,
+                    183,
+                    339,
+                    211
+                  ],
+                  "group_id": 3,
+                  "pixels": 415,
+                  "width_fraction": 0.03543512245961438
+                },
+                {
+                  "bbox_xyxy": [
+                    387,
+                    141,
+                    614,
+                    215
+                  ],
+                  "group_id": 4,
+                  "pixels": 1900,
+                  "width_fraction": 0.11829077644606566
+                },
+                {
+                  "bbox_xyxy": [
+                    402,
+                    220,
+                    405,
+                    221
+                  ],
+                  "group_id": 5,
+                  "pixels": 2,
+                  "width_fraction": 0.001563314226159458
+                },
+                {
+                  "bbox_xyxy": [
+                    635,
+                    146,
+                    832,
+                    195
+                  ],
+                  "group_id": 6,
+                  "pixels": 1300,
+                  "width_fraction": 0.10265763418447107
+                },
+                {
+                  "bbox_xyxy": [
+                    692,
+                    90,
+                    695,
+                    92
+                  ],
+                  "group_id": 7,
+                  "pixels": 5,
+                  "width_fraction": 0.001563314226159458
+                },
+                {
+                  "bbox_xyxy": [
+                    871,
+                    154,
+                    1119,
+                    182
+                  ],
+                  "group_id": 8,
+                  "pixels": 1876,
+                  "width_fraction": 0.12923397602918185
+                },
+                {
+                  "bbox_xyxy": [
+                    906,
+                    100,
+                    918,
+                    102
+                  ],
+                  "group_id": 9,
+                  "pixels": 17,
+                  "width_fraction": 0.006253256904637832
+                },
+                {
+                  "bbox_xyxy": [
+                    945,
+                    91,
+                    967,
+                    98
+                  ],
+                  "group_id": 10,
+                  "pixels": 67,
+                  "width_fraction": 0.011464304325169358
+                },
+                {
+                  "bbox_xyxy": [
+                    1012,
+                    87,
+                    1066,
+                    103
+                  ],
+                  "group_id": 11,
+                  "pixels": 193,
+                  "width_fraction": 0.028139656070870246
+                },
+                {
+                  "bbox_xyxy": [
+                    1164,
+                    126,
+                    1379,
+                    189
+                  ],
+                  "group_id": 12,
+                  "pixels": 2024,
+                  "width_fraction": 0.11203751954142782
+                },
+                {
+                  "bbox_xyxy": [
+                    1172,
+                    89,
+                    1223,
+                    113
+                  ],
+                  "group_id": 13,
+                  "pixels": 226,
+                  "width_fraction": 0.026576341844710787
+                },
+                {
+                  "bbox_xyxy": [
+                    1261,
+                    90,
+                    1330,
+                    111
+                  ],
+                  "group_id": 14,
+                  "pixels": 196,
+                  "width_fraction": 0.03595622720166754
+                },
+                {
+                  "bbox_xyxy": [
+                    1358,
+                    86,
+                    1477,
+                    132
+                  ],
+                  "group_id": 15,
+                  "pixels": 625,
+                  "width_fraction": 0.06201146430432517
+                },
+                {
+                  "bbox_xyxy": [
+                    1394,
+                    161,
+                    1452,
+                    189
+                  ],
+                  "group_id": 16,
+                  "pixels": 500,
+                  "width_fraction": 0.030224075039082855
+                },
+                {
+                  "bbox_xyxy": [
+                    1416,
+                    95,
+                    1821,
+                    238
+                  ],
+                  "group_id": 17,
+                  "pixels": 6676,
+                  "width_fraction": 0.21104742053152684
+                },
+                {
+                  "bbox_xyxy": [
+                    1508,
+                    223,
+                    1535,
+                    239
+                  ],
+                  "group_id": 18,
+                  "pixels": 85,
+                  "width_fraction": 0.014069828035435123
+                },
+                {
+                  "bbox_xyxy": [
+                    1674,
+                    231,
+                    1695,
+                    241
+                  ],
+                  "group_id": 19,
+                  "pixels": 65,
+                  "width_fraction": 0.010943199583116207
+                }
+              ],
+              "ink_pixel_identity_preserved": true,
+              "kernel_hw": [
+                7,
+                25
+              ],
+              "labels_file": "broad-7x25.labels.uint16.png",
+              "labels_file_sha256": "bc25158e1e5671a1c10018703bd95e18a2d5bf09a54f00ea5e67202e6d9a7bfa",
+              "labels_int32_pixel_sha256": "88523efba1e87691b1c953fdaf9835ce220162d706924b55acdc8a9441cdbb15",
+              "largest_group_width_fraction": 0.21104742053152684,
+              "raw_evidence_components": 54,
+              "review_groups": 19
+            },
+            "tight-3x7": {
+              "component_to_group_reduction_fraction": 0.4444444444444444,
+              "exact_evidence_pixel_count": 18241,
+              "groups": [
+                {
+                  "bbox_xyxy": [
+                    110,
+                    99,
+                    394,
+                    162
+                  ],
+                  "group_id": 1,
+                  "pixels": 2026,
+                  "width_fraction": 0.14799374674309537
+                },
+                {
+                  "bbox_xyxy": [
+                    172,
+                    213,
+                    182,
+                    216
+                  ],
+                  "group_id": 2,
+                  "pixels": 19,
+                  "width_fraction": 0.005211047420531527
+                },
+                {
+                  "bbox_xyxy": [
+                    271,
+                    183,
+                    317,
+                    211
+                  ],
+                  "group_id": 3,
+                  "pixels": 271,
+                  "width_fraction": 0.023970818134445022
+                },
+                {
+                  "bbox_xyxy": [
+                    280,
+                    107,
+                    286,
+                    113
+                  ],
+                  "group_id": 4,
+                  "pixels": 24,
+                  "width_fraction": 0.003126628452318916
+                },
+                {
+                  "bbox_xyxy": [
+                    303,
+                    188,
+                    339,
+                    209
+                  ],
+                  "group_id": 5,
+                  "pixels": 144,
+                  "width_fraction": 0.018759770713913496
+                },
+                {
+                  "bbox_xyxy": [
+                    387,
+                    158,
+                    417,
+                    166
+                  ],
+                  "group_id": 6,
+                  "pixels": 102,
+                  "width_fraction": 0.015633142261594582
+                },
+                {
+                  "bbox_xyxy": [
+                    402,
+                    220,
+                    405,
+                    221
+                  ],
+                  "group_id": 7,
+                  "pixels": 2,
+                  "width_fraction": 0.001563314226159458
+                },
+                {
+                  "bbox_xyxy": [
+                    425,
+                    141,
+                    614,
+                    215
+                  ],
+                  "group_id": 8,
+                  "pixels": 1798,
+                  "width_fraction": 0.09848879624804585
+                },
+                {
+                  "bbox_xyxy": [
+                    635,
+                    146,
+                    808,
+                    175
+                  ],
+                  "group_id": 9,
+                  "pixels": 1225,
+                  "width_fraction": 0.09015112037519542
+                },
+                {
+                  "bbox_xyxy": [
+                    692,
+                    90,
+                    695,
+                    92
+                  ],
+                  "group_id": 10,
+                  "pixels": 5,
+                  "width_fraction": 0.001563314226159458
+                },
+                {
+                  "bbox_xyxy": [
+                    815,
+                    175,
+                    832,
+                    195
+                  ],
+                  "group_id": 11,
+                  "pixels": 75,
+                  "width_fraction": 0.008858780614903595
+                },
+                {
+                  "bbox_xyxy": [
+                    871,
+                    154,
+                    1119,
+                    182
+                  ],
+                  "group_id": 12,
+                  "pixels": 1876,
+                  "width_fraction": 0.12923397602918185
+                },
+                {
+                  "bbox_xyxy": [
+                    906,
+                    100,
+                    918,
+                    102
+                  ],
+                  "group_id": 13,
+                  "pixels": 17,
+                  "width_fraction": 0.006253256904637832
+                },
+                {
+                  "bbox_xyxy": [
+                    945,
+                    91,
+                    967,
+                    98
+                  ],
+                  "group_id": 14,
+                  "pixels": 67,
+                  "width_fraction": 0.011464304325169358
+                },
+                {
+                  "bbox_xyxy": [
+                    1012,
+                    87,
+                    1052,
+                    99
+                  ],
+                  "group_id": 15,
+                  "pixels": 134,
+                  "width_fraction": 0.020844189682126108
+                },
+                {
+                  "bbox_xyxy": [
+                    1048,
+                    94,
+                    1066,
+                    103
+                  ],
+                  "group_id": 16,
+                  "pixels": 59,
+                  "width_fraction": 0.009379885356956748
+                },
+                {
+                  "bbox_xyxy": [
+                    1164,
+                    126,
+                    1274,
+                    187
+                  ],
+                  "group_id": 17,
+                  "pixels": 968,
+                  "width_fraction": 0.0573215216258468
+                },
+                {
+                  "bbox_xyxy": [
+                    1172,
+                    89,
+                    1223,
+                    113
+                  ],
+                  "group_id": 18,
+                  "pixels": 226,
+                  "width_fraction": 0.026576341844710787
+                },
+                {
+                  "bbox_xyxy": [
+                    1239,
+                    149,
+                    1379,
+                    189
+                  ],
+                  "group_id": 19,
+                  "pixels": 1056,
+                  "width_fraction": 0.07295466388744137
+                },
+                {
+                  "bbox_xyxy": [
+                    1261,
+                    90,
+                    1279,
+                    94
+                  ],
+                  "group_id": 20,
+                  "pixels": 59,
+                  "width_fraction": 0.009379885356956748
+                },
+                {
+                  "bbox_xyxy": [
+                    1282,
+                    97,
+                    1302,
+                    105
+                  ],
+                  "group_id": 21,
+                  "pixels": 67,
+                  "width_fraction": 0.010422094841063054
+                },
+                {
+                  "bbox_xyxy": [
+                    1311,
+                    103,
+                    1330,
+                    111
+                  ],
+                  "group_id": 22,
+                  "pixels": 70,
+                  "width_fraction": 0.009900990099009901
+                },
+                {
+                  "bbox_xyxy": [
+                    1358,
+                    88,
+                    1428,
+                    132
+                  ],
+                  "group_id": 23,
+                  "pixels": 513,
+                  "width_fraction": 0.03647733194372069
+                },
+                {
+                  "bbox_xyxy": [
+                    1389,
+                    86,
+                    1396,
+                    95
+                  ],
+                  "group_id": 24,
+                  "pixels": 38,
+                  "width_fraction": 0.0036477331943720686
+                },
+                {
+                  "bbox_xyxy": [
+                    1394,
+                    161,
+                    1452,
+                    189
+                  ],
+                  "group_id": 25,
+                  "pixels": 500,
+                  "width_fraction": 0.030224075039082855
+                },
+                {
+                  "bbox_xyxy": [
+                    1416,
+                    165,
+                    1540,
+                    238
+                  ],
+                  "group_id": 26,
+                  "pixels": 1035,
+                  "width_fraction": 0.06461698801459093
+                },
+                {
+                  "bbox_xyxy": [
+                    1438,
+                    103,
+                    1477,
+                    110
+                  ],
+                  "group_id": 27,
+                  "pixels": 74,
+                  "width_fraction": 0.020323084940072955
+                },
+                {
+                  "bbox_xyxy": [
+                    1508,
+                    223,
+                    1535,
+                    239
+                  ],
+                  "group_id": 28,
+                  "pixels": 85,
+                  "width_fraction": 0.014069828035435123
+                },
+                {
+                  "bbox_xyxy": [
+                    1524,
+                    95,
+                    1821,
+                    205
+                  ],
+                  "group_id": 29,
+                  "pixels": 5641,
+                  "width_fraction": 0.15476810838978636
+                },
+                {
+                  "bbox_xyxy": [
+                    1674,
+                    231,
+                    1695,
+                    241
+                  ],
+                  "group_id": 30,
+                  "pixels": 65,
+                  "width_fraction": 0.010943199583116207
+                }
+              ],
+              "ink_pixel_identity_preserved": true,
+              "kernel_hw": [
+                3,
+                7
+              ],
+              "labels_file": "tight-3x7.labels.uint16.png",
+              "labels_file_sha256": "6584e2c921791b5f859c36841ee18aeddd61d847a7908409d62ddf11a08eac2f",
+              "labels_int32_pixel_sha256": "618b8adb5556a227498b52543c7a56641f9006f60feb7c9253d9803e665eb1dc",
+              "largest_group_width_fraction": 0.15476810838978636,
+              "raw_evidence_components": 54,
+              "review_groups": 30
+            }
+          }
+        }
+      }
+    }
+  },
+  "post_run_acting_safe_visual_review": {
+    "decision": "Promote balanced 5x15 grouping as an editable initial colour grouping, never as final word ownership. Preserve tight and broad as one-click split/merge challengers.",
+    "difficulties": "Tight grouping leaves detached dots, ascenders, and broken strokes as separate colours. Broad grouping visibly merges neighboring words, including `thoroughly enjoying`; balanced can still merge `forgetful brother` and retain isolated speck groups. Fewer groups alone is not quality.",
+    "meaning": "Balanced grouping reduced 36-168 raw eight-connected evidence components to 10-22 left-to-right colour groups (58.33%-92.26% reduction) while preserving every exact ink pixel. Across six boards, many groups visually align with whole words. This is a promising human-effort transformation even though split/merge correction remains necessary.",
+    "sealed_human_evidence_used": false,
+    "visual_scope": "All six generated source/tight/balanced/broad grouping boards only; no sealed human page, answer, mask, or evaluator board was opened."
+  },
+  "runtime_seconds": 3.3615218330014613,
+  "schema_version": "vector-fragment-grouping.v1",
+  "sealed_human_evidence_used": false,
+  "selection_rule": "Apply three frozen anisotropic grouping kernels to the six prior automatically selected cross-page lines. Group labels may change; the exact anchor-plus-proposal ink pixels may not.",
+  "upstream": {
+    "file_sha256": "b1fcd2b1deeb37b60155babfe7605511649091376be7b8bcb0995027b01b8230",
+    "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/kraken-line-vector-crosspage-v1/experiment.json"
+  }
+}

@@ -38,6 +38,10 @@ but this POC does not create or modify an environment.
 ## Common commands
 
 ```sh
+# Start the established exact-ink selector with the full
+# collection → letter → ordered-page library.
+"$PYTHON" scripts/simple_page_selector.py serve-library
+
 # Inventory and label connected components.
 PYTHONPATH=src "$PYTHON" -m word_envelope.cli components \
   --mask path/to/raw-mask.png --output-dir path/to/inventory

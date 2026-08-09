@@ -11,6 +11,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from word_envelope.simple_page_selector import (  # noqa: E402
     initialize_simple_selector,
     install_dual_ink_layers,
+    serve_selector_library,
     serve_simple_selector,
 )
 
@@ -32,11 +33,28 @@ def main() -> int:
     serve.add_argument("--session-dir", type=Path, required=True)
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8770)
+    library = subparsers.add_parser("serve-library")
+    library.add_argument(
+        "--workspace-dir",
+        type=Path,
+        default=ROOT / "workspaces" / "word-ink-ground-truth-v1",
+    )
+    library.add_argument("--initial-page-id", default="001-18881103-L01-01")
+    library.add_argument("--host", default="127.0.0.1")
+    library.add_argument("--port", type=int, default=8770)
     layers = subparsers.add_parser("install-ink-layers")
     layers.add_argument("--session-dir", type=Path, required=True)
     layers.add_argument("--clean-mask", type=Path, required=True)
     layers.add_argument("--high-recall-mask", type=Path, required=True)
     args = parser.parse_args()
+    if args.command == "serve-library":
+        serve_selector_library(
+            args.workspace_dir,
+            host=args.host,
+            port=args.port,
+            initial_page_id=args.initial_page_id,
+        )
+        return 0
     if args.command == "init":
         state = initialize_simple_selector(
             args.session_dir,

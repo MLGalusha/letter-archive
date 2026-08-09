@@ -26,6 +26,12 @@ const state = {
   inkVariant: "clean",
   recovery: null,
   library: null,
+  libraryCollection: null,
+  libraryLetter: null,
+  ownership: null,
+  ownershipMode: false,
+  ownershipTool: "to_word",
+  ownershipTargetWordId: null,
 };
 
 function sourceOnlyMode() {
@@ -108,6 +114,11 @@ function resetClientWorkspace() {
   state.inkVariant = "clean";
   state.recovery = null;
   state.boxes = false;
+  state.ownership = null;
+  state.ownershipMode = false;
+  state.ownershipTool = "to_word";
+  state.ownershipTargetWordId = null;
+  state.images.ownership = null;
   el("toggle-boxes").textContent = "Boxes off";
   el("toggle-boxes").setAttribute("aria-pressed", "false");
   el("tool-cut").textContent = "Cut ink";
@@ -138,6 +149,31 @@ function librarySearchText(item) {
   ].join(" ").toLowerCase();
 }
 
+function letterId(item) {
+  const identity = item.identity;
+  return `${identity.collection_code}-${identity.date_raw}-L${String(identity.letter_sequence).padStart(2, "0")}`;
+}
+
+function readableDate(raw) {
+  if (!/^\d{8}$/.test(raw)) return raw;
+  return new Date(`${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}T12:00:00`).toLocaleDateString(undefined, {
+    year: "numeric", month: "short", day: "numeric",
+  });
+}
+
+function libraryNavButton({title, meta, selected, onClick}) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `library-nav-item${selected ? " selected" : ""}`;
+  const strong = document.createElement("strong");
+  strong.textContent = title;
+  const small = document.createElement("span");
+  small.textContent = meta;
+  button.append(strong, small);
+  button.addEventListener("click", onClick);
+  return button;
+}
+
 function renderLibrary() {
   if (!state.library) return;
   const query = el("library-search").value.trim().toLowerCase()
@@ -148,7 +184,53 @@ function renderLibrary() {
     return terms.every((term) => searchable.includes(term));
   });
   el("library-count").textContent = `${visible.length} page${visible.length === 1 ? "" : "s"}`;
-  const cards = visible.map((item) => {
+
+  const collections = [...new Set(visible.map((item) => item.identity.collection_code))].sort();
+  if (!collections.includes(state.libraryCollection)) state.libraryCollection = collections[0] || null;
+  const collectionButtons = collections.map((collection) => {
+    const pages = visible.filter((item) => item.identity.collection_code === collection);
+    const letters = new Set(pages.map(letterId));
+    const complete = pages.filter((item) => item.saved_progress?.status === "complete").length;
+    return libraryNavButton({
+      title: `Collection ${collection}`,
+      meta: `${letters.size} letter${letters.size === 1 ? "" : "s"} · ${complete}/${pages.length} pages complete`,
+      selected: collection === state.libraryCollection,
+      onClick: () => { state.libraryCollection = collection; state.libraryLetter = null; renderLibrary(); },
+    });
+  });
+  el("collection-count").textContent = String(collections.length);
+  el("library-collections").replaceChildren(...collectionButtons);
+
+  const collectionPages = visible.filter((item) => item.identity.collection_code === state.libraryCollection);
+  const letterMap = new Map();
+  for (const item of collectionPages) {
+    const id = letterId(item);
+    if (!letterMap.has(id)) letterMap.set(id, []);
+    letterMap.get(id).push(item);
+  }
+  const letters = [...letterMap.entries()].sort((left, right) => left[0].localeCompare(right[0]));
+  if (!letters.some(([id]) => id === state.libraryLetter)) state.libraryLetter = letters[0]?.[0] || null;
+  const letterButtons = letters.map(([id, pages]) => {
+    const identity = pages[0].identity;
+    const complete = pages.filter((item) => item.saved_progress?.status === "complete").length;
+    return libraryNavButton({
+      title: readableDate(identity.date_raw),
+      meta: `L${String(identity.letter_sequence).padStart(2, "0")} · ${complete}/${pages.length} pages complete`,
+      selected: id === state.libraryLetter,
+      onClick: () => { state.libraryLetter = id; renderLibrary(); },
+    });
+  });
+  el("letter-count").textContent = String(letters.length);
+  el("library-letters").replaceChildren(...letterButtons);
+
+  const pages = (letterMap.get(state.libraryLetter) || []).slice().sort(
+    (left, right) => left.identity.page_number - right.identity.page_number,
+  );
+  const activeLetter = pages[0]?.identity;
+  el("page-list-title").textContent = activeLetter
+    ? `${readableDate(activeLetter.date_raw)} · L${String(activeLetter.letter_sequence).padStart(2, "0")}`
+    : "Pages";
+  const cards = pages.map((item) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = `library-card${item.saved_progress?.is_active ? " active" : ""}`;
@@ -160,7 +242,7 @@ function renderLibrary() {
     copy.className = "library-card-copy";
     const title = document.createElement("strong");
     title.className = "library-card-title";
-    title.textContent = `Collection ${item.identity.collection_code} · page ${item.identity.page_number}`;
+    title.textContent = `Page ${item.identity.page_number}`;
     const meta = document.createElement("span");
     meta.className = "library-card-meta";
     meta.textContent = `${item.identity.date_raw} · ${item.dimensions.width} × ${item.dimensions.height}`;
@@ -195,6 +277,13 @@ async function showLibrary() {
   el("library-grid").innerHTML = '<p class="library-empty">Loading your saved pages…</p>';
   try {
     state.library = await api("/api/library");
+    const active = state.library.items.find((item) => item.catalog_item_id === state.library.active_catalog_item_id)
+      || state.library.items.find((item) => item.saved_progress)
+      || state.library.items[0];
+    if (active) {
+      state.libraryCollection = active.identity.collection_code;
+      state.libraryLetter = letterId(active);
+    }
     renderLibrary();
     el("library-search").focus();
   } catch (error) {
@@ -357,6 +446,10 @@ function renderCanvases() {
   if (state.images.selection) {
     (sourceOnlyMode() ? originalContext : inkContext).drawImage(state.images.selection, 0, 0, width, height);
   }
+  if (state.ownershipMode && state.images.ownership) {
+    originalContext.drawImage(state.images.ownership, 0, 0, width, height);
+    if (state.images.available) inkContext.drawImage(state.images.ownership, 0, 0, width, height);
+  }
   if (state.tool === "cut") {
     drawCutPath(originalContext);
     if (state.images.available) drawCutPath(inkContext);
@@ -381,6 +474,16 @@ function updateSelectionCopy() {
   el("undo-word").disabled = state.busy || state.commitBusy || !state.boot?.state?.word_count;
   el("ink-clean").disabled = state.busy || state.commitBusy || state.tool === "cut";
   el("ink-high-recall").disabled = state.busy || state.commitBusy || state.tool === "cut";
+  el("toggle-prefill").disabled = state.busy || state.commitBusy;
+  if (state.ownershipMode) {
+    const disabled = state.busy;
+    el("ownership-word").disabled = disabled;
+    el("ownership-to-word").disabled = disabled;
+    el("ownership-unassign").disabled = disabled;
+    el("ownership-nontext").disabled = disabled;
+    el("ownership-finish").disabled = disabled;
+    return;
+  }
   el("recover-ink").disabled = state.busy || state.commitBusy || state.previewBusy || !state.selectionReceipt?.selection_preview_sha256 || state.tool === "cut";
   el("recovery-panel").hidden = !state.recovery;
   el("selection-copy").hidden = Boolean(state.recovery);
@@ -487,6 +590,170 @@ function synchronizePageScroll(source, target) {
   requestAnimationFrame(() => { synchronizingPageScroll = false; });
 }
 
+function ownershipWordLabel(word) {
+  const text = word.reference_text || "untitled word";
+  return `Line ${word.line_order}, word ${word.word_order} · ${text}`;
+}
+
+function renderOwnershipControls() {
+  if (!state.ownership) return;
+  const select = el("ownership-word");
+  const options = [new Option("Choose by clicking ink…", "")];
+  for (const word of state.ownership.words) {
+    options.push(new Option(ownershipWordLabel(word), word.word_id));
+  }
+  select.replaceChildren(...options);
+  if (state.ownershipTargetWordId && state.ownership.words.some((word) => word.word_id === state.ownershipTargetWordId)) {
+    select.value = state.ownershipTargetWordId;
+  } else {
+    state.ownershipTargetWordId = null;
+    select.value = "";
+  }
+  for (const tool of ["to_word", "unassign", "nontext"]) {
+    el(`ownership-${tool === "to_word" ? "to-word" : tool}`).setAttribute("aria-pressed", String(state.ownershipTool === tool));
+  }
+  const counts = state.ownership.counts;
+  el("ownership-counts").textContent = `${counts.active_words} proposed words · ${counts.owned_components.toLocaleString()} owned pieces · ${counts.unassigned_components.toLocaleString()} gray · ${counts.ambiguous_components.toLocaleString()} amber`;
+  const target = state.ownership.words.find((word) => word.word_id === state.ownershipTargetWordId);
+  el("ownership-status").textContent = state.busy
+    ? "Saving exact ownership…"
+    : state.ownershipTool === "nontext"
+      ? "Click pieces that are definitely not handwriting."
+      : state.ownershipTool === "unassign"
+        ? "Click wrong pieces to return them to gray."
+        : target
+          ? `Target: ${ownershipWordLabel(target)} · click wrong or gray pieces to move them here.`
+          : "Click a correctly colored word to choose the target.";
+}
+
+async function refreshOwnership(bootstrap) {
+  state.ownership = bootstrap;
+  state.images.ownership = await image(bootstrap.assets.review_overlay);
+  renderOwnershipControls();
+  updateSelectionCopy();
+  renderCanvases();
+}
+
+function setOwnershipTool(tool) {
+  if (!state.ownershipMode || state.busy) return;
+  state.ownershipTool = tool;
+  renderOwnershipControls();
+}
+
+function setOwnershipMode(enabled) {
+  if (!state.ownership || state.busy) return;
+  state.ownershipMode = enabled;
+  state.rectangles = [];
+  state.deselectRectangles = [];
+  state.selectionHistory = [];
+  state.selectionReceipt = null;
+  state.images.selection = null;
+  el("toggle-prefill").setAttribute("aria-pressed", String(enabled));
+  el("toggle-prefill").textContent = enabled ? "Prefill cleanup on" : "Prefill cleanup";
+  el("commit-bar").hidden = !enabled ? state.boot.state.status !== "selecting_words" : true;
+  el("ownership-bar").hidden = !enabled;
+  el("finish-page").hidden = enabled || state.boot.state.status !== "selecting_words";
+  el("tool-cut").hidden = enabled || state.boot.state.status !== "selecting_words";
+  el("undo-word").hidden = enabled || state.boot.state.status !== "selecting_words";
+  el("instruction").textContent = enabled ? "Clean the colored word ownership" : "Select one word · press Enter";
+  el("word-count").textContent = enabled ? `${state.ownership.counts.active_words} provisional` : state.boot.state.word_count;
+  el("progress-label").textContent = enabled ? "words to review" : "words finished";
+  el("ink-layer-switch").hidden = enabled || !dualInkMode();
+  el("original-shell").classList.toggle("interactive", enabled || sourceOnlyMode());
+  updateSelectionCopy();
+  renderCanvases();
+}
+
+async function applyOwnershipAction(action) {
+  if (state.busy || !state.ownership) return;
+  state.busy = true;
+  renderOwnershipControls();
+  updateSelectionCopy();
+  try {
+    const result = await api("/api/ownership-action", {
+      schema_version: "provisional-ownership-ledger-action.v1",
+      base_state_sha256: state.ownership.state_sha256,
+      ...action,
+    });
+    await refreshOwnership(result.bootstrap);
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    state.busy = false;
+    renderOwnershipControls();
+    updateSelectionCopy();
+  }
+}
+
+async function finishOwnership() {
+  if (state.busy || !state.ownership || !state.ownershipMode) return;
+  const counts = state.ownership.counts;
+  const warning = `${counts.unassigned_components.toLocaleString()} gray pieces and ${counts.ambiguous_components.toLocaleString()} amber pieces will remain outside word masks.`;
+  if (!confirm(`Freeze ${counts.active_words} provisional words and fit their exact envelopes now?\n\n${warning}\n\nYou cannot edit this ownership run after freezing.`)) return;
+  state.busy = true;
+  el("ownership-finish").textContent = "Fitting envelopes…";
+  renderOwnershipControls();
+  try {
+    const result = await api("/api/finalize-ownership", {
+      ownership_base_state_sha256: state.ownership.state_sha256,
+      selector_base_state_sha256: state.boot.state.state_sha256,
+    });
+    state.ownershipMode = false;
+    state.boxes = true;
+    el("toggle-boxes").textContent = "Boxes on";
+    el("toggle-boxes").setAttribute("aria-pressed", "true");
+    await loadBootstrap(result.bootstrap);
+    renderCanvases();
+    showToast(`${result.imported_word_count} exact word masks frozen · fitted envelopes are on.`);
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    state.busy = false;
+    el("ownership-finish").textContent = "Finish cleanup + fit boxes";
+    updateSelectionCopy();
+  }
+}
+
+async function ownershipClick(point) {
+  if (state.busy || !state.ownershipMode) return;
+  try {
+    const component = await api("/api/ownership-component", {x: point[0], y: point[1]});
+    if (!component.component_id) {
+      showToast("That point is background. Click directly on an ink piece.");
+      return;
+    }
+    if (state.ownershipTool === "nontext") {
+      await applyOwnershipAction({type: "mark_nontext", component_ids: [component.component_id]});
+      return;
+    }
+    if (state.ownershipTool === "unassign") {
+      await applyOwnershipAction({type: "transfer", component_ids: [component.component_id], target_word_id: null});
+      return;
+    }
+    if (!state.ownershipTargetWordId) {
+      if (!component.owner_word_id) {
+        showToast("That piece is gray. First click a correctly colored word to choose its target.");
+        return;
+      }
+      state.ownershipTargetWordId = component.owner_word_id;
+      el("ownership-word").value = component.owner_word_id;
+      renderOwnershipControls();
+      return;
+    }
+    if (component.owner_word_id === state.ownershipTargetWordId) {
+      showToast("That piece already belongs to the target word.");
+      return;
+    }
+    await applyOwnershipAction({
+      type: "transfer",
+      component_ids: [component.component_id],
+      target_word_id: state.ownershipTargetWordId,
+    });
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
 async function loadBootstrap(data = null, {preserveSelection = false} = {}) {
   state.boot = data || await api("/api/bootstrap");
   if (state.boot.csrf_token) state.csrf = state.boot.csrf_token;
@@ -510,18 +777,34 @@ async function loadBootstrap(data = null, {preserveSelection = false} = {}) {
   }
   state.images.claimed = await image(state.boot.assets.claimed);
   state.images.cut = state.boot.assets.cut ? await image(state.boot.assets.cut) : null;
-  el("word-count").textContent = state.boot.state.word_count;
+  const ownership = await api("/api/ownership");
+  state.ownership = ownership.available ? ownership : null;
+  state.images.ownership = ownership.available ? await image(ownership.assets.review_overlay) : null;
+  if (!ownership.available) {
+    state.ownershipMode = false;
+    state.ownershipTargetWordId = null;
+  } else if (!preserveSelection && state.boot.state.word_count === 0 && state.boot.state.status === "selecting_words") {
+    state.ownershipMode = true;
+  }
+  if (state.boot.state.status !== "selecting_words") state.ownershipMode = false;
+  el("word-count").textContent = state.ownershipMode && state.ownership
+    ? `${state.ownership.counts.active_words} provisional`
+    : state.boot.state.word_count;
+  el("progress-label").textContent = state.ownershipMode ? "words to review" : "words finished";
   const status = state.boot.state.status;
   const sourceOnly = sourceOnlyMode();
   const dualInk = dualInkMode();
   el("pages").classList.toggle("source-only", sourceOnly);
   el("ink-card").hidden = sourceOnly;
-  el("ink-layer-switch").hidden = !dualInk;
+  el("ink-layer-switch").hidden = !dualInk || state.ownershipMode;
+  el("toggle-prefill").hidden = !ownership.available || status !== "selecting_words";
+  el("toggle-prefill").setAttribute("aria-pressed", String(state.ownershipMode));
+  el("toggle-prefill").textContent = state.ownershipMode ? "Prefill cleanup on" : "Prefill cleanup";
   el("ink-clean").setAttribute("aria-pressed", String(state.inkVariant === "clean"));
   el("ink-high-recall").setAttribute("aria-pressed", String(state.inkVariant === "high_recall"));
   el("ink-title").textContent = state.inkVariant === "clean" ? "Clean ink" : "High-recall ink";
   el("ink-layer-description").textContent = state.inkVariant === "clean" ? "V4 likely handwriting · lower noise" : "V4 likely + uncertain · higher recall";
-  el("original-shell").classList.toggle("interactive", sourceOnly && status === "selecting_words");
+  el("original-shell").classList.toggle("interactive", (sourceOnly || state.ownershipMode) && status === "selecting_words");
   el("original-title").textContent = sourceOnly ? "Original letter" : "Original";
   el("original-role").textContent = sourceOnly ? "Select here" : "Context";
   el("original-canvas").setAttribute(
@@ -531,12 +814,16 @@ async function loadBootstrap(data = null, {preserveSelection = false} = {}) {
       : "Original letter with completed word ink shown red",
   );
   applyZoom();
-  el("commit-bar").hidden = status !== "selecting_words";
-  el("finish-page").hidden = status !== "selecting_words";
-  el("tool-cut").hidden = status !== "selecting_words";
-  el("undo-word").hidden = status !== "selecting_words";
+  el("commit-bar").hidden = status !== "selecting_words" || state.ownershipMode;
+  el("ownership-bar").hidden = status !== "selecting_words" || !state.ownershipMode;
+  el("finish-page").hidden = status !== "selecting_words" || state.ownershipMode;
+  el("tool-cut").hidden = status !== "selecting_words" || state.ownershipMode;
+  el("undo-word").hidden = status !== "selecting_words" || state.ownershipMode;
   el("notes-panel").hidden = status !== "page_notes";
-  el("instruction").textContent = status === "selecting_words" ? "Select one word · press Enter" : status === "page_notes" ? "Add notes once · finish the page" : "Page complete";
+  el("instruction").textContent = state.ownershipMode
+    ? "Clean the colored word ownership"
+    : status === "selecting_words" ? "Select one word · press Enter" : status === "page_notes" ? "Add notes once · finish the page" : "Page complete";
+  renderOwnershipControls();
   updateSelectionCopy(); renderCanvases();
   if (status === "complete") showToast(`Complete · ${state.boot.state.word_count} words selected`);
 }
@@ -548,7 +835,8 @@ function beginDrag(event, target) {
   if (
     target === "original"
     && !(
-      status === "page_notes"
+      state.ownershipMode
+      || status === "page_notes"
       || (status === "selecting_words" && (sourceOnlyMode() || state.tool === "cut"))
     )
   ) return;
@@ -581,6 +869,14 @@ function endDrag(event) {
   const displayWidth = Math.abs(drag.end.x - drag.start.x);
   const displayHeight = Math.abs(drag.end.y - drag.start.y);
   const isClick = displayWidth < 3 && displayHeight < 3;
+  if (state.ownershipMode) {
+    if (!isClick) {
+      showToast("Ownership cleanup uses quick clicks on exact ink pieces.");
+      return;
+    }
+    ownershipClick(sourcePointFromPointer(canvas, drag.start));
+    return;
+  }
   const start = isClick ? {x: drag.start.x - 1, y: drag.start.y - 1} : drag.start;
   const end = isClick ? {x: drag.start.x + 1, y: drag.start.y + 1} : drag.end;
   const rect = sourceRectFromPointer(canvas, start, end);
@@ -946,6 +1242,16 @@ function wire() {
   el("library-back").addEventListener("click", showWorkspace);
   el("library-search").addEventListener("input", renderLibrary);
   el("reset-page").addEventListener("click", resetPage);
+  el("toggle-prefill").addEventListener("click", () => setOwnershipMode(!state.ownershipMode));
+  el("ownership-word").addEventListener("change", (event) => {
+    state.ownershipTargetWordId = event.target.value || null;
+    state.ownershipTool = "to_word";
+    renderOwnershipControls();
+  });
+  el("ownership-to-word").addEventListener("click", () => setOwnershipTool("to_word"));
+  el("ownership-unassign").addEventListener("click", () => setOwnershipTool("unassign"));
+  el("ownership-nontext").addEventListener("click", () => setOwnershipTool("nontext"));
+  el("ownership-finish").addEventListener("click", finishOwnership);
   window.addEventListener("resize", applyZoom);
   window.addEventListener("keydown", (event) => {
     if (event.target.matches("textarea, input")) return;

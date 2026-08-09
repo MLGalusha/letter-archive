@@ -20,7 +20,20 @@
       <input id="library-search" type="search" placeholder="Find collection, date, page, or challenge…" aria-label="Search letter pages">
       <span id="library-count" aria-live="polite"></span>
     </div>
-    <div id="library-grid" class="library-grid" aria-live="polite"></div>
+    <div class="library-browser">
+      <nav class="library-column collection-column" aria-label="Collections">
+        <div class="library-column-heading"><b>Collections</b><span id="collection-count"></span></div>
+        <div id="library-collections" class="library-list"></div>
+      </nav>
+      <nav class="library-column letter-column" aria-label="Letters">
+        <div class="library-column-heading"><b>Letters</b><span id="letter-count"></span></div>
+        <div id="library-letters" class="library-list"></div>
+      </nav>
+      <section class="library-pages" aria-label="Ordered letter pages">
+        <div class="library-column-heading"><b id="page-list-title">Pages</b><span>in archive order</span></div>
+        <div id="library-grid" class="library-grid" aria-live="polite"></div>
+      </section>
+    </div>
   </section>
 
   <div id="workspace-view" class="workspace-view">
@@ -29,10 +42,11 @@
       <span class="eyebrow">Letter Archive experiment</span>
       <strong id="instruction">Select one word · press Enter</strong>
     </div>
-    <div class="progress" aria-live="polite"><b id="word-count">0</b> words finished</div>
+    <div class="progress" aria-live="polite"><b id="word-count">0</b> <span id="progress-label">words finished</span></div>
     <div class="toolbar-actions">
       <button id="open-library" class="quiet" type="button">Library</button>
       <button id="reset-page" class="quiet danger" type="button">Reset page</button>
+      <button id="toggle-prefill" class="quiet" type="button" aria-pressed="false" hidden>Prefill cleanup</button>
       <button id="toggle-boxes" class="quiet" type="button" aria-pressed="false">Boxes off</button>
       <button id="undo-word" class="quiet" type="button" title="Keyboard shortcut: Command or Control + Z">Undo last red word</button>
       <button id="tool-cut" class="quiet" type="button" aria-pressed="false">Cut ink</button>
@@ -87,6 +101,21 @@
     <button id="recover-ink" class="quiet" type="button" disabled>Recover missed ink</button>
     <button id="clear-selection" class="quiet" type="button">Erase selection</button>
     <button id="commit-word" class="primary" type="button" disabled>Enter · finish word</button>
+  </footer>
+  <footer id="ownership-bar" class="ownership-bar" hidden>
+    <div class="ownership-copy">
+      <strong id="ownership-status">Click a correctly colored word to choose the target.</strong>
+      <span id="ownership-counts">Gray stays unassigned · amber needs review</span>
+    </div>
+    <label class="ownership-target">Target word
+      <select id="ownership-word"><option value="">Choose by clicking ink…</option></select>
+    </label>
+    <div class="ownership-actions" role="group" aria-label="Ownership cleanup tool">
+      <button id="ownership-to-word" class="quiet" type="button" aria-pressed="true">Move pieces to word</button>
+      <button id="ownership-unassign" class="quiet" type="button" aria-pressed="false">Move pieces to gray</button>
+      <button id="ownership-nontext" class="quiet" type="button" aria-pressed="false">Mark non-text</button>
+      <button id="ownership-finish" class="primary" type="button">Finish cleanup + fit boxes</button>
+    </div>
   </footer>
   </div>
 

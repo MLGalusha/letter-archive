@@ -27,10 +27,10 @@ import tempfile
 import threading
 import weakref
 from typing import Any, Mapping, Sequence
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter, ImageOps
 from scipy import ndimage
 from skimage import color, filters
 
@@ -42,10 +42,16 @@ from .fragmented_envelope import (
 from .human_review_console import ConsoleError
 from .io_utils import canonical_json_bytes, sha256_file, sha256_mask_pixels
 from .local_ink_recovery import recover_local_ink_candidates
+from .line_ribbon_envelope import (
+    fit_line_ribbon_envelope,
+    fit_simplified_convex_envelope,
+)
+from .archive_source_catalog import ArchiveSourceCatalog
 from .pipeline_source_catalog import (
     CatalogRevisionConflictError,
     PipelineSourceCatalog,
     PipelineSourceError,
+    discover_letter_archive_root,
 )
 
 
@@ -62,6 +68,7 @@ MAX_UPLOADED_IMAGE_BYTES = 25_000_000
 MAX_UPLOADED_IMAGE_PIXELS = 16_000_000
 MAX_UPLOADED_IMAGE_EDGE = 6_000
 LIBRARY_SCHEMA = "simple-selector-library.v1"
+FINAL_FIT_WORKER_WORD_BATCH = 12
 
 
 def _hash_record(value: Mapping[str, Any], hash_key: str) -> str:
@@ -806,6 +813,18 @@ class SimplePageSelector:
                 status=500,
             )
         return response["result"]
+
+    def _recycle_fit_process(self) -> None:
+        """Bound retained worker memory between independent final-page words."""
+
+        with self._fit_process_lock:
+            process = self._fit_process
+            self._fit_process = None
+            if self._fit_process_finalizer is not None:
+                self._fit_process_finalizer.detach()
+                self._fit_process_finalizer = None
+            if process is not None:
+                self._stop_fit_process(process)
 
     def _verify_bound(self, relative: str, expected: str) -> Path:
         path = (self.session_dir / relative).resolve()
@@ -2216,6 +2235,172 @@ class SimplePageSelector:
                 "bootstrap": self.bootstrap(),
             }
 
+    def import_provisional_ownership(self, ledger: Any) -> dict[str, Any]:
+        """Publish one frozen page-wide ownership ledger as selector word masks."""
+
+        validation = ledger.validate()
+        if validation.get("violation_count"):
+            raise ConsoleError(
+                "integrity_error", "The ownership ledger failed validation", status=500
+            )
+        ownership = ledger.head()
+        if ownership.get("status") != "frozen":
+            raise ConsoleError(
+                "wrong_stage", "Freeze ownership before building fitted boxes", status=409
+            )
+        if (
+            ledger._manifest.get("selector_manifest_sha256")
+            != self.manifest["manifest_sha256"]
+        ):
+            raise ConsoleError(
+                "integrity_error", "Ownership belongs to a different page run", status=500
+            )
+        clean = self._ink_mask("clean")
+        if sha256_mask_pixels(clean) != ledger._manifest.get("clean_mask_pixel_sha256"):
+            raise ConsoleError(
+                "integrity_error", "The Clean ink changed after ownership began", status=500
+            )
+        with self._locked():
+            prior = self._head_state()
+            if prior["status"] != "selecting_words" or prior["word_count"] != 0:
+                raise ConsoleError(
+                    "wrong_stage",
+                    "Provisional ownership can only fill a fresh selector page",
+                    status=409,
+                )
+            if int(self._cut(prior).sum()):
+                raise ConsoleError(
+                    "wrong_stage",
+                    "This ownership inventory predates the selector cuts",
+                    status=409,
+                )
+            active_words = sorted(
+                (
+                    word
+                    for word in ownership["words"]
+                    if word.get("status") == "active" and word.get("component_ids")
+                ),
+                key=lambda word: (
+                    int(word["line_order"]),
+                    int(word["word_order"]),
+                    str(word["word_id"]),
+                ),
+            )
+            if not active_words:
+                raise ConsoleError("empty_page", "No owned words are ready to fit")
+            words: list[dict[str, Any]] = []
+            claimed = np.zeros(clean.shape, dtype=bool)
+            revision = int(prior["revision"]) + 1
+            component_inventory = {
+                int(component["component_id"]): component
+                for component in ledger._manifest["components"]
+            }
+            for word_number, ownership_word in enumerate(active_words, start=1):
+                component_ids = [int(value) for value in ownership_word["component_ids"]]
+                component_boxes = [
+                    component_inventory[component_id]["bbox_xywh"]
+                    for component_id in component_ids
+                ]
+                x = min(box[0] for box in component_boxes)
+                y = min(box[1] for box in component_boxes)
+                right = max(box[0] + box[2] for box in component_boxes)
+                bottom = max(box[1] + box[3] for box in component_boxes)
+                width, height = right - x, bottom - y
+                local = np.isin(
+                    ledger._labels[y:bottom, x:right], component_ids
+                )
+                if not np.any(local) or np.any(local & claimed[y:bottom, x:right]):
+                    raise ConsoleError(
+                        "integrity_error",
+                        "Frozen ownership produced an empty or overlapping word",
+                        status=500,
+                    )
+                selection_bbox = [x, y, width, height]
+                word_dir = self.session_dir / "words" / (
+                    f"word-{word_number:04d}-ownership-r{revision:06d}"
+                )
+                word_dir.mkdir(parents=True, exist_ok=False)
+                word_mask_path = word_dir / "selected.mask.png"
+                _save_binary(word_mask_path, local)
+                words.append(
+                    {
+                        "word_number": word_number,
+                        "ownership_word_id": ownership_word["word_id"],
+                        "line_id": ownership_word["line_id"],
+                        "line_order": ownership_word["line_order"],
+                        "word_order": ownership_word["word_order"],
+                        "reference_text": ownership_word.get("reference_text"),
+                        "ink_variant": "clean",
+                        "ink_variant_pixel_sha256": (
+                            self.ink_layers["layers"]["clean"]["mask_pixel_sha256"]
+                            if self.ink_layers is not None
+                            else self.manifest["strong_ink"]["pixel_sha256"]
+                        ),
+                        "rectangles": [],
+                        "deselect_rectangles": [],
+                        "selection_bbox_xywh": selection_bbox,
+                        "selected_pixels": int(local.sum()),
+                        "selected_source_component_ids": component_ids,
+                        "selected_source_component_count": len(component_ids),
+                        "selection_hygiene": {
+                            "source": "frozen_provisional_ownership",
+                            "ownership_state_sha256": ownership["state_sha256"],
+                            "ownership_revision": ownership["revision"],
+                        },
+                        "recovery": None,
+                        "selection_preview_sha256": None,
+                        "selected_pixel_sha256": sha256_mask_pixels(local),
+                        "selected_mask_path": str(word_mask_path.relative_to(self.session_dir)),
+                        "selected_mask_file_sha256": sha256_file(word_mask_path),
+                        "fit_status": "pending_page_finish",
+                        "fit_profile": None,
+                        "fit_method": None,
+                        "fit_quality": None,
+                        "fit_crop_xywh": None,
+                        "envelope_polygon": None,
+                        "envelope_polygon_sha256": None,
+                        "envelope_metrics": None,
+                        "fit_trials": [],
+                    }
+                )
+                claimed[y:bottom, x:right] |= local
+            empty_active_words = [
+                word["word_id"]
+                for word in ownership["words"]
+                if word.get("status") == "active" and not word.get("component_ids")
+            ]
+            published = self._publish_state(
+                prior,
+                {
+                    "status": "selecting_words",
+                    "page_id": prior["page_id"],
+                    "word_count": len(words),
+                    "claimed_pixels": int(claimed.sum()),
+                    "words": words,
+                    "page_notes": None,
+                },
+                claimed,
+                {
+                    "type": "import_frozen_provisional_ownership",
+                    "ownership_state_sha256": ownership["state_sha256"],
+                    "ownership_revision": ownership["revision"],
+                    "imported_word_count": len(words),
+                    "empty_active_word_ids": empty_active_words,
+                    "unassigned_component_count": sum(
+                        owner is None
+                        for owner in ownership["component_owner"].values()
+                    ),
+                },
+            )
+            self._component_cache.clear()
+            self._selection_preview_cache = None
+            self._recovery_preview_cache = None
+            return {
+                "state": published,
+                "imported_word_count": len(words),
+                "empty_active_word_ids": empty_active_words,
+            }
+
     def _word_mask(self, word: Mapping[str, Any]) -> np.ndarray:
         bbox = self._validated_rectangles([word.get("selection_bbox_xywh")])[0]
         x, y, width, height = bbox
@@ -2371,38 +2556,6 @@ class SimplePageSelector:
                 fit_quality = "fitted_fragmented_selection"
                 fit_status = "fitted_at_page_finish"
             except EnvelopeError as fragmented_error:
-                x0 = int(xs.min())
-                y0 = int(ys.min())
-                x1 = int(xs.max()) + 1
-                y1 = int(ys.max()) + 1
-                polygon = [
-                    [float(x0), float(y0)],
-                    [float(x1), float(y0)],
-                    [float(x1), float(y1)],
-                    [float(x0), float(y1)],
-                ]
-                fit_crop = [x0, y0, x1 - x0, y1 - y0]
-                excluded_pixels = int(
-                    np.count_nonzero(
-                        claimed[y0:y1, x0:x1]
-                        & ~selected[y0:y1, x0:x1]
-                    )
-                )
-                selected_pixels = int(selected.sum())
-                denominator = max(1, selected_pixels + excluded_pixels)
-                winner = {
-                    "profile": "selection_only_fallback",
-                    "method": "selected_pixel_bbox",
-                    "selected_ink_coverage": 1.0,
-                    "excluded_ink_contamination": excluded_pixels / denominator,
-                    "envelope_area_px2": float((x1 - x0) * (y1 - y0)),
-                    "selected_component_count": int(
-                        ndimage.label(
-                            selected,
-                            structure=np.ones((3, 3), dtype=np.uint8),
-                        )[1]
-                    ),
-                }
                 fit_trials.append(
                     {
                         "status": "rejected",
@@ -2410,8 +2563,120 @@ class SimplePageSelector:
                         "reason": str(fragmented_error),
                     }
                 )
-                fit_quality = "selection_only_fallback"
-                fit_status = "fallback_at_page_finish"
+                try:
+                    convex = fit_simplified_convex_envelope(
+                        local_selected,
+                        local_excluded,
+                    )
+                    polygon = [
+                        [round(float(px) + x0, 3), round(float(py) + y0, 3)]
+                        for px, py in convex["polygon"]
+                    ]
+                    winner = {
+                        "profile": convex["profile"],
+                        "method": convex["method"],
+                        "selected_ink_coverage": convex[
+                            "selected_ink_coverage"
+                        ],
+                        "excluded_ink_contamination": convex[
+                            "excluded_ink_contamination"
+                        ],
+                        "envelope_area_px2": convex["envelope_area_px2"],
+                        "selected_component_count": convex[
+                            "selected_component_count"
+                        ],
+                    }
+                    fit_trials.extend(
+                        {
+                            **trial,
+                            "method": "simplified_convex_hull",
+                        }
+                        for trial in convex["trials"]
+                    )
+                    fit_quality = "fitted_simplified_convex_hull"
+                    fit_status = "fitted_at_page_finish"
+                except EnvelopeError as convex_error:
+                    fit_trials.append(
+                        {
+                            "status": "rejected",
+                            "method": "simplified_convex_hull",
+                            "reason": str(convex_error),
+                        }
+                    )
+                    try:
+                        ribbon = fit_line_ribbon_envelope(
+                            local_selected,
+                            local_excluded,
+                        )
+                        polygon = [
+                            [round(float(px) + x0, 3), round(float(py) + y0, 3)]
+                            for px, py in ribbon["polygon"]
+                        ]
+                        winner = {
+                            "profile": ribbon["profile"],
+                            "method": ribbon["method"],
+                            "selected_ink_coverage": ribbon[
+                                "selected_ink_coverage"
+                            ],
+                            "excluded_ink_contamination": ribbon[
+                                "excluded_ink_contamination"
+                            ],
+                            "envelope_area_px2": ribbon["envelope_area_px2"],
+                            "selected_component_count": ribbon[
+                                "selected_component_count"
+                            ],
+                        }
+                        fit_trials.extend(
+                            {
+                                **trial,
+                                "method": "line_coordinate_smooth_ribbon",
+                            }
+                            for trial in ribbon["trials"]
+                        )
+                        fit_quality = "fitted_line_coordinate_ribbon"
+                        fit_status = "fitted_at_page_finish"
+                    except EnvelopeError as ribbon_error:
+                        fit_trials.append(
+                            {
+                                "status": "rejected",
+                                "method": "line_coordinate_smooth_ribbon",
+                                "reason": str(ribbon_error),
+                            }
+                        )
+                        x0 = int(xs.min())
+                        y0 = int(ys.min())
+                        x1 = int(xs.max()) + 1
+                        y1 = int(ys.max()) + 1
+                        polygon = [
+                            [float(x0), float(y0)],
+                            [float(x1), float(y0)],
+                            [float(x1), float(y1)],
+                            [float(x0), float(y1)],
+                        ]
+                        fit_crop = [x0, y0, x1 - x0, y1 - y0]
+                        excluded_pixels = int(
+                            np.count_nonzero(
+                                claimed[y0:y1, x0:x1]
+                                & ~selected[y0:y1, x0:x1]
+                            )
+                        )
+                        selected_pixels = int(selected.sum())
+                        denominator = max(1, selected_pixels + excluded_pixels)
+                        winner = {
+                            "profile": "selection_only_fallback",
+                            "method": "selected_pixel_bbox",
+                            "selected_ink_coverage": 1.0,
+                            "excluded_ink_contamination": excluded_pixels / denominator,
+                            "envelope_area_px2": float((x1 - x0) * (y1 - y0)),
+                            "selected_component_count": int(
+                                ndimage.label(
+                                    selected,
+                                    structure=np.ones((3, 3), dtype=np.uint8),
+                                )[1]
+                            ),
+                        }
+                        fit_quality = "selection_only_fallback"
+                        fit_status = "fallback_at_page_finish"
         return {
             "fit_status": fit_status,
             "fit_profile": winner["profile"],
@@ -2445,11 +2710,18 @@ class SimplePageSelector:
             claimed = self._claimed(prior)
             words = [dict(word) for word in prior["words"]]
             fitted_word_count = 0
-            for word in words:
-                if word.get("envelope_polygon") is not None:
-                    continue
-                word.update(self._final_fit(self._word_mask(word), claimed))
-                fitted_word_count += 1
+            try:
+                for word in words:
+                    if word.get("envelope_polygon") is not None:
+                        continue
+                    word.update(self._final_fit(self._word_mask(word), claimed))
+                    fitted_word_count += 1
+                    if fitted_word_count % FINAL_FIT_WORKER_WORD_BATCH == 0:
+                        # Bound retained worker memory without paying a process
+                        # startup for every independent word on the page.
+                        self._recycle_fit_process()
+            finally:
+                self._recycle_fit_process()
             state = {
                 "page_id": prior["page_id"],
                 "word_count": prior["word_count"],
@@ -2526,18 +2798,19 @@ def initialize_uploaded_simple_selector(
             if getattr(opened, "n_frames", 1) != 1:
                 raise ConsoleError("invalid_image", "Animated images are not supported")
             opened.load()
+            upright = ImageOps.exif_transpose(opened)
             if (
-                opened.width < 64
-                or opened.height < 64
-                or opened.width > MAX_UPLOADED_IMAGE_EDGE
-                or opened.height > MAX_UPLOADED_IMAGE_EDGE
-                or opened.width * opened.height > MAX_UPLOADED_IMAGE_PIXELS
+                upright.width < 64
+                or upright.height < 64
+                or upright.width > MAX_UPLOADED_IMAGE_EDGE
+                or upright.height > MAX_UPLOADED_IMAGE_EDGE
+                or upright.width * upright.height > MAX_UPLOADED_IMAGE_PIXELS
             ):
                 raise ConsoleError(
                     "invalid_image",
                     "Choose an image between 64 px and 8,000 px per edge",
                 )
-            source = opened.convert("RGB")
+            source = upright.convert("RGB")
     except ConsoleError:
         raise
     except (OSError, ValueError, Image.DecompressionBombError) as error:
@@ -2625,6 +2898,65 @@ def _write_json_replace(path: Path, value: Mapping[str, Any]) -> None:
         temporary.unlink(missing_ok=True)
 
 
+def initialize_catalog_selector_run(
+    workspace_dir: Path | str,
+    catalog: Any,
+    catalog_item_id: str,
+) -> "SimplePageSelector":
+    """Create one append-only selector run under its archive hierarchy."""
+
+    workspace = Path(workspace_dir).resolve()
+    workspace.mkdir(parents=True, exist_ok=True)
+    if workspace.is_symlink():
+        raise ConsoleError("unsafe_workspace", "The selector workspace is unsafe", status=500)
+    resolved = catalog.resolve_catalog_source(catalog_item_id)
+    with Image.open(resolved.absolute_path) as opened:
+        opened.load()
+        source = ImageOps.exif_transpose(opened).convert("RGB")
+    _clean, high_recall = derive_uploaded_dual_ink(source)
+    identity_match = re.fullmatch(
+        r"(?P<collection>[0-9]{3})-(?P<date>[0-9X]{8})-L(?P<sequence>[0-9]{2})-(?P<page>[0-9]{2})",
+        catalog_item_id,
+    )
+    if identity_match is None:
+        raise ConsoleError("library_image_failed", "That library page identity is invalid")
+    token = secrets.token_hex(6)
+    staging = Path(
+        tempfile.mkdtemp(prefix=f".library-{catalog_item_id}-", dir=workspace)
+    )
+    target = (
+        workspace
+        / "collections"
+        / identity_match.group("collection")
+        / identity_match.group("date")
+        / f"L{identity_match.group('sequence')}"
+        / "pages"
+        / catalog_item_id
+        / "runs"
+        / f"run-{token}"
+    )
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        source_path = staging / "source.png"
+        high_path = staging / "high-recall.png"
+        source.save(source_path, format="PNG", compress_level=6)
+        _save_binary(high_path, high_recall)
+        initialize_simple_selector(
+            target,
+            page_id=catalog_item_id,
+            source_path=source_path,
+            strong_mask_path=high_path,
+            selection_mode="source_color_guided",
+        )
+        return SimplePageSelector(target)
+    except BaseException:
+        if target.is_dir() and not target.is_symlink():
+            shutil.rmtree(target)
+        raise
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+
+
 class SimpleSelectorLibrary:
     """Internal Letter Archive pages with one resumable active run per page."""
 
@@ -2633,10 +2965,12 @@ class SimpleSelectorLibrary:
         workspace_dir: Path | str,
         current_selector: SimplePageSelector,
         *,
-        catalog: PipelineSourceCatalog | None = None,
+        catalog: PipelineSourceCatalog | ArchiveSourceCatalog | None = None,
     ) -> None:
         self.workspace_dir = Path(workspace_dir).resolve()
-        self.catalog = catalog or PipelineSourceCatalog()
+        self.catalog = catalog or ArchiveSourceCatalog(
+            discover_letter_archive_root(Path(__file__).resolve())
+        )
         self.registry_path = self.workspace_dir / "simple-selector-library.json"
         self.thumbnail_dir = self.workspace_dir / ".library-thumbnails"
         self.registry = self._load_registry()
@@ -2646,6 +2980,7 @@ class SimpleSelectorLibrary:
         return {
             "schema_version": LIBRARY_SCHEMA,
             "catalog_revision": self.catalog.catalog_revision,
+            "active_catalog_item_id": None,
             "items": {},
         }
 
@@ -2666,11 +3001,42 @@ class SimpleSelectorLibrary:
             )
         if value.get("catalog_revision") != self.catalog.catalog_revision:
             value["catalog_revision"] = self.catalog.catalog_revision
-            _write_json_replace(self.registry_path, value)
+        if "active_catalog_item_id" not in value:
+            value["active_catalog_item_id"] = None
+        _write_json_replace(self.registry_path, value)
         return value
 
     def _save(self) -> None:
         _write_json_replace(self.registry_path, self.registry)
+
+    def _session_reference(self, path: Path) -> str:
+        try:
+            relative = path.resolve(strict=True).relative_to(self.workspace_dir)
+        except (OSError, ValueError) as error:
+            raise ConsoleError(
+                "integrity_error",
+                "A saved library run lies outside its workspace",
+                status=500,
+            ) from error
+        return relative.as_posix()
+
+    def _session_path(self, reference: Any) -> Path:
+        if not isinstance(reference, str):
+            raise ConsoleError("integrity_error", "A saved library run is unsafe", status=500)
+        relative = Path(reference)
+        if relative.is_absolute() or not relative.parts or any(
+            part in {"", ".", ".."} for part in relative.parts
+        ):
+            raise ConsoleError("integrity_error", "A saved library run is unsafe", status=500)
+        path = self.workspace_dir.joinpath(*relative.parts)
+        try:
+            resolved = path.resolve(strict=True)
+            resolved.relative_to(self.workspace_dir)
+        except (OSError, ValueError) as error:
+            raise ConsoleError("integrity_error", "A saved library run is missing", status=500) from error
+        if path.is_symlink() or not resolved.is_dir():
+            raise ConsoleError("integrity_error", "A saved library run is missing", status=500)
+        return resolved
 
     @staticmethod
     def _decoded_source_sha256(path: Path) -> str:
@@ -2684,6 +3050,9 @@ class SimpleSelectorLibrary:
 
     def _candidate_for_selector(self, selector: SimplePageSelector) -> str | None:
         page_id = str(selector.manifest["page_id"])
+        listing_items = self.catalog.public_listing()["items"]
+        if any(item["catalog_item_id"] == page_id for item in listing_items):
+            return page_id
         match = re.search(r"(?P<collection>[0-9]{3})-p(?P<page>[0-9]{2})", page_id)
         if not match:
             return None
@@ -2691,7 +3060,7 @@ class SimpleSelectorLibrary:
         suffix = f"-{match.group('page')}"
         choices = [
             item["catalog_item_id"]
-            for item in self.catalog.public_listing()["items"]
+            for item in listing_items
             if item["catalog_item_id"].startswith(prefix)
             and item["catalog_item_id"].endswith(suffix)
         ]
@@ -2712,18 +3081,22 @@ class SimpleSelectorLibrary:
         return matches[0] if len(matches) == 1 else None
 
     def _attach_current(self, selector: SimplePageSelector) -> str | None:
+        current_reference = self._session_reference(selector.session_dir)
         for catalog_item_id, record in self.registry["items"].items():
-            if record.get("active_session") == selector.session_dir.name:
+            if record.get("active_session") == current_reference:
+                self.registry["active_catalog_item_id"] = catalog_item_id
+                self._save()
                 return catalog_item_id
         candidate = self._candidate_for_selector(selector)
         if candidate is None:
             return None
         record = self.registry["items"].setdefault(
             candidate,
-            {"active_session": selector.session_dir.name, "prior_sessions": []},
+            {"active_session": current_reference, "prior_sessions": []},
         )
-        if record.get("active_session") != selector.session_dir.name:
+        if record.get("active_session") != current_reference:
             return None
+        self.registry["active_catalog_item_id"] = candidate
         self._save()
         return candidate
 
@@ -2732,11 +3105,7 @@ class SimpleSelectorLibrary:
         if not isinstance(record, dict):
             return None
         name = record.get("active_session")
-        if not isinstance(name, str) or Path(name).name != name:
-            raise ConsoleError("integrity_error", "A saved library run is unsafe", status=500)
-        path = self.workspace_dir / name
-        if not path.is_dir() or path.is_symlink():
-            raise ConsoleError("integrity_error", "A saved library run is missing", status=500)
+        path = self._session_path(name)
         return SimplePageSelector(path)
 
     def listing(self) -> dict[str, Any]:
@@ -2779,13 +3148,15 @@ class SimpleSelectorLibrary:
         }
 
     def thumbnail(self, catalog_item_id: str) -> bytes:
-        target = self.thumbnail_dir / f"{catalog_item_id}.jpg"
+        target = self.thumbnail_dir / (
+            f"{self.catalog.catalog_revision[:16]}-{catalog_item_id}.jpg"
+        )
         if target.is_file() and not target.is_symlink():
             return target.read_bytes()
         resolved = self.catalog.resolve_catalog_source(catalog_item_id)
         with Image.open(resolved.absolute_path) as opened:
             opened.load()
-            preview = opened.convert("RGB")
+            preview = ImageOps.exif_transpose(opened).convert("RGB")
             preview.thumbnail((360, 280), Image.Resampling.LANCZOS)
         self.thumbnail_dir.mkdir(parents=True, exist_ok=True)
         temporary = target.with_name(f".{target.name}.{secrets.token_hex(6)}.tmp")
@@ -2797,41 +3168,11 @@ class SimpleSelectorLibrary:
         return target.read_bytes()
 
     def _initialize_catalog_item(self, catalog_item_id: str) -> SimplePageSelector:
-        resolved = self.catalog.resolve_catalog_source(catalog_item_id)
-        with Image.open(resolved.absolute_path) as opened:
-            opened.load()
-            source = opened.convert("RGB")
-        clean, high_recall = derive_uploaded_dual_ink(source)
-        token = secrets.token_hex(6)
-        staging = Path(
-            tempfile.mkdtemp(prefix=f".library-{catalog_item_id}-", dir=self.workspace_dir)
+        return initialize_catalog_selector_run(
+            self.workspace_dir,
+            self.catalog,
+            catalog_item_id,
         )
-        target = self.workspace_dir / f"library-{catalog_item_id}-{token}"
-        try:
-            source_path = staging / "source.png"
-            clean_path = staging / "clean.png"
-            high_path = staging / "high-recall.png"
-            source.save(source_path, format="PNG", compress_level=6)
-            _save_binary(clean_path, clean)
-            _save_binary(high_path, high_recall)
-            initialize_simple_selector(
-                target,
-                page_id=catalog_item_id,
-                source_path=source_path,
-                strong_mask_path=high_path,
-            )
-            install_dual_ink_layers(
-                target,
-                clean_mask_path=clean_path,
-                high_recall_mask_path=high_path,
-            )
-            return SimplePageSelector(target)
-        except BaseException:
-            if target.is_dir() and not target.is_symlink():
-                shutil.rmtree(target)
-            raise
-        finally:
-            shutil.rmtree(staging, ignore_errors=True)
 
     def open_item(self, catalog_item_id: str, catalog_revision: str) -> SimplePageSelector:
         if catalog_revision != self.catalog.catalog_revision:
@@ -2841,13 +3182,15 @@ class SimpleSelectorLibrary:
             if selector is None:
                 selector = self._initialize_catalog_item(catalog_item_id)
                 self.registry["items"][catalog_item_id] = {
-                    "active_session": selector.session_dir.name,
+                    "active_session": self._session_reference(selector.session_dir),
                     "prior_sessions": [],
                 }
                 self._save()
         except (PipelineSourceError, OSError) as error:
             raise ConsoleError("library_image_failed", "That library image could not be opened") from error
         self.active_catalog_item_id = catalog_item_id
+        self.registry["active_catalog_item_id"] = catalog_item_id
+        self._save()
         return selector
 
     def reset_active(self, selector: SimplePageSelector) -> SimplePageSelector:
@@ -2857,22 +3200,96 @@ class SimpleSelectorLibrary:
             record = self.registry["items"][catalog_item_id]
             prior = record.setdefault("prior_sessions", [])
             prior.append(record["active_session"])
-            record["active_session"] = replacement.session_dir.name
+            record["active_session"] = self._session_reference(replacement.session_dir)
+            self.registry["active_catalog_item_id"] = catalog_item_id
             self._save()
         return replacement
+
+
+def open_or_initialize_selector_library(
+    workspace_dir: Path | str,
+    *,
+    initial_page_id: str = "001-18881103-L01-01",
+    catalog: ArchiveSourceCatalog | None = None,
+) -> tuple[SimplePageSelector, ArchiveSourceCatalog]:
+    """Open the last active page, or create the first durable library run."""
+
+    workspace = Path(workspace_dir).resolve()
+    workspace.mkdir(parents=True, exist_ok=True)
+    if workspace.is_symlink():
+        raise ConsoleError("unsafe_workspace", "The selector workspace is unsafe", status=500)
+    active_catalog = catalog or ArchiveSourceCatalog(
+        discover_letter_archive_root(Path(__file__).resolve())
+    )
+    registry_path = workspace / "simple-selector-library.json"
+    if registry_path.exists():
+        registry = _read_json(registry_path)
+        active_id = registry.get("active_catalog_item_id")
+        record = registry.get("items", {}).get(active_id) if isinstance(registry.get("items"), dict) else None
+        reference = record.get("active_session") if isinstance(record, dict) else None
+        if isinstance(reference, str):
+            relative = Path(reference)
+            if relative.is_absolute() or any(part in {"", ".", ".."} for part in relative.parts):
+                raise ConsoleError("integrity_error", "The active library run is unsafe", status=500)
+            candidate = workspace.joinpath(*relative.parts)
+            try:
+                resolved = candidate.resolve(strict=True)
+                resolved.relative_to(workspace)
+            except (OSError, ValueError) as error:
+                raise ConsoleError("integrity_error", "The active library run is missing", status=500) from error
+            if candidate.is_symlink() or not resolved.is_dir():
+                raise ConsoleError("integrity_error", "The active library run is missing", status=500)
+            return SimplePageSelector(resolved), active_catalog
+    selector = initialize_catalog_selector_run(
+        workspace,
+        active_catalog,
+        initial_page_id,
+    )
+    SimpleSelectorLibrary(workspace, selector, catalog=active_catalog)
+    return selector, active_catalog
 
 
 class SimpleSelectorServer(ThreadingHTTPServer):
     allow_reuse_address = True
 
-    def __init__(self, address: tuple[str, int], selector: SimplePageSelector, static_dir: Path):
+    def __init__(
+        self,
+        address: tuple[str, int],
+        selector: SimplePageSelector,
+        static_dir: Path,
+        *,
+        catalog: PipelineSourceCatalog | ArchiveSourceCatalog | None = None,
+        workspace_dir: Path | str | None = None,
+    ):
         self.selector = selector
-        self.workspace_dir = selector.session_dir.parent
+        self.workspace_dir = (
+            selector.session_dir.parent
+            if workspace_dir is None
+            else Path(workspace_dir).resolve()
+        )
         self.workspace_lock = threading.RLock()
-        self.library = SimpleSelectorLibrary(self.workspace_dir, selector)
+        self.library = SimpleSelectorLibrary(self.workspace_dir, selector, catalog=catalog)
         self.static_dir = static_dir.resolve()
         self.csrf_token = secrets.token_urlsafe(32)
         super().__init__(address, SimpleSelectorHandler)
+
+    def ownership_ledger(self):
+        from .provisional_ownership_ledger import ProvisionalOwnershipLedger
+
+        root = self.selector.session_dir / "provisional-ownership"
+        if not root.is_dir() or root.is_symlink():
+            return None
+        ledger = ProvisionalOwnershipLedger(root)
+        if (
+            ledger._manifest.get("selector_manifest_sha256")
+            != self.selector.manifest["manifest_sha256"]
+        ):
+            raise ConsoleError(
+                "integrity_error",
+                "The provisional ownership belongs to a different selector run",
+                status=500,
+            )
+        return ledger
 
 
 class SimpleSelectorHandler(BaseHTTPRequestHandler):
@@ -2949,6 +3366,16 @@ class SimpleSelectorHandler(BaseHTTPRequestHandler):
                     data = self.server.library.listing()
                 self._json(200, {"ok": True, "data": data})
                 return
+            if parsed.path == "/api/ownership":
+                with self.server.workspace_lock:
+                    ledger = self.server.ownership_ledger()
+                    data = (
+                        {"available": False}
+                        if ledger is None
+                        else {"available": True, **ledger.public_bootstrap()}
+                    )
+                self._json(200, {"ok": True, "data": data})
+                return
             if parsed.path.startswith("/api/library-thumbnail/"):
                 catalog_item_id = parsed.path.rsplit("/", 1)[-1]
                 with self.server.workspace_lock:
@@ -2982,6 +3409,31 @@ class SimpleSelectorHandler(BaseHTTPRequestHandler):
                         raise ConsoleError("unknown_asset", "The requested selector image is invalid", status=404) from error
                 with self.server.workspace_lock:
                     path, media = self.server.selector.asset_path(kind, revision)
+                    data = path.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", media)
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(data)
+                return
+            if parsed.path.startswith("/api/ownership-asset/"):
+                kind = parsed.path.rsplit("/", 1)[-1]
+                try:
+                    revision = int(parse_qs(parsed.query).get("revision", [""])[0])
+                except ValueError as error:
+                    raise ConsoleError(
+                        "unknown_asset",
+                        "The requested ownership image is invalid",
+                        status=404,
+                    ) from error
+                with self.server.workspace_lock:
+                    ledger = self.server.ownership_ledger()
+                    if ledger is None:
+                        raise ConsoleError(
+                            "not_found", "No ownership proposal is installed", status=404
+                        )
+                    path, media = ledger.asset_path(kind, revision)
                     data = path.read_bytes()
                 self.send_response(200)
                 self.send_header("Content-Type", media)
@@ -3067,6 +3519,82 @@ class SimpleSelectorHandler(BaseHTTPRequestHandler):
                             "previous_session": previous,
                             "current_session": replacement.session_dir.name,
                         }
+                    elif endpoint == "/api/ownership-component":
+                        if set(payload) != {"x", "y"}:
+                            raise ConsoleError(
+                                "invalid_action", "Choose one exact ink point"
+                            )
+                        ledger = self.server.ownership_ledger()
+                        if ledger is None:
+                            raise ConsoleError(
+                                "not_found", "No ownership proposal is installed", status=404
+                            )
+                        result = ledger.component_at(payload["x"], payload["y"])
+                    elif endpoint == "/api/ownership-action":
+                        ledger = self.server.ownership_ledger()
+                        if ledger is None:
+                            raise ConsoleError(
+                                "not_found", "No ownership proposal is installed", status=404
+                            )
+                        state = ledger.apply(payload)
+                        result = {
+                            "revision": state["revision"],
+                            "bootstrap": {"available": True, **ledger.public_bootstrap()},
+                        }
+                    elif endpoint == "/api/finalize-ownership":
+                        if set(payload) != {
+                            "ownership_base_state_sha256",
+                            "selector_base_state_sha256",
+                        }:
+                            raise ConsoleError(
+                                "invalid_action",
+                                "Finalizing ownership needs both current page states",
+                            )
+                        ledger = self.server.ownership_ledger()
+                        if ledger is None:
+                            raise ConsoleError(
+                                "not_found", "No ownership proposal is installed", status=404
+                            )
+                        ownership_state = ledger.head()
+                        if (
+                            payload["ownership_base_state_sha256"]
+                            != ownership_state["state_sha256"]
+                        ):
+                            raise ConsoleError(
+                                "stale_action",
+                                "Ownership changed before final fitting",
+                                status=409,
+                            )
+                        selector_state = self.server.selector.bootstrap()["state"]
+                        if (
+                            payload["selector_base_state_sha256"]
+                            != selector_state["state_sha256"]
+                        ):
+                            raise ConsoleError(
+                                "stale_action",
+                                "The selector changed before final fitting",
+                                status=409,
+                            )
+                        if ownership_state["status"] == "editing":
+                            ownership_state = ledger.apply(
+                                {
+                                    "schema_version": "provisional-ownership-ledger-action.v1",
+                                    "base_state_sha256": ownership_state["state_sha256"],
+                                    "type": "freeze",
+                                }
+                            )
+                        imported = self.server.selector.import_provisional_ownership(
+                            ledger
+                        )
+                        fitted = self.server.selector.finish_words(
+                            {"base_state_sha256": imported["state"]["state_sha256"]}
+                        )
+                        result = {
+                            "bootstrap": fitted["bootstrap"],
+                            "imported_word_count": imported["imported_word_count"],
+                            "empty_active_word_ids": imported["empty_active_word_ids"],
+                            "ownership_state_sha256": ownership_state["state_sha256"],
+                        }
                     elif endpoint == "/api/commit-word":
                         result = self.server.selector.commit_word(payload)
                     elif endpoint == "/api/undo-last-word":
@@ -3094,9 +3622,44 @@ class SimpleSelectorHandler(BaseHTTPRequestHandler):
             self._error(error)
 
 
-def serve_simple_selector(session_dir: Path | str, *, host: str = "127.0.0.1", port: int = 8770, static_dir: Path | str | None = None) -> None:
+def serve_simple_selector(
+    session_dir: Path | str,
+    *,
+    host: str = "127.0.0.1",
+    port: int = 8770,
+    static_dir: Path | str | None = None,
+    catalog: PipelineSourceCatalog | ArchiveSourceCatalog | None = None,
+) -> None:
     selector = SimplePageSelector(session_dir)
     static = Path(static_dir).resolve() if static_dir is not None else Path(__file__).resolve().parents[2] / "simple_selector"
-    server = SimpleSelectorServer((host, port), selector, static)
+    server = SimpleSelectorServer((host, port), selector, static, catalog=catalog)
     print(f"Simple page selector: http://{host}:{server.server_address[1]}", flush=True)
+    server.serve_forever()
+
+
+def serve_selector_library(
+    workspace_dir: Path | str,
+    *,
+    host: str = "127.0.0.1",
+    port: int = 8770,
+    initial_page_id: str = "001-18881103-L01-01",
+    static_dir: Path | str | None = None,
+) -> None:
+    selector, catalog = open_or_initialize_selector_library(
+        workspace_dir,
+        initial_page_id=initial_page_id,
+    )
+    static = (
+        Path(static_dir).resolve()
+        if static_dir is not None
+        else Path(__file__).resolve().parents[2] / "simple_selector"
+    )
+    server = SimpleSelectorServer(
+        (host, port),
+        selector,
+        static,
+        catalog=catalog,
+        workspace_dir=workspace_dir,
+    )
+    print(f"Letter Archive word ground truth: http://{host}:{server.server_address[1]}", flush=True)
     server.serve_forever()

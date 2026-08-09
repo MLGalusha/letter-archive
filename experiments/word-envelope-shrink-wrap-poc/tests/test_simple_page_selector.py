@@ -174,6 +174,11 @@ class SimplePageSelectorTests(unittest.TestCase):
             self.assertIsNone(listing["items"][0]["saved_progress"])
             opened = library.open_item(item_id, FakeCatalog.catalog_revision)
             self.assertEqual(opened.bootstrap()["state"]["word_count"], 0)
+            self.assertEqual(opened.selection_mode, "source_color_guided")
+            self.assertEqual(
+                opened.session_dir.relative_to(root.resolve()).parts[:7],
+                ("collections", "007", "19430411", "L01", "pages", item_id, "runs"),
+            )
             self.assertEqual(
                 library.open_item(item_id, FakeCatalog.catalog_revision).session_dir,
                 opened.session_dir,
@@ -917,6 +922,9 @@ class SimpleSelectorFrontendContractTests(unittest.TestCase):
         self.assertIn('id="open-library"', html)
         self.assertIn('id="reset-page"', html)
         self.assertIn('id="library-grid"', html)
+        self.assertIn('id="library-collections"', html)
+        self.assertIn('id="library-letters"', html)
+        self.assertIn("function letterId(item)", script)
         self.assertIn('class="page-view-controls"', html)
         self.assertIn('id="ink-shell"', html)
         self.assertIn('"/api/library"', script)

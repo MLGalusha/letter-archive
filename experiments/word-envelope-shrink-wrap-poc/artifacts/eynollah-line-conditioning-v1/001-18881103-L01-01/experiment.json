@@ -1,0 +1,6084 @@
+{
+  "schema_version": "eynollah-line-conditioning.v1",
+  "page_id": "001-18881103-L01-01",
+  "evidence_boundary": {
+    "sealed_human_evidence_used": false,
+    "source_and_independent_software_geometry_only": true
+  },
+  "source": {
+    "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/workspaces/word-ink-ground-truth-v1/collections/001/18881103/L01/pages/001-18881103-L01-01/runs/run-cfd4cf589c5c/source/working.png",
+    "file_sha256": "0bf222b2413e0c0f91b3f46519845b2ff32abf8e0f5e91e0f5634acfc8840b6d",
+    "size_wh": [
+      2588,
+      3632
+    ]
+  },
+  "hybrid_mask": {
+    "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-hybrid-binarization-trial-20260809/001-18881103-L01-01/foreground-p0.50.png",
+    "file_sha256": "9ba93a9306afcb00da53bfdec84b0aae453035917ee1f75073fc1406d2c614bc",
+    "pixels": 248596
+  },
+  "kraken_layout": {
+    "path": "/Users/masongalusha/Workspace/projects/letter-archive/backend/test-results/layout-benchmark/runs/kraken7-blla-v2-full-20260728/pages/001-18881103-L01-01/normalized-layout.v1.json",
+    "file_sha256": "b95afb9e70e550c046a918a84ba47e00e6747f75ec2de354a10d9eed702137f3",
+    "coordinate_space": "prepared-pixels-top-left",
+    "line_count": 14,
+    "prepared_pixels_match_source_dimensions": true
+  },
+  "method": "Intersect hybrid p0.50 with union of Kraken provider line-boundary polygons after isotropic dilation.",
+  "radii_px": {
+    "0": {
+      "file": "hybrid-p050-line-polygon-plus-000px.png",
+      "file_sha256": "37144226531cae2d5cf974f7fb1cb64246493ca7a4a5eaa0fed926ad1e7d7137",
+      "mask_pixel_sha256": "189c43f20757a24ceecc3e69e81956abcf2d815327cfda00b225ca19b825bc60",
+      "selected_pixels": 194273,
+      "retained_fraction_of_raw_hybrid": 0.781480796151185,
+      "excluded_raw_hybrid_pixels": 54323,
+      "corridor_pixels": 1975433,
+      "corridor_page_fraction": 0.21016103211024792
+    },
+    "15": {
+      "file": "hybrid-p050-line-polygon-plus-015px.png",
+      "file_sha256": "247ad23ec17da975d03f3a20f76b48b9dd865c61d2fc263d84fdd4689e23fa5b",
+      "mask_pixel_sha256": "de2abaf4b6efa01b0586c4840f985401092690912c2c37755303c4f54a1bd468",
+      "selected_pixels": 200631,
+      "retained_fraction_of_raw_hybrid": 0.807056428904729,
+      "excluded_raw_hybrid_pixels": 47965,
+      "corridor_pixels": 2562074,
+      "corridor_page_fraction": 0.2725721986940743
+    },
+    "30": {
+      "file": "hybrid-p050-line-polygon-plus-030px.png",
+      "file_sha256": "8382d07f5581c71267c54a3672ac64a95c43fdf413e7c43eb6a5d40fd06f7754",
+      "mask_pixel_sha256": "c8bd9b9036d3d651f4be7e076909e4ec87702ee5d2f7e4d66daf99f50eb597ee",
+      "selected_pixels": 206873,
+      "retained_fraction_of_raw_hybrid": 0.8321654411173148,
+      "excluded_raw_hybrid_pixels": 41723,
+      "corridor_pixels": 2868957,
+      "corridor_page_fraction": 0.3052206600780287
+    },
+    "60": {
+      "file": "hybrid-p050-line-polygon-plus-060px.png",
+      "file_sha256": "3d7b10a6ccb01ab0f7cbae08eec64d851a317b2ebeb1c555278e30ce5ed2cc12",
+      "mask_pixel_sha256": "ce4e05e4b4057cded10a348c8080bccba1644f1dc09e0db3a4b9d8bd58c8dab7",
+      "selected_pixels": 224049,
+      "retained_fraction_of_raw_hybrid": 0.9012574619060645,
+      "excluded_raw_hybrid_pixels": 24547,
+      "corridor_pixels": 3143427,
+      "corridor_page_fraction": 0.3344207891045762
+    }
+  },
+  "review_board": {
+    "file": "line-conditioning-review.png",
+    "file_sha256": "bac7b7935b3ee720248ca5a0a7485ecc4059ba7330399261f1bce920b29aa465"
+  },
+  "whole_component_policy": {
+    "corridor_radius_px": 30,
+    "connectivity": 8,
+    "rule": "Keep each complete raw-hybrid connected component when its fraction inside the dilated line corridor meets the threshold.",
+    "thresholds": {
+      "0.10": {
+        "file": "hybrid-p050-whole-components-overlap-0.10.png",
+        "file_sha256": "75390bd6f76091db259c6229783cc73eb67a38143ee726bcb677f329f26e5a36",
+        "mask_pixel_sha256": "ec93df1f0144cd27079db71df7a7db94f1793218bbd79737debbc2ce8a7c19ad",
+        "selected_pixels": 237344,
+        "retained_fraction_of_raw_hybrid": 0.954737807527072,
+        "component_count": 444,
+        "accepted_component_count": 355,
+        "rejected_component_count": 89,
+        "components_ge_100px": [
+          {
+            "component_id": 398,
+            "area_pixels": 17406,
+            "corridor_overlap_pixels": 2861,
+            "corridor_overlap_fraction": 0.1643686085257957,
+            "accepted": true,
+            "bbox_xyxy": [
+              2015,
+              3003,
+              2424,
+              3392
+            ]
+          },
+          {
+            "component_id": 198,
+            "area_pixels": 15570,
+            "corridor_overlap_pixels": 1736,
+            "corridor_overlap_fraction": 0.11149646756583173,
+            "accepted": true,
+            "bbox_xyxy": [
+              384,
+              2342,
+              415,
+              3251
+            ]
+          },
+          {
+            "component_id": 404,
+            "area_pixels": 10225,
+            "corridor_overlap_pixels": 10225,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              452,
+              3029,
+              970,
+              3227
+            ]
+          },
+          {
+            "component_id": 391,
+            "area_pixels": 4566,
+            "corridor_overlap_pixels": 4566,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1171,
+              2984,
+              1620,
+              3068
+            ]
+          },
+          {
+            "component_id": 125,
+            "area_pixels": 4524,
+            "corridor_overlap_pixels": 4524,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1638,
+              2038,
+              1931,
+              2159
+            ]
+          },
+          {
+            "component_id": 148,
+            "area_pixels": 4403,
+            "corridor_overlap_pixels": 4403,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              471,
+              2175,
+              782,
+              2307
+            ]
+          },
+          {
+            "component_id": 243,
+            "area_pixels": 3849,
+            "corridor_overlap_pixels": 3849,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              676,
+              2591,
+              1001,
+              2675
+            ]
+          },
+          {
+            "component_id": 89,
+            "area_pixels": 3544,
+            "corridor_overlap_pixels": 3544,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              634,
+              1772,
+              909,
+              1863
+            ]
+          },
+          {
+            "component_id": 424,
+            "area_pixels": 3541,
+            "corridor_overlap_pixels": 3541,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1163,
+              3128,
+              1446,
+              3216
+            ]
+          },
+          {
+            "component_id": 124,
+            "area_pixels": 3472,
+            "corridor_overlap_pixels": 3472,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1897,
+              2036,
+              2175,
+              2105
+            ]
+          },
+          {
+            "component_id": 209,
+            "area_pixels": 3324,
+            "corridor_overlap_pixels": 3324,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1386,
+              2430,
+              1657,
+              2517
+            ]
+          },
+          {
+            "component_id": 1,
+            "area_pixels": 3280,
+            "corridor_overlap_pixels": 0,
+            "corridor_overlap_fraction": 0.0,
+            "accepted": false,
+            "bbox_xyxy": [
+              1093,
+              564,
+              1337,
+              624
+            ]
+          },
+          {
+            "component_id": 67,
+            "area_pixels": 3115,
+            "corridor_overlap_pixels": 3115,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1196,
+              1497,
+              1449,
+              1633
+            ]
+          },
+          {
+            "component_id": 113,
+            "area_pixels": 3009,
+            "corridor_overlap_pixels": 2977,
+            "corridor_overlap_fraction": 0.9893652376204719,
+            "accepted": true,
+            "bbox_xyxy": [
+              571,
+              1952,
+              863,
+              2056
+            ]
+          },
+          {
+            "component_id": 232,
+            "area_pixels": 2986,
+            "corridor_overlap_pixels": 2986,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1653,
+              2555,
+              1900,
+              2643
+            ]
+          },
+          {
+            "component_id": 185,
+            "area_pixels": 2968,
+            "corridor_overlap_pixels": 2968,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              852,
+              2309,
+              1132,
+              2378
+            ]
+          },
+          {
+            "component_id": 59,
+            "area_pixels": 2923,
+            "corridor_overlap_pixels": 923,
+            "corridor_overlap_fraction": 0.31577146767020187,
+            "accepted": true,
+            "bbox_xyxy": [
+              629,
+              1352,
+              857,
+              1497
+            ]
+          },
+          {
+            "component_id": 92,
+            "area_pixels": 2917,
+            "corridor_overlap_pixels": 2917,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1279,
+              1788,
+              1619,
+              1849
+            ]
+          },
+          {
+            "component_id": 207,
+            "area_pixels": 2783,
+            "corridor_overlap_pixels": 2783,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1751,
+              2408,
+              1936,
+              2546
+            ]
+          },
+          {
+            "component_id": 319,
+            "area_pixels": 2769,
+            "corridor_overlap_pixels": 2769,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1600,
+              2805,
+              1805,
+              2890
+            ]
+          },
+          {
+            "component_id": 302,
+            "area_pixels": 2718,
+            "corridor_overlap_pixels": 2718,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              458,
+              2756,
+              721,
+              2838
+            ]
+          },
+          {
+            "component_id": 210,
+            "area_pixels": 2706,
+            "corridor_overlap_pixels": 2706,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              448,
+              2433,
+              700,
+              2528
+            ]
+          },
+          {
+            "component_id": 103,
+            "area_pixels": 2687,
+            "corridor_overlap_pixels": 2687,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              979,
+              1921,
+              1266,
+              1986
+            ]
+          },
+          {
+            "component_id": 369,
+            "area_pixels": 2590,
+            "corridor_overlap_pixels": 2590,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              464,
+              2885,
+              714,
+              2971
+            ]
+          },
+          {
+            "component_id": 208,
+            "area_pixels": 2583,
+            "corridor_overlap_pixels": 2583,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              702,
+              2429,
+              973,
+              2521
+            ]
+          },
+          {
+            "component_id": 421,
+            "area_pixels": 2575,
+            "corridor_overlap_pixels": 2575,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1490,
+              3101,
+              1724,
+              3200
+            ]
+          },
+          {
+            "component_id": 380,
+            "area_pixels": 2435,
+            "corridor_overlap_pixels": 2435,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              2004,
+              2924,
+              2137,
+              2993
+            ]
+          },
+          {
+            "component_id": 246,
+            "area_pixels": 2409,
+            "corridor_overlap_pixels": 2409,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1037,
+              2599,
+              1265,
+              2693
+            ]
+          },
+          {
+            "component_id": 410,
+            "area_pixels": 2400,
+            "corridor_overlap_pixels": 2400,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1727,
+              3047,
+              1860,
+              3191
+            ]
+          },
+          {
+            "component_id": 393,
+            "area_pixels": 2380,
+            "corridor_overlap_pixels": 2380,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              693,
+              2992,
+              900,
+              3060
+            ]
+          },
+          {
+            "component_id": 11,
+            "area_pixels": 2284,
+            "corridor_overlap_pixels": 0,
+            "corridor_overlap_fraction": 0.0,
+            "accepted": false,
+            "bbox_xyxy": [
+              1376,
+              722,
+              1433,
+              903
+            ]
+          },
+          {
+            "component_id": 325,
+            "area_pixels": 2239,
+            "corridor_overlap_pixels": 2239,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1257,
+              2831,
+              1428,
+              2933
+            ]
+          },
+          {
+            "component_id": 90,
+            "area_pixels": 2228,
+            "corridor_overlap_pixels": 2228,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1035,
+              1781,
+              1279,
+              1854
+            ]
+          },
+          {
+            "component_id": 123,
+            "area_pixels": 2188,
+            "corridor_overlap_pixels": 2188,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1494,
+              2033,
+              1652,
+              2152
+            ]
+          },
+          {
+            "component_id": 216,
+            "area_pixels": 2177,
+            "corridor_overlap_pixels": 2177,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1112,
+              2474,
+              1381,
+              2512
+            ]
+          },
+          {
+            "component_id": 60,
+            "area_pixels": 2176,
+            "corridor_overlap_pixels": 2176,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              917,
+              1371,
+              1011,
+              1509
+            ]
+          },
+          {
+            "component_id": 180,
+            "area_pixels": 2173,
+            "corridor_overlap_pixels": 2173,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              588,
+              2303,
+              731,
+              2387
+            ]
+          },
+          {
+            "component_id": 181,
+            "area_pixels": 2150,
+            "corridor_overlap_pixels": 2150,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1525,
+              2303,
+              1764,
+              2362
+            ]
+          },
+          {
+            "component_id": 104,
+            "area_pixels": 2147,
+            "corridor_overlap_pixels": 2147,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1522,
+              1921,
+              1745,
+              1979
+            ]
+          },
+          {
+            "component_id": 81,
+            "area_pixels": 2130,
+            "corridor_overlap_pixels": 2130,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1724,
+              1655,
+              1917,
+              1729
+            ]
+          },
+          {
+            "component_id": 254,
+            "area_pixels": 2106,
+            "corridor_overlap_pixels": 2106,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1037,
+              2691,
+              1255,
+              2774
+            ]
+          },
+          {
+            "component_id": 151,
+            "area_pixels": 2069,
+            "corridor_overlap_pixels": 2069,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1228,
+              2179,
+              1442,
+              2248
+            ]
+          },
+          {
+            "component_id": 72,
+            "area_pixels": 1979,
+            "corridor_overlap_pixels": 1979,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              968,
+              1526,
+              1207,
+              1585
+            ]
+          },
+          {
+            "component_id": 183,
+            "area_pixels": 1902,
+            "corridor_overlap_pixels": 1902,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1197,
+              2304,
+              1371,
+              2372
+            ]
+          },
+          {
+            "component_id": 110,
+            "area_pixels": 1871,
+            "corridor_overlap_pixels": 1871,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1258,
+              1948,
+              1516,
+              1981
+            ]
+          },
+          {
+            "component_id": 37,
+            "area_pixels": 1799,
+            "corridor_overlap_pixels": 0,
+            "corridor_overlap_fraction": 0.0,
+            "accepted": false,
+            "bbox_xyxy": [
+              1221,
+              882,
+              1401,
+              981
+            ]
+          },
+          {
+            "component_id": 382,
+            "area_pixels": 1783,
+            "corridor_overlap_pixels": 1783,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1639,
+              2950,
+              1844,
+              3014
+            ]
+          },
+          {
+            "component_id": 157,
+            "area_pixels": 1779,
+            "corridor_overlap_pixels": 1779,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1667,
+              2201,
+              1884,
+              2238
+            ]
+          },
+          {
+            "component_id": 430,
+            "area_pixels": 1768,
+            "corridor_overlap_pixels": 1768,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1003,
+              3134,
+              1167,
+              3218
+            ]
+          },
+          {
+            "component_id": 135,
+            "area_pixels": 1762,
+            "corridor_overlap_pixels": 1762,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1012,
+              2084,
+              1212,
+              2179
+            ]
+          },
+          {
+            "component_id": 262,
+            "area_pixels": 1750,
+            "corridor_overlap_pixels": 1750,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              859,
+              2711,
+              1020,
+              2780
+            ]
+          },
+          {
+            "component_id": 233,
+            "area_pixels": 1708,
+            "corridor_overlap_pixels": 1708,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1921,
+              2555,
+              2078,
+              2617
+            ]
+          },
+          {
+            "component_id": 237,
+            "area_pixels": 1708,
+            "corridor_overlap_pixels": 1708,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1496,
+              2574,
+              1633,
+              2628
+            ]
+          },
+          {
+            "component_id": 152,
+            "area_pixels": 1689,
+            "corridor_overlap_pixels": 1689,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1965,
+              2179,
+              2163,
+              2243
+            ]
+          },
+          {
+            "component_id": 80,
+            "area_pixels": 1673,
+            "corridor_overlap_pixels": 1673,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1926,
+              1654,
+              2084,
+              1706
+            ]
+          },
+          {
+            "component_id": 411,
+            "area_pixels": 1659,
+            "corridor_overlap_pixels": 1659,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1882,
+              3053,
+              1999,
+              3166
+            ]
+          },
+          {
+            "component_id": 156,
+            "area_pixels": 1644,
+            "corridor_overlap_pixels": 1644,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1856,
+              2199,
+              1986,
+              2279
+            ]
+          },
+          {
+            "component_id": 147,
+            "area_pixels": 1626,
+            "corridor_overlap_pixels": 1626,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1059,
+              2172,
+              1221,
+              2252
+            ]
+          },
+          {
+            "component_id": 132,
+            "area_pixels": 1613,
+            "corridor_overlap_pixels": 1613,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              799,
+              2076,
+              979,
+              2126
+            ]
+          },
+          {
+            "component_id": 158,
+            "area_pixels": 1578,
+            "corridor_overlap_pixels": 1578,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1457,
+              2209,
+              1661,
+              2238
+            ]
+          },
+          {
+            "component_id": 354,
+            "area_pixels": 1547,
+            "corridor_overlap_pixels": 1547,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1067,
+              2868,
+              1246,
+              2909
+            ]
+          },
+          {
+            "component_id": 61,
+            "area_pixels": 1544,
+            "corridor_overlap_pixels": 1544,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              981,
+              1377,
+              1096,
+              1465
+            ]
+          },
+          {
+            "component_id": 182,
+            "area_pixels": 1542,
+            "corridor_overlap_pixels": 1542,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              750,
+              2304,
+              887,
+              2427
+            ]
+          },
+          {
+            "component_id": 78,
+            "area_pixels": 1536,
+            "corridor_overlap_pixels": 1536,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1372,
+              1649,
+              1534,
+              1714
+            ]
+          },
+          {
+            "component_id": 128,
+            "area_pixels": 1481,
+            "corridor_overlap_pixels": 1481,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              611,
+              2050,
+              740,
+              2127
+            ]
+          },
+          {
+            "component_id": 127,
+            "area_pixels": 1479,
+            "corridor_overlap_pixels": 1479,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1252,
+              2046,
+              1387,
+              2116
+            ]
+          },
+          {
+            "component_id": 330,
+            "area_pixels": 1418,
+            "corridor_overlap_pixels": 1418,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              701,
+              2839,
+              826,
+              2922
+            ]
+          },
+          {
+            "component_id": 126,
+            "area_pixels": 1403,
+            "corridor_overlap_pixels": 1403,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              715,
+              2045,
+              844,
+              2177
+            ]
+          },
+          {
+            "component_id": 177,
+            "area_pixels": 1373,
+            "corridor_overlap_pixels": 1373,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1919,
+              2284,
+              2052,
+              2352
+            ]
+          },
+          {
+            "component_id": 245,
+            "area_pixels": 1366,
+            "corridor_overlap_pixels": 1366,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1318,
+              2596,
+              1471,
+              2635
+            ]
+          },
+          {
+            "component_id": 95,
+            "area_pixels": 1357,
+            "corridor_overlap_pixels": 1357,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1798,
+              1810,
+              1960,
+              1840
+            ]
+          },
+          {
+            "component_id": 2,
+            "area_pixels": 1337,
+            "corridor_overlap_pixels": 0,
+            "corridor_overlap_fraction": 0.0,
+            "accepted": false,
+            "bbox_xyxy": [
+              1337,
+              605,
+              1412,
+              694
+            ]
+          },
+          {
+            "component_id": 93,
+            "area_pixels": 1231,
+            "corridor_overlap_pixels": 1231,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1939,
+              1803,
+              2093,
+              1840
+            ]
+          },
+          {
+            "component_id": 155,
+            "area_pixels": 1164,
+            "corridor_overlap_pixels": 1164,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              807,
+              2189,
+              943,
+              2251
+            ]
+          },
+          {
+            "component_id": 395,
+            "area_pixels": 1149,
+            "corridor_overlap_pixels": 1149,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              924,
+              2993,
+              1061,
+              3046
+            ]
+          },
+          {
+            "component_id": 190,
+            "area_pixels": 1129,
+            "corridor_overlap_pixels": 1129,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              460,
+              2320,
+              571,
+              2387
+            ]
+          },
+          {
+            "component_id": 108,
+            "area_pixels": 1103,
+            "corridor_overlap_pixels": 1103,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              444,
+              1933,
+              559,
+              1996
+            ]
+          },
+          {
+            "component_id": 261,
+            "area_pixels": 1084,
+            "corridor_overlap_pixels": 1084,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1254,
+              2707,
+              1354,
+              2771
+            ]
+          },
+          {
+            "component_id": 301,
+            "area_pixels": 1036,
+            "corridor_overlap_pixels": 1036,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              691,
+              2752,
+              764,
+              2847
+            ]
+          },
+          {
+            "component_id": 94,
+            "area_pixels": 1033,
+            "corridor_overlap_pixels": 1033,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              937,
+              1804,
+              1037,
+              1856
+            ]
+          },
+          {
+            "component_id": 162,
+            "area_pixels": 1028,
+            "corridor_overlap_pixels": 1028,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              943,
+              2220,
+              1066,
+              2252
+            ]
+          },
+          {
+            "component_id": 133,
+            "area_pixels": 1008,
+            "corridor_overlap_pixels": 1008,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1380,
+              2076,
+              1499,
+              2117
+            ]
+          },
+          {
+            "component_id": 109,
+            "area_pixels": 992,
+            "corridor_overlap_pixels": 992,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1772,
+              1945,
+              1886,
+              1973
+            ]
+          },
+          {
+            "component_id": 265,
+            "area_pixels": 989,
+            "corridor_overlap_pixels": 989,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              2038,
+              2717,
+              2105,
+              2804
+            ]
+          },
+          {
+            "component_id": 260,
+            "area_pixels": 987,
+            "corridor_overlap_pixels": 987,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1681,
+              2703,
+              1771,
+              2775
+            ]
+          },
+          {
+            "component_id": 394,
+            "area_pixels": 964,
+            "corridor_overlap_pixels": 964,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1080,
+              2992,
+              1159,
+              3076
+            ]
+          },
+          {
+            "component_id": 219,
+            "area_pixels": 955,
+            "corridor_overlap_pixels": 955,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              986,
+              2481,
+              1106,
+              2516
+            ]
+          },
+          {
+            "component_id": 415,
+            "area_pixels": 954,
+            "corridor_overlap_pixels": 952,
+            "corridor_overlap_fraction": 0.9979035639412998,
+            "accepted": true,
+            "bbox_xyxy": [
+              1956,
+              3080,
+              2043,
+              3121
+            ]
+          },
+          {
+            "component_id": 71,
+            "area_pixels": 923,
+            "corridor_overlap_pixels": 923,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1446,
+              1524,
+              1536,
+              1579
+            ]
+          },
+          {
+            "component_id": 98,
+            "area_pixels": 917,
+            "corridor_overlap_pixels": 917,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              448,
+              1832,
+              570,
+              1863
+            ]
+          },
+          {
+            "component_id": 215,
+            "area_pixels": 902,
+            "corridor_overlap_pixels": 902,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1672,
+              2465,
+              1737,
+              2545
+            ]
+          },
+          {
+            "component_id": 188,
+            "area_pixels": 895,
+            "corridor_overlap_pixels": 895,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1789,
+              2311,
+              1887,
+              2359
+            ]
+          },
+          {
+            "component_id": 111,
+            "area_pixels": 879,
+            "corridor_overlap_pixels": 879,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1828,
+              1948,
+              1929,
+              2027
+            ]
+          },
+          {
+            "component_id": 263,
+            "area_pixels": 834,
+            "corridor_overlap_pixels": 834,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1789,
+              2714,
+              1895,
+              2749
+            ]
+          },
+          {
+            "component_id": 69,
+            "area_pixels": 809,
+            "corridor_overlap_pixels": 809,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              867,
+              1519,
+              979,
+              1589
+            ]
+          },
+          {
+            "component_id": 370,
+            "area_pixels": 797,
+            "corridor_overlap_pixels": 797,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              830,
+              2885,
+              926,
+              2916
+            ]
+          },
+          {
+            "component_id": 255,
+            "area_pixels": 790,
+            "corridor_overlap_pixels": 790,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1415,
+              2692,
+              1516,
+              2754
+            ]
+          },
+          {
+            "component_id": 112,
+            "area_pixels": 762,
+            "corridor_overlap_pixels": 762,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              865,
+              1949,
+              971,
+              1989
+            ]
+          },
+          {
+            "component_id": 84,
+            "area_pixels": 759,
+            "corridor_overlap_pixels": 759,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1566,
+              1682,
+              1679,
+              1706
+            ]
+          },
+          {
+            "component_id": 96,
+            "area_pixels": 733,
+            "corridor_overlap_pixels": 733,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1628,
+              1816,
+              1758,
+              1843
+            ]
+          },
+          {
+            "component_id": 121,
+            "area_pixels": 714,
+            "corridor_overlap_pixels": 714,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              594,
+              2016,
+              760,
+              2087
+            ]
+          },
+          {
+            "component_id": 324,
+            "area_pixels": 714,
+            "corridor_overlap_pixels": 714,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1456,
+              2828,
+              1541,
+              2916
+            ]
+          },
+          {
+            "component_id": 317,
+            "area_pixels": 697,
+            "corridor_overlap_pixels": 685,
+            "corridor_overlap_fraction": 0.9827833572453372,
+            "accepted": true,
+            "bbox_xyxy": [
+              1895,
+              2791,
+              1988,
+              2869
+            ]
+          },
+          {
+            "component_id": 192,
+            "area_pixels": 692,
+            "corridor_overlap_pixels": 692,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1998,
+              2326,
+              2090,
+              2371
+            ]
+          },
+          {
+            "component_id": 388,
+            "area_pixels": 691,
+            "corridor_overlap_pixels": 691,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1912,
+              2974,
+              2003,
+              2995
+            ]
+          },
+          {
+            "component_id": 76,
+            "area_pixels": 664,
+            "corridor_overlap_pixels": 664,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1352,
+              1614,
+              1513,
+              1670
+            ]
+          },
+          {
+            "component_id": 195,
+            "area_pixels": 608,
+            "corridor_overlap_pixels": 608,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1437,
+              2338,
+              1512,
+              2367
+            ]
+          },
+          {
+            "component_id": 129,
+            "area_pixels": 603,
+            "corridor_overlap_pixels": 603,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              525,
+              2052,
+              668,
+              2130
+            ]
+          },
+          {
+            "component_id": 368,
+            "area_pixels": 533,
+            "corridor_overlap_pixels": 533,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              948,
+              2884,
+              1020,
+              2916
+            ]
+          },
+          {
+            "component_id": 300,
+            "area_pixels": 500,
+            "corridor_overlap_pixels": 500,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              797,
+              2750,
+              876,
+              2781
+            ]
+          },
+          {
+            "component_id": 77,
+            "area_pixels": 492,
+            "corridor_overlap_pixels": 492,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1296,
+              1644,
+              1430,
+              1715
+            ]
+          },
+          {
+            "component_id": 58,
+            "area_pixels": 479,
+            "corridor_overlap_pixels": 0,
+            "corridor_overlap_fraction": 0.0,
+            "accepted": false,
+            "bbox_xyxy": [
+              611,
+              1352,
+              758,
+              1390
+            ]
+          },
+          {
+            "component_id": 239,
+            "area_pixels": 477,
+            "corridor_overlap_pixels": 477,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              519,
+              2580,
+              626,
+              2670
+            ]
+          },
+          {
+            "component_id": 99,
+            "area_pixels": 468,
+            "corridor_overlap_pixels": 468,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              573,
+              1832,
+              631,
+              1860
+            ]
+          },
+          {
+            "component_id": 334,
+            "area_pixels": 468,
+            "corridor_overlap_pixels": 468,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              2032,
+              2842,
+              2090,
+              2920
+            ]
+          },
+          {
+            "component_id": 440,
+            "area_pixels": 467,
+            "corridor_overlap_pixels": 0,
+            "corridor_overlap_fraction": 0.0,
+            "accepted": false,
+            "bbox_xyxy": [
+              2323,
+              3290,
+              2395,
+              3366
+            ]
+          },
+          {
+            "component_id": 349,
+            "area_pixels": 451,
+            "corridor_overlap_pixels": 451,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1531,
+              2856,
+              1603,
+              2894
+            ]
+          },
+          {
+            "component_id": 279,
+            "area_pixels": 430,
+            "corridor_overlap_pixels": 430,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1487,
+              2730,
+              1551,
+              2756
+            ]
+          },
+          {
+            "component_id": 442,
+            "area_pixels": 426,
+            "corridor_overlap_pixels": 0,
+            "corridor_overlap_fraction": 0.0,
+            "accepted": false,
+            "bbox_xyxy": [
+              687,
+              3441,
+              713,
+              3492
+            ]
+          },
+          {
+            "component_id": 34,
+            "area_pixels": 369,
+            "corridor_overlap_pixels": 0,
+            "corridor_overlap_fraction": 0.0,
+            "accepted": false,
+            "bbox_xyxy": [
+              372,
+              877,
+              382,
+              932
+            ]
+          },
+          {
+            "component_id": 345,
+            "area_pixels": 320,
+            "corridor_overlap_pixels": 320,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1805,
+              2849,
+              1861,
+              2873
+            ]
+          },
+          {
+            "component_id": 249,
+            "area_pixels": 313,
+            "corridor_overlap_pixels": 313,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              628,
+              2608,
+              692,
+              2651
+            ]
+          },
+          {
+            "component_id": 327,
+            "area_pixels": 312,
+            "corridor_overlap_pixels": 312,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1932,
+              2837,
+              1975,
+              2870
+            ]
+          },
+          {
+            "component_id": 213,
+            "area_pixels": 301,
+            "corridor_overlap_pixels": 301,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1918,
+              2443,
+              2001,
+              2459
+            ]
+          },
+          {
+            "component_id": 259,
+            "area_pixels": 297,
+            "corridor_overlap_pixels": 297,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1587,
+              2700,
+              1631,
+              2753
+            ]
+          },
+          {
+            "component_id": 287,
+            "area_pixels": 230,
+            "corridor_overlap_pixels": 230,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1842,
+              2732,
+              1877,
+              2792
+            ]
+          },
+          {
+            "component_id": 293,
+            "area_pixels": 221,
+            "corridor_overlap_pixels": 221,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1892,
+              2735,
+              1927,
+              2780
+            ]
+          },
+          {
+            "component_id": 73,
+            "area_pixels": 219,
+            "corridor_overlap_pixels": 219,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              933,
+              1564,
+              962,
+              1617
+            ]
+          },
+          {
+            "component_id": 196,
+            "area_pixels": 216,
+            "corridor_overlap_pixels": 216,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1397,
+              2340,
+              1464,
+              2368
+            ]
+          },
+          {
+            "component_id": 153,
+            "area_pixels": 212,
+            "corridor_overlap_pixels": 0,
+            "corridor_overlap_fraction": 0.0,
+            "accepted": false,
+            "bbox_xyxy": [
+              398,
+              2183,
+              409,
+              2261
+            ]
+          },
+          {
+            "component_id": 389,
+            "area_pixels": 202,
+            "corridor_overlap_pixels": 202,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1844,
+              2976,
+              1892,
+              2982
+            ]
+          },
+          {
+            "component_id": 191,
+            "area_pixels": 199,
+            "corridor_overlap_pixels": 199,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1311,
+              2325,
+              1378,
+              2332
+            ]
+          },
+          {
+            "component_id": 376,
+            "area_pixels": 191,
+            "corridor_overlap_pixels": 191,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              915,
+              2898,
+              953,
+              2917
+            ]
+          },
+          {
+            "component_id": 197,
+            "area_pixels": 178,
+            "corridor_overlap_pixels": 178,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1878,
+              2340,
+              1921,
+              2358
+            ]
+          },
+          {
+            "component_id": 120,
+            "area_pixels": 168,
+            "corridor_overlap_pixels": 168,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              808,
+              1991,
+              843,
+              2019
+            ]
+          },
+          {
+            "component_id": 23,
+            "area_pixels": 166,
+            "corridor_overlap_pixels": 0,
+            "corridor_overlap_fraction": 0.0,
+            "accepted": false,
+            "bbox_xyxy": [
+              370,
+              834,
+              380,
+              874
+            ]
+          },
+          {
+            "component_id": 234,
+            "area_pixels": 166,
+            "corridor_overlap_pixels": 166,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1526,
+              2560,
+              1553,
+              2581
+            ]
+          },
+          {
+            "component_id": 268,
+            "area_pixels": 160,
+            "corridor_overlap_pixels": 160,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1422,
+              2721,
+              1453,
+              2742
+            ]
+          },
+          {
+            "component_id": 407,
+            "area_pixels": 158,
+            "corridor_overlap_pixels": 158,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              448,
+              3036,
+              487,
+              3064
+            ]
+          },
+          {
+            "component_id": 337,
+            "area_pixels": 147,
+            "corridor_overlap_pixels": 147,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              2027,
+              2845,
+              2049,
+              2864
+            ]
+          },
+          {
+            "component_id": 204,
+            "area_pixels": 133,
+            "corridor_overlap_pixels": 133,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1739,
+              2363,
+              1765,
+              2386
+            ]
+          },
+          {
+            "component_id": 231,
+            "area_pixels": 132,
+            "corridor_overlap_pixels": 132,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1556,
+              2552,
+              1586,
+              2570
+            ]
+          },
+          {
+            "component_id": 338,
+            "area_pixels": 127,
+            "corridor_overlap_pixels": 127,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              2108,
+              2845,
+              2142,
+              2851
+            ]
+          },
+          {
+            "component_id": 220,
+            "area_pixels": 125,
+            "corridor_overlap_pixels": 125,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1644,
+              2484,
+              1678,
+              2495
+            ]
+          },
+          {
+            "component_id": 341,
+            "area_pixels": 116,
+            "corridor_overlap_pixels": 116,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              2009,
+              2846,
+              2025,
+              2867
+            ]
+          },
+          {
+            "component_id": 347,
+            "area_pixels": 113,
+            "corridor_overlap_pixels": 113,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              916,
+              2853,
+              935,
+              2874
+            ]
+          },
+          {
+            "component_id": 290,
+            "area_pixels": 111,
+            "corridor_overlap_pixels": 111,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1555,
+              2733,
+              1582,
+              2756
+            ]
+          },
+          {
+            "component_id": 363,
+            "area_pixels": 110,
+            "corridor_overlap_pixels": 110,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1842,
+              2875,
+              1869,
+              2890
+            ]
+          },
+          {
+            "component_id": 115,
+            "area_pixels": 108,
+            "corridor_overlap_pixels": 62,
+            "corridor_overlap_fraction": 0.5740740740740741,
+            "accepted": true,
+            "bbox_xyxy": [
+              1978,
+              1965,
+              2015,
+              1970
+            ]
+          },
+          {
+            "component_id": 422,
+            "area_pixels": 107,
+            "corridor_overlap_pixels": 107,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1811,
+              3122,
+              1841,
+              3140
+            ]
+          },
+          {
+            "component_id": 294,
+            "area_pixels": 106,
+            "corridor_overlap_pixels": 106,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1389,
+              2739,
+              1420,
+              2758
+            ]
+          },
+          {
+            "component_id": 141,
+            "area_pixels": 100,
+            "corridor_overlap_pixels": 100,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              942,
+              2120,
+              967,
+              2136
+            ]
+          }
+        ]
+      },
+      "0.25": {
+        "file": "hybrid-p050-whole-components-overlap-0.25.png",
+        "file_sha256": "081955c249c23ba4a557fcefe11370abf841a7bddcbb0606003fe196c6bcd89d",
+        "mask_pixel_sha256": "fd0920ab9ca578299ee20f6fa19d492fe6ebf2df41c58dbd4c6caef4fe5e223d",
+        "selected_pixels": 204368,
+        "retained_fraction_of_raw_hybrid": 0.8220888509871438,
+        "component_count": 444,
+        "accepted_component_count": 353,
+        "rejected_component_count": 91,
+        "components_ge_100px": [
+          {
+            "component_id": 398,
+            "area_pixels": 17406,
+            "corridor_overlap_pixels": 2861,
+            "corridor_overlap_fraction": 0.1643686085257957,
+            "accepted": false,
+            "bbox_xyxy": [
+              2015,
+              3003,
+              2424,
+              3392
+            ]
+          },
+          {
+            "component_id": 198,
+            "area_pixels": 15570,
+            "corridor_overlap_pixels": 1736,
+            "corridor_overlap_fraction": 0.11149646756583173,
+            "accepted": false,
+            "bbox_xyxy": [
+              384,
+              2342,
+              415,
+              3251
+            ]
+          },
+          {
+            "component_id": 404,
+            "area_pixels": 10225,
+            "corridor_overlap_pixels": 10225,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              452,
+              3029,
+              970,
+              3227
+            ]
+          },
+          {
+            "component_id": 391,
+            "area_pixels": 4566,
+            "corridor_overlap_pixels": 4566,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1171,
+              2984,
+              1620,
+              3068
+            ]
+          },
+          {
+            "component_id": 125,
+            "area_pixels": 4524,
+            "corridor_overlap_pixels": 4524,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1638,
+              2038,
+              1931,
+              2159
+            ]
+          },
+          {
+            "component_id": 148,
+            "area_pixels": 4403,
+            "corridor_overlap_pixels": 4403,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              471,
+              2175,
+              782,
+              2307
+            ]
+          },
+          {
+            "component_id": 243,
+            "area_pixels": 3849,
+            "corridor_overlap_pixels": 3849,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              676,
+              2591,
+              1001,
+              2675
+            ]
+          },
+          {
+            "component_id": 89,
+            "area_pixels": 3544,
+            "corridor_overlap_pixels": 3544,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              634,
+              1772,
+              909,
+              1863
+            ]
+          },
+          {
+            "component_id": 424,
+            "area_pixels": 3541,
+            "corridor_overlap_pixels": 3541,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1163,
+              3128,
+              1446,
+              3216
+            ]
+          },
+          {
+            "component_id": 124,
+            "area_pixels": 3472,
+            "corridor_overlap_pixels": 3472,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1897,
+              2036,
+              2175,
+              2105
+            ]
+          },
+          {
+            "component_id": 209,
+            "area_pixels": 3324,
+            "corridor_overlap_pixels": 3324,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1386,
+              2430,
+              1657,
+              2517
+            ]
+          },
+          {
+            "component_id": 1,
+            "area_pixels": 3280,
+            "corridor_overlap_pixels": 0,
+            "corridor_overlap_fraction": 0.0,
+            "accepted": false,
+            "bbox_xyxy": [
+              1093,
+              564,
+              1337,
+              624
+            ]
+          },
+          {
+            "component_id": 67,
+            "area_pixels": 3115,
+            "corridor_overlap_pixels": 3115,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1196,
+              1497,
+              1449,
+              1633
+            ]
+          },
+          {
+            "component_id": 113,
+            "area_pixels": 3009,
+            "corridor_overlap_pixels": 2977,
+            "corridor_overlap_fraction": 0.9893652376204719,
+            "accepted": true,
+            "bbox_xyxy": [
+              571,
+              1952,
+              863,
+              2056
+            ]
+          },
+          {
+            "component_id": 232,
+            "area_pixels": 2986,
+            "corridor_overlap_pixels": 2986,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1653,
+              2555,
+              1900,
+              2643
+            ]
+          },
+          {
+            "component_id": 185,
+            "area_pixels": 2968,
+            "corridor_overlap_pixels": 2968,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              852,
+              2309,
+              1132,
+              2378
+            ]
+          },
+          {
+            "component_id": 59,
+            "area_pixels": 2923,
+            "corridor_overlap_pixels": 923,
+            "corridor_overlap_fraction": 0.31577146767020187,
+            "accepted": true,
+            "bbox_xyxy": [
+              629,
+              1352,
+              857,
+              1497
+            ]
+          },
+          {
+            "component_id": 92,
+            "area_pixels": 2917,
+            "corridor_overlap_pixels": 2917,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1279,
+              1788,
+              1619,
+              1849
+            ]
+          },
+          {
+            "component_id": 207,
+            "area_pixels": 2783,
+            "corridor_overlap_pixels": 2783,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1751,
+              2408,
+              1936,
+              2546
+            ]
+          },
+          {
+            "component_id": 319,
+            "area_pixels": 2769,
+            "corridor_overlap_pixels": 2769,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1600,
+              2805,
+              1805,
+              2890
+            ]
+          },
+          {
+            "component_id": 302,
+            "area_pixels": 2718,
+            "corridor_overlap_pixels": 2718,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              458,
+              2756,
+              721,
+              2838
+            ]
+          },
+          {
+            "component_id": 210,
+            "area_pixels": 2706,
+            "corridor_overlap_pixels": 2706,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              448,
+              2433,
+              700,
+              2528
+            ]
+          },
+          {
+            "component_id": 103,
+            "area_pixels": 2687,
+            "corridor_overlap_pixels": 2687,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              979,
+              1921,
+              1266,
+              1986
+            ]
+          },
+          {
+            "component_id": 369,
+            "area_pixels": 2590,
+            "corridor_overlap_pixels": 2590,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              464,
+              2885,
+              714,
+              2971
+            ]
+          },
+          {
+            "component_id": 208,
+            "area_pixels": 2583,
+            "corridor_overlap_pixels": 2583,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              702,
+              2429,
+              973,
+              2521
+            ]
+          },
+          {
+            "component_id": 421,
+            "area_pixels": 2575,
+            "corridor_overlap_pixels": 2575,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1490,
+              3101,
+              1724,
+              3200
+            ]
+          },
+          {
+            "component_id": 380,
+            "area_pixels": 2435,
+            "corridor_overlap_pixels": 2435,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              2004,
+              2924,
+              2137,
+              2993
+            ]
+          },
+          {
+            "component_id": 246,
+            "area_pixels": 2409,
+            "corridor_overlap_pixels": 2409,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1037,
+              2599,
+              1265,
+              2693
+            ]
+          },
+          {
+            "component_id": 410,
+            "area_pixels": 2400,
+            "corridor_overlap_pixels": 2400,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1727,
+              3047,
+              1860,
+              3191
+            ]
+          },
+          {
+            "component_id": 393,
+            "area_pixels": 2380,
+            "corridor_overlap_pixels": 2380,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              693,
+              2992,
+              900,
+              3060
+            ]
+          },
+          {
+            "component_id": 11,
+            "area_pixels": 2284,
+            "corridor_overlap_pixels": 0,
+            "corridor_overlap_fraction": 0.0,
+            "accepted": false,
+            "bbox_xyxy": [
+              1376,
+              722,
+              1433,
+              903
+            ]
+          },
+          {
+            "component_id": 325,
+            "area_pixels": 2239,
+            "corridor_overlap_pixels": 2239,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1257,
+              2831,
+              1428,
+              2933
+            ]
+          },
+          {
+            "component_id": 90,
+            "area_pixels": 2228,
+            "corridor_overlap_pixels": 2228,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1035,
+              1781,
+              1279,
+              1854
+            ]
+          },
+          {
+            "component_id": 123,
+            "area_pixels": 2188,
+            "corridor_overlap_pixels": 2188,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1494,
+              2033,
+              1652,
+              2152
+            ]
+          },
+          {
+            "component_id": 216,
+            "area_pixels": 2177,
+            "corridor_overlap_pixels": 2177,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1112,
+              2474,
+              1381,
+              2512
+            ]
+          },
+          {
+            "component_id": 60,
+            "area_pixels": 2176,
+            "corridor_overlap_pixels": 2176,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              917,
+              1371,
+              1011,
+              1509
+            ]
+          },
+          {
+            "component_id": 180,
+            "area_pixels": 2173,
+            "corridor_overlap_pixels": 2173,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              588,
+              2303,
+              731,
+              2387
+            ]
+          },
+          {
+            "component_id": 181,
+            "area_pixels": 2150,
+            "corridor_overlap_pixels": 2150,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1525,
+              2303,
+              1764,
+              2362
+            ]
+          },
+          {
+            "component_id": 104,
+            "area_pixels": 2147,
+            "corridor_overlap_pixels": 2147,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1522,
+              1921,
+              1745,
+              1979
+            ]
+          },
+          {
+            "component_id": 81,
+            "area_pixels": 2130,
+            "corridor_overlap_pixels": 2130,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1724,
+              1655,
+              1917,
+              1729
+            ]
+          },
+          {
+            "component_id": 254,
+            "area_pixels": 2106,
+            "corridor_overlap_pixels": 2106,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1037,
+              2691,
+              1255,
+              2774
+            ]
+          },
+          {
+            "component_id": 151,
+            "area_pixels": 2069,
+            "corridor_overlap_pixels": 2069,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1228,
+              2179,
+              1442,
+              2248
+            ]
+          },
+          {
+            "component_id": 72,
+            "area_pixels": 1979,
+            "corridor_overlap_pixels": 1979,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              968,
+              1526,
+              1207,
+              1585
+            ]
+          },
+          {
+            "component_id": 183,
+            "area_pixels": 1902,
+            "corridor_overlap_pixels": 1902,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1197,
+              2304,
+              1371,
+              2372
+            ]
+          },
+          {
+            "component_id": 110,
+            "area_pixels": 1871,
+            "corridor_overlap_pixels": 1871,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1258,
+              1948,
+              1516,
+              1981
+            ]
+          },
+          {
+            "component_id": 37,
+            "area_pixels": 1799,
+            "corridor_overlap_pixels": 0,
+            "corridor_overlap_fraction": 0.0,
+            "accepted": false,
+            "bbox_xyxy": [
+              1221,
+              882,
+              1401,
+              981
+            ]
+          },
+          {
+            "component_id": 382,
+            "area_pixels": 1783,
+            "corridor_overlap_pixels": 1783,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1639,
+              2950,
+              1844,
+              3014
+            ]
+          },
+          {
+            "component_id": 157,
+            "area_pixels": 1779,
+            "corridor_overlap_pixels": 1779,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1667,
+              2201,
+              1884,
+              2238
+            ]
+          },
+          {
+            "component_id": 430,
+            "area_pixels": 1768,
+            "corridor_overlap_pixels": 1768,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1003,
+              3134,
+              1167,
+              3218
+            ]
+          },
+          {
+            "component_id": 135,
+            "area_pixels": 1762,
+            "corridor_overlap_pixels": 1762,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1012,
+              2084,
+              1212,
+              2179
+            ]
+          },
+          {
+            "component_id": 262,
+            "area_pixels": 1750,
+            "corridor_overlap_pixels": 1750,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              859,
+              2711,
+              1020,
+              2780
+            ]
+          },
+          {
+            "component_id": 233,
+            "area_pixels": 1708,
+            "corridor_overlap_pixels": 1708,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1921,
+              2555,
+              2078,
+              2617
+            ]
+          },
+          {
+            "component_id": 237,
+            "area_pixels": 1708,
+            "corridor_overlap_pixels": 1708,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1496,
+              2574,
+              1633,
+              2628
+            ]
+          },
+          {
+            "component_id": 152,
+            "area_pixels": 1689,
+            "corridor_overlap_pixels": 1689,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1965,
+              2179,
+              2163,
+              2243
+            ]
+          },
+          {
+            "component_id": 80,
+            "area_pixels": 1673,
+            "corridor_overlap_pixels": 1673,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1926,
+              1654,
+              2084,
+              1706
+            ]
+          },
+          {
+            "component_id": 411,
+            "area_pixels": 1659,
+            "corridor_overlap_pixels": 1659,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1882,
+              3053,
+              1999,
+              3166
+            ]
+          },
+          {
+            "component_id": 156,
+            "area_pixels": 1644,
+            "corridor_overlap_pixels": 1644,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1856,
+              2199,
+              1986,
+              2279
+            ]
+          },
+          {
+            "component_id": 147,
+            "area_pixels": 1626,
+            "corridor_overlap_pixels": 1626,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1059,
+              2172,
+              1221,
+              2252
+            ]
+          },
+          {
+            "component_id": 132,
+            "area_pixels": 1613,
+            "corridor_overlap_pixels": 1613,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              799,
+              2076,
+              979,
+              2126
+            ]
+          },
+          {
+            "component_id": 158,
+            "area_pixels": 1578,
+            "corridor_overlap_pixels": 1578,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1457,
+              2209,
+              1661,
+              2238
+            ]
+          },
+          {
+            "component_id": 354,
+            "area_pixels": 1547,
+            "corridor_overlap_pixels": 1547,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1067,
+              2868,
+              1246,
+              2909
+            ]
+          },
+          {
+            "component_id": 61,
+            "area_pixels": 1544,
+            "corridor_overlap_pixels": 1544,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              981,
+              1377,
+              1096,
+              1465
+            ]
+          },
+          {
+            "component_id": 182,
+            "area_pixels": 1542,
+            "corridor_overlap_pixels": 1542,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              750,
+              2304,
+              887,
+              2427
+            ]
+          },
+          {
+            "component_id": 78,
+            "area_pixels": 1536,
+            "corridor_overlap_pixels": 1536,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1372,
+              1649,
+              1534,
+              1714
+            ]
+          },
+          {
+            "component_id": 128,
+            "area_pixels": 1481,
+            "corridor_overlap_pixels": 1481,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              611,
+              2050,
+              740,
+              2127
+            ]
+          },
+          {
+            "component_id": 127,
+            "area_pixels": 1479,
+            "corridor_overlap_pixels": 1479,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1252,
+              2046,
+              1387,
+              2116
+            ]
+          },
+          {
+            "component_id": 330,
+            "area_pixels": 1418,
+            "corridor_overlap_pixels": 1418,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              701,
+              2839,
+              826,
+              2922
+            ]
+          },
+          {
+            "component_id": 126,
+            "area_pixels": 1403,
+            "corridor_overlap_pixels": 1403,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              715,
+              2045,
+              844,
+              2177
+            ]
+          },
+          {
+            "component_id": 177,
+            "area_pixels": 1373,
+            "corridor_overlap_pixels": 1373,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1919,
+              2284,
+              2052,
+              2352
+            ]
+          },
+          {
+            "component_id": 245,
+            "area_pixels": 1366,
+            "corridor_overlap_pixels": 1366,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1318,
+              2596,
+              1471,
+              2635
+            ]
+          },
+          {
+            "component_id": 95,
+            "area_pixels": 1357,
+            "corridor_overlap_pixels": 1357,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1798,
+              1810,
+              1960,
+              1840
+            ]
+          },
+          {
+            "component_id": 2,
+            "area_pixels": 1337,
+            "corridor_overlap_pixels": 0,
+            "corridor_overlap_fraction": 0.0,
+            "accepted": false,
+            "bbox_xyxy": [
+              1337,
+              605,
+              1412,
+              694
+            ]
+          },
+          {
+            "component_id": 93,
+            "area_pixels": 1231,
+            "corridor_overlap_pixels": 1231,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1939,
+              1803,
+              2093,
+              1840
+            ]
+          },
+          {
+            "component_id": 155,
+            "area_pixels": 1164,
+            "corridor_overlap_pixels": 1164,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              807,
+              2189,
+              943,
+              2251
+            ]
+          },
+          {
+            "component_id": 395,
+            "area_pixels": 1149,
+            "corridor_overlap_pixels": 1149,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              924,
+              2993,
+              1061,
+              3046
+            ]
+          },
+          {
+            "component_id": 190,
+            "area_pixels": 1129,
+            "corridor_overlap_pixels": 1129,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              460,
+              2320,
+              571,
+              2387
+            ]
+          },
+          {
+            "component_id": 108,
+            "area_pixels": 1103,
+            "corridor_overlap_pixels": 1103,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              444,
+              1933,
+              559,
+              1996
+            ]
+          },
+          {
+            "component_id": 261,
+            "area_pixels": 1084,
+            "corridor_overlap_pixels": 1084,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1254,
+              2707,
+              1354,
+              2771
+            ]
+          },
+          {
+            "component_id": 301,
+            "area_pixels": 1036,
+            "corridor_overlap_pixels": 1036,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              691,
+              2752,
+              764,
+              2847
+            ]
+          },
+          {
+            "component_id": 94,
+            "area_pixels": 1033,
+            "corridor_overlap_pixels": 1033,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              937,
+              1804,
+              1037,
+              1856
+            ]
+          },
+          {
+            "component_id": 162,
+            "area_pixels": 1028,
+            "corridor_overlap_pixels": 1028,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              943,
+              2220,
+              1066,
+              2252
+            ]
+          },
+          {
+            "component_id": 133,
+            "area_pixels": 1008,
+            "corridor_overlap_pixels": 1008,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1380,
+              2076,
+              1499,
+              2117
+            ]
+          },
+          {
+            "component_id": 109,
+            "area_pixels": 992,
+            "corridor_overlap_pixels": 992,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1772,
+              1945,
+              1886,
+              1973
+            ]
+          },
+          {
+            "component_id": 265,
+            "area_pixels": 989,
+            "corridor_overlap_pixels": 989,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              2038,
+              2717,
+              2105,
+              2804
+            ]
+          },
+          {
+            "component_id": 260,
+            "area_pixels": 987,
+            "corridor_overlap_pixels": 987,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1681,
+              2703,
+              1771,
+              2775
+            ]
+          },
+          {
+            "component_id": 394,
+            "area_pixels": 964,
+            "corridor_overlap_pixels": 964,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1080,
+              2992,
+              1159,
+              3076
+            ]
+          },
+          {
+            "component_id": 219,
+            "area_pixels": 955,
+            "corridor_overlap_pixels": 955,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              986,
+              2481,
+              1106,
+              2516
+            ]
+          },
+          {
+            "component_id": 415,
+            "area_pixels": 954,
+            "corridor_overlap_pixels": 952,
+            "corridor_overlap_fraction": 0.9979035639412998,
+            "accepted": true,
+            "bbox_xyxy": [
+              1956,
+              3080,
+              2043,
+              3121
+            ]
+          },
+          {
+            "component_id": 71,
+            "area_pixels": 923,
+            "corridor_overlap_pixels": 923,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1446,
+              1524,
+              1536,
+              1579
+            ]
+          },
+          {
+            "component_id": 98,
+            "area_pixels": 917,
+            "corridor_overlap_pixels": 917,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              448,
+              1832,
+              570,
+              1863
+            ]
+          },
+          {
+            "component_id": 215,
+            "area_pixels": 902,
+            "corridor_overlap_pixels": 902,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1672,
+              2465,
+              1737,
+              2545
+            ]
+          },
+          {
+            "component_id": 188,
+            "area_pixels": 895,
+            "corridor_overlap_pixels": 895,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1789,
+              2311,
+              1887,
+              2359
+            ]
+          },
+          {
+            "component_id": 111,
+            "area_pixels": 879,
+            "corridor_overlap_pixels": 879,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1828,
+              1948,
+              1929,
+              2027
+            ]
+          },
+          {
+            "component_id": 263,
+            "area_pixels": 834,
+            "corridor_overlap_pixels": 834,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1789,
+              2714,
+              1895,
+              2749
+            ]
+          },
+          {
+            "component_id": 69,
+            "area_pixels": 809,
+            "corridor_overlap_pixels": 809,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              867,
+              1519,
+              979,
+              1589
+            ]
+          },
+          {
+            "component_id": 370,
+            "area_pixels": 797,
+            "corridor_overlap_pixels": 797,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              830,
+              2885,
+              926,
+              2916
+            ]
+          },
+          {
+            "component_id": 255,
+            "area_pixels": 790,
+            "corridor_overlap_pixels": 790,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1415,
+              2692,
+              1516,
+              2754
+            ]
+          },
+          {
+            "component_id": 112,
+            "area_pixels": 762,
+            "corridor_overlap_pixels": 762,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              865,
+              1949,
+              971,
+              1989
+            ]
+          },
+          {
+            "component_id": 84,
+            "area_pixels": 759,
+            "corridor_overlap_pixels": 759,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1566,
+              1682,
+              1679,
+              1706
+            ]
+          },
+          {
+            "component_id": 96,
+            "area_pixels": 733,
+            "corridor_overlap_pixels": 733,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1628,
+              1816,
+              1758,
+              1843
+            ]
+          },
+          {
+            "component_id": 121,
+            "area_pixels": 714,
+            "corridor_overlap_pixels": 714,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              594,
+              2016,
+              760,
+              2087
+            ]
+          },
+          {
+            "component_id": 324,
+            "area_pixels": 714,
+            "corridor_overlap_pixels": 714,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1456,
+              2828,
+              1541,
+              2916
+            ]
+          },
+          {
+            "component_id": 317,
+            "area_pixels": 697,
+            "corridor_overlap_pixels": 685,
+            "corridor_overlap_fraction": 0.9827833572453372,
+            "accepted": true,
+            "bbox_xyxy": [
+              1895,
+              2791,
+              1988,
+              2869
+            ]
+          },
+          {
+            "component_id": 192,
+            "area_pixels": 692,
+            "corridor_overlap_pixels": 692,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1998,
+              2326,
+              2090,
+              2371
+            ]
+          },
+          {
+            "component_id": 388,
+            "area_pixels": 691,
+            "corridor_overlap_pixels": 691,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1912,
+              2974,
+              2003,
+              2995
+            ]
+          },
+          {
+            "component_id": 76,
+            "area_pixels": 664,
+            "corridor_overlap_pixels": 664,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1352,
+              1614,
+              1513,
+              1670
+            ]
+          },
+          {
+            "component_id": 195,
+            "area_pixels": 608,
+            "corridor_overlap_pixels": 608,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1437,
+              2338,
+              1512,
+              2367
+            ]
+          },
+          {
+            "component_id": 129,
+            "area_pixels": 603,
+            "corridor_overlap_pixels": 603,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              525,
+              2052,
+              668,
+              2130
+            ]
+          },
+          {
+            "component_id": 368,
+            "area_pixels": 533,
+            "corridor_overlap_pixels": 533,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              948,
+              2884,
+              1020,
+              2916
+            ]
+          },
+          {
+            "component_id": 300,
+            "area_pixels": 500,
+            "corridor_overlap_pixels": 500,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              797,
+              2750,
+              876,
+              2781
+            ]
+          },
+          {
+            "component_id": 77,
+            "area_pixels": 492,
+            "corridor_overlap_pixels": 492,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1296,
+              1644,
+              1430,
+              1715
+            ]
+          },
+          {
+            "component_id": 58,
+            "area_pixels": 479,
+            "corridor_overlap_pixels": 0,
+            "corridor_overlap_fraction": 0.0,
+            "accepted": false,
+            "bbox_xyxy": [
+              611,
+              1352,
+              758,
+              1390
+            ]
+          },
+          {
+            "component_id": 239,
+            "area_pixels": 477,
+            "corridor_overlap_pixels": 477,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              519,
+              2580,
+              626,
+              2670
+            ]
+          },
+          {
+            "component_id": 99,
+            "area_pixels": 468,
+            "corridor_overlap_pixels": 468,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              573,
+              1832,
+              631,
+              1860
+            ]
+          },
+          {
+            "component_id": 334,
+            "area_pixels": 468,
+            "corridor_overlap_pixels": 468,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              2032,
+              2842,
+              2090,
+              2920
+            ]
+          },
+          {
+            "component_id": 440,
+            "area_pixels": 467,
+            "corridor_overlap_pixels": 0,
+            "corridor_overlap_fraction": 0.0,
+            "accepted": false,
+            "bbox_xyxy": [
+              2323,
+              3290,
+              2395,
+              3366
+            ]
+          },
+          {
+            "component_id": 349,
+            "area_pixels": 451,
+            "corridor_overlap_pixels": 451,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1531,
+              2856,
+              1603,
+              2894
+            ]
+          },
+          {
+            "component_id": 279,
+            "area_pixels": 430,
+            "corridor_overlap_pixels": 430,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1487,
+              2730,
+              1551,
+              2756
+            ]
+          },
+          {
+            "component_id": 442,
+            "area_pixels": 426,
+            "corridor_overlap_pixels": 0,
+            "corridor_overlap_fraction": 0.0,
+            "accepted": false,
+            "bbox_xyxy": [
+              687,
+              3441,
+              713,
+              3492
+            ]
+          },
+          {
+            "component_id": 34,
+            "area_pixels": 369,
+            "corridor_overlap_pixels": 0,
+            "corridor_overlap_fraction": 0.0,
+            "accepted": false,
+            "bbox_xyxy": [
+              372,
+              877,
+              382,
+              932
+            ]
+          },
+          {
+            "component_id": 345,
+            "area_pixels": 320,
+            "corridor_overlap_pixels": 320,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1805,
+              2849,
+              1861,
+              2873
+            ]
+          },
+          {
+            "component_id": 249,
+            "area_pixels": 313,
+            "corridor_overlap_pixels": 313,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              628,
+              2608,
+              692,
+              2651
+            ]
+          },
+          {
+            "component_id": 327,
+            "area_pixels": 312,
+            "corridor_overlap_pixels": 312,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1932,
+              2837,
+              1975,
+              2870
+            ]
+          },
+          {
+            "component_id": 213,
+            "area_pixels": 301,
+            "corridor_overlap_pixels": 301,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1918,
+              2443,
+              2001,
+              2459
+            ]
+          },
+          {
+            "component_id": 259,
+            "area_pixels": 297,
+            "corridor_overlap_pixels": 297,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1587,
+              2700,
+              1631,
+              2753
+            ]
+          },
+          {
+            "component_id": 287,
+            "area_pixels": 230,
+            "corridor_overlap_pixels": 230,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1842,
+              2732,
+              1877,
+              2792
+            ]
+          },
+          {
+            "component_id": 293,
+            "area_pixels": 221,
+            "corridor_overlap_pixels": 221,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1892,
+              2735,
+              1927,
+              2780
+            ]
+          },
+          {
+            "component_id": 73,
+            "area_pixels": 219,
+            "corridor_overlap_pixels": 219,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              933,
+              1564,
+              962,
+              1617
+            ]
+          },
+          {
+            "component_id": 196,
+            "area_pixels": 216,
+            "corridor_overlap_pixels": 216,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1397,
+              2340,
+              1464,
+              2368
+            ]
+          },
+          {
+            "component_id": 153,
+            "area_pixels": 212,
+            "corridor_overlap_pixels": 0,
+            "corridor_overlap_fraction": 0.0,
+            "accepted": false,
+            "bbox_xyxy": [
+              398,
+              2183,
+              409,
+              2261
+            ]
+          },
+          {
+            "component_id": 389,
+            "area_pixels": 202,
+            "corridor_overlap_pixels": 202,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1844,
+              2976,
+              1892,
+              2982
+            ]
+          },
+          {
+            "component_id": 191,
+            "area_pixels": 199,
+            "corridor_overlap_pixels": 199,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1311,
+              2325,
+              1378,
+              2332
+            ]
+          },
+          {
+            "component_id": 376,
+            "area_pixels": 191,
+            "corridor_overlap_pixels": 191,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              915,
+              2898,
+              953,
+              2917
+            ]
+          },
+          {
+            "component_id": 197,
+            "area_pixels": 178,
+            "corridor_overlap_pixels": 178,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1878,
+              2340,
+              1921,
+              2358
+            ]
+          },
+          {
+            "component_id": 120,
+            "area_pixels": 168,
+            "corridor_overlap_pixels": 168,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              808,
+              1991,
+              843,
+              2019
+            ]
+          },
+          {
+            "component_id": 23,
+            "area_pixels": 166,
+            "corridor_overlap_pixels": 0,
+            "corridor_overlap_fraction": 0.0,
+            "accepted": false,
+            "bbox_xyxy": [
+              370,
+              834,
+              380,
+              874
+            ]
+          },
+          {
+            "component_id": 234,
+            "area_pixels": 166,
+            "corridor_overlap_pixels": 166,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1526,
+              2560,
+              1553,
+              2581
+            ]
+          },
+          {
+            "component_id": 268,
+            "area_pixels": 160,
+            "corridor_overlap_pixels": 160,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1422,
+              2721,
+              1453,
+              2742
+            ]
+          },
+          {
+            "component_id": 407,
+            "area_pixels": 158,
+            "corridor_overlap_pixels": 158,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              448,
+              3036,
+              487,
+              3064
+            ]
+          },
+          {
+            "component_id": 337,
+            "area_pixels": 147,
+            "corridor_overlap_pixels": 147,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              2027,
+              2845,
+              2049,
+              2864
+            ]
+          },
+          {
+            "component_id": 204,
+            "area_pixels": 133,
+            "corridor_overlap_pixels": 133,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1739,
+              2363,
+              1765,
+              2386
+            ]
+          },
+          {
+            "component_id": 231,
+            "area_pixels": 132,
+            "corridor_overlap_pixels": 132,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1556,
+              2552,
+              1586,
+              2570
+            ]
+          },
+          {
+            "component_id": 338,
+            "area_pixels": 127,
+            "corridor_overlap_pixels": 127,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              2108,
+              2845,
+              2142,
+              2851
+            ]
+          },
+          {
+            "component_id": 220,
+            "area_pixels": 125,
+            "corridor_overlap_pixels": 125,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1644,
+              2484,
+              1678,
+              2495
+            ]
+          },
+          {
+            "component_id": 341,
+            "area_pixels": 116,
+            "corridor_overlap_pixels": 116,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              2009,
+              2846,
+              2025,
+              2867
+            ]
+          },
+          {
+            "component_id": 347,
+            "area_pixels": 113,
+            "corridor_overlap_pixels": 113,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              916,
+              2853,
+              935,
+              2874
+            ]
+          },
+          {
+            "component_id": 290,
+            "area_pixels": 111,
+            "corridor_overlap_pixels": 111,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1555,
+              2733,
+              1582,
+              2756
+            ]
+          },
+          {
+            "component_id": 363,
+            "area_pixels": 110,
+            "corridor_overlap_pixels": 110,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1842,
+              2875,
+              1869,
+              2890
+            ]
+          },
+          {
+            "component_id": 115,
+            "area_pixels": 108,
+            "corridor_overlap_pixels": 62,
+            "corridor_overlap_fraction": 0.5740740740740741,
+            "accepted": true,
+            "bbox_xyxy": [
+              1978,
+              1965,
+              2015,
+              1970
+            ]
+          },
+          {
+            "component_id": 422,
+            "area_pixels": 107,
+            "corridor_overlap_pixels": 107,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1811,
+              3122,
+              1841,
+              3140
+            ]
+          },
+          {
+            "component_id": 294,
+            "area_pixels": 106,
+            "corridor_overlap_pixels": 106,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1389,
+              2739,
+              1420,
+              2758
+            ]
+          },
+          {
+            "component_id": 141,
+            "area_pixels": 100,
+            "corridor_overlap_pixels": 100,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              942,
+              2120,
+              967,
+              2136
+            ]
+          }
+        ]
+      },
+      "0.50": {
+        "file": "hybrid-p050-whole-components-overlap-0.50.png",
+        "file_sha256": "4065b6706280f3e134a0513a6415a23cb1fc3ce48d6097b9090458805c6e0d15",
+        "mask_pixel_sha256": "c407125e14a9551b1353a50f06d72474265fec176478a78dbf77c3f450c033c7",
+        "selected_pixels": 201445,
+        "retained_fraction_of_raw_hybrid": 0.8103308178731757,
+        "component_count": 444,
+        "accepted_component_count": 352,
+        "rejected_component_count": 92,
+        "components_ge_100px": [
+          {
+            "component_id": 398,
+            "area_pixels": 17406,
+            "corridor_overlap_pixels": 2861,
+            "corridor_overlap_fraction": 0.1643686085257957,
+            "accepted": false,
+            "bbox_xyxy": [
+              2015,
+              3003,
+              2424,
+              3392
+            ]
+          },
+          {
+            "component_id": 198,
+            "area_pixels": 15570,
+            "corridor_overlap_pixels": 1736,
+            "corridor_overlap_fraction": 0.11149646756583173,
+            "accepted": false,
+            "bbox_xyxy": [
+              384,
+              2342,
+              415,
+              3251
+            ]
+          },
+          {
+            "component_id": 404,
+            "area_pixels": 10225,
+            "corridor_overlap_pixels": 10225,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              452,
+              3029,
+              970,
+              3227
+            ]
+          },
+          {
+            "component_id": 391,
+            "area_pixels": 4566,
+            "corridor_overlap_pixels": 4566,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1171,
+              2984,
+              1620,
+              3068
+            ]
+          },
+          {
+            "component_id": 125,
+            "area_pixels": 4524,
+            "corridor_overlap_pixels": 4524,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1638,
+              2038,
+              1931,
+              2159
+            ]
+          },
+          {
+            "component_id": 148,
+            "area_pixels": 4403,
+            "corridor_overlap_pixels": 4403,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              471,
+              2175,
+              782,
+              2307
+            ]
+          },
+          {
+            "component_id": 243,
+            "area_pixels": 3849,
+            "corridor_overlap_pixels": 3849,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              676,
+              2591,
+              1001,
+              2675
+            ]
+          },
+          {
+            "component_id": 89,
+            "area_pixels": 3544,
+            "corridor_overlap_pixels": 3544,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              634,
+              1772,
+              909,
+              1863
+            ]
+          },
+          {
+            "component_id": 424,
+            "area_pixels": 3541,
+            "corridor_overlap_pixels": 3541,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1163,
+              3128,
+              1446,
+              3216
+            ]
+          },
+          {
+            "component_id": 124,
+            "area_pixels": 3472,
+            "corridor_overlap_pixels": 3472,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1897,
+              2036,
+              2175,
+              2105
+            ]
+          },
+          {
+            "component_id": 209,
+            "area_pixels": 3324,
+            "corridor_overlap_pixels": 3324,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1386,
+              2430,
+              1657,
+              2517
+            ]
+          },
+          {
+            "component_id": 1,
+            "area_pixels": 3280,
+            "corridor_overlap_pixels": 0,
+            "corridor_overlap_fraction": 0.0,
+            "accepted": false,
+            "bbox_xyxy": [
+              1093,
+              564,
+              1337,
+              624
+            ]
+          },
+          {
+            "component_id": 67,
+            "area_pixels": 3115,
+            "corridor_overlap_pixels": 3115,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1196,
+              1497,
+              1449,
+              1633
+            ]
+          },
+          {
+            "component_id": 113,
+            "area_pixels": 3009,
+            "corridor_overlap_pixels": 2977,
+            "corridor_overlap_fraction": 0.9893652376204719,
+            "accepted": true,
+            "bbox_xyxy": [
+              571,
+              1952,
+              863,
+              2056
+            ]
+          },
+          {
+            "component_id": 232,
+            "area_pixels": 2986,
+            "corridor_overlap_pixels": 2986,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1653,
+              2555,
+              1900,
+              2643
+            ]
+          },
+          {
+            "component_id": 185,
+            "area_pixels": 2968,
+            "corridor_overlap_pixels": 2968,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              852,
+              2309,
+              1132,
+              2378
+            ]
+          },
+          {
+            "component_id": 59,
+            "area_pixels": 2923,
+            "corridor_overlap_pixels": 923,
+            "corridor_overlap_fraction": 0.31577146767020187,
+            "accepted": false,
+            "bbox_xyxy": [
+              629,
+              1352,
+              857,
+              1497
+            ]
+          },
+          {
+            "component_id": 92,
+            "area_pixels": 2917,
+            "corridor_overlap_pixels": 2917,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1279,
+              1788,
+              1619,
+              1849
+            ]
+          },
+          {
+            "component_id": 207,
+            "area_pixels": 2783,
+            "corridor_overlap_pixels": 2783,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1751,
+              2408,
+              1936,
+              2546
+            ]
+          },
+          {
+            "component_id": 319,
+            "area_pixels": 2769,
+            "corridor_overlap_pixels": 2769,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1600,
+              2805,
+              1805,
+              2890
+            ]
+          },
+          {
+            "component_id": 302,
+            "area_pixels": 2718,
+            "corridor_overlap_pixels": 2718,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              458,
+              2756,
+              721,
+              2838
+            ]
+          },
+          {
+            "component_id": 210,
+            "area_pixels": 2706,
+            "corridor_overlap_pixels": 2706,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              448,
+              2433,
+              700,
+              2528
+            ]
+          },
+          {
+            "component_id": 103,
+            "area_pixels": 2687,
+            "corridor_overlap_pixels": 2687,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              979,
+              1921,
+              1266,
+              1986
+            ]
+          },
+          {
+            "component_id": 369,
+            "area_pixels": 2590,
+            "corridor_overlap_pixels": 2590,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              464,
+              2885,
+              714,
+              2971
+            ]
+          },
+          {
+            "component_id": 208,
+            "area_pixels": 2583,
+            "corridor_overlap_pixels": 2583,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              702,
+              2429,
+              973,
+              2521
+            ]
+          },
+          {
+            "component_id": 421,
+            "area_pixels": 2575,
+            "corridor_overlap_pixels": 2575,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1490,
+              3101,
+              1724,
+              3200
+            ]
+          },
+          {
+            "component_id": 380,
+            "area_pixels": 2435,
+            "corridor_overlap_pixels": 2435,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              2004,
+              2924,
+              2137,
+              2993
+            ]
+          },
+          {
+            "component_id": 246,
+            "area_pixels": 2409,
+            "corridor_overlap_pixels": 2409,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1037,
+              2599,
+              1265,
+              2693
+            ]
+          },
+          {
+            "component_id": 410,
+            "area_pixels": 2400,
+            "corridor_overlap_pixels": 2400,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1727,
+              3047,
+              1860,
+              3191
+            ]
+          },
+          {
+            "component_id": 393,
+            "area_pixels": 2380,
+            "corridor_overlap_pixels": 2380,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              693,
+              2992,
+              900,
+              3060
+            ]
+          },
+          {
+            "component_id": 11,
+            "area_pixels": 2284,
+            "corridor_overlap_pixels": 0,
+            "corridor_overlap_fraction": 0.0,
+            "accepted": false,
+            "bbox_xyxy": [
+              1376,
+              722,
+              1433,
+              903
+            ]
+          },
+          {
+            "component_id": 325,
+            "area_pixels": 2239,
+            "corridor_overlap_pixels": 2239,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1257,
+              2831,
+              1428,
+              2933
+            ]
+          },
+          {
+            "component_id": 90,
+            "area_pixels": 2228,
+            "corridor_overlap_pixels": 2228,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1035,
+              1781,
+              1279,
+              1854
+            ]
+          },
+          {
+            "component_id": 123,
+            "area_pixels": 2188,
+            "corridor_overlap_pixels": 2188,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1494,
+              2033,
+              1652,
+              2152
+            ]
+          },
+          {
+            "component_id": 216,
+            "area_pixels": 2177,
+            "corridor_overlap_pixels": 2177,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1112,
+              2474,
+              1381,
+              2512
+            ]
+          },
+          {
+            "component_id": 60,
+            "area_pixels": 2176,
+            "corridor_overlap_pixels": 2176,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              917,
+              1371,
+              1011,
+              1509
+            ]
+          },
+          {
+            "component_id": 180,
+            "area_pixels": 2173,
+            "corridor_overlap_pixels": 2173,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              588,
+              2303,
+              731,
+              2387
+            ]
+          },
+          {
+            "component_id": 181,
+            "area_pixels": 2150,
+            "corridor_overlap_pixels": 2150,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1525,
+              2303,
+              1764,
+              2362
+            ]
+          },
+          {
+            "component_id": 104,
+            "area_pixels": 2147,
+            "corridor_overlap_pixels": 2147,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1522,
+              1921,
+              1745,
+              1979
+            ]
+          },
+          {
+            "component_id": 81,
+            "area_pixels": 2130,
+            "corridor_overlap_pixels": 2130,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1724,
+              1655,
+              1917,
+              1729
+            ]
+          },
+          {
+            "component_id": 254,
+            "area_pixels": 2106,
+            "corridor_overlap_pixels": 2106,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1037,
+              2691,
+              1255,
+              2774
+            ]
+          },
+          {
+            "component_id": 151,
+            "area_pixels": 2069,
+            "corridor_overlap_pixels": 2069,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1228,
+              2179,
+              1442,
+              2248
+            ]
+          },
+          {
+            "component_id": 72,
+            "area_pixels": 1979,
+            "corridor_overlap_pixels": 1979,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              968,
+              1526,
+              1207,
+              1585
+            ]
+          },
+          {
+            "component_id": 183,
+            "area_pixels": 1902,
+            "corridor_overlap_pixels": 1902,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1197,
+              2304,
+              1371,
+              2372
+            ]
+          },
+          {
+            "component_id": 110,
+            "area_pixels": 1871,
+            "corridor_overlap_pixels": 1871,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1258,
+              1948,
+              1516,
+              1981
+            ]
+          },
+          {
+            "component_id": 37,
+            "area_pixels": 1799,
+            "corridor_overlap_pixels": 0,
+            "corridor_overlap_fraction": 0.0,
+            "accepted": false,
+            "bbox_xyxy": [
+              1221,
+              882,
+              1401,
+              981
+            ]
+          },
+          {
+            "component_id": 382,
+            "area_pixels": 1783,
+            "corridor_overlap_pixels": 1783,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1639,
+              2950,
+              1844,
+              3014
+            ]
+          },
+          {
+            "component_id": 157,
+            "area_pixels": 1779,
+            "corridor_overlap_pixels": 1779,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1667,
+              2201,
+              1884,
+              2238
+            ]
+          },
+          {
+            "component_id": 430,
+            "area_pixels": 1768,
+            "corridor_overlap_pixels": 1768,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1003,
+              3134,
+              1167,
+              3218
+            ]
+          },
+          {
+            "component_id": 135,
+            "area_pixels": 1762,
+            "corridor_overlap_pixels": 1762,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1012,
+              2084,
+              1212,
+              2179
+            ]
+          },
+          {
+            "component_id": 262,
+            "area_pixels": 1750,
+            "corridor_overlap_pixels": 1750,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              859,
+              2711,
+              1020,
+              2780
+            ]
+          },
+          {
+            "component_id": 233,
+            "area_pixels": 1708,
+            "corridor_overlap_pixels": 1708,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1921,
+              2555,
+              2078,
+              2617
+            ]
+          },
+          {
+            "component_id": 237,
+            "area_pixels": 1708,
+            "corridor_overlap_pixels": 1708,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1496,
+              2574,
+              1633,
+              2628
+            ]
+          },
+          {
+            "component_id": 152,
+            "area_pixels": 1689,
+            "corridor_overlap_pixels": 1689,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1965,
+              2179,
+              2163,
+              2243
+            ]
+          },
+          {
+            "component_id": 80,
+            "area_pixels": 1673,
+            "corridor_overlap_pixels": 1673,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1926,
+              1654,
+              2084,
+              1706
+            ]
+          },
+          {
+            "component_id": 411,
+            "area_pixels": 1659,
+            "corridor_overlap_pixels": 1659,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1882,
+              3053,
+              1999,
+              3166
+            ]
+          },
+          {
+            "component_id": 156,
+            "area_pixels": 1644,
+            "corridor_overlap_pixels": 1644,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1856,
+              2199,
+              1986,
+              2279
+            ]
+          },
+          {
+            "component_id": 147,
+            "area_pixels": 1626,
+            "corridor_overlap_pixels": 1626,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1059,
+              2172,
+              1221,
+              2252
+            ]
+          },
+          {
+            "component_id": 132,
+            "area_pixels": 1613,
+            "corridor_overlap_pixels": 1613,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              799,
+              2076,
+              979,
+              2126
+            ]
+          },
+          {
+            "component_id": 158,
+            "area_pixels": 1578,
+            "corridor_overlap_pixels": 1578,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1457,
+              2209,
+              1661,
+              2238
+            ]
+          },
+          {
+            "component_id": 354,
+            "area_pixels": 1547,
+            "corridor_overlap_pixels": 1547,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1067,
+              2868,
+              1246,
+              2909
+            ]
+          },
+          {
+            "component_id": 61,
+            "area_pixels": 1544,
+            "corridor_overlap_pixels": 1544,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              981,
+              1377,
+              1096,
+              1465
+            ]
+          },
+          {
+            "component_id": 182,
+            "area_pixels": 1542,
+            "corridor_overlap_pixels": 1542,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              750,
+              2304,
+              887,
+              2427
+            ]
+          },
+          {
+            "component_id": 78,
+            "area_pixels": 1536,
+            "corridor_overlap_pixels": 1536,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1372,
+              1649,
+              1534,
+              1714
+            ]
+          },
+          {
+            "component_id": 128,
+            "area_pixels": 1481,
+            "corridor_overlap_pixels": 1481,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              611,
+              2050,
+              740,
+              2127
+            ]
+          },
+          {
+            "component_id": 127,
+            "area_pixels": 1479,
+            "corridor_overlap_pixels": 1479,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1252,
+              2046,
+              1387,
+              2116
+            ]
+          },
+          {
+            "component_id": 330,
+            "area_pixels": 1418,
+            "corridor_overlap_pixels": 1418,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              701,
+              2839,
+              826,
+              2922
+            ]
+          },
+          {
+            "component_id": 126,
+            "area_pixels": 1403,
+            "corridor_overlap_pixels": 1403,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              715,
+              2045,
+              844,
+              2177
+            ]
+          },
+          {
+            "component_id": 177,
+            "area_pixels": 1373,
+            "corridor_overlap_pixels": 1373,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1919,
+              2284,
+              2052,
+              2352
+            ]
+          },
+          {
+            "component_id": 245,
+            "area_pixels": 1366,
+            "corridor_overlap_pixels": 1366,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1318,
+              2596,
+              1471,
+              2635
+            ]
+          },
+          {
+            "component_id": 95,
+            "area_pixels": 1357,
+            "corridor_overlap_pixels": 1357,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1798,
+              1810,
+              1960,
+              1840
+            ]
+          },
+          {
+            "component_id": 2,
+            "area_pixels": 1337,
+            "corridor_overlap_pixels": 0,
+            "corridor_overlap_fraction": 0.0,
+            "accepted": false,
+            "bbox_xyxy": [
+              1337,
+              605,
+              1412,
+              694
+            ]
+          },
+          {
+            "component_id": 93,
+            "area_pixels": 1231,
+            "corridor_overlap_pixels": 1231,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1939,
+              1803,
+              2093,
+              1840
+            ]
+          },
+          {
+            "component_id": 155,
+            "area_pixels": 1164,
+            "corridor_overlap_pixels": 1164,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              807,
+              2189,
+              943,
+              2251
+            ]
+          },
+          {
+            "component_id": 395,
+            "area_pixels": 1149,
+            "corridor_overlap_pixels": 1149,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              924,
+              2993,
+              1061,
+              3046
+            ]
+          },
+          {
+            "component_id": 190,
+            "area_pixels": 1129,
+            "corridor_overlap_pixels": 1129,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              460,
+              2320,
+              571,
+              2387
+            ]
+          },
+          {
+            "component_id": 108,
+            "area_pixels": 1103,
+            "corridor_overlap_pixels": 1103,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              444,
+              1933,
+              559,
+              1996
+            ]
+          },
+          {
+            "component_id": 261,
+            "area_pixels": 1084,
+            "corridor_overlap_pixels": 1084,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1254,
+              2707,
+              1354,
+              2771
+            ]
+          },
+          {
+            "component_id": 301,
+            "area_pixels": 1036,
+            "corridor_overlap_pixels": 1036,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              691,
+              2752,
+              764,
+              2847
+            ]
+          },
+          {
+            "component_id": 94,
+            "area_pixels": 1033,
+            "corridor_overlap_pixels": 1033,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              937,
+              1804,
+              1037,
+              1856
+            ]
+          },
+          {
+            "component_id": 162,
+            "area_pixels": 1028,
+            "corridor_overlap_pixels": 1028,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              943,
+              2220,
+              1066,
+              2252
+            ]
+          },
+          {
+            "component_id": 133,
+            "area_pixels": 1008,
+            "corridor_overlap_pixels": 1008,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1380,
+              2076,
+              1499,
+              2117
+            ]
+          },
+          {
+            "component_id": 109,
+            "area_pixels": 992,
+            "corridor_overlap_pixels": 992,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1772,
+              1945,
+              1886,
+              1973
+            ]
+          },
+          {
+            "component_id": 265,
+            "area_pixels": 989,
+            "corridor_overlap_pixels": 989,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              2038,
+              2717,
+              2105,
+              2804
+            ]
+          },
+          {
+            "component_id": 260,
+            "area_pixels": 987,
+            "corridor_overlap_pixels": 987,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1681,
+              2703,
+              1771,
+              2775
+            ]
+          },
+          {
+            "component_id": 394,
+            "area_pixels": 964,
+            "corridor_overlap_pixels": 964,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1080,
+              2992,
+              1159,
+              3076
+            ]
+          },
+          {
+            "component_id": 219,
+            "area_pixels": 955,
+            "corridor_overlap_pixels": 955,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              986,
+              2481,
+              1106,
+              2516
+            ]
+          },
+          {
+            "component_id": 415,
+            "area_pixels": 954,
+            "corridor_overlap_pixels": 952,
+            "corridor_overlap_fraction": 0.9979035639412998,
+            "accepted": true,
+            "bbox_xyxy": [
+              1956,
+              3080,
+              2043,
+              3121
+            ]
+          },
+          {
+            "component_id": 71,
+            "area_pixels": 923,
+            "corridor_overlap_pixels": 923,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1446,
+              1524,
+              1536,
+              1579
+            ]
+          },
+          {
+            "component_id": 98,
+            "area_pixels": 917,
+            "corridor_overlap_pixels": 917,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              448,
+              1832,
+              570,
+              1863
+            ]
+          },
+          {
+            "component_id": 215,
+            "area_pixels": 902,
+            "corridor_overlap_pixels": 902,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1672,
+              2465,
+              1737,
+              2545
+            ]
+          },
+          {
+            "component_id": 188,
+            "area_pixels": 895,
+            "corridor_overlap_pixels": 895,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1789,
+              2311,
+              1887,
+              2359
+            ]
+          },
+          {
+            "component_id": 111,
+            "area_pixels": 879,
+            "corridor_overlap_pixels": 879,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1828,
+              1948,
+              1929,
+              2027
+            ]
+          },
+          {
+            "component_id": 263,
+            "area_pixels": 834,
+            "corridor_overlap_pixels": 834,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1789,
+              2714,
+              1895,
+              2749
+            ]
+          },
+          {
+            "component_id": 69,
+            "area_pixels": 809,
+            "corridor_overlap_pixels": 809,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              867,
+              1519,
+              979,
+              1589
+            ]
+          },
+          {
+            "component_id": 370,
+            "area_pixels": 797,
+            "corridor_overlap_pixels": 797,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              830,
+              2885,
+              926,
+              2916
+            ]
+          },
+          {
+            "component_id": 255,
+            "area_pixels": 790,
+            "corridor_overlap_pixels": 790,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1415,
+              2692,
+              1516,
+              2754
+            ]
+          },
+          {
+            "component_id": 112,
+            "area_pixels": 762,
+            "corridor_overlap_pixels": 762,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              865,
+              1949,
+              971,
+              1989
+            ]
+          },
+          {
+            "component_id": 84,
+            "area_pixels": 759,
+            "corridor_overlap_pixels": 759,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1566,
+              1682,
+              1679,
+              1706
+            ]
+          },
+          {
+            "component_id": 96,
+            "area_pixels": 733,
+            "corridor_overlap_pixels": 733,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1628,
+              1816,
+              1758,
+              1843
+            ]
+          },
+          {
+            "component_id": 121,
+            "area_pixels": 714,
+            "corridor_overlap_pixels": 714,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              594,
+              2016,
+              760,
+              2087
+            ]
+          },
+          {
+            "component_id": 324,
+            "area_pixels": 714,
+            "corridor_overlap_pixels": 714,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1456,
+              2828,
+              1541,
+              2916
+            ]
+          },
+          {
+            "component_id": 317,
+            "area_pixels": 697,
+            "corridor_overlap_pixels": 685,
+            "corridor_overlap_fraction": 0.9827833572453372,
+            "accepted": true,
+            "bbox_xyxy": [
+              1895,
+              2791,
+              1988,
+              2869
+            ]
+          },
+          {
+            "component_id": 192,
+            "area_pixels": 692,
+            "corridor_overlap_pixels": 692,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1998,
+              2326,
+              2090,
+              2371
+            ]
+          },
+          {
+            "component_id": 388,
+            "area_pixels": 691,
+            "corridor_overlap_pixels": 691,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1912,
+              2974,
+              2003,
+              2995
+            ]
+          },
+          {
+            "component_id": 76,
+            "area_pixels": 664,
+            "corridor_overlap_pixels": 664,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1352,
+              1614,
+              1513,
+              1670
+            ]
+          },
+          {
+            "component_id": 195,
+            "area_pixels": 608,
+            "corridor_overlap_pixels": 608,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1437,
+              2338,
+              1512,
+              2367
+            ]
+          },
+          {
+            "component_id": 129,
+            "area_pixels": 603,
+            "corridor_overlap_pixels": 603,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              525,
+              2052,
+              668,
+              2130
+            ]
+          },
+          {
+            "component_id": 368,
+            "area_pixels": 533,
+            "corridor_overlap_pixels": 533,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              948,
+              2884,
+              1020,
+              2916
+            ]
+          },
+          {
+            "component_id": 300,
+            "area_pixels": 500,
+            "corridor_overlap_pixels": 500,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              797,
+              2750,
+              876,
+              2781
+            ]
+          },
+          {
+            "component_id": 77,
+            "area_pixels": 492,
+            "corridor_overlap_pixels": 492,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1296,
+              1644,
+              1430,
+              1715
+            ]
+          },
+          {
+            "component_id": 58,
+            "area_pixels": 479,
+            "corridor_overlap_pixels": 0,
+            "corridor_overlap_fraction": 0.0,
+            "accepted": false,
+            "bbox_xyxy": [
+              611,
+              1352,
+              758,
+              1390
+            ]
+          },
+          {
+            "component_id": 239,
+            "area_pixels": 477,
+            "corridor_overlap_pixels": 477,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              519,
+              2580,
+              626,
+              2670
+            ]
+          },
+          {
+            "component_id": 99,
+            "area_pixels": 468,
+            "corridor_overlap_pixels": 468,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              573,
+              1832,
+              631,
+              1860
+            ]
+          },
+          {
+            "component_id": 334,
+            "area_pixels": 468,
+            "corridor_overlap_pixels": 468,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              2032,
+              2842,
+              2090,
+              2920
+            ]
+          },
+          {
+            "component_id": 440,
+            "area_pixels": 467,
+            "corridor_overlap_pixels": 0,
+            "corridor_overlap_fraction": 0.0,
+            "accepted": false,
+            "bbox_xyxy": [
+              2323,
+              3290,
+              2395,
+              3366
+            ]
+          },
+          {
+            "component_id": 349,
+            "area_pixels": 451,
+            "corridor_overlap_pixels": 451,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1531,
+              2856,
+              1603,
+              2894
+            ]
+          },
+          {
+            "component_id": 279,
+            "area_pixels": 430,
+            "corridor_overlap_pixels": 430,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1487,
+              2730,
+              1551,
+              2756
+            ]
+          },
+          {
+            "component_id": 442,
+            "area_pixels": 426,
+            "corridor_overlap_pixels": 0,
+            "corridor_overlap_fraction": 0.0,
+            "accepted": false,
+            "bbox_xyxy": [
+              687,
+              3441,
+              713,
+              3492
+            ]
+          },
+          {
+            "component_id": 34,
+            "area_pixels": 369,
+            "corridor_overlap_pixels": 0,
+            "corridor_overlap_fraction": 0.0,
+            "accepted": false,
+            "bbox_xyxy": [
+              372,
+              877,
+              382,
+              932
+            ]
+          },
+          {
+            "component_id": 345,
+            "area_pixels": 320,
+            "corridor_overlap_pixels": 320,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1805,
+              2849,
+              1861,
+              2873
+            ]
+          },
+          {
+            "component_id": 249,
+            "area_pixels": 313,
+            "corridor_overlap_pixels": 313,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              628,
+              2608,
+              692,
+              2651
+            ]
+          },
+          {
+            "component_id": 327,
+            "area_pixels": 312,
+            "corridor_overlap_pixels": 312,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1932,
+              2837,
+              1975,
+              2870
+            ]
+          },
+          {
+            "component_id": 213,
+            "area_pixels": 301,
+            "corridor_overlap_pixels": 301,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1918,
+              2443,
+              2001,
+              2459
+            ]
+          },
+          {
+            "component_id": 259,
+            "area_pixels": 297,
+            "corridor_overlap_pixels": 297,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1587,
+              2700,
+              1631,
+              2753
+            ]
+          },
+          {
+            "component_id": 287,
+            "area_pixels": 230,
+            "corridor_overlap_pixels": 230,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1842,
+              2732,
+              1877,
+              2792
+            ]
+          },
+          {
+            "component_id": 293,
+            "area_pixels": 221,
+            "corridor_overlap_pixels": 221,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1892,
+              2735,
+              1927,
+              2780
+            ]
+          },
+          {
+            "component_id": 73,
+            "area_pixels": 219,
+            "corridor_overlap_pixels": 219,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              933,
+              1564,
+              962,
+              1617
+            ]
+          },
+          {
+            "component_id": 196,
+            "area_pixels": 216,
+            "corridor_overlap_pixels": 216,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1397,
+              2340,
+              1464,
+              2368
+            ]
+          },
+          {
+            "component_id": 153,
+            "area_pixels": 212,
+            "corridor_overlap_pixels": 0,
+            "corridor_overlap_fraction": 0.0,
+            "accepted": false,
+            "bbox_xyxy": [
+              398,
+              2183,
+              409,
+              2261
+            ]
+          },
+          {
+            "component_id": 389,
+            "area_pixels": 202,
+            "corridor_overlap_pixels": 202,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1844,
+              2976,
+              1892,
+              2982
+            ]
+          },
+          {
+            "component_id": 191,
+            "area_pixels": 199,
+            "corridor_overlap_pixels": 199,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1311,
+              2325,
+              1378,
+              2332
+            ]
+          },
+          {
+            "component_id": 376,
+            "area_pixels": 191,
+            "corridor_overlap_pixels": 191,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              915,
+              2898,
+              953,
+              2917
+            ]
+          },
+          {
+            "component_id": 197,
+            "area_pixels": 178,
+            "corridor_overlap_pixels": 178,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1878,
+              2340,
+              1921,
+              2358
+            ]
+          },
+          {
+            "component_id": 120,
+            "area_pixels": 168,
+            "corridor_overlap_pixels": 168,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              808,
+              1991,
+              843,
+              2019
+            ]
+          },
+          {
+            "component_id": 23,
+            "area_pixels": 166,
+            "corridor_overlap_pixels": 0,
+            "corridor_overlap_fraction": 0.0,
+            "accepted": false,
+            "bbox_xyxy": [
+              370,
+              834,
+              380,
+              874
+            ]
+          },
+          {
+            "component_id": 234,
+            "area_pixels": 166,
+            "corridor_overlap_pixels": 166,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1526,
+              2560,
+              1553,
+              2581
+            ]
+          },
+          {
+            "component_id": 268,
+            "area_pixels": 160,
+            "corridor_overlap_pixels": 160,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1422,
+              2721,
+              1453,
+              2742
+            ]
+          },
+          {
+            "component_id": 407,
+            "area_pixels": 158,
+            "corridor_overlap_pixels": 158,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              448,
+              3036,
+              487,
+              3064
+            ]
+          },
+          {
+            "component_id": 337,
+            "area_pixels": 147,
+            "corridor_overlap_pixels": 147,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              2027,
+              2845,
+              2049,
+              2864
+            ]
+          },
+          {
+            "component_id": 204,
+            "area_pixels": 133,
+            "corridor_overlap_pixels": 133,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1739,
+              2363,
+              1765,
+              2386
+            ]
+          },
+          {
+            "component_id": 231,
+            "area_pixels": 132,
+            "corridor_overlap_pixels": 132,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1556,
+              2552,
+              1586,
+              2570
+            ]
+          },
+          {
+            "component_id": 338,
+            "area_pixels": 127,
+            "corridor_overlap_pixels": 127,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              2108,
+              2845,
+              2142,
+              2851
+            ]
+          },
+          {
+            "component_id": 220,
+            "area_pixels": 125,
+            "corridor_overlap_pixels": 125,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1644,
+              2484,
+              1678,
+              2495
+            ]
+          },
+          {
+            "component_id": 341,
+            "area_pixels": 116,
+            "corridor_overlap_pixels": 116,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              2009,
+              2846,
+              2025,
+              2867
+            ]
+          },
+          {
+            "component_id": 347,
+            "area_pixels": 113,
+            "corridor_overlap_pixels": 113,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              916,
+              2853,
+              935,
+              2874
+            ]
+          },
+          {
+            "component_id": 290,
+            "area_pixels": 111,
+            "corridor_overlap_pixels": 111,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1555,
+              2733,
+              1582,
+              2756
+            ]
+          },
+          {
+            "component_id": 363,
+            "area_pixels": 110,
+            "corridor_overlap_pixels": 110,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1842,
+              2875,
+              1869,
+              2890
+            ]
+          },
+          {
+            "component_id": 115,
+            "area_pixels": 108,
+            "corridor_overlap_pixels": 62,
+            "corridor_overlap_fraction": 0.5740740740740741,
+            "accepted": true,
+            "bbox_xyxy": [
+              1978,
+              1965,
+              2015,
+              1970
+            ]
+          },
+          {
+            "component_id": 422,
+            "area_pixels": 107,
+            "corridor_overlap_pixels": 107,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1811,
+              3122,
+              1841,
+              3140
+            ]
+          },
+          {
+            "component_id": 294,
+            "area_pixels": 106,
+            "corridor_overlap_pixels": 106,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              1389,
+              2739,
+              1420,
+              2758
+            ]
+          },
+          {
+            "component_id": 141,
+            "area_pixels": 100,
+            "corridor_overlap_pixels": 100,
+            "corridor_overlap_fraction": 1.0,
+            "accepted": true,
+            "bbox_xyxy": [
+              942,
+              2120,
+              967,
+              2136
+            ]
+          }
+        ]
+      }
+    },
+    "review_board": {
+      "file": "whole-component-conditioning-review.png",
+      "file_sha256": "3770ae2f7485a116a326cfdc66bde86ca230cb75b0196661f3989625f0d2ecf8"
+    }
+  },
+  "runtime_seconds": 3.579945208002755,
+  "decision_policy": "Visual acting-safe characterization only; no radius may be promoted without complete-mask evaluation and correction-effort measurement.",
+  "post_run_acting_safe_visual_review": {
+    "pixel_clipping": "All tested line-polygon intersections remove both glass rings, but they visibly trim real strokes where Kraken line boundaries are imperfect. Pixel clipping is rejected as a final ink operation.",
+    "whole_component_overlap_0.10": "Too permissive on this page. It restores the bottom glass ring and vertical page edge.",
+    "whole_component_overlap_0.25": "Promising page-bound candidate. It preserves admitted components intact, selects 204368 pixels (82.21% of raw hybrid), and visually removes both glass rings and the vertical page edge.",
+    "whole_component_overlap_0.50": "Too strict on this page. Relative to 0.25 it removes exactly one additional 2923-pixel component near the top writing line.",
+    "largest_obvious_nontext_components": {
+      "total_pixels": 36256,
+      "fraction_of_all_pixels_rejected_by_0.25": 0.8197521931807904,
+      "components": [
+        {
+          "visual_identity": "bottom glass-weight ring",
+          "area_pixels": 17406,
+          "bbox_xyxy": [2015, 3003, 2424, 3392],
+          "overlap_fraction_at_30px": 0.1643686085257957
+        },
+        {
+          "visual_identity": "vertical page edge",
+          "area_pixels": 15570,
+          "bbox_xyxy": [384, 2342, 415, 3251],
+          "overlap_fraction_at_30px": 0.11149646756583173
+        },
+        {
+          "visual_identity": "top glass-weight ring",
+          "area_pixels": 3280,
+          "bbox_xyxy": [1093, 564, 1337, 624],
+          "overlap_fraction_at_30px": 0.0
+        }
+      ]
+    },
+    "limitation": "Kraken detected only 14 lines. Unmodelled salutation, signature, marginalia, page number, or rotated writing must remain visible in residual/alternate-orientation queues rather than being deleted.",
+    "next_test": "Freeze the 30px/0.25 whole-component candidate on independent pages with existing line geometry, then evaluate complete human masks only after freeze."
+  }
+}

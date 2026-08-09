@@ -730,6 +730,54 @@ model. The current pseudo-seed vector result is a lower bound because its teache
 already misses the target; exact human masks provide much cleaner prototypes and
 hard negatives.
 
+## Fragment repair before model reinference
+
+The first bounded repair experiment tested the user's hypothesis directly on the
+frozen acting-safe `enough-tight` crop. It treated Eynollah p0.50 pixels as strong
+seeds and p0.20 pixels as weaker source evidence, limited repair to the centered
+22%–78% line corridor, and compared:
+
+- the unaltered real-context crop;
+- the page-ink-vector enhancement baseline;
+- source-only 3×7 hysteresis-style reconnect, which strengthens weak Eynollah
+  evidence but invents no pixels;
+- temporary 3×7 and 5×11 bridges, whose synthetic pixels were hash-bound and
+  removed from every projected result.
+
+An initial raw-vector bridge prototype created 16,357 synthetic pixels around
+32,446 supported pixels and visibly connected paper texture into a web. It was
+rejected before inference. The bounded variants used 7,729 weak-source pixels and
+5,544 strong seeds; the tight and broad temporary bridges contained 875 and
+2,284 synthetic pixels respectively.
+
+At Eynollah p0.50, source-only reconnect was the balanced winner:
+
+| Input | Faint-proxy recall | Full-page anchor retention | Paper-proxy pixels | Exact-source pixels | Exact-source components |
+|---|---:|---:|---:|---:|---:|
+| Page-ink vector baseline | 34.77% | 90.65% | 0 | 7,169 | 54 |
+| Source-only reconnect 3×7 | **52.17%** | **96.00%** | **0** | **9,529** | **38** |
+| Temporary bridge 3×7, projected | 51.76% | 93.26% | 1 | 9,040 | 40 |
+| Temporary bridge 5×11, projected | 52.00% | 90.08% | 0 | 8,612 | 46 |
+
+At p0.20, source-only reconnect raised faint-proxy recall from 48.77% to
+61.16% and retained 92.85% of the full-page anchor, but activated three pixels
+in the conservative paper proxy. This lower threshold therefore remains a
+defer/high-recall layer, not the default.
+
+Visual inspection agrees with the measurements: source-only strengthening makes
+more of the faint center stroke coherent, while explicit bridges do not cause the
+model to recover more exact source ink after the scaffolding is removed. Reject
+synthetic bridges and promote source-only reconnect as a bounded preprocessing
+candidate. This is not word-ownership proof: neighboring fragments remain at the
+crop edges and still require line-conditioned unique ownership or human review.
+
+Exact preparation manifest SHA-256:
+`5c0a880f9c33a3870a66543aca23f9b9fa467ac32c91548e6f8034537604ba3b`.
+Exact reinference manifest SHA-256:
+`dd1354f4d086c4f81daa2d330bd17d4a412dd913ab7c2adf6b90e4ac36257dd6`.
+Five model variants ran in 12.59 s CPU after a 3.94 s model load. No sealed human
+page or answer was opened.
+
 ## What to train, and in what order
 
 ### First: domain-adapted ink/foreground model

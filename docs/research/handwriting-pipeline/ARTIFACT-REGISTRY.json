@@ -799,6 +799,36 @@
       "identity_sha256": null,
       "predecessor_ids": ["20260809-natural-faint-word-enhancement-v1", "20260809-eynollah-crop-preprocessing-v1"],
       "summary": "Page-ink-vector context raised Eynollah p0.50 faint-proxy selection from 0.97% to 34.77% while retaining 90.65% of the full-page anchor and activating zero conservative paper-proxy pixels. Promote as an optional secondary proposal; fragmentation and neighboring-line recovery still require geometry and human ownership review."
+    },
+    {
+      "record_id": "20260809-faint-ink-fragment-repair-v1",
+      "title": "Faint-ink fragment repair inputs",
+      "evidence_role": "run_state",
+      "decision": "diagnostic",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/faint-ink-fragment-repair-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/faint-ink-fragment-repair-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "5c0a880f9c33a3870a66543aca23f9b9fa467ac32c91548e6f8034537604ba3b"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-enhanced-eynollah-reinference-v1"],
+      "summary": "A raw-vector bridge precursor visibly webbed paper and was rejected before inference. The bounded replacement uses p0.50 Eynollah seeds propagated only through p0.20 source-supported pixels in a centered line corridor; bridge pixels are hash-bound scaffolding that must be removed before geometry or training export."
+    },
+    {
+      "record_id": "20260809-fragment-repaired-eynollah-reinference-v1",
+      "title": "Fragment-repaired Eynollah reinference",
+      "evidence_role": "run_state",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/fragment-repaired-eynollah-reinference-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/fragment-repaired-eynollah-reinference-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "dd1354f4d086c4f81daa2d330bd17d4a412dd913ab7c2adf6b90e4ac36257dd6"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-faint-ink-fragment-repair-v1", "20260809-enhanced-eynollah-reinference-v1"],
+      "summary": "Source-only 3x7 reconnect improved p0.50 faint-proxy recall from 34.77% to 52.17%, full-page retention from 90.65% to 96.00%, kept the paper proxy at zero, and reduced exact-source components from 54 to 38. Temporary bridge variants recovered less exact source ink after scaffold removal and are rejected."
     }
   ]
 }

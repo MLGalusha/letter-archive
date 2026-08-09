@@ -1,0 +1,673 @@
+{
+  "schema_version": "hybrid-seed-local-recovery.v1",
+  "page_id": "003-18860314-L01-01",
+  "evidence_boundary": {
+    "sealed_human_evidence_used": false,
+    "source_and_software_evidence_only": true
+  },
+  "source": {
+    "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/workspaces/word-ink-ground-truth-v1/collections/003/18860314/L01/pages/003-18860314-L01-01/runs/run-4111a8cd75be/source/working.png",
+    "file_sha256": "ac21aa38dbff33823d08e156b214355d85a55a3c8bbdccc0228738b70e41d027"
+  },
+  "anchor": {
+    "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-hybrid-binarization-trial-20260809/003-18860314-L01-01/foreground-p0.50.png",
+    "file_sha256": "1654a3da7943180ba9391e1a4789acb14c04537dd0824902e6b9985156a651d5",
+    "mask_pixel_sha256": "443a16f6d8a7e73dac958650250fb7049a22023188743cf4388b3f288ad6cf6c"
+  },
+  "hybrid_probability": {
+    "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-hybrid-binarization-trial-20260809/003-18860314-L01-01/foreground-probability.float16.npy",
+    "file_sha256": "d2a6d6ba6f158dcc8f3a8fc710b513295e9f9c5679d23c8457ffc84ac2b74e65"
+  },
+  "method": "Existing local source-colour/ridge recovery, conditioned by hybrid p0.50 only inside each predeclared crop; proposal evidence, not ownership.",
+  "crops": {
+    "folded-write-to-you": {
+      "bbox_xywh": [
+        1700,
+        1875,
+        1000,
+        350
+      ],
+      "selection_role": "predeclared acting-safe source-visible difficult writing crop",
+      "anchor_pixels": 12496,
+      "anchor_colour_residual_vector": [
+        0.0679242,
+        0.06649882,
+        0.06312457
+      ],
+      "features": {
+        "paper_normalization": "local_and_broad_gaussian_source_background",
+        "local_sigma_px": 16.537499999999998,
+        "broad_sigma_px": 51.974999999999994,
+        "colour_sigma_px": 14.174999999999999,
+        "ridge_sigmas_px": [
+          2.3625,
+          4.725,
+          7.0874999999999995
+        ],
+        "selection_conditioning": "anchor_colour_stroke_shape_axis_and_distance"
+      },
+      "profiles": {
+        "conservative": {
+          "added_pixels": 772,
+          "added_component_count": 36,
+          "score_threshold": 0.68,
+          "minimum_component_pixels": 3,
+          "along_extension_fraction": 0.08,
+          "across_extension_fraction": 0.38,
+          "maximum_straight_artifact": 0.56,
+          "straight_artifact_ridge_override": 1.1,
+          "source_supported_only": true,
+          "mask_file": "folded-write-to-you/conservative.mask.png",
+          "mask_file_sha256": "88fcaeff88e257823ee913250696e09acfc18b36d535288e3595faf0ce89ea0a",
+          "mask_pixel_sha256": "134a05d8341c59372573527d438f26ad232590d84b25f88b92a84c4ef82b516a",
+          "addition_file": "folded-write-to-you/conservative.additions.png",
+          "addition_file_sha256": "39e2435d347283d4dad89213fe6202a14ed3495f1000f2bc5adb224cb792aca4",
+          "addition_mask_pixel_sha256": "8ca6d5d5c29a0be5fdfa4efd4d7a8472495ea8ca1d1e106556622d2d6786f52f",
+          "addition_component_count": 36,
+          "hybrid_probability_bands_for_additions": {
+            "p_ge_0.20": 130,
+            "p_0.05_to_0.20": 130,
+            "p_0.01_to_0.05": 111,
+            "p_lt_0.01": 401
+          }
+        },
+        "balanced": {
+          "added_pixels": 2281,
+          "added_component_count": 167,
+          "score_threshold": 0.55,
+          "minimum_component_pixels": 2,
+          "along_extension_fraction": 0.14,
+          "across_extension_fraction": 0.52,
+          "maximum_straight_artifact": 0.72,
+          "straight_artifact_ridge_override": 0.88,
+          "source_supported_only": true,
+          "mask_file": "folded-write-to-you/balanced.mask.png",
+          "mask_file_sha256": "9285cf37ec4f0a969442a67c825717a5ce5877a164c95422d6e1cece4a5c1801",
+          "mask_pixel_sha256": "f4271754e0f07d83c6e39daada73aa564935f8fa5573c2ab81bed80200eb331b",
+          "addition_file": "folded-write-to-you/balanced.additions.png",
+          "addition_file_sha256": "05ad3f2be3db3ba6b997e7e4cd1c917ec674ca29ff9febbb4df365aa09b4fd98",
+          "addition_mask_pixel_sha256": "b8f1fcb8eea992a2e8bba2036ae04bb90c4b19efac48708cbb96ecaaad9460c1",
+          "addition_component_count": 167,
+          "hybrid_probability_bands_for_additions": {
+            "p_ge_0.20": 454,
+            "p_0.05_to_0.20": 324,
+            "p_0.01_to_0.05": 239,
+            "p_lt_0.01": 1264
+          }
+        },
+        "maximum_recall": {
+          "added_pixels": 6474,
+          "added_component_count": 431,
+          "score_threshold": 0.44,
+          "minimum_component_pixels": 2,
+          "along_extension_fraction": 0.24,
+          "across_extension_fraction": 0.68,
+          "maximum_straight_artifact": 0.88,
+          "straight_artifact_ridge_override": 0.72,
+          "source_supported_only": true,
+          "mask_file": "folded-write-to-you/maximum_recall.mask.png",
+          "mask_file_sha256": "7ff762b4851d9b071f4bd36be05d6f165d0fce765daa942f23013e79a11bc26f",
+          "mask_pixel_sha256": "ac8164cd58e2c6b07dab11b5130dae20cb8c6f692d408ca1a600f23d17a2d963",
+          "addition_file": "folded-write-to-you/maximum_recall.additions.png",
+          "addition_file_sha256": "2492a294b129fcabefbd5ac097b210c9b1d6308e271f2e810ee76993df4d7f9b",
+          "addition_mask_pixel_sha256": "20286a04fc441d0db7df89bec0dd8eea711455462d78b3bebdb96eb81dc3941c",
+          "addition_component_count": 431,
+          "hybrid_probability_bands_for_additions": {
+            "p_ge_0.20": 998,
+            "p_0.05_to_0.20": 812,
+            "p_0.01_to_0.05": 479,
+            "p_lt_0.01": 4185
+          }
+        }
+      },
+      "review_board": {
+        "file": "folded-write-to-you/review.png",
+        "file_sha256": "0709c8aeec01212e2569dbf277899ffba035f08c264a9e98d34b0c0c795991f2"
+      }
+    },
+    "know-enough": {
+      "bbox_xywh": [
+        1450,
+        2100,
+        1200,
+        350
+      ],
+      "selection_role": "predeclared acting-safe source-visible difficult writing crop",
+      "anchor_pixels": 26864,
+      "anchor_colour_residual_vector": [
+        0.05691767,
+        0.05671844,
+        0.05338544
+      ],
+      "features": {
+        "paper_normalization": "local_and_broad_gaussian_source_background",
+        "local_sigma_px": 16.537499999999998,
+        "broad_sigma_px": 51.974999999999994,
+        "colour_sigma_px": 14.174999999999999,
+        "ridge_sigmas_px": [
+          2.3625,
+          4.725,
+          7.0874999999999995
+        ],
+        "selection_conditioning": "anchor_colour_stroke_shape_axis_and_distance"
+      },
+      "profiles": {
+        "conservative": {
+          "added_pixels": 2805,
+          "added_component_count": 109,
+          "score_threshold": 0.68,
+          "minimum_component_pixels": 3,
+          "along_extension_fraction": 0.08,
+          "across_extension_fraction": 0.38,
+          "maximum_straight_artifact": 0.56,
+          "straight_artifact_ridge_override": 1.1,
+          "source_supported_only": true,
+          "mask_file": "know-enough/conservative.mask.png",
+          "mask_file_sha256": "360f101ef47b6fd1af1fa50aa7681c0bd95364fa32a3486a91fb826d65d40dad",
+          "mask_pixel_sha256": "6664f2fe149899828aa5e4d9e3175d25c85f6d6d8b1179249f38b10f4b467b99",
+          "addition_file": "know-enough/conservative.additions.png",
+          "addition_file_sha256": "d06b2b9c5420794ac435d7376b59a057d138fc0da895c541a2c254b548d677ad",
+          "addition_mask_pixel_sha256": "0c54cf6b138c0950035ed4974476a8f85d564008b5547a8b74ce47678e20cf92",
+          "addition_component_count": 109,
+          "hybrid_probability_bands_for_additions": {
+            "p_ge_0.20": 704,
+            "p_0.05_to_0.20": 486,
+            "p_0.01_to_0.05": 266,
+            "p_lt_0.01": 1349
+          }
+        },
+        "balanced": {
+          "added_pixels": 7042,
+          "added_component_count": 380,
+          "score_threshold": 0.55,
+          "minimum_component_pixels": 2,
+          "along_extension_fraction": 0.14,
+          "across_extension_fraction": 0.52,
+          "maximum_straight_artifact": 0.72,
+          "straight_artifact_ridge_override": 0.88,
+          "source_supported_only": true,
+          "mask_file": "know-enough/balanced.mask.png",
+          "mask_file_sha256": "55e7127a5f278d93c5107fb088054d47f25d4f97b9f90ad582cab67ba2b7d6b4",
+          "mask_pixel_sha256": "ba8ed72e4f227f031f06d666d105ff7c470f208d6a339a2ef3b00e00692e5dcd",
+          "addition_file": "know-enough/balanced.additions.png",
+          "addition_file_sha256": "1fe92797cc947f84b32d5af9c9fbacfa5d45786b0c603d0c31421c71a0bf0f86",
+          "addition_mask_pixel_sha256": "e769f8161c5a9f53e7d9ee836d8b4104cefd1f3016bb2075ff315453e0dc3939",
+          "addition_component_count": 380,
+          "hybrid_probability_bands_for_additions": {
+            "p_ge_0.20": 1661,
+            "p_0.05_to_0.20": 1173,
+            "p_0.01_to_0.05": 693,
+            "p_lt_0.01": 3515
+          }
+        },
+        "maximum_recall": {
+          "added_pixels": 16121,
+          "added_component_count": 875,
+          "score_threshold": 0.44,
+          "minimum_component_pixels": 2,
+          "along_extension_fraction": 0.24,
+          "across_extension_fraction": 0.68,
+          "maximum_straight_artifact": 0.88,
+          "straight_artifact_ridge_override": 0.72,
+          "source_supported_only": true,
+          "mask_file": "know-enough/maximum_recall.mask.png",
+          "mask_file_sha256": "035848214fd4d6be5a0b5a2df33af67d6dcfc1a78b82d68415c2444e624e7bca",
+          "mask_pixel_sha256": "694e6227e8480fa8aca379568420c7afe80d24f050fc2f10e4de951852f3cce0",
+          "addition_file": "know-enough/maximum_recall.additions.png",
+          "addition_file_sha256": "73b1cec91988e5ab07e0b9cf95d82ad62a2ee7938e58560bf32155de8dc882b6",
+          "addition_mask_pixel_sha256": "2a8de48fd8274c8a716916c6934c5aaeedbe9d00af4e798d494af70575f626bb",
+          "addition_component_count": 875,
+          "hybrid_probability_bands_for_additions": {
+            "p_ge_0.20": 2809,
+            "p_0.05_to_0.20": 2106,
+            "p_0.01_to_0.05": 1211,
+            "p_lt_0.01": 9995
+          }
+        }
+      },
+      "review_board": {
+        "file": "know-enough/review.png",
+        "file_sha256": "78730b7493d7345a040ebcd9474a5d25b68e60740f041f5f2b02dfa2bed3334f"
+      }
+    },
+    "enough-tight": {
+      "bbox_xywh": [
+        2050,
+        2100,
+        600,
+        300
+      ],
+      "selection_role": "predeclared acting-safe source-visible difficult writing crop",
+      "anchor_pixels": 3175,
+      "anchor_colour_residual_vector": [
+        0.05835032,
+        0.0576452,
+        0.05148125
+      ],
+      "features": {
+        "paper_normalization": "local_and_broad_gaussian_source_background",
+        "local_sigma_px": 16.537499999999998,
+        "broad_sigma_px": 51.974999999999994,
+        "colour_sigma_px": 14.174999999999999,
+        "ridge_sigmas_px": [
+          2.3625,
+          4.725,
+          7.0874999999999995
+        ],
+        "selection_conditioning": "anchor_colour_stroke_shape_axis_and_distance"
+      },
+      "profiles": {
+        "conservative": {
+          "added_pixels": 457,
+          "added_component_count": 23,
+          "score_threshold": 0.68,
+          "minimum_component_pixels": 3,
+          "along_extension_fraction": 0.08,
+          "across_extension_fraction": 0.38,
+          "maximum_straight_artifact": 0.56,
+          "straight_artifact_ridge_override": 1.1,
+          "source_supported_only": true,
+          "mask_file": "enough-tight/conservative.mask.png",
+          "mask_file_sha256": "28d4783afd2f9067f47200da12820c53d1b44e0d548315fec50b501f5b096598",
+          "mask_pixel_sha256": "e1bea62c7da5450ce4250c4c419629dc6bca5e269b61b7e618166f9afe3d6766",
+          "addition_file": "enough-tight/conservative.additions.png",
+          "addition_file_sha256": "be41c22c034872236d0ad16904b957c561548389130824cc7c344a107e4cd2ad",
+          "addition_mask_pixel_sha256": "444f430b095c00dc74e276dafe0c89acc12bd6fb8efd8edafa9c21861ef27d3e",
+          "addition_component_count": 23,
+          "hybrid_probability_bands_for_additions": {
+            "p_ge_0.20": 191,
+            "p_0.05_to_0.20": 89,
+            "p_0.01_to_0.05": 38,
+            "p_lt_0.01": 139
+          }
+        },
+        "balanced": {
+          "added_pixels": 1520,
+          "added_component_count": 72,
+          "score_threshold": 0.55,
+          "minimum_component_pixels": 2,
+          "along_extension_fraction": 0.14,
+          "across_extension_fraction": 0.52,
+          "maximum_straight_artifact": 0.72,
+          "straight_artifact_ridge_override": 0.88,
+          "source_supported_only": true,
+          "mask_file": "enough-tight/balanced.mask.png",
+          "mask_file_sha256": "df9fd4001cdbe91d8f17c4887a2ff3604c519cdf7bd3ef44e245310de71ef32a",
+          "mask_pixel_sha256": "0769d3d8648ee94d026c2229f38116baa668af011be4ae2dab40dc166b4671e5",
+          "addition_file": "enough-tight/balanced.additions.png",
+          "addition_file_sha256": "60560c4e21b7d4fecd834ef6515e3467580deea25bda1e5da837ffd4a8f1ffcc",
+          "addition_mask_pixel_sha256": "a9037d2757cf15e4864eb63da7cc84c52ff9e4784a24f4f2c64d8e280c87241d",
+          "addition_component_count": 72,
+          "hybrid_probability_bands_for_additions": {
+            "p_ge_0.20": 489,
+            "p_0.05_to_0.20": 371,
+            "p_0.01_to_0.05": 139,
+            "p_lt_0.01": 521
+          }
+        },
+        "maximum_recall": {
+          "added_pixels": 3084,
+          "added_component_count": 128,
+          "score_threshold": 0.44,
+          "minimum_component_pixels": 2,
+          "along_extension_fraction": 0.24,
+          "across_extension_fraction": 0.68,
+          "maximum_straight_artifact": 0.88,
+          "straight_artifact_ridge_override": 0.72,
+          "source_supported_only": true,
+          "mask_file": "enough-tight/maximum_recall.mask.png",
+          "mask_file_sha256": "9c491a04dcb4699fb925588f519efade4681c961899536a855e049cc6b7f9132",
+          "mask_pixel_sha256": "76be5642e33a086e1ab13a1c69d77fff7590c13942dffc807e57555e8d88ee92",
+          "addition_file": "enough-tight/maximum_recall.additions.png",
+          "addition_file_sha256": "a33cf6ea1e593fe8cfc43cd3430047a1ac8e351ae5abbe0ebdea05ea9eb0d1f8",
+          "addition_mask_pixel_sha256": "8d89a6d789521a87bbb6c5d67aa44eedf7dfcdc02b48daf028441a7e80689ce1",
+          "addition_component_count": 128,
+          "hybrid_probability_bands_for_additions": {
+            "p_ge_0.20": 778,
+            "p_0.05_to_0.20": 679,
+            "p_0.01_to_0.05": 313,
+            "p_lt_0.01": 1314
+          }
+        }
+      },
+      "review_board": {
+        "file": "enough-tight/review.png",
+        "file_sha256": "4bff78647b885f336eb625b22776ddbcadacf650c30fa6a4cca39468a9022e81"
+      }
+    },
+    "thank-you-for": {
+      "bbox_xywh": [
+        1450,
+        2600,
+        1200,
+        300
+      ],
+      "selection_role": "predeclared acting-safe source-visible difficult writing crop",
+      "anchor_pixels": 25594,
+      "anchor_colour_residual_vector": [
+        0.06087247,
+        0.0591079,
+        0.05557981
+      ],
+      "features": {
+        "paper_normalization": "local_and_broad_gaussian_source_background",
+        "local_sigma_px": 16.537499999999998,
+        "broad_sigma_px": 51.974999999999994,
+        "colour_sigma_px": 14.174999999999999,
+        "ridge_sigmas_px": [
+          2.3625,
+          4.725,
+          7.0874999999999995
+        ],
+        "selection_conditioning": "anchor_colour_stroke_shape_axis_and_distance"
+      },
+      "profiles": {
+        "conservative": {
+          "added_pixels": 2516,
+          "added_component_count": 72,
+          "score_threshold": 0.68,
+          "minimum_component_pixels": 3,
+          "along_extension_fraction": 0.08,
+          "across_extension_fraction": 0.38,
+          "maximum_straight_artifact": 0.56,
+          "straight_artifact_ridge_override": 1.1,
+          "source_supported_only": true,
+          "mask_file": "thank-you-for/conservative.mask.png",
+          "mask_file_sha256": "32a20b18d3248d436a7b14c6d62edaeeaa120976b527598f231abfff5da888b2",
+          "mask_pixel_sha256": "90a7c2cb72926fdbcbadc8a3aaeb5bb597f3d2dd0d1ccfd160a19668f2c8c166",
+          "addition_file": "thank-you-for/conservative.additions.png",
+          "addition_file_sha256": "51e03b90c014a2297c0697e47d8f5190abc19e22df44633adbbe0d9adc02d1af",
+          "addition_mask_pixel_sha256": "1f06dcdc64a58abb08589e4096cc6292b6d5a95a2918896e7a4d2cec704c394a",
+          "addition_component_count": 72,
+          "hybrid_probability_bands_for_additions": {
+            "p_ge_0.20": 305,
+            "p_0.05_to_0.20": 323,
+            "p_0.01_to_0.05": 335,
+            "p_lt_0.01": 1553
+          }
+        },
+        "balanced": {
+          "added_pixels": 5930,
+          "added_component_count": 322,
+          "score_threshold": 0.55,
+          "minimum_component_pixels": 2,
+          "along_extension_fraction": 0.14,
+          "across_extension_fraction": 0.52,
+          "maximum_straight_artifact": 0.72,
+          "straight_artifact_ridge_override": 0.88,
+          "source_supported_only": true,
+          "mask_file": "thank-you-for/balanced.mask.png",
+          "mask_file_sha256": "bbe0e64338c9954b9844a8b7d1b9ec2ba86947b735931c7ff49af4cc579a5c37",
+          "mask_pixel_sha256": "902f3c78ba4cb23dad8348cf8c51e6071cfcd37fa6daa99db26a1ab2dcd8f026",
+          "addition_file": "thank-you-for/balanced.additions.png",
+          "addition_file_sha256": "2e9e9a9b2a123d457746355d80787fe71db2729ff3b06e508f80c9a23b21ae75",
+          "addition_mask_pixel_sha256": "61d1bd663cbf719a7f748434538b7bcfb094d06ab57e973177401fd63b6ef740",
+          "addition_component_count": 322,
+          "hybrid_probability_bands_for_additions": {
+            "p_ge_0.20": 1120,
+            "p_0.05_to_0.20": 817,
+            "p_0.01_to_0.05": 705,
+            "p_lt_0.01": 3288
+          }
+        },
+        "maximum_recall": {
+          "added_pixels": 11291,
+          "added_component_count": 854,
+          "score_threshold": 0.44,
+          "minimum_component_pixels": 2,
+          "along_extension_fraction": 0.24,
+          "across_extension_fraction": 0.68,
+          "maximum_straight_artifact": 0.88,
+          "straight_artifact_ridge_override": 0.72,
+          "source_supported_only": true,
+          "mask_file": "thank-you-for/maximum_recall.mask.png",
+          "mask_file_sha256": "8a4584e7cd0f48de2c2a17de068076fc7f885e2bd2a3463670a4115a6e41f6fc",
+          "mask_pixel_sha256": "400976ae0a4fe1b3f60087b5fd52bf4a1187add492af15df0883c8bef6408de0",
+          "addition_file": "thank-you-for/maximum_recall.additions.png",
+          "addition_file_sha256": "9e6a22a1e43ddd4a55ddfc02d1183128e15e9f1e67994897cb4531ed86a9e2c0",
+          "addition_mask_pixel_sha256": "be075a7078e5dc54ed5d7fce090ac1b2d03bd786ccc13a663d275e8276ba1183",
+          "addition_component_count": 854,
+          "hybrid_probability_bands_for_additions": {
+            "p_ge_0.20": 1927,
+            "p_0.05_to_0.20": 1584,
+            "p_0.01_to_0.05": 1319,
+            "p_lt_0.01": 6461
+          }
+        }
+      },
+      "review_board": {
+        "file": "thank-you-for/review.png",
+        "file_sha256": "053e63a13039483472f09b98ee5c8a5f0ef8098a4e5c430fe54bcc73dd631ade"
+      }
+    },
+    "acknowledgement": {
+      "bbox_xywh": [
+        1450,
+        3100,
+        1200,
+        300
+      ],
+      "selection_role": "predeclared acting-safe source-visible difficult writing crop",
+      "anchor_pixels": 24764,
+      "anchor_colour_residual_vector": [
+        0.0613018,
+        0.06032264,
+        0.05633059
+      ],
+      "features": {
+        "paper_normalization": "local_and_broad_gaussian_source_background",
+        "local_sigma_px": 16.537499999999998,
+        "broad_sigma_px": 51.974999999999994,
+        "colour_sigma_px": 14.174999999999999,
+        "ridge_sigmas_px": [
+          2.3625,
+          4.725,
+          7.0874999999999995
+        ],
+        "selection_conditioning": "anchor_colour_stroke_shape_axis_and_distance"
+      },
+      "profiles": {
+        "conservative": {
+          "added_pixels": 2132,
+          "added_component_count": 68,
+          "score_threshold": 0.68,
+          "minimum_component_pixels": 3,
+          "along_extension_fraction": 0.08,
+          "across_extension_fraction": 0.38,
+          "maximum_straight_artifact": 0.56,
+          "straight_artifact_ridge_override": 1.1,
+          "source_supported_only": true,
+          "mask_file": "acknowledgement/conservative.mask.png",
+          "mask_file_sha256": "49be6050ac16163bc56a0fb41bbfd9fdc47d3bba277827d04bc8c0ea4cc616b7",
+          "mask_pixel_sha256": "3ced70a6fe94c2c66fcdbdf2cfd71f07694d2680361096a97f1581b024b4e450",
+          "addition_file": "acknowledgement/conservative.additions.png",
+          "addition_file_sha256": "0b73b342aac3f3bd2799db4a27f6a54a083c07d79d77b38ff6a7ec3b499f8634",
+          "addition_mask_pixel_sha256": "22c38c9f3a97d484e9055f496bacbfd64298bb326686bc21dc9204b66165eecc",
+          "addition_component_count": 68,
+          "hybrid_probability_bands_for_additions": {
+            "p_ge_0.20": 296,
+            "p_0.05_to_0.20": 227,
+            "p_0.01_to_0.05": 248,
+            "p_lt_0.01": 1361
+          }
+        },
+        "balanced": {
+          "added_pixels": 5166,
+          "added_component_count": 396,
+          "score_threshold": 0.55,
+          "minimum_component_pixels": 2,
+          "along_extension_fraction": 0.14,
+          "across_extension_fraction": 0.52,
+          "maximum_straight_artifact": 0.72,
+          "straight_artifact_ridge_override": 0.88,
+          "source_supported_only": true,
+          "mask_file": "acknowledgement/balanced.mask.png",
+          "mask_file_sha256": "62042b84be6896f28f92a261601f5f2f98790e11567fd5c9ef3751f17da485a0",
+          "mask_pixel_sha256": "730a3a68eed5e1c629833ef6a9266246cf08e7bdb1526eafd0a11cb2495e1ee3",
+          "addition_file": "acknowledgement/balanced.additions.png",
+          "addition_file_sha256": "10032d708ab22b941335bee5d57e04c37ee2597688305dbe0aa0dc7de6bd9d4a",
+          "addition_mask_pixel_sha256": "42134d2e36981e4657c8a8df0f26d31f717789144c21436e19573216610be1ef",
+          "addition_component_count": 396,
+          "hybrid_probability_bands_for_additions": {
+            "p_ge_0.20": 768,
+            "p_0.05_to_0.20": 638,
+            "p_0.01_to_0.05": 649,
+            "p_lt_0.01": 3111
+          }
+        },
+        "maximum_recall": {
+          "added_pixels": 10316,
+          "added_component_count": 1073,
+          "score_threshold": 0.44,
+          "minimum_component_pixels": 2,
+          "along_extension_fraction": 0.24,
+          "across_extension_fraction": 0.68,
+          "maximum_straight_artifact": 0.88,
+          "straight_artifact_ridge_override": 0.72,
+          "source_supported_only": true,
+          "mask_file": "acknowledgement/maximum_recall.mask.png",
+          "mask_file_sha256": "747b1e010bcdc3c4bba41a7bba730aede32493daba6f951464cac89e5063e38d",
+          "mask_pixel_sha256": "0f82a463f1afb68c08f6491cbf7246786d77d7fb3fe8798111e7e4fda86415bd",
+          "addition_file": "acknowledgement/maximum_recall.additions.png",
+          "addition_file_sha256": "8f689631edad3620fb44a5f1b84089e164e4dcd050c5320d6efbce789877f983",
+          "addition_mask_pixel_sha256": "a90f552a596b6a7e93d071a2c6d35f78d71bd9483298bb01acae96d908de4df6",
+          "addition_component_count": 1073,
+          "hybrid_probability_bands_for_additions": {
+            "p_ge_0.20": 1321,
+            "p_0.05_to_0.20": 1250,
+            "p_0.01_to_0.05": 1115,
+            "p_lt_0.01": 6630
+          }
+        }
+      },
+      "review_board": {
+        "file": "acknowledgement/review.png",
+        "file_sha256": "c5980ffa0412bcae11ec5c3fdbfe5f9887a27928e57bf3b7a5657305837fbe83"
+      }
+    },
+    "acknowledgement-tight": {
+      "bbox_xywh": [
+        1750,
+        3100,
+        900,
+        300
+      ],
+      "selection_role": "predeclared acting-safe source-visible difficult writing crop",
+      "anchor_pixels": 19551,
+      "anchor_colour_residual_vector": [
+        0.06101376,
+        0.05987674,
+        0.05574521
+      ],
+      "features": {
+        "paper_normalization": "local_and_broad_gaussian_source_background",
+        "local_sigma_px": 16.537499999999998,
+        "broad_sigma_px": 51.974999999999994,
+        "colour_sigma_px": 14.174999999999999,
+        "ridge_sigmas_px": [
+          2.3625,
+          4.725,
+          7.0874999999999995
+        ],
+        "selection_conditioning": "anchor_colour_stroke_shape_axis_and_distance"
+      },
+      "profiles": {
+        "conservative": {
+          "added_pixels": 1705,
+          "added_component_count": 44,
+          "score_threshold": 0.68,
+          "minimum_component_pixels": 3,
+          "along_extension_fraction": 0.08,
+          "across_extension_fraction": 0.38,
+          "maximum_straight_artifact": 0.56,
+          "straight_artifact_ridge_override": 1.1,
+          "source_supported_only": true,
+          "mask_file": "acknowledgement-tight/conservative.mask.png",
+          "mask_file_sha256": "7bec7641885dc1d7040d66fede4d880fce2bab01d4a56bc99e38d03c66e1205c",
+          "mask_pixel_sha256": "6937b584a34051d72bd8196702b75272ed9f0761ec5e2428f45270721b5e44b8",
+          "addition_file": "acknowledgement-tight/conservative.additions.png",
+          "addition_file_sha256": "e0f452278ff1a9a42b1e3811a63728517541152b019f30a466db30a2ead2f9b1",
+          "addition_mask_pixel_sha256": "70dabb9deb12af1e6179c5a987d3e885b4fed70f3c31a5cc6ea5056d11b82fcd",
+          "addition_component_count": 44,
+          "hybrid_probability_bands_for_additions": {
+            "p_ge_0.20": 200,
+            "p_0.05_to_0.20": 166,
+            "p_0.01_to_0.05": 143,
+            "p_lt_0.01": 1196
+          }
+        },
+        "balanced": {
+          "added_pixels": 4043,
+          "added_component_count": 307,
+          "score_threshold": 0.55,
+          "minimum_component_pixels": 2,
+          "along_extension_fraction": 0.14,
+          "across_extension_fraction": 0.52,
+          "maximum_straight_artifact": 0.72,
+          "straight_artifact_ridge_override": 0.88,
+          "source_supported_only": true,
+          "mask_file": "acknowledgement-tight/balanced.mask.png",
+          "mask_file_sha256": "3deeeb73a788c1ed68206787d1de3ee98eb68dab4b39b96c531cb5463e7f6048",
+          "mask_pixel_sha256": "fa2aea23c14fd96474730be6efbba5b5729066f418c12695e5f75c1a076abf5e",
+          "addition_file": "acknowledgement-tight/balanced.additions.png",
+          "addition_file_sha256": "f4c9a220befb9bbc1217e7533d971b54dd1796f6309e27f4a0b7ea24427c4bf1",
+          "addition_mask_pixel_sha256": "c93c722c3343801bfd15a8804dfa7655061f3192b578be12cffeba6bf5f0f3d7",
+          "addition_component_count": 307,
+          "hybrid_probability_bands_for_additions": {
+            "p_ge_0.20": 550,
+            "p_0.05_to_0.20": 442,
+            "p_0.01_to_0.05": 387,
+            "p_lt_0.01": 2664
+          }
+        },
+        "maximum_recall": {
+          "added_pixels": 7998,
+          "added_component_count": 857,
+          "score_threshold": 0.44,
+          "minimum_component_pixels": 2,
+          "along_extension_fraction": 0.24,
+          "across_extension_fraction": 0.68,
+          "maximum_straight_artifact": 0.88,
+          "straight_artifact_ridge_override": 0.72,
+          "source_supported_only": true,
+          "mask_file": "acknowledgement-tight/maximum_recall.mask.png",
+          "mask_file_sha256": "10905723cb413035d6728d62e35e19aa7aa52d9d55b323d094c6b7fbf5aa49b4",
+          "mask_pixel_sha256": "517a6d346295098107209b42a266acc0025d7921779ea5356c0d87c7bb0ef3c8",
+          "addition_file": "acknowledgement-tight/maximum_recall.additions.png",
+          "addition_file_sha256": "c0b9666bd2e0442ebfe653b68a04093e54ce78c6b0987a1e86c9a20216f67690",
+          "addition_mask_pixel_sha256": "7157522b43ffbc774abd44695fd564a2b7220348546ab543163c6213a7df1ba1",
+          "addition_component_count": 857,
+          "hybrid_probability_bands_for_additions": {
+            "p_ge_0.20": 1005,
+            "p_0.05_to_0.20": 875,
+            "p_0.01_to_0.05": 676,
+            "p_lt_0.01": 5442
+          }
+        }
+      },
+      "review_board": {
+        "file": "acknowledgement-tight/review.png",
+        "file_sha256": "fc9850d83193209843c1dd5fb4c0163435568dc2eb3fbc2f95c3a277e4589334"
+      }
+    }
+  },
+  "cohort_review_board": {
+    "file": "local-recovery-cohort-review.png",
+    "file_sha256": "8807f81fc7ded5e5fa40a04ba810638327de8edb781f3415aeaaa23be57e6502"
+  },
+  "runtime_seconds_cpu": 4.9387668749986915,
+  "decision_policy": "Inspect useful stroke continuation and rule/fold/neighbor contamination together; do not select by added-pixel count.",
+  "post_run_acting_safe_visual_review": {
+    "decision": "promote_conservative_local_recovery_as_optional_candidate",
+    "conservative": "Across the predeclared difficult crops, conservative recovery reconnects multiple source-visible faint word fragments that hybrid omitted, including pixels with hybrid probability below 0.01. It remains mostly localized, though the fold-crossing crop and broad crops still contain some rule, fold, neighboring-line, and isolated speck evidence.",
+    "balanced": "Often reveals additional real faint letter structure but increases disconnected debris and foreign local evidence. Present only as a second-stage choice after conservative remains incomplete.",
+    "maximum_recall": "Rejected as a default or automatic proposal. It consistently produces excessive speckle and nearby physical-page evidence.",
+    "tight_vs_broad": {
+      "enough": "Tight conservative recovery reduces additions from 2805 to 457 pixels (83.71% less distraction) but restores only fragments of the extremely faint tail. Tight balanced reduces 7042 to 1520 pixels (78.42%) with the same completeness tradeoff.",
+      "acknowledgement": "Tight conservative recovery reduces additions from 2132 to 1705 pixels (20.03%) while preserving several visibly useful gap continuations. Tight balanced reduces 5166 to 4043 pixels (21.74%)."
+    },
+    "workflow_implication": "Start with a tight rough word box and conservative additions. If incomplete, expand primarily along the fitted line or offer balanced evidence. Never default to full-page recovery or select the recovery pool wholesale.",
+    "runtime_interpretation": "Six crops completed in 4.94 CPU seconds; local recovery is plausible as cached or on-demand assistance, unlike the 145.55-second full-page run.",
+    "sealed_human_evaluation": "Not opened."
+  }
+}

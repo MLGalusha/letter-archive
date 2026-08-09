@@ -173,11 +173,38 @@ def render_component_board(
     board.save(output, optimize=True)
 
 
+def render_candidate_residual_board(
+    source: Image.Image,
+    raw: np.ndarray,
+    selected: np.ndarray,
+    output: Path,
+) -> None:
+    residual = raw & ~selected
+    source_array = np.asarray(source).copy()
+    source_overlay = source_array.astype(np.float32)
+    source_overlay[residual] = source_overlay[residual] * 0.2 + np.array([230, 35, 35]) * 0.8
+    labels_and_images = [
+        ("Source; rejected hybrid pixels in red", Image.fromarray(source_overlay.astype(np.uint8))),
+        (f"Accepted whole components ({int(selected.sum()):,} px)", render_mask(selected)),
+        (f"Rejected residual ({int(residual.sum()):,} px)", render_mask(residual)),
+    ]
+    cell_w, cell_h, header_h = 620, 720, 62
+    board = Image.new("RGB", (cell_w * 3, cell_h + header_h), "#f7f3ea")
+    draw = ImageDraw.Draw(board)
+    font = ImageFont.load_default(size=17)
+    for column, (panel_label, image) in enumerate(labels_and_images):
+        x = column * cell_w
+        draw.text((x + 14, 18), panel_label, font=font, fill="#1f2526")
+        board.paste(fit(image, cell_w - 20, cell_h - 10), (x + 10, header_h))
+    board.save(output, optimize=True)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--hybrid-mask", type=Path, required=True)
     parser.add_argument("--layout", type=Path, required=True)
+    parser.add_argument("--prepared-reference", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--page-id", required=True)
     parser.add_argument("--radii", default="0,15,30,60")
@@ -194,6 +221,21 @@ def main() -> None:
         raise ValueError("Source and hybrid mask dimensions differ")
     if layout["image"]["width"] != source.width or layout["image"]["height"] != source.height:
         raise ValueError("Kraken prepared coordinate space does not match source dimensions")
+    prepared_reference: dict[str, Any] | None = None
+    if args.prepared_reference:
+        prepared = np.asarray(Image.open(args.prepared_reference).convert("RGB"))
+        source_pixels = np.asarray(source)
+        if prepared.shape != source_pixels.shape:
+            raise ValueError("Kraken prepared reference dimensions do not match source")
+        exact = bool(np.array_equal(prepared, source_pixels))
+        if not exact:
+            raise ValueError("Kraken prepared reference pixels do not exactly match source")
+        prepared_reference = {
+            "path": str(args.prepared_reference.resolve()),
+            "file_sha256": sha256_file(args.prepared_reference),
+            "rgb_pixel_sha256": hashlib.sha256(np.ascontiguousarray(prepared).tobytes()).hexdigest(),
+            "exactly_matches_source_rgb_pixels": True,
+        }
 
     base = line_union(layout, hybrid.shape)
     radii = [int(value) for value in args.radii.split(",")]
@@ -246,6 +288,13 @@ def main() -> None:
         component_results,
         component_board_path,
     )
+    candidate_fraction = 0.25
+    candidate_selected = next(mask for fraction, mask in component_results if fraction == candidate_fraction)
+    candidate_residual = hybrid & ~candidate_selected
+    candidate_residual_path = args.output / "candidate-0.25-rejected-residual.png"
+    render_mask(candidate_residual).convert("L").save(candidate_residual_path, optimize=True)
+    candidate_residual_board_path = args.output / "candidate-0.25-residual-review.png"
+    render_candidate_residual_board(source, hybrid, candidate_selected, candidate_residual_board_path)
     manifest = {
         "schema_version": "eynollah-line-conditioning.v1",
         "page_id": args.page_id,
@@ -265,6 +314,7 @@ def main() -> None:
             "coordinate_space": layout["image"]["coordinateSpace"],
             "line_count": len(layout["lines"]),
             "prepared_pixels_match_source_dimensions": True,
+            "prepared_reference": prepared_reference,
         },
         "method": "Intersect hybrid p0.50 with union of Kraken provider line-boundary polygons after isotropic dilation.",
         "radii_px": records,
@@ -275,6 +325,18 @@ def main() -> None:
             "rule": "Keep each complete raw-hybrid connected component when its fraction inside the dilated line corridor meets the threshold.",
             "thresholds": component_records,
             "review_board": {"file": component_board_path.name, "file_sha256": sha256_file(component_board_path)},
+        },
+        "frozen_candidate_0.25": {
+            "selected_file": component_records["0.25"]["file"],
+            "selected_file_sha256": component_records["0.25"]["file_sha256"],
+            "rejected_residual_file": candidate_residual_path.name,
+            "rejected_residual_file_sha256": sha256_file(candidate_residual_path),
+            "rejected_residual_mask_pixel_sha256": mask_pixel_sha256(candidate_residual),
+            "rejected_residual_pixels": int(candidate_residual.sum()),
+            "review_board": {
+                "file": candidate_residual_board_path.name,
+                "file_sha256": sha256_file(candidate_residual_board_path),
+            },
         },
         "runtime_seconds": time.perf_counter() - started,
         "decision_policy": "Visual acting-safe characterization only; no radius may be promoted without complete-mask evaluation and correction-effort measurement.",

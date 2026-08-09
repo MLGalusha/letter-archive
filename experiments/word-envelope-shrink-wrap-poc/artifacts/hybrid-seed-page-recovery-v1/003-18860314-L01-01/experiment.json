@@ -1,0 +1,189 @@
+{
+  "schema_version": "hybrid-seed-page-recovery.v1",
+  "page_id": "003-18860314-L01-01",
+  "evidence_boundary": {
+    "sealed_human_evidence_used": false,
+    "source_and_software_evidence_only": true
+  },
+  "source": {
+    "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/workspaces/word-ink-ground-truth-v1/collections/003/18860314/L01/pages/003-18860314-L01-01/runs/run-4111a8cd75be/source/working.png",
+    "file_sha256": "ac21aa38dbff33823d08e156b214355d85a55a3c8bbdccc0228738b70e41d027",
+    "size_wh": [
+      2834,
+      3780
+    ]
+  },
+  "anchor": {
+    "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-hybrid-binarization-trial-20260809/003-18860314-L01-01/foreground-p0.50.png",
+    "file_sha256": "1654a3da7943180ba9391e1a4789acb14c04537dd0824902e6b9985156a651d5",
+    "mask_pixel_sha256": "443a16f6d8a7e73dac958650250fb7049a22023188743cf4388b3f288ad6cf6c",
+    "pixels": 281522
+  },
+  "hybrid_probability": {
+    "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-hybrid-binarization-trial-20260809/003-18860314-L01-01/foreground-probability.float16.npy",
+    "file_sha256": "d2a6d6ba6f158dcc8f3a8fc710b513295e9f9c5679d23c8457ffc84ac2b74e65",
+    "dtype_loaded": "float32 from preserved float16"
+  },
+  "method": {
+    "implementation": "word_envelope.local_ink_recovery.recover_local_ink_candidates",
+    "conditioning": "full-page hybrid p0.50 anchor; exact source color residual, local/broad darkness, Sato ridge, proximity, principal writing axis, and straight-artifact penalty",
+    "ownership": "none; recovered pixels are proposal evidence only",
+    "features": {
+      "paper_normalization": "local_and_broad_gaussian_source_background",
+      "local_sigma_px": 16.537499999999998,
+      "broad_sigma_px": 51.974999999999994,
+      "colour_sigma_px": 14.174999999999999,
+      "ridge_sigmas_px": [
+        2.3625,
+        4.725,
+        7.0874999999999995
+      ],
+      "selection_conditioning": "anchor_colour_stroke_shape_axis_and_distance"
+    },
+    "anchor_colour_residual_vector": [
+      0.06440857,
+      0.06373087,
+      0.06082866
+    ]
+  },
+  "candidates": {
+    "conservative": {
+      "added_pixels": 17289,
+      "added_component_count": 793,
+      "score_threshold": 0.68,
+      "minimum_component_pixels": 3,
+      "along_extension_fraction": 0.08,
+      "across_extension_fraction": 0.38,
+      "maximum_straight_artifact": 0.56,
+      "straight_artifact_ridge_override": 1.1,
+      "source_supported_only": true,
+      "mask_file": "conservative.mask.png",
+      "mask_file_sha256": "d99785bd50eac14e346a0880917b2f30f86eb4b0584348eeffd9ac354d3f70f2",
+      "mask_pixel_sha256": "2c1340f3a8dea3909dde4e999337b33740c7ead8a6428beaeea6d9120d32da5c",
+      "addition_file": "conservative.additions.png",
+      "addition_file_sha256": "a48f58ec466b395b321ef51019aefdd3b3cdc191f16ccc608bc11cbb38fc36a2",
+      "addition_mask_pixel_sha256": "0f25b609d336cd3e6901b36cdbc5216888171f5d8dc46b88869f6d089562835b",
+      "mask_metrics": {
+        "pixels": 298811,
+        "components": 758,
+        "components_ge_3px": 696,
+        "components_ge_8px": 453,
+        "median_component_pixels": 13.0
+      },
+      "addition_metrics": {
+        "pixels": 17289,
+        "components": 793,
+        "components_ge_3px": 793,
+        "components_ge_8px": 348,
+        "median_component_pixels": 6.0
+      },
+      "new_pixels_vs_previous_profile": 17289,
+      "hybrid_probability_bands_for_additions": {
+        "p_ge_0.20": 2057,
+        "p_0.05_to_0.20": 1626,
+        "p_0.01_to_0.05": 1406,
+        "p_lt_0.01": 12200
+      }
+    },
+    "balanced": {
+      "added_pixels": 63721,
+      "added_component_count": 3901,
+      "score_threshold": 0.55,
+      "minimum_component_pixels": 2,
+      "along_extension_fraction": 0.14,
+      "across_extension_fraction": 0.52,
+      "maximum_straight_artifact": 0.72,
+      "straight_artifact_ridge_override": 0.88,
+      "source_supported_only": true,
+      "mask_file": "balanced.mask.png",
+      "mask_file_sha256": "1da037edccd1811c33481391d995b9aa24dfffe09203813f7cf5a6889270116e",
+      "mask_pixel_sha256": "518a19d93143f7c9248c2e730418a903a0aa57e5be66e95de655fea989699877",
+      "addition_file": "balanced.additions.png",
+      "addition_file_sha256": "0978561f2a42a2ff4f9071cec3df9222e528d08db51b9be1d885445901b16046",
+      "addition_mask_pixel_sha256": "cddaaa08ba11f44910d9d24eaf8b8164dca8c6ba08d112cff2d6e117d8f977f5",
+      "mask_metrics": {
+        "pixels": 345243,
+        "components": 2405,
+        "components_ge_3px": 1439,
+        "components_ge_8px": 635,
+        "median_component_pixels": 3.0
+      },
+      "addition_metrics": {
+        "pixels": 63721,
+        "components": 3901,
+        "components_ge_3px": 2345,
+        "components_ge_8px": 803,
+        "median_component_pixels": 3.0
+      },
+      "new_pixels_vs_previous_profile": 46432,
+      "hybrid_probability_bands_for_additions": {
+        "p_ge_0.20": 7183,
+        "p_0.05_to_0.20": 5951,
+        "p_0.01_to_0.05": 5349,
+        "p_lt_0.01": 45238
+      }
+    },
+    "maximum_recall": {
+      "added_pixels": 138948,
+      "added_component_count": 11237,
+      "score_threshold": 0.44,
+      "minimum_component_pixels": 2,
+      "along_extension_fraction": 0.24,
+      "across_extension_fraction": 0.68,
+      "maximum_straight_artifact": 0.88,
+      "straight_artifact_ridge_override": 0.72,
+      "source_supported_only": true,
+      "mask_file": "maximum_recall.mask.png",
+      "mask_file_sha256": "323a60cde59ede1f35f3a4a5254c0c6f340d9be9881615b9f99fcf2de20ac189",
+      "mask_pixel_sha256": "3b54b86efd8a21494d4fad0ae9e02308676955a2e68794a843f1e8d1d0bc6f4b",
+      "addition_file": "maximum_recall.additions.png",
+      "addition_file_sha256": "0d5bb1d915f5632a06a7c1294c2e0526c53113a2a6efa70c86a61f3922e70617",
+      "addition_mask_pixel_sha256": "2943c1a94a060fb5c4bd3defbf47768e885c903b047473a10fb20c62d9f78d53",
+      "mask_metrics": {
+        "pixels": 420470,
+        "components": 8225,
+        "components_ge_3px": 4734,
+        "components_ge_8px": 1064,
+        "median_component_pixels": 3.0
+      },
+      "addition_metrics": {
+        "pixels": 138948,
+        "components": 11237,
+        "components_ge_3px": 6806,
+        "components_ge_8px": 1767,
+        "median_component_pixels": 3.0
+      },
+      "new_pixels_vs_previous_profile": 75227,
+      "hybrid_probability_bands_for_additions": {
+        "p_ge_0.20": 13726,
+        "p_0.05_to_0.20": 11595,
+        "p_0.01_to_0.05": 9785,
+        "p_lt_0.01": 103842
+      }
+    }
+  },
+  "review_board": {
+    "file": "page-adaptive-recovery-review.png",
+    "file_sha256": "3d6cb8a433f9dd045c4119b5e4658825b7cae25a28d70b86ef8d7ad63039f382"
+  },
+  "main_writing_detail_board": {
+    "crop_bbox_xyxy": [
+      564,
+      1196,
+      2794,
+      3663
+    ],
+    "file": "main-writing-recovery-detail.png",
+    "file_sha256": "81e066a93b7374e0577e874a370237d39a1f7b430d35320098b59b022107b928"
+  },
+  "runtime_seconds_cpu": 145.5479080829973,
+  "decision_policy": "Do not promote by recovered-pixel count. Inspect continuity, paper/fold/rule contamination, foreign objects, unresolved words, and later complete-mask correction effort.",
+  "post_run_acting_safe_visual_review": {
+    "decision": "reject_page_wide_recovery",
+    "conservative": "Adds some source-visible missing word fragments, including evidence that hybrid assigned below 0.01 probability, but also admits ruled lines, fold fragments, page-border evidence, and many disconnected specks.",
+    "balanced": "Recovers more faint letter structure but expands physical-page artifacts and component fragmentation substantially.",
+    "maximum_recall": "Unacceptable page-wide proposal: page edges, fold/ruling structure, paper texture, and 11237 addition components overwhelm the useful writing evidence.",
+    "meaning": "Hybrid seeds can teach useful source-ink appearance, but a single page-level appearance model is too broad. Recovery must be conditioned by a fitted line or rough word corridor and remain optional evidence.",
+    "sealed_human_evaluation": "Not opened."
+  }
+}

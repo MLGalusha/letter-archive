@@ -1,0 +1,154 @@
+{
+  "board": {
+    "file": "probability-threshold-board.png",
+    "file_sha256": "76d23c9d082725efbc1340ddfb85ded0e187e3d076578488493e8426c78cdcf4"
+  },
+  "comparison_to_2021_convolutional_p0.50": {
+    "hybrid_pixels": 281522,
+    "old_pixels": 125678,
+    "shared_pixels": 121825,
+    "hybrid_only_pixels": 159697,
+    "old_only_pixels": 3853,
+    "hybrid_to_old_pixel_ratio": 2.240026098124733,
+    "old_pixels_retained_by_hybrid_fraction": 0.9693422874377378,
+    "hybrid_pixels_already_in_old_fraction": 0.43273705070652275,
+    "source_overlay": {
+      "file": "source-overlay-old-vs-hybrid-p050.png",
+      "file_sha256": "7ed061dc2ce99bb0e874310f49cb91633ce282fbb9a8ca4f7f412ccc64360157",
+      "legend": "cyan=shared, red=hybrid-only, gold=old-only"
+    },
+    "main_body_review": {
+      "file": "hybrid-vs-2021-main-body-review.png",
+      "file_sha256": "c2d33cff35144c74be4e00c25428f90211b22f9450f62c10acc3d0fa69e655f5"
+    },
+    "interpretation": "The hybrid recovers many complete faint word portions, not just thicker versions of old strokes. This is acting-safe visual characterization, not semantic ownership evaluation."
+  },
+  "hard_reference_check": null,
+  "inference": {
+    "probability_dtype": "float16 on disk; float32 during inference and thresholding",
+    "released_decision": "argmax over two softmax channels",
+    "stitching": "released SBB 10%-of-model-width overlap discard"
+  },
+  "input": {
+    "file_sha256": "ac21aa38dbff33823d08e156b214355d85a55a3c8bbdccc0228738b70e41d027",
+    "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/workspaces/word-ink-ground-truth-v1/collections/003/18860314/L01/pages/003-18860314-L01-01/runs/run-4111a8cd75be/source/working.png",
+    "size_wh": [
+      2834,
+      3780
+    ]
+  },
+  "model": {
+    "architecture_observed": "ResNet-50 encoder, transformer block, and convolutional upsampling/skip decoder",
+    "foreground_channel": 1,
+    "input_shape": [
+      null,
+      448,
+      448,
+      3
+    ],
+    "label": "SBB/Eynollah hybrid CNN-Transformer binarization",
+    "layer_type_counts": {
+      "Activation": 56,
+      "Add": 32,
+      "BatchNormalization": 60,
+      "Concatenate": 5,
+      "Conv2D": 60,
+      "Dense": 16,
+      "Dropout": 16,
+      "InputLayer": 1,
+      "Lambda": 1,
+      "LayerNormalization": 16,
+      "MaxPooling2D": 1,
+      "MultiHeadAttention": 8,
+      "PatchEncoder": 1,
+      "Patches": 1,
+      "TFOpLambda": 1,
+      "UpSampling2D": 5,
+      "ZeroPadding2D": 7
+    },
+    "name": "model_1",
+    "output_shape": [
+      null,
+      448,
+      448,
+      2
+    ],
+    "parameters": 36988874,
+    "path": "/tmp/eynollah-hybrid.MFzWVd/model",
+    "release": "2022-08-16",
+    "source": "https://huggingface.co/SBB/sbb_binarization/resolve/cfdf4446f8e33b2c743a66bf7c1a4686515442ae/saved_model/2022-08-16"
+  },
+  "page_id": "003-18860314-L01-01",
+  "probability": {
+    "file": "foreground-probability.float16.npy",
+    "file_sha256": "d2a6d6ba6f158dcc8f3a8fc710b513295e9f9c5679d23c8457ffc84ac2b74e65",
+    "max": 1.0,
+    "mean": 0.02633904665708542,
+    "min": 4.181091242116963e-07,
+    "quantiles": {
+      "0.5": 8.526385499862954e-05,
+      "0.9": 0.00018268476123921567,
+      "0.95": 0.0014908618351909336,
+      "0.99": 0.9957671165466309,
+      "0.995": 0.9995890259742737,
+      "0.999": 0.9999914169311523
+    }
+  },
+  "runtime": {
+    "device": "CPU",
+    "host_arch": "arm64",
+    "tensorflow": "2.12.0",
+    "wall_seconds": 40.45529195800191
+  },
+  "schema_version": "sbb-probability-sweep.v1",
+  "sealed_human_evidence_used": false,
+  "thresholds": {
+    "0.20": {
+      "components": 266,
+      "components_ge_3px": 220,
+      "components_ge_8px": 190,
+      "file": "foreground-p0.20.png",
+      "file_sha256": "b92431281d5e0c7e02f9b6eb7851ab24c713d5591bfe8d92c27ade47171a2630",
+      "mask_pixel_sha256": "c9c8878ae6dfcf0d79dbabe9a43aa262f81fba7b2ab7635b9e3d2bc4e114f6a4",
+      "median_component_pixels": 153.0,
+      "page_fraction": 0.030662533185468965,
+      "pixels": 328473,
+      "pixels_added_vs_previous_threshold": 17915
+    },
+    "0.30": {
+      "components": 289,
+      "components_ge_3px": 236,
+      "components_ge_8px": 209,
+      "file": "foreground-p0.30.png",
+      "file_sha256": "aabf2ee31acf1702125120c989b352d6f72d4169639d4064ea593f23df20009f",
+      "mask_pixel_sha256": "c1ca23facf2268e1e66ccbdb1369f58e72f9bb24bf06f6e9bab14983c445ae19",
+      "median_component_pixels": 126.0,
+      "page_fraction": 0.028990190916796423,
+      "pixels": 310558,
+      "pixels_added_vs_previous_threshold": 14861
+    },
+    "0.40": {
+      "components": 311,
+      "components_ge_3px": 247,
+      "components_ge_8px": 218,
+      "file": "foreground-p0.40.png",
+      "file_sha256": "3e21a2f7f9f4d4f30a4b32d57a1ada2a61eddfd5be91a7c1ae1cc320bdc01562",
+      "mask_pixel_sha256": "830d54617f76566858c7b4e4ac3e52fcac6889ec2b7c6df059e164c576cd848a",
+      "median_component_pixels": 114.0,
+      "page_fraction": 0.027602935630458566,
+      "pixels": 295697,
+      "pixels_added_vs_previous_threshold": 14175
+    },
+    "0.50": {
+      "components": 340,
+      "components_ge_3px": 264,
+      "components_ge_8px": 231,
+      "file": "foreground-p0.50.png",
+      "file_sha256": "1654a3da7943180ba9391e1a4789acb14c04537dd0824902e6b9985156a651d5",
+      "mask_pixel_sha256": "3ab8dd4f5af927287b5e0fdc82d871d7c79decf1132b8f13111f969bcb3271c0",
+      "median_component_pixels": 78.0,
+      "page_fraction": 0.026279717564121233,
+      "pixels": 281522
+    }
+  }
+}

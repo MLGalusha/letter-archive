@@ -121,7 +121,10 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--model", type=Path, required=True)
-    parser.add_argument("--hard-reference", type=Path, required=True)
+    parser.add_argument("--model-label", default="SBB Binarization 2021-03-09")
+    parser.add_argument("--model-release", default="2021-03-09")
+    parser.add_argument("--model-source")
+    parser.add_argument("--hard-reference", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--page-id", required=True)
     parser.add_argument("--thresholds", default="0.50,0.40,0.30,0.20")
@@ -134,6 +137,7 @@ def main() -> None:
     if image is None:
         raise SystemExit(f"Could not read {args.input}")
     model = tf.keras.models.load_model(args.model, compile=False)
+    layer_types = [layer.__class__.__name__ for layer in model.layers]
     probability = predict_foreground_probability(model, image)
     wall_seconds = time.perf_counter() - started
 
@@ -158,7 +162,6 @@ def main() -> None:
         previous_mask = mask
         threshold_outputs.append((threshold, path))
 
-    hard_reference = np.asarray(Image.open(args.hard_reference).convert("L")) == 0
     p50 = probability >= 0.5
     board_path = args.output / "probability-threshold-board.png"
     render_board(args.input, probability, threshold_outputs, board_path)
@@ -169,13 +172,20 @@ def main() -> None:
         "input": {"path": str(args.input), "file_sha256": sha256_file(args.input), "size_wh": [image.shape[1], image.shape[0]]},
         "model": {
             "path": str(args.model),
+            "label": args.model_label,
+            "source": args.model_source,
             "name": model.name,
             "input_shape": list(model.input_shape),
             "output_shape": list(model.output_shape),
             "parameters": int(model.count_params()),
             "foreground_channel": 1,
-            "release": "2021-03-09",
-            "architecture_observed": "ResNet-50 encoder with convolutional upsampling/skip decoder; no transformer layers observed",
+            "release": args.model_release,
+            "architecture_observed": (
+                "ResNet-50 encoder, transformer block, and convolutional upsampling/skip decoder"
+                if "MultiHeadAttention" in layer_types
+                else "ResNet-50 encoder with convolutional upsampling/skip decoder; no transformer layers observed"
+            ),
+            "layer_type_counts": {name: layer_types.count(name) for name in sorted(set(layer_types))},
         },
         "inference": {
             "stitching": "released SBB 10%-of-model-width overlap discard",
@@ -183,11 +193,7 @@ def main() -> None:
             "probability_dtype": "float16 on disk; float32 during inference and thresholding",
         },
         "thresholds": threshold_records,
-        "hard_reference_check": {
-            "path": str(args.hard_reference),
-            "file_sha256": sha256_file(args.hard_reference),
-            "p50_disagreement_pixels": int(np.logical_xor(p50, hard_reference).sum()),
-        },
+        "hard_reference_check": None,
         "probability": {
             "file": probability_path.name,
             "file_sha256": sha256_file(probability_path),
@@ -199,6 +205,13 @@ def main() -> None:
         "board": {"file": board_path.name, "file_sha256": sha256_file(board_path)},
         "runtime": {"wall_seconds": wall_seconds, "device": "CPU", "host_arch": platform.machine(), "tensorflow": tf.__version__},
     }
+    if args.hard_reference:
+        hard_reference = np.asarray(Image.open(args.hard_reference).convert("L")) == 0
+        manifest["hard_reference_check"] = {
+            "path": str(args.hard_reference),
+            "file_sha256": sha256_file(args.hard_reference),
+            "p50_disagreement_pixels": int(np.logical_xor(p50, hard_reference).sum()),
+        }
     manifest_path = args.output / "experiment.json"
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     print(json.dumps(manifest, indent=2, sort_keys=True))

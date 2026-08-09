@@ -1,0 +1,130 @@
+{
+  "schema_version": "eynollah-hybrid-binarization-cohort.v1",
+  "created_date": "2026-08-09",
+  "evidence_boundary": {
+    "sealed_human_evidence_used": false,
+    "source_pages_only": true,
+    "claim": "Acting-safe characterization; not a semantic ownership evaluation."
+  },
+  "model": {
+    "label": "SBB/Eynollah hybrid CNN-Transformer binarization",
+    "release": "2022-08-16",
+    "source": "https://huggingface.co/SBB/sbb_binarization/resolve/cfdf4446f8e33b2c743a66bf7c1a4686515442ae/saved_model/2022-08-16",
+    "parameters": 36988874,
+    "architecture_observed": "ResNet-50 encoder, transformer block, and convolutional upsampling/skip decoder",
+    "saved_model_file_sha256": "63cfe676b63569e7cbebf05567448834945e9be9c35bcf3dbce59312ca0d1902",
+    "keras_metadata_file_sha256": "ca18795a986844bf1c147950ddca70975df736f87994477252f0088f4c65882e",
+    "variables_data_file_sha256": "965b62227ce6e572203662a67c1d0d232b996acdc68bbaae26f93cc15ce40458",
+    "variables_index_file_sha256": "17de8e34f380d0b7c631dff48e1ac21660bc9503f7da7ecff72d36156f8dd87d"
+  },
+  "pages": [
+    {
+      "page_id": "001-18881103-L01-01",
+      "input_sha256": "0bf222b2413e0c0f91b3f46519845b2ff32abf8e0f5e91e0f5634acfc8840b6d",
+      "experiment_manifest_sha256": "75017719af258b824f2fa28972c769c4ac82ced6b21f0190c89c22a54516a77b",
+      "runtime_seconds_cpu": 73.35277545799909,
+      "p0.50": {
+        "components": 444,
+        "components_ge_3px": 303,
+        "components_ge_8px": 240,
+        "file": "foreground-p0.50.png",
+        "file_sha256": "9ba93a9306afcb00da53bfdec84b0aae453035917ee1f75073fc1406d2c614bc",
+        "mask_pixel_sha256": "abb609a55b8ddad3cdccdb3a9eaba5cc29ce4d7fdcfd6f3a43a5ee98a4c52261",
+        "median_component_pixels": 13.0,
+        "page_fraction": 0.02644746338573831,
+        "pixels": 248596
+      },
+      "p0.20": {
+        "components": 407,
+        "components_ge_3px": 263,
+        "components_ge_8px": 204,
+        "file": "foreground-p0.20.png",
+        "file_sha256": "972ac7524716c8438dcc4efdc426984febabda8a316c709f0d5bb71f1d3e9cae",
+        "mask_pixel_sha256": "eb69d866bc1dc35d0e9dc2cb53e61a6a85dfc09309d51d909cc09afca9c5ebf1",
+        "median_component_pixels": 8.0,
+        "page_fraction": 0.030358899767820302,
+        "pixels": 285362,
+        "pixels_added_vs_previous_threshold": 14294
+      },
+      "visual_review": "Strong handwriting extraction, but glass-weight rings and the page edge are also high-confidence foreground. Geometry filtering is required."
+    },
+    {
+      "page_id": "002-19001113-L01-02",
+      "input_sha256": "570a51ae974c545fd9c5d2ac011c282ca0ff4f88fcd58cc713bc56d454b849af",
+      "experiment_manifest_sha256": "bc8510f565313af6bb2b3620ce3a872bbe0b12963a7ab49ccfa57a608d4a0ec6",
+      "runtime_seconds_cpu": 81.58246687499923,
+      "p0.50": {
+        "components": 544,
+        "components_ge_3px": 525,
+        "components_ge_8px": 511,
+        "file": "foreground-p0.50.png",
+        "file_sha256": "5f8f50240fe22d742b50cc228d3aff98977a93c7c4a6dcfc987ce068c348451d",
+        "mask_pixel_sha256": "adc57f9879e5fd04644eab9513b1cb1ac1473d1f33a30ca4fa36d7826c421dc9",
+        "median_component_pixels": 452.0,
+        "page_fraction": 0.026385833333333334,
+        "pixels": 316630
+      },
+      "p0.20": {
+        "components": 533,
+        "components_ge_3px": 489,
+        "components_ge_8px": 469,
+        "file": "foreground-p0.20.png",
+        "file_sha256": "10d66c97210697dfddec6489245ef4130ad84b8e0172f562bc0947e30557cb4f",
+        "mask_pixel_sha256": "dbcb052c886192a140cbaa21ed645a0f5f0dc0374a0ffa4530f9154782bb815f",
+        "median_component_pixels": 497.0,
+        "page_fraction": 0.029143,
+        "pixels": 349716,
+        "pixels_added_vs_previous_threshold": 12848
+      },
+      "visual_review": "Strong whole-page extraction across folded paper; folds and most paper texture remain suppressed."
+    },
+    {
+      "page_id": "003-18860314-L01-01",
+      "input_sha256": "ac21aa38dbff33823d08e156b214355d85a55a3c8bbdccc0228738b70e41d027",
+      "experiment_manifest_sha256": "d2ff255b51bf051aed1ffafcb87ab35d5042b16e9ad6d61275701f711c3fd260",
+      "runtime_seconds_cpu": 40.45529195800191,
+      "p0.50": {
+        "components": 340,
+        "components_ge_3px": 264,
+        "components_ge_8px": 231,
+        "file": "foreground-p0.50.png",
+        "file_sha256": "1654a3da7943180ba9391e1a4789acb14c04537dd0824902e6b9985156a651d5",
+        "mask_pixel_sha256": "3ab8dd4f5af927287b5e0fdc82d871d7c79decf1132b8f13111f969bcb3271c0",
+        "median_component_pixels": 78.0,
+        "page_fraction": 0.026279717564121233,
+        "pixels": 281522
+      },
+      "p0.20": {
+        "components": 266,
+        "components_ge_3px": 220,
+        "components_ge_8px": 190,
+        "file": "foreground-p0.20.png",
+        "file_sha256": "b92431281d5e0c7e02f9b6eb7851ab24c713d5591bfe8d92c27ade47171a2630",
+        "mask_pixel_sha256": "c9c8878ae6dfcf0d79dbabe9a43aa262f81fba7b2ab7635b9e3d2bc4e114f6a4",
+        "median_component_pixels": 153.0,
+        "page_fraction": 0.030662533185468965,
+        "pixels": 328473,
+        "pixels_added_vs_previous_threshold": 17915
+      },
+      "visual_review": "Recovers many faint words and line portions omitted by the 2021 convolutional checkpoint while still suppressing rules and the central fold."
+    }
+  ],
+  "review_board": {
+    "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-hybrid-binarization-trial-20260809/cohort-p050-p020-review.png",
+    "file_sha256": "26a06b4e59463a05a30eeb6fa3652ea152edd1e6ffb6a965ce085dada183334c"
+  },
+  "decision": {
+    "status": "promising_candidate_not_ownership_truth",
+    "promote": [
+      "Preserve hybrid foreground probability as the primary candidate-ink layer.",
+      "Use old-model/hybrid agreement as an ultra-conservative positive seed.",
+      "Test hybrid p0.50 inside page, text-region, and fitted-line geometry."
+    ],
+    "do_not_promote": [
+      "Do not treat full-page hybrid foreground as handwriting-only.",
+      "Do not use a lower global threshold as the main recovery mechanism.",
+      "Do not infer word ownership or fitted boxes from binarization alone."
+    ],
+    "next_bounded_test": "Compare line-conditioned hybrid p0.50 and seed-driven page-adaptive graph propagation on the same three pages before exposing a default UI layer."
+  }
+}

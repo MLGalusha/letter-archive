@@ -1,0 +1,134 @@
+{
+  "board": {
+    "file": "probability-threshold-board.png",
+    "file_sha256": "f4e9a5e9775cc4cd10e488ee11905b48d41c25b9c815fc065bf60ed7cf5ecf5e"
+  },
+  "hard_reference_check": null,
+  "inference": {
+    "probability_dtype": "float16 on disk; float32 during inference and thresholding",
+    "released_decision": "argmax over two softmax channels",
+    "stitching": "released SBB 10%-of-model-width overlap discard"
+  },
+  "input": {
+    "file_sha256": "570a51ae974c545fd9c5d2ac011c282ca0ff4f88fcd58cc713bc56d454b849af",
+    "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/workspaces/word-ink-ground-truth-v1/collections/002/19001113/L01/pages/002-19001113-L01-02/runs/run-6b217db34f1c/source/working.png",
+    "size_wh": [
+      3000,
+      4000
+    ]
+  },
+  "model": {
+    "architecture_observed": "ResNet-50 encoder, transformer block, and convolutional upsampling/skip decoder",
+    "foreground_channel": 1,
+    "input_shape": [
+      null,
+      448,
+      448,
+      3
+    ],
+    "label": "SBB/Eynollah hybrid CNN-Transformer binarization",
+    "layer_type_counts": {
+      "Activation": 56,
+      "Add": 32,
+      "BatchNormalization": 60,
+      "Concatenate": 5,
+      "Conv2D": 60,
+      "Dense": 16,
+      "Dropout": 16,
+      "InputLayer": 1,
+      "Lambda": 1,
+      "LayerNormalization": 16,
+      "MaxPooling2D": 1,
+      "MultiHeadAttention": 8,
+      "PatchEncoder": 1,
+      "Patches": 1,
+      "TFOpLambda": 1,
+      "UpSampling2D": 5,
+      "ZeroPadding2D": 7
+    },
+    "name": "model_1",
+    "output_shape": [
+      null,
+      448,
+      448,
+      2
+    ],
+    "parameters": 36988874,
+    "path": "/tmp/eynollah-hybrid.MFzWVd/model",
+    "release": "2022-08-16",
+    "source": "https://huggingface.co/SBB/sbb_binarization/resolve/cfdf4446f8e33b2c743a66bf7c1a4686515442ae/saved_model/2022-08-16"
+  },
+  "page_id": "002-19001113-L01-02",
+  "probability": {
+    "file": "foreground-probability.float16.npy",
+    "file_sha256": "9f61f7e8205407a0bb0a651fc7f0ad7753ad876ce30cf9f9fb11fb00e95e4d57",
+    "max": 1.0,
+    "mean": 0.026510365307331085,
+    "min": 9.094895858652308e-07,
+    "quantiles": {
+      "0.5": 8.8956490799319e-05,
+      "0.9": 0.0001760360770276747,
+      "0.95": 0.0005888835556106623,
+      "0.99": 0.9997604489326477,
+      "0.995": 0.999982476234436,
+      "0.999": 0.9999995231628418
+    }
+  },
+  "runtime": {
+    "device": "CPU",
+    "host_arch": "arm64",
+    "tensorflow": "2.12.0",
+    "wall_seconds": 81.58246687499923
+  },
+  "schema_version": "sbb-probability-sweep.v1",
+  "sealed_human_evidence_used": false,
+  "thresholds": {
+    "0.20": {
+      "components": 533,
+      "components_ge_3px": 489,
+      "components_ge_8px": 469,
+      "file": "foreground-p0.20.png",
+      "file_sha256": "10d66c97210697dfddec6489245ef4130ad84b8e0172f562bc0947e30557cb4f",
+      "mask_pixel_sha256": "dbcb052c886192a140cbaa21ed645a0f5f0dc0374a0ffa4530f9154782bb815f",
+      "median_component_pixels": 497.0,
+      "page_fraction": 0.029143,
+      "pixels": 349716,
+      "pixels_added_vs_previous_threshold": 12848
+    },
+    "0.30": {
+      "components": 539,
+      "components_ge_3px": 490,
+      "components_ge_8px": 479,
+      "file": "foreground-p0.30.png",
+      "file_sha256": "961bcdcb002f425675d638d2b626bcc9c042a10fd17a5284795e8c44ceba9779",
+      "mask_pixel_sha256": "97d9a7e2001e50b6e656b494ef1f4af2241949d54abc263590ac6e733ba0a494",
+      "median_component_pixels": 476.0,
+      "page_fraction": 0.028072333333333335,
+      "pixels": 336868,
+      "pixels_added_vs_previous_threshold": 10504
+    },
+    "0.40": {
+      "components": 540,
+      "components_ge_3px": 511,
+      "components_ge_8px": 502,
+      "file": "foreground-p0.40.png",
+      "file_sha256": "b10c512fae3cf2af41627e9338cfc5655a0caeb0f42a64f37ca0f3466e3f211e",
+      "mask_pixel_sha256": "44bdddd15e1f6b94b4e3e6077fa19c08cd93f22ccda6cbad53bfb818144e9211",
+      "median_component_pixels": 473.5,
+      "page_fraction": 0.027197,
+      "pixels": 326364,
+      "pixels_added_vs_previous_threshold": 9734
+    },
+    "0.50": {
+      "components": 544,
+      "components_ge_3px": 525,
+      "components_ge_8px": 511,
+      "file": "foreground-p0.50.png",
+      "file_sha256": "5f8f50240fe22d742b50cc228d3aff98977a93c7c4a6dcfc987ce068c348451d",
+      "mask_pixel_sha256": "adc57f9879e5fd04644eab9513b1cb1ac1473d1f33a30ca4fa36d7826c421dc9",
+      "median_component_pixels": 452.0,
+      "page_fraction": 0.026385833333333334,
+      "pixels": 316630
+    }
+  }
+}

@@ -649,6 +649,111 @@
       "identity_sha256": null,
       "predecessor_ids": ["20260809-eynollah-crop-preprocessing-v1", "20260809-hybrid-seed-local-recovery-v1"],
       "summary": "Whole-component agreement with independent local source recovery reduces CLAHE proposal fragmentation and concentrates moderate-faint candidates. It remains optional evidence and does not reconstruct the almost-erased word."
+    },
+    {
+      "record_id": "20260809-page-adaptive-vector-ink-v1",
+      "title": "Page-adaptive source-feature vector ink",
+      "evidence_role": "run_state",
+      "decision": "diagnostic",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/page-adaptive-vector-ink-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/page-adaptive-vector-ink-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "18e4db46a57ee23af4db4a8e77fcdfb290aa52c95663da28195b2d5f57341c19"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-hybrid-seed-local-recovery-v1"],
+      "summary": "Page-local source-feature prototypes are the first tested method to expose most disconnected near-erased writing, but the ungated mask floods paper texture and is diagnostic only. Pseudo-label AUC was actively misleading; clean seed-bound graph methods did not recover the disconnected word."
+    },
+    {
+      "record_id": "20260809-line-conditioned-vector-ink-v1",
+      "title": "Positive-unknown rough-line-conditioned vector ink",
+      "evidence_role": "run_state",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-conditioned-vector-ink-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-conditioned-vector-ink-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "3f5f6213120731016fb3bedc60032bccb06f37efc2750db38a4046d0938d95d2"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-page-adaptive-vector-ink-v1"],
+      "summary": "Treating low-confidence pixels inside the rough line as unknown instead of negative reduced the near-erased-word proposal from 24,625 to 7,502 pixels and from 2,946 to 239 components while retaining most visible word structure. Promote only as optional high-recall proposal evidence."
+    },
+    {
+      "record_id": "20260809-fitted-line-vector-gate-v1-rejected",
+      "title": "Unconditional fitted-line gate over vector proposals",
+      "evidence_role": "run_state",
+      "decision": "rejected",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/fitted-line-vector-gate-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/fitted-line-vector-gate-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "0432cc43313d66f80ee3661618033a5154c8448dd069fc4e497132cd7c8d7048"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-line-conditioned-vector-ink-v1"],
+      "summary": "Reject unconditional fitted-line clipping. A sparse five-bin anchor produced an invented -0.1597 slope and deleted most of the newly recovered word, demonstrating that geometry must abstain when its evidence is weak."
+    },
+    {
+      "record_id": "20260809-fitted-line-quality-gate-v1",
+      "title": "Fitted-line quality and abstention gate",
+      "evidence_role": "run_state",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/fitted-line-quality-gate-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/fitted-line-quality-gate-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "55980ff36faecc7ee21417f76bd3909a08a94fffbbca9f171416bf52578e7949"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-fitted-line-vector-gate-v1-rejected"],
+      "summary": "A frozen evidence-quality gate correctly abstained on the destructive sparse fit and preserved all 7,502 upstream proposal pixels. It accepted one strong fit and conservatively rejected another near threshold; target-line retention needs refinement before precision use."
+    },
+    {
+      "record_id": "20260809-line-conditioned-vector-heldout-v1",
+      "title": "Line-conditioned vector proposal same-page held-out check",
+      "evidence_role": "run_state",
+      "decision": "candidate_heldout",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-conditioned-vector-heldout-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/line-conditioned-vector-heldout-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "cd8361638592e9247933fbe148136ba1dbee11161ea2ff61ac7d4dd2f10099c6"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-line-conditioned-vector-ink-v1"],
+      "summary": "The unchanged proposal policy recovered coherent faint middle-phrase structure on a distinct same-page line, adding 5,966 pixels and 431 components. This supports the mechanism but is not cross-page or cross-collection generalization evidence."
+    },
+    {
+      "record_id": "20260809-vector-proposal-tiers-v1",
+      "title": "Three-tier vector component review surface",
+      "evidence_role": "run_state",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/vector-proposal-tiers-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/vector-proposal-tiers-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "9884a5874899703a4ab7ad9f7d057f9fa621c086350913db2640eb31926b778d"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-line-conditioned-vector-ink-v1", "20260809-line-conditioned-vector-heldout-v1", "20260809-hybrid-seed-local-recovery-v1"],
+      "summary": "Partition vector components into strong, likely, and exploratory tiers by independent local-recovery support. The tiers are a review order, not labels: the near-erased word remains mainly exploratory precisely because every earlier method missed it, so exploratory evidence must never be silently discarded."
+    },
+    {
+      "record_id": "20260809-kraken-line-vector-crosspage-v1",
+      "title": "Automatic Kraken-line vector proposals across pages",
+      "evidence_role": "run_state",
+      "decision": "candidate_heldout",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/kraken-line-vector-crosspage-v1",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/kraken-line-vector-crosspage-v1/experiment.json",
+        "file_sha256": "b1fcd2b1deeb37b60155babfe7605511649091376be7b8bcb0995027b01b8230"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-line-conditioned-vector-ink-v1", "20260809-eynollah-kraken-line-conditioning-002-heldout"],
+      "summary": "Kraken boundaries automatically centered six software-selected lines on two independent pages, and unchanged vector proposals stayed concentrated on stroke gaps without catastrophic paper flooding. Fragment burden remains 259-652 additions per line with median area one pixel, so geometry is promoted only as a search corridor."
     }
   ]
 }

@@ -456,6 +456,190 @@ The experiment must therefore compare target continuity, foreign-object
 contamination, unresolved ink, and human correction effort—not recovered-pixel
 count alone.
 
+## Page-adaptive source-vector results
+
+The source-vector idea was tested without any completed human page or sealed
+ownership evidence. Each crop used ten exact-source features: Lab colour,
+grayscale, darkness relative to three Gaussian paper backgrounds, Sato ridge,
+Sobel gradient, and local standard deviation. Eynollah `p>=0.95` supplied safe
+positive seeds. Very bright, flat `p<=0.0001` paper supplied initial negatives.
+
+Three model families were compared on the same frozen `folded-write-to-you`,
+`enough-tight`, and `acknowledgement-tight` crops:
+
+- nearest positive/negative feature prototypes;
+- a small histogram gradient-boosted classifier;
+- source-feature random-walker propagation;
+- a two-of-three agreement mask.
+
+The first run produced the first tested recovery of most of the disconnected,
+nearly erased `enough` word. The raw prototype proposed 24,625 pixels in 2,946
+components; 22,030 pixels occurred where hybrid probability was below 0.01.
+This supported page-local appearance vectors, but paper texture made the mask
+unusable. The boosted classifier achieved pseudo-label holdout AUC 1.0 while
+flooding crops with 58,736–214,990 pixels, proving that reproducing easy
+software-derived seeds is not human-truth accuracy. Random walking was cleaner
+but stayed close to seeds and missed the disconnected word; voting discarded
+the breakthrough.
+
+Exact first-run record:
+`artifacts/page-adaptive-vector-ink-v1/003-18860314-L01-01/experiment.json`
+(SHA-256
+`18e4db46a57ee23af4db4a8e77fcdfb290aa52c95663da28195b2d5f57341c19`;
+9.68 s CPU).
+
+### Positive–unknown line conditioning
+
+The second run introduced a rough centered line corridor covering 22%–78% of
+each frozen crop. It added difficult paper negatives only outside that corridor
+and left every low-probability pixel inside it unknown. It did not teach the
+near-erased target that a missing teacher prediction meant background.
+
+On `enough-tight`, prototype/classifier agreement reduced the first raw
+prototype from 24,625 pixels/2,946 components to 7,502/239—a 69.53% pixel and
+91.89% component reduction—while visually preserving most of the erased word.
+Of those additions, 6,571 had hybrid probability below 0.01. The same frozen
+method produced coherent moderate-faint continuation evidence on the folded and
+acknowledgement crops. A fixed directional-density filter removed only about 4%
+and was not independently useful.
+
+Exact line-conditioned record:
+`artifacts/line-conditioned-vector-ink-v1/003-18860314-L01-01/experiment.json`
+(SHA-256
+`3f5f6213120731016fb3bedc60032bccb06f37efc2750db38a4046d0938d95d2`;
+3.78 s CPU).
+
+The unchanged policy was then applied to two crops already frozen in the local
+recovery experiment. `thank-you-for` is distinct content; `know-enough-broad`
+overlaps the difficult phrase and tests context width rather than independent
+visual generalization. On `thank-you-for`, agreement proposed 5,966 pixels/431
+components, including 3,192 pixels below hybrid 0.01, and visibly recovered
+coherent middle-phrase structure. The broader context retained the `enough`
+effect. This supports same-page transfer only—not cross-page or cross-collection
+generalization.
+
+Exact held-out record:
+`artifacts/line-conditioned-vector-heldout-v1/003-18860314-L01-01/experiment.json`
+(SHA-256
+`cd8361638592e9247933fbe148136ba1dbee11161ea2ff61ac7d4dd2f10099c6`;
+3.03 s CPU).
+
+### Automatic Kraken line corridors across pages
+
+The same positive–unknown vector policy was next driven by Kraken boundaries
+instead of centered hand-frozen rectangles. On each of independent pages 001
+and 002, software selected the eligible Kraken lines with low, median, and high
+Eynollah p0.50 density. Each boundary was expanded 30 pixels and cropped with a
+90-pixel context margin. No line was chosen by visual appeal.
+
+All six corridors centered the intended line and largely excluded adjacent
+writing. The vector additions remained concentrated on visible stroke gaps and
+shoulders rather than catastrophically flooding the paper. Added-pixel load was
+1.70%–7.17% of anchor size on page 001 and 2.70%–21.44% on page 002. The
+lowest-density page-002 line received 1,679 additions, including 404 where
+hybrid probability was below 0.01, and visibly filled faint portions of the
+target line.
+
+The limitation is now sharper: those six proposal masks contain 259–652 added
+components per line, and every crop has median four-connected addition area of
+one pixel. Kraken geometry therefore appears useful for deciding **where to
+search**, but it does not decide **which tiny source fragments belong**. Promote
+the automatic corridor as proposal geometry only. Rank anchor-attached or
+independently supported groups first; never present hundreds of raw fragments as
+individual human decisions.
+
+Exact cross-page record:
+`artifacts/kraken-line-vector-crosspage-v1/experiment.json` (SHA-256
+`b1fcd2b1deeb37b60155babfe7605511649091376be7b8bcb0995027b01b8230`;
+10.36 s CPU).
+
+### Fitted-line gate and required abstention
+
+A RANSAC line was fitted from confident hybrid fragments inside the rough
+corridor, using median-y x bins and an asymmetric anchor-residual band. It was
+plausible on folded and acknowledgement writing, with slopes `+0.0116` and
+`-0.0335`. On `enough`, only five x bins contained anchors; the fit connected
+unrelated fragments into slope `-0.1597`, retained only 1,797/7,502 vector
+pixels, and visibly deleted most recovered writing.
+
+This rejects unconditional fitted-line clipping. Exact record:
+`artifacts/fitted-line-vector-gate-v1/003-18860314-L01-01/experiment.json`
+(SHA-256
+`0432cc43313d66f80ee3661618033a5154c8448dd069fc4e497132cd7c8d7048`;
+1.04 s CPU).
+
+A frozen quality gate required at least eight occupied bins, 60% RANSAC inliers,
+absolute slope at most 0.08, and 55% all-crop anchor retention. It rejected the
+destructive `enough` fit and preserved all upstream proposals. It accepted the
+folded fit and conservatively rejected acknowledgement because all-crop anchor
+retention was 54.33%. Promote the abstention behavior; refine retention to use
+target-line anchors before using it for precision selection.
+
+Exact quality-gate record:
+`artifacts/fitted-line-quality-gate-v1/003-18860314-L01-01/experiment.json`
+(SHA-256
+`55980ff36faecc7ee21417f76bd3909a08a94fffbbca9f171416bf52578e7949`;
+0.69 s CPU).
+
+### Three-tier review surface
+
+Vector-only connected components were ranked by independent local recovery:
+
+- **strong**: at least 10% overlaps one-pixel-dilated conservative recovery;
+- **likely**: not strong, but at least 10% overlaps balanced recovery;
+- **exploratory**: vector-only; visible but never automatically accepted.
+
+On held-out `thank-you-for`, strong plus likely account for 5,188/5,966 pixels
+(86.96%); only 778 pixels remain exploratory. On acknowledgement, strong plus
+likely account for 4,953/6,349. On near-erased `enough`, 6,409/7,502 remain
+exploratory because the independent recovery method missed the word too. Those
+exploratory pixels visibly contain valid word structure, so disagreement must
+lower review priority rather than erase evidence.
+
+Exact tier record:
+`artifacts/vector-proposal-tiers-v1/003-18860314-L01-01/experiment.json`
+(SHA-256
+`9884a5874899703a4ab7ad9f7d057f9fa621c086350913db2640eb31926b778d`;
+3.40 s CPU).
+
+The resulting interaction policy is:
+
+1. keep the full-page hybrid anchor visible and selected;
+2. offer strong green whole components first;
+3. offer likely orange components if the word remains incomplete;
+4. show exploratory magenta only on demand or when visible source writing is
+   still missing;
+5. record every component accept/reject with its tier and upstream hashes;
+6. fit the deterministic word envelope only after ownership is corrected.
+
+### Research alignment
+
+This result is consistent with, but does not establish the performance claims
+of, several primary research directions:
+
+- [PANet](https://openaccess.thecvf.com/content_ICCV_2019/html/Wang_PANet_Few-Shot_Image_Semantic_Segmentation_With_Prototype_Alignment_ICCV_2019_paper.html)
+  segments query pixels by matching support-derived class prototypes;
+- [positive–unlabeled learning with incomplete annotations](https://arxiv.org/abs/2302.08050)
+  treats unlabelled examples as unknown rather than automatically negative;
+- [ScribbleSup](https://openaccess.thecvf.com/content_cvpr_2016/html/Lin_ScribbleSup_Scribble-Supervised_Convolutional_CVPR_2016_paper.html)
+  combines sparse trusted marks, graphical propagation, and learned segmentation;
+- [PixelPick](https://openaccess.thecvf.com/content/ICCV2021W/ILDAV/html/Shin_All_You_Need_Are_a_Few_Pixels_Semantic_Segmentation_With_ICCVW_2021_paper.html)
+  shows that carefully selected sparse pixel labels can sharply reduce dense
+  annotation effort;
+- [unsupervised domain adaptation for document binarization](https://arxiv.org/abs/2012.01204)
+  reports that adaptation can help new document domains but can also hurt when
+  domains are already similar, supporting an explicit adapt-or-abstain gate;
+- [DocBinFormer](https://arxiv.org/abs/2312.03568) and
+  [BiNet](https://arxiv.org/abs/1911.07930) are relevant supervised historical
+  document binarization baselines for the later trained-model comparison.
+
+The practical implication is stronger than “train a binarizer.” Accepted human
+word masks, rejected components, unresolved pixels, and line/word geometry can
+train a positive–unknown, page-adaptive proposal model and a separate ownership
+model. The current pseudo-seed vector result is a lower bound because its teacher
+already misses the target; exact human masks provide much cleaner prototypes and
+hard negatives.
+
 ## What to train, and in what order
 
 ### First: domain-adapted ink/foreground model

@@ -1,0 +1,216 @@
+{
+  "experiment_status": "acting_safe_visual_review_complete",
+  "eynollah_reinference_context": {
+    "bbox_xywh": [
+      1890,
+      1940,
+      920,
+      620
+    ],
+    "inputs": {
+      "dark-ink selective boost": {
+        "file": "context-inputs/dark-ink-selective-boost.png",
+        "file_sha256": "e1be6a5195a46648ba73a1fd00d1a34e009f92b162ac5974c2394f29a84e907c",
+        "rgb_pixel_sha256": "43e93e26ae6f0e84e6b1858ba94a7ab378fc492c4ed0623a11bb79b0af680b89"
+      },
+      "ink vector + ridge gate": {
+        "file": "context-inputs/ink-vector-plus-ridge-gate.png",
+        "file_sha256": "2a76d2662a8752ebfbcd699231b28e12939ab1f703a439a60c859f18a2bd7bca",
+        "rgb_pixel_sha256": "f98c7bbbe65a420ef9b7f8936e3f63fa12fe7091c81981a93146ca782db40844"
+      },
+      "original context": {
+        "file": "context-inputs/original-context.png",
+        "file_sha256": "13d2927d13c1b47e2b71e5f96047a4f4959d8e414127d8749b1784c905122b2c",
+        "rgb_pixel_sha256": "f17cd4054165fc8bf02e3964082ebe4dc6a9508d01d10e36d91d06e4b71c4db3"
+      },
+      "page-ink vector boost": {
+        "file": "context-inputs/page-ink-vector-boost.png",
+        "file_sha256": "0e81d17ba8075a63501985df789a9f29fe5bad32f28e3cb288426b13bbb48912",
+        "rgb_pixel_sha256": "5ff635373541fb4d365bfde27837ce79c555d5cd02476fbc0e36392cd4afc293"
+      }
+    },
+    "margin_pixels": 160,
+    "target_bbox_within_context_xywh": [
+      160,
+      160,
+      600,
+      300
+    ],
+    "target_faint_vector_proxy": {
+      "file": "context-inputs/target-faint-vector-proxy.png",
+      "file_sha256": "1987c9cab6dc74f62bdb8fa526bcbe8a44c213bfe245f0f73eaf2af3c68969f4"
+    },
+    "target_paper_proxy": {
+      "file": "context-inputs/target-paper-proxy.png",
+      "file_sha256": "dff2d5fe15f990264bc146114b399c6c884f6f57174050b806478260ec5e7f79"
+    }
+  },
+  "faint_proxy": "line-conditioned vector agreement>=0.80 where hybrid<0.01 and outside p0.50 anchor",
+  "frozen_crop": {
+    "bbox_xywh": [
+      2050,
+      2100,
+      600,
+      300
+    ],
+    "label": "enough-tight"
+  },
+  "hybrid_probability": {
+    "file_sha256": "d2a6d6ba6f158dcc8f3a8fc710b513295e9f9c5679d23c8457ffc84ac2b74e65",
+    "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-hybrid-binarization-trial-20260809/003-18860314-L01-01/foreground-probability.float16.npy"
+  },
+  "interpretation_guardrail": "The hybrid anchor and vector proposal define measurement probes, not human truth. More contrast is not automatically better if paper texture, clipping, or structural distortion also increases.",
+  "paper_proxy": "hybrid<=0.0001 and local LAB-L 9x9 standard deviation at or below crop 45th percentile",
+  "post_run_acting_safe_visual_review": {
+    "decision": "Promote page-ink vector boost and its quieter ridge-gated form as Eynollah reinference challengers. Reject generic paper flattening and unsharp masking as visibility defaults.",
+    "difficulties": "Dark-only and multiscale boosting make the faint word obvious but also amplify paper fibres and mottling. Paper flattening reduces the measured faint-proxy contrast. Unsharp masking increases paper standard deviation more than target contrast.",
+    "meaning": "Page-ink vector boosting raised faint-proxy median contrast from 0.1112 to 0.2293 (2.06x) with SSIM 0.911 and zero channel clipping. Ridge gating raised it to 0.1720 (1.55x) while keeping paper standard deviation within 5.25% of the original and SSIM 0.963. The word is visibly clearer in both, but visibility alone is not model recall.",
+    "sealed_human_evidence_used": false,
+    "visual_scope": "Generated acting-safe enhancement board and individual variants only; no sealed human page, answer, mask, or evaluator board was opened."
+  },
+  "review_board": {
+    "file": "natural-faint-word-enhancement-review.png",
+    "file_sha256": "48fec2439c8fb935b9a9451d34930d480e228470716a029fe10894802bd406a7"
+  },
+  "runtime_seconds": 8.91098675000103,
+  "schema_version": "natural-faint-word-enhancement.v1",
+  "sealed_human_evidence_used": false,
+  "source": {
+    "file_sha256": "ac21aa38dbff33823d08e156b214355d85a55a3c8bbdccc0228738b70e41d027",
+    "path": "experiments/word-envelope-shrink-wrap-poc/workspaces/word-ink-ground-truth-v1/collections/003/18860314/L01/pages/003-18860314-L01-01/runs/run-4111a8cd75be/source/working.png"
+  },
+  "variants": {
+    "LAB residual x2": {
+      "file": "lab-residual-x2.png",
+      "file_sha256": "0c709cfa20eb3d0f5939303de3a09332fce32cb7cc7219485fbe0d7816dd18e3",
+      "metrics": {
+        "anchor_pixels": 3176,
+        "clipped_channel_fraction": 0.0,
+        "faint_proposal_pixels": 6571,
+        "mean_absolute_rgb_change": 5.174066543579102,
+        "paper_grayscale_std": 0.026889939153014318,
+        "paper_minus_anchor_median_contrast": 0.17329215686274518,
+        "paper_minus_faint_proposal_median_contrast": 0.18714196078431378,
+        "paper_proxy_pixels": 61287,
+        "ssim_to_original": 0.900230241801288
+      },
+      "rgb_pixel_sha256": "17d614b09374c27af07e20aa1f91dfa8acf99c365f44fc44c786d025495eff6f"
+    },
+    "dark-ink selective boost": {
+      "file": "dark-ink-selective-boost.png",
+      "file_sha256": "1b07238a7aa8631790d0bc29bcfedf43289d04ccb7ab26bdbd06a7aa8146be8c",
+      "metrics": {
+        "anchor_pixels": 3176,
+        "clipped_channel_fraction": 0.0002685185185185185,
+        "faint_proposal_pixels": 6571,
+        "mean_absolute_rgb_change": 5.962916851043701,
+        "paper_grayscale_std": 0.022152701191089353,
+        "paper_minus_anchor_median_contrast": 0.25685921568627457,
+        "paper_minus_faint_proposal_median_contrast": 0.2644572549019608,
+        "paper_proxy_pixels": 61287,
+        "ssim_to_original": 0.8710400935693731
+      },
+      "rgb_pixel_sha256": "d2582ac3004b4b9d83d6db6affeca1ddc0c48cdea19a232ce94f200e6c9cc9a5"
+    },
+    "flatten + multiscale ink": {
+      "file": "flatten-plus-multiscale-ink.png",
+      "file_sha256": "7cae19ccd0b989a0f027c4084552abb4a1513a6de1915ec7d67aed52c51d9f44",
+      "metrics": {
+        "anchor_pixels": 3176,
+        "clipped_channel_fraction": 0.00014074074074074073,
+        "faint_proposal_pixels": 6571,
+        "mean_absolute_rgb_change": 6.9092535972595215,
+        "paper_grayscale_std": 0.02048260289336545,
+        "paper_minus_anchor_median_contrast": 0.22379725490196084,
+        "paper_minus_faint_proposal_median_contrast": 0.21512078431372555,
+        "paper_proxy_pixels": 61287,
+        "ssim_to_original": 0.8750522578145954
+      },
+      "rgb_pixel_sha256": "cd791dd27f8046a6f57e58f350b5b8f884cf74bfeba3fbc1540754900520cd9a"
+    },
+    "ink vector + ridge gate": {
+      "file": "ink-vector-plus-ridge-gate.png",
+      "file_sha256": "0e504e71c9d0580725abfcbbd1b380e79a79e5221fa8aaa87ff8f0ac455d016d",
+      "metrics": {
+        "anchor_pixels": 3176,
+        "clipped_channel_fraction": 0.0,
+        "faint_proposal_pixels": 6571,
+        "mean_absolute_rgb_change": 2.0294463634490967,
+        "paper_grayscale_std": 0.01739116379957652,
+        "paper_minus_anchor_median_contrast": 0.1660450980392157,
+        "paper_minus_faint_proposal_median_contrast": 0.1719686274509804,
+        "paper_proxy_pixels": 61287,
+        "ssim_to_original": 0.9631071811725885
+      },
+      "rgb_pixel_sha256": "8e73fa0073bf3171952c57f7527bd37831b4e78b9dfbd2b42c322445ed21e8aa"
+    },
+    "original": {
+      "file": "original.png",
+      "file_sha256": "7756d5135e080bb2a8b98f37eda9e19c03807048483c9629a356c1603f9ecd70",
+      "metrics": {
+        "anchor_pixels": 3176,
+        "clipped_channel_fraction": 0.0,
+        "faint_proposal_pixels": 6571,
+        "mean_absolute_rgb_change": 0.0,
+        "paper_grayscale_std": 0.016523463635350705,
+        "paper_minus_anchor_median_contrast": 0.09128235294117648,
+        "paper_minus_faint_proposal_median_contrast": 0.11121058823529417,
+        "paper_proxy_pixels": 61287,
+        "ssim_to_original": 1.0
+      },
+      "rgb_pixel_sha256": "181defc5c15fdce48c45a2faa50fa6425ab881a326886d384b7a9886fa2e15e0"
+    },
+    "page-ink vector boost": {
+      "file": "page-ink-vector-boost.png",
+      "file_sha256": "18fb75ad98fbc6bffa2fbe2fed0f936fe297f5bbbb85275c62c53481b330a9a6",
+      "metrics": {
+        "anchor_pixels": 3176,
+        "clipped_channel_fraction": 0.0,
+        "faint_proposal_pixels": 6571,
+        "mean_absolute_rgb_change": 4.303096294403076,
+        "paper_grayscale_std": 0.02066007674073023,
+        "paper_minus_anchor_median_contrast": 0.2209023529411765,
+        "paper_minus_faint_proposal_median_contrast": 0.22934862745098045,
+        "paper_proxy_pixels": 61287,
+        "ssim_to_original": 0.9109628587751252
+      },
+      "rgb_pixel_sha256": "2dc1fea6ad0759bdb49fb21aa30440def80c29844a9b4fbe8b26b97d899c7241"
+    },
+    "paper flattened": {
+      "file": "paper-flattened.png",
+      "file_sha256": "1ced9c94fc1b6b4c047cdb69168b50cea6efb79cbfb389e15b78b321d42c9e3e",
+      "metrics": {
+        "anchor_pixels": 3176,
+        "clipped_channel_fraction": 0.0,
+        "faint_proposal_pixels": 6571,
+        "mean_absolute_rgb_change": 2.9821722507476807,
+        "paper_grayscale_std": 0.012914669839978096,
+        "paper_minus_anchor_median_contrast": 0.09216823529411755,
+        "paper_minus_faint_proposal_median_contrast": 0.09101450980392156,
+        "paper_proxy_pixels": 61287,
+        "ssim_to_original": 0.9992704337901339
+      },
+      "rgb_pixel_sha256": "a7b7a0d0041a2f4486f7fe33a4f6d2fe40e3bb01a55689bae9b0b8763bbc630b"
+    },
+    "unsharp edges": {
+      "file": "unsharp-edges.png",
+      "file_sha256": "bfba203cfbfb3e34e593a6e48f8e3991b5c914972b793ffae736995854b9e565",
+      "metrics": {
+        "anchor_pixels": 3176,
+        "clipped_channel_fraction": 0.0,
+        "faint_proposal_pixels": 6571,
+        "mean_absolute_rgb_change": 2.868412971496582,
+        "paper_grayscale_std": 0.02370235839642695,
+        "paper_minus_anchor_median_contrast": 0.10248156862745095,
+        "paper_minus_faint_proposal_median_contrast": 0.12265490196078421,
+        "paper_proxy_pixels": 61287,
+        "ssim_to_original": 0.9024461796303209
+      },
+      "rgb_pixel_sha256": "39ca5cb6cc12169857f598d8c82d2c9646ea5b39494348e1887aadf8ae9aebd6"
+    }
+  },
+  "vector_score": {
+    "file_sha256": "0a4e047ce9c2f5fff164079c90d7c65a0a6a3949ae845a1db3ba0362139dd66b",
+    "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/line-conditioned-vector-ink-v1/003-18860314-L01-01/enough-tight/prototype-classifier-agreement.score.float16.npy"
+  }
+}

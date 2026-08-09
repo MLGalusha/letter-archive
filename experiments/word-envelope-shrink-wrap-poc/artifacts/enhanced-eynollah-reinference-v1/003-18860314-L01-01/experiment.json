@@ -1,0 +1,280 @@
+{
+  "enhancement_manifest": {
+    "file_sha256": "fe2343d868dfbff5a3315b7be138dc2982866c527aed274c7fca4a02b69f288e",
+    "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/natural-faint-word-enhancement-v1/003-18860314-L01-01/experiment.json"
+  },
+  "experiment_status": "acting_safe_visual_review_complete",
+  "full_page_probability": {
+    "file_sha256": "d2a6d6ba6f158dcc8f3a8fc710b513295e9f9c5679d23c8457ffc84ac2b74e65",
+    "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-hybrid-binarization-trial-20260809/003-18860314-L01-01/foreground-probability.float16.npy"
+  },
+  "inputs": {
+    "dark-ink selective boost": {
+      "file_sha256": "e1be6a5195a46648ba73a1fd00d1a34e009f92b162ac5974c2394f29a84e907c",
+      "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/natural-faint-word-enhancement-v1/003-18860314-L01-01/context-inputs/dark-ink-selective-boost.png",
+      "upstream_expected_file_sha256": "e1be6a5195a46648ba73a1fd00d1a34e009f92b162ac5974c2394f29a84e907c"
+    },
+    "ink vector + ridge gate": {
+      "file_sha256": "2a76d2662a8752ebfbcd699231b28e12939ab1f703a439a60c859f18a2bd7bca",
+      "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/natural-faint-word-enhancement-v1/003-18860314-L01-01/context-inputs/ink-vector-plus-ridge-gate.png",
+      "upstream_expected_file_sha256": "2a76d2662a8752ebfbcd699231b28e12939ab1f703a439a60c859f18a2bd7bca"
+    },
+    "original context": {
+      "file_sha256": "13d2927d13c1b47e2b71e5f96047a4f4959d8e414127d8749b1784c905122b2c",
+      "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/natural-faint-word-enhancement-v1/003-18860314-L01-01/context-inputs/original-context.png",
+      "upstream_expected_file_sha256": "13d2927d13c1b47e2b71e5f96047a4f4959d8e414127d8749b1784c905122b2c"
+    },
+    "page-ink vector boost": {
+      "file_sha256": "0e81d17ba8075a63501985df789a9f29fe5bad32f28e3cb288426b13bbb48912",
+      "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/natural-faint-word-enhancement-v1/003-18860314-L01-01/context-inputs/page-ink-vector-boost.png",
+      "upstream_expected_file_sha256": "0e81d17ba8075a63501985df789a9f29fe5bad32f28e3cb288426b13bbb48912"
+    }
+  },
+  "interpretation_guardrail": "Faint-vector and paper masks are acting-safe measurement probes, not truth. A useful enhancement must improve coherent target strokes without proportionally increasing paper selection or deleting reliable full-page anchor ink.",
+  "metrics": {
+    "dark-ink selective boost": {
+      "0.20": {
+        "candidate_only_vs_full_page": 4397,
+        "components": 52,
+        "faint_proxy_recall": 0.4434637041546188,
+        "faint_proxy_selected": 2914,
+        "full_page_only": 1390,
+        "full_page_retention": 0.7034982935153583,
+        "gained_vs_original_context": 7136,
+        "lost_vs_original_context": 4,
+        "mask_pixel_sha256": "481d10e828449ce69f09c48d518261bf6634238819705c0266893462de5cfbce",
+        "paper_proxy_rate": 0.0,
+        "paper_proxy_selected": 0,
+        "pixels": 7695,
+        "shared_with_full_page": 3298
+      },
+      "0.50": {
+        "candidate_only_vs_full_page": 3444,
+        "components": 59,
+        "faint_proxy_recall": 0.3477400700045655,
+        "faint_proxy_selected": 2285,
+        "full_page_only": 870,
+        "full_page_retention": 0.7260705289672544,
+        "gained_vs_original_context": 5384,
+        "lost_vs_original_context": 0,
+        "mask_pixel_sha256": "b2fd0b736a9e6d53c276c0c095155e6d575c8b8ab4ae6e3ab3d66e4e8b483793",
+        "paper_proxy_rate": 0.0,
+        "paper_proxy_selected": 0,
+        "pixels": 5750,
+        "shared_with_full_page": 2306
+      },
+      "probability_probes": {
+        "faint_proxy_median": 0.10015814006328583,
+        "faint_proxy_q90": 0.984736979007721,
+        "paper_proxy_median": 7.744661706965417e-05,
+        "paper_proxy_q99": 0.00022676802560454235
+      }
+    },
+    "ink vector + ridge gate": {
+      "0.20": {
+        "candidate_only_vs_full_page": 4554,
+        "components": 48,
+        "faint_proxy_recall": 0.45031197686805663,
+        "faint_proxy_selected": 2959,
+        "full_page_only": 1606,
+        "full_page_retention": 0.6574232081911263,
+        "gained_vs_original_context": 7080,
+        "lost_vs_original_context": 7,
+        "mask_pixel_sha256": "4d7cf16dd85e4ec24acc5bc81dfc184864311c819a987f22b3d38d90b43e3890",
+        "paper_proxy_rate": 0.0,
+        "paper_proxy_selected": 0,
+        "pixels": 7636,
+        "shared_with_full_page": 3082
+      },
+      "0.50": {
+        "candidate_only_vs_full_page": 3495,
+        "components": 40,
+        "faint_proxy_recall": 0.32947800943539796,
+        "faint_proxy_selected": 2165,
+        "full_page_only": 985,
+        "full_page_retention": 0.6898614609571788,
+        "gained_vs_original_context": 5324,
+        "lost_vs_original_context": 4,
+        "mask_pixel_sha256": "af84446076f2cd4739d6b06b4be125c403a739cb388e6b46824f3e39e9571ec8",
+        "paper_proxy_rate": 0.0,
+        "paper_proxy_selected": 0,
+        "pixels": 5686,
+        "shared_with_full_page": 2191
+      },
+      "probability_probes": {
+        "faint_proxy_median": 0.12703120708465576,
+        "faint_proxy_q90": 0.9794880747795105,
+        "paper_proxy_median": 7.418666791636497e-05,
+        "paper_proxy_q99": 0.00024267310305731366
+      }
+    },
+    "original context": {
+      "0.20": {
+        "candidate_only_vs_full_page": 173,
+        "components": 4,
+        "faint_proxy_recall": 0.0205448181403135,
+        "faint_proxy_selected": 135,
+        "full_page_only": 4298,
+        "full_page_retention": 0.08319112627986348,
+        "gained_vs_original_context": 0,
+        "lost_vs_original_context": 0,
+        "mask_pixel_sha256": "f0de77c53da295c4315ba56063c6a0cff976c54caa035f1351922ca4adbced45",
+        "paper_proxy_rate": 0.0,
+        "paper_proxy_selected": 0,
+        "pixels": 563,
+        "shared_with_full_page": 390
+      },
+      "0.50": {
+        "candidate_only_vs_full_page": 83,
+        "components": 4,
+        "faint_proxy_recall": 0.009739765636889362,
+        "faint_proxy_selected": 64,
+        "full_page_only": 2893,
+        "full_page_retention": 0.08910579345088161,
+        "gained_vs_original_context": 0,
+        "lost_vs_original_context": 0,
+        "mask_pixel_sha256": "c20df979a584b7cfa66d448500bf70cd47789f8ef6b66b271f9538328e786bcd",
+        "paper_proxy_rate": 0.0,
+        "paper_proxy_selected": 0,
+        "pixels": 366,
+        "shared_with_full_page": 283
+      },
+      "probability_probes": {
+        "faint_proxy_median": 0.00019404767954256386,
+        "faint_proxy_q90": 0.0009988871170207858,
+        "paper_proxy_median": 7.129455480026081e-05,
+        "paper_proxy_q99": 0.00017266228183871135
+      }
+    },
+    "page-ink vector boost": {
+      "0.20": {
+        "candidate_only_vs_full_page": 5593,
+        "components": 45,
+        "faint_proxy_recall": 0.4877492010348501,
+        "faint_proxy_selected": 3205,
+        "full_page_only": 547,
+        "full_page_retention": 0.8833191126279863,
+        "gained_vs_original_context": 9171,
+        "lost_vs_original_context": 0,
+        "mask_pixel_sha256": "a1dbd5d802e1740d70a9c9fd3cfb08793095fedf438ae219fc7e2138116a81c8",
+        "paper_proxy_rate": 1.631667400916997e-05,
+        "paper_proxy_selected": 1,
+        "pixels": 9734,
+        "shared_with_full_page": 4141
+      },
+      "0.50": {
+        "candidate_only_vs_full_page": 4290,
+        "components": 54,
+        "faint_proxy_recall": 0.3477400700045655,
+        "faint_proxy_selected": 2285,
+        "full_page_only": 297,
+        "full_page_retention": 0.9064861460957179,
+        "gained_vs_original_context": 6803,
+        "lost_vs_original_context": 0,
+        "mask_pixel_sha256": "18ccc0142fb6ffbf8ba926aba3eb0db03ebf7df727a04169529460053980fb68",
+        "paper_proxy_rate": 0.0,
+        "paper_proxy_selected": 0,
+        "pixels": 7169,
+        "shared_with_full_page": 2879
+      },
+      "probability_probes": {
+        "faint_proxy_median": 0.18269914388656616,
+        "faint_proxy_q90": 0.9856857061386108,
+        "paper_proxy_median": 7.637256203452125e-05,
+        "paper_proxy_q99": 0.00022947545105125744
+      }
+    }
+  },
+  "model": {
+    "input_shape": [
+      null,
+      448,
+      448,
+      3
+    ],
+    "output_shape": [
+      null,
+      448,
+      448,
+      2
+    ],
+    "parameters": 36988874,
+    "path": "/Volumes/EynollahRAM/model",
+    "saved_model_pb_sha256": "63cfe676b63569e7cbebf05567448834945e9be9c35bcf3dbce59312ca0d1902"
+  },
+  "outputs": {
+    "dark-ink selective boost": {
+      "p0.20_file": "dark-ink-selective-boost/target-p0.20.png",
+      "p0.20_file_sha256": "0f1e23b38c3abf6bd16a535c8604f57408702fbb5392519b5a3d905847091bc9",
+      "p0.50_file": "dark-ink-selective-boost/target-p0.50.png",
+      "p0.50_file_sha256": "670d06e1dd6667ac286f82d56a305fdf570f0eadc99b7d4fa152392228614bfe",
+      "probability_file": "dark-ink-selective-boost/target-probability.float16.npy",
+      "probability_file_sha256": "70c401a2a4828c329d910a379034a90407125bb18f45550264211b23283a0226",
+      "probability_float32_pixel_sha256": "3f971775063ef4feccdbda67dd5026391d342b151b244fd9599ac3f0f79905eb",
+      "runtime_seconds": 3.038403667000239
+    },
+    "ink vector + ridge gate": {
+      "p0.20_file": "ink-vector-plus-ridge-gate/target-p0.20.png",
+      "p0.20_file_sha256": "649947cb7959e9bba66ed214e8d5b638b8a2f3e411c6e08a94762258abc1806f",
+      "p0.50_file": "ink-vector-plus-ridge-gate/target-p0.50.png",
+      "p0.50_file_sha256": "45c75ccf972631e62b67073e84e57b2d3387f2eabce0d53871ec01e1bc04ff93",
+      "probability_file": "ink-vector-plus-ridge-gate/target-probability.float16.npy",
+      "probability_file_sha256": "c089cb3f3fdda5dceb985f13a8f6393ae67d3540f13a901b8441f61de0d528cf",
+      "probability_float32_pixel_sha256": "32bb20991690d846493e71acc6f5d08e1e8a52857042e6fa94cc3809333c9bfa",
+      "runtime_seconds": 2.3345052919976297
+    },
+    "original context": {
+      "p0.20_file": "original-context/target-p0.20.png",
+      "p0.20_file_sha256": "bf9f9625420271bbbb2ae74765dff2109d716ee314e4b06bc457490ad2577d60",
+      "p0.50_file": "original-context/target-p0.50.png",
+      "p0.50_file_sha256": "d5dfe4dc2a3d733a775519dbd4d5d32f88fbd3db02326a14e906a08aa73fdca8",
+      "probability_file": "original-context/target-probability.float16.npy",
+      "probability_file_sha256": "7fcbdd7ecbf486a9e912d072ca9a62d3cecbab15c82aa68ef5de9d7876a58d1b",
+      "probability_float32_pixel_sha256": "6462af51d27d09ff53ce5051b72c07de0266759720aa7eb421a5f8155cda069b",
+      "runtime_seconds": 2.203435167000862
+    },
+    "page-ink vector boost": {
+      "p0.20_file": "page-ink-vector-boost/target-p0.20.png",
+      "p0.20_file_sha256": "7c9be309f6060ba2fcf1f2bd4eb461eb257c7e1d3a9f59cc977880b5203fe4fd",
+      "p0.50_file": "page-ink-vector-boost/target-p0.50.png",
+      "p0.50_file_sha256": "51e4eec8d4d8f5cf393a8301945d263fc1e23169a1dddcf455ffb0b63d29cea0",
+      "probability_file": "page-ink-vector-boost/target-probability.float16.npy",
+      "probability_file_sha256": "99847493238b3c74b472a6ef1e5557b94a4d45137cea7255898ff7dd1ac8110f",
+      "probability_float32_pixel_sha256": "3dbaefe2b6253ae2007ce144c91468569c6f4076a736e07bad886715e4768b85",
+      "runtime_seconds": 2.2524980410016724
+    }
+  },
+  "post_run_acting_safe_visual_review": {
+    "decision": "Promote page-ink-vector Eynollah p0.50 as an optional secondary proposal and p0.20 only on defer. Keep the untouched full-page hybrid as the anchor; never replace or automatically union it.",
+    "difficulties": "Enhanced outputs still fragment the faint word and also recover legitimate neighboring-line strokes at target-crop edges. The conservative paper proxy records almost no activation, but it cannot prove that every candidate-only source mark is handwriting or belongs to this word.",
+    "meaning": "This confirms enhancement changes model behavior, not merely human visibility. At p0.50, original real-context inference selected 64/6,571 faint-proxy pixels (0.97%) and retained 8.91% of the full-page anchor. Page-ink vector preprocessing selected 2,285/6,571 (34.77%), retained 90.65%, and selected zero conservative paper-proxy pixels. At p0.20 it selected 3,205/6,571 (48.77%), retained 88.33%, and selected one paper-proxy pixel. Dark-only tied p0.50 faint recall but retained only 72.61%; ridge-gated retained only 68.99%, so page-ink vector is the least-dominated tested challenger.",
+    "sealed_human_evidence_used": false,
+    "visual_scope": "Generated p0.50 and p0.20 source/overlay boards only; no sealed human page, answer, mask, or evaluator board was opened."
+  },
+  "review_boards": {
+    "0.20": {
+      "file": "p0.20-enhanced-eynollah-reinference-review.png",
+      "file_sha256": "99757eeef5aa1952f5d7bd93cc9b04dbf3047b7cdafda0ee694ef2ec53c2c108"
+    },
+    "0.50": {
+      "file": "p0.50-enhanced-eynollah-reinference-review.png",
+      "file_sha256": "a9035145b853c502c271100ccc3ba60df32a19f4e6b3cae3f9d53d6e10616a96"
+    }
+  },
+  "runtime": {
+    "device": "CPU",
+    "host_arch": "arm64",
+    "model_load_seconds": 4.022336999994877,
+    "tensorflow": "2.12.0",
+    "total_inference_seconds": 9.828842167000403,
+    "variant_inference_seconds": {
+      "dark-ink selective boost": 3.038403667000239,
+      "ink vector + ridge gate": 2.3345052919976297,
+      "original context": 2.203435167000862,
+      "page-ink vector boost": 2.2524980410016724
+    }
+  },
+  "schema_version": "enhanced-eynollah-reinference.v1",
+  "sealed_human_evidence_used": false,
+  "selection_rule": "Run the frozen 2022-08-16 Eynollah hybrid checkpoint at native scale on the same 160px real-context crop for original, dark-ink, page-ink-vector, and ridge-gated inputs."
+}

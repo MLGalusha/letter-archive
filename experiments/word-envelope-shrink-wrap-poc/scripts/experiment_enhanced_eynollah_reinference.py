@@ -44,11 +44,13 @@ def threshold_metrics(
     original_context: np.ndarray,
     faint_proxy: np.ndarray,
     paper_proxy: np.ndarray,
+    synthetic_bridge: np.ndarray,
     threshold: float,
 ) -> dict[str, int | float]:
     candidate = probability >= threshold
     reference = full_page_reference >= threshold
     original = original_context >= threshold
+    projected = candidate & ~synthetic_bridge
     return {
         "pixels": int(candidate.sum()),
         "components": component_count(candidate),
@@ -62,6 +64,10 @@ def threshold_metrics(
         "faint_proxy_recall": float((candidate & faint_proxy).sum() / max(1, faint_proxy.sum())),
         "paper_proxy_selected": int((candidate & paper_proxy).sum()),
         "paper_proxy_rate": float((candidate & paper_proxy).sum() / max(1, paper_proxy.sum())),
+        "synthetic_bridge_selected": int((candidate & synthetic_bridge).sum()),
+        "exact_source_projected_pixels": int(projected.sum()),
+        "exact_source_projected_components": component_count(projected),
+        "exact_source_projected_mask_pixel_sha256": sha256_array(projected.astype(np.uint8)),
         "mask_pixel_sha256": sha256_array(candidate.astype(np.uint8)),
     }
 
@@ -85,8 +91,10 @@ def render_board(
     source: np.ndarray,
     probabilities: dict[str, np.ndarray],
     metrics: dict[str, object],
+    synthetic_bridges: dict[str, np.ndarray],
     threshold: float,
     output: Path,
+    project_exact_source: bool = False,
 ) -> None:
     baseline = probabilities["original context"]
     ordered: list[tuple[str, np.ndarray | None]] = [("unaltered source", None), *probabilities.items()]
@@ -106,15 +114,26 @@ def render_board(
             subtitle_1 = "acting-safe source; no overlay"
             subtitle_2 = "cyan shared · red gained · gold lost vs original context"
         else:
-            panel = overlay(source, probability, baseline, threshold)
+            display_probability = probability.copy()
+            if project_exact_source:
+                display_probability[synthetic_bridges[name]] = 0.0
+            panel = overlay(source, display_probability, baseline, threshold)
             item = metrics[name][f"{threshold:.2f}"]
             subtitle_1 = (
                 f"gain {item['gained_vs_original_context']:,} · loss {item['lost_vs_original_context']:,} · "
                 f"faint {100*item['faint_proxy_recall']:.1f}%"
             )
-            subtitle_2 = (
-                f"paper {100*item['paper_proxy_rate']:.2f}% · full-page retain {100*item['full_page_retention']:.1f}%"
-            )
+            if project_exact_source:
+                subtitle_2 = (
+                    f"source-only {item['exact_source_projected_pixels']:,} px / "
+                    f"{item['exact_source_projected_components']} components · removed "
+                    f"{item['synthetic_bridge_selected']:,} bridge px"
+                )
+            else:
+                subtitle_2 = (
+                    f"paper {100*item['paper_proxy_rate']:.2f}% · "
+                    f"full-page retain {100*item['full_page_retention']:.1f}%"
+                )
         draw.text((x + 10, y + 34), subtitle_1, fill="#555555")
         draw.text((x + 10, y + 56), subtitle_2, fill="#555555")
         board.paste(panel, (x, y + title_height))
@@ -147,6 +166,7 @@ def main() -> None:
     probabilities: dict[str, np.ndarray] = {}
     runtimes: dict[str, float] = {}
     input_records: dict[str, object] = {}
+    synthetic_bridges: dict[str, np.ndarray] = {}
     for name, item in context["inputs"].items():
         input_path = enhancement_root / item["file"]
         image = cv2.imread(str(input_path), cv2.IMREAD_COLOR)
@@ -159,10 +179,18 @@ def main() -> None:
             target_y : target_y + target_height,
             target_x : target_x + target_width,
         ]
+        bridge_file = item.get("target_synthetic_bridge_file")
+        synthetic_bridges[name] = (
+            np.asarray(Image.open(enhancement_root / bridge_file)) == 0
+            if bridge_file
+            else np.zeros((target_height, target_width), dtype=bool)
+        )
         input_records[name] = {
             "path": str(input_path),
             "file_sha256": sha256_file(input_path),
             "upstream_expected_file_sha256": item["file_sha256"],
+            "target_synthetic_bridge_file": bridge_file,
+            "target_synthetic_bridge_pixels": int(synthetic_bridges[name].sum()),
         }
 
     original_probability = probabilities["original context"]
@@ -180,6 +208,7 @@ def main() -> None:
                 original_probability,
                 faint_proxy,
                 paper_proxy,
+                synthetic_bridges[name],
                 threshold,
             )
             for threshold in THRESHOLDS
@@ -199,22 +228,46 @@ def main() -> None:
         for threshold in THRESHOLDS:
             mask_path = variant_dir / f"target-p{threshold:.2f}.png"
             Image.fromarray(np.where(probability >= threshold, 0, 255).astype(np.uint8), "L").save(mask_path)
+            projected_path = variant_dir / f"target-p{threshold:.2f}-exact-source-projected.png"
+            projected = (probability >= threshold) & ~synthetic_bridges[name]
+            Image.fromarray(np.where(projected, 0, 255).astype(np.uint8), "L").save(projected_path)
             outputs[name][f"p{threshold:.2f}_file"] = str(mask_path.relative_to(args.output))
             outputs[name][f"p{threshold:.2f}_file_sha256"] = sha256_file(mask_path)
+            outputs[name][f"p{threshold:.2f}_exact_source_projected_file"] = str(
+                projected_path.relative_to(args.output)
+            )
+            outputs[name][f"p{threshold:.2f}_exact_source_projected_file_sha256"] = sha256_file(
+                projected_path
+            )
 
     review_boards: dict[str, object] = {}
     for threshold in THRESHOLDS:
         board_path = args.output / f"p{threshold:.2f}-enhanced-eynollah-reinference-review.png"
-        render_board(source, probabilities, metrics, threshold, board_path)
+        render_board(source, probabilities, metrics, synthetic_bridges, threshold, board_path)
+        projected_board_path = args.output / f"p{threshold:.2f}-exact-source-projected-review.png"
+        render_board(
+            source,
+            probabilities,
+            metrics,
+            synthetic_bridges,
+            threshold,
+            projected_board_path,
+            project_exact_source=True,
+        )
         review_boards[f"{threshold:.2f}"] = {
             "file": board_path.name,
             "file_sha256": sha256_file(board_path),
+            "exact_source_projected_file": projected_board_path.name,
+            "exact_source_projected_file_sha256": sha256_file(projected_board_path),
         }
     manifest = {
         "schema_version": "enhanced-eynollah-reinference.v1",
         "experiment_status": "measurement_complete_visual_review_pending",
         "sealed_human_evidence_used": False,
-        "selection_rule": "Run the frozen 2022-08-16 Eynollah hybrid checkpoint at native scale on the same 160px real-context crop for original, dark-ink, page-ink-vector, and ridge-gated inputs.",
+        "selection_rule": (
+            "Run the frozen 2022-08-16 Eynollah hybrid checkpoint at native scale on one fixed real-context crop "
+            f"for these upstream-frozen inputs: {', '.join(context['inputs'].keys())}."
+        ),
         "interpretation_guardrail": "Faint-vector and paper masks are acting-safe measurement probes, not truth. A useful enhancement must improve coherent target strokes without proportionally increasing paper selection or deleting reliable full-page anchor ink.",
         "enhancement_manifest": {"path": str(args.enhancement_manifest), "file_sha256": sha256_file(args.enhancement_manifest)},
         "full_page_probability": {"path": str(args.full_page_probability), "file_sha256": sha256_file(args.full_page_probability)},

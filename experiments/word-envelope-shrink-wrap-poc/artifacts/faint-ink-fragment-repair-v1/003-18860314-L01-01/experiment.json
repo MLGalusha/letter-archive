@@ -1,0 +1,117 @@
+{
+  "experiment_status": "acting_safe_visual_review_complete",
+  "eynollah_reinference_context": {
+    "bbox_xywh": [
+      1890,
+      1940,
+      920,
+      620
+    ],
+    "inputs": {
+      "original context": {
+        "file": "context-inputs/original-context.png",
+        "file_sha256": "13d2927d13c1b47e2b71e5f96047a4f4959d8e414127d8749b1784c905122b2c",
+        "rgb_pixel_sha256": "f17cd4054165fc8bf02e3964082ebe4dc6a9508d01d10e36d91d06e4b71c4db3"
+      },
+      "page-ink vector baseline": {
+        "file": "context-inputs/page-ink-vector-baseline.png",
+        "file_sha256": "0e81d17ba8075a63501985df789a9f29fe5bad32f28e3cb288426b13bbb48912",
+        "rgb_pixel_sha256": "5ff635373541fb4d365bfde27837ce79c555d5cd02476fbc0e36392cd4afc293"
+      },
+      "source-only reconnect 3x7": {
+        "file": "context-inputs/source-only-reconnect-3x7.png",
+        "file_sha256": "c7d00b800c062d68bdf31c148d9d83d7fc224efe84122087e855c9bb96710d53",
+        "rgb_pixel_sha256": "949cab1cfab5d4eafff23fb0ad855589b77ec3b524a3a757792ad2c6d86de8ad"
+      },
+      "temporary bridge 3x7": {
+        "file": "context-inputs/temporary-bridge-3x7.png",
+        "file_sha256": "d9692d57d5612cf97cfe18eff692a3ce04e1435d90fe697d2fb500ae7901daf4",
+        "rgb_pixel_sha256": "79ba4767d07ff97c811ac4a28fe93f635f5079cb77ab0b91afe9b5297bf7cc05",
+        "target_synthetic_bridge_file": "context-inputs/temporary-bridge-3x7-target-synthetic-bridge.png",
+        "target_synthetic_bridge_file_sha256": "1b35b9be94d32269009cf297e8da63e7ac5365e56533ccf0fb9b96159e79188f"
+      },
+      "temporary bridge 5x11": {
+        "file": "context-inputs/temporary-bridge-5x11.png",
+        "file_sha256": "698c37ee401e2e0e0cf20abf33c9d3a3dddd6c7a1cea3625982123dcf24a2ef5",
+        "rgb_pixel_sha256": "04c1f4e78b5412798702ad8b2e18e201bfb014d602184e403378df38b586ebc2",
+        "target_synthetic_bridge_file": "context-inputs/temporary-bridge-5x11-target-synthetic-bridge.png",
+        "target_synthetic_bridge_file_sha256": "9f121ba2b621ea87141c09ec6be813b0ee451b9782dc623b6262d1e753482db0"
+      }
+    },
+    "margin_pixels": 160,
+    "target_bbox_within_context_xywh": [
+      160,
+      160,
+      600,
+      300
+    ],
+    "target_faint_vector_proxy": {
+      "file": "context-inputs/target-faint-vector-proxy.png",
+      "file_sha256": "1987c9cab6dc74f62bdb8fa526bcbe8a44c213bfe245f0f73eaf2af3c68969f4"
+    },
+    "target_paper_proxy": {
+      "file": "context-inputs/target-paper-proxy.png",
+      "file_sha256": "edefec1a45192ce99c9331496e1d62e30b6d034edad500fc433586d0652ecc40"
+    }
+  },
+  "fragment_probability": {
+    "file_sha256": "99847493238b3c74b472a6ef1e5557b94a4d45137cea7255898ff7dd1ac8110f",
+    "high_seed_threshold": 0.5,
+    "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/enhanced-eynollah-reinference-v1/003-18860314-L01-01/page-ink-vector-boost/target-probability.float16.npy",
+    "weak_source_threshold": 0.2
+  },
+  "frozen_crop": {
+    "bbox_xywh": [
+      2050,
+      2100,
+      600,
+      300
+    ],
+    "label": "enough-tight"
+  },
+  "hybrid_probability": {
+    "file_sha256": "d2a6d6ba6f158dcc8f3a8fc710b513295e9f9c5679d23c8457ffc84ac2b74e65",
+    "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-hybrid-binarization-trial-20260809/003-18860314-L01-01/foreground-probability.float16.npy"
+  },
+  "interpretation_guardrail": "Temporary bridge pixels are model-input scaffolding, never source ink. Every downstream mask must report and remove selected synthetic bridge pixels before fitted geometry or training export.",
+  "post_run_visual_review": {
+    "decision": "advance_source_only_reconnect_reject_synthetic_bridges",
+    "frozen_before_sealed_evaluation": false,
+    "meaning": "The centered, source-supported repair candidates are visually plausible enough for acting-safe Eynollah reinference. Synthetic bridge pixels remain scaffolding only and cannot enter ink geometry or training labels.",
+    "rejected_precursor": "A first raw-vector-field bridge attempt created 16357 synthetic pixels from 32446 supported pixels and visibly webbed paper texture together. It was rejected before model inference and replaced with p0.50 Eynollah seeds propagated only through p0.20 Eynollah-supported source pixels.",
+    "sealed_human_evidence_inspected": false
+  },
+  "repair": {
+    "broad_5x11": {
+      "supported_source_pixels": 7705,
+      "synthetic_bridge_mask_pixel_sha256": "8aba1d3a5ea871261a1e63435d194dad1de34c8bafa0da9ddef9a9152750d608",
+      "synthetic_bridge_pixels": 2284,
+      "temporary_support_components": 10
+    },
+    "source_evidence_components": 34,
+    "source_evidence_pixels": 7729,
+    "strong_seed_pixels": 5544,
+    "tight_3x7": {
+      "supported_source_pixels": 7690,
+      "synthetic_bridge_mask_pixel_sha256": "85e14e03e84d0e34a7e0b3362b6baae7dbc9496d8515886870f30eac00247489",
+      "synthetic_bridge_pixels": 875,
+      "temporary_support_components": 11
+    }
+  },
+  "review_board": {
+    "file": "faint-ink-fragment-repair-input-review.png",
+    "file_sha256": "7b93c380ec35cbf4f5bae6e9fab96341eee7338dbfa8d45481432f1476fa89cc"
+  },
+  "runtime_seconds": 5.3646691250032745,
+  "schema_version": "faint-ink-fragment-repair.v1",
+  "sealed_human_evidence_used": false,
+  "selection_rule": "Reuse the prior page-ink vector context. Freeze 3x7 and 5x11 temporary grouping kernels before Eynollah reinference. Restrict all repair to the centered 22%-78% target-line corridor.",
+  "source": {
+    "file_sha256": "ac21aa38dbff33823d08e156b214355d85a55a3c8bbdccc0228738b70e41d027",
+    "path": "experiments/word-envelope-shrink-wrap-poc/workspaces/word-ink-ground-truth-v1/collections/003/18860314/L01/pages/003-18860314-L01-01/runs/run-4111a8cd75be/source/working.png"
+  },
+  "vector_score": {
+    "file_sha256": "0a4e047ce9c2f5fff164079c90d7c65a0a6a3949ae845a1db3ba0362139dd66b",
+    "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/line-conditioned-vector-ink-v1/003-18860314-L01-01/enough-tight/prototype-classifier-agreement.score.float16.npy"
+  }
+}

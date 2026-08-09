@@ -488,6 +488,64 @@ Exact first-run record:
 `18e4db46a57ee23af4db4a8e77fcdfb290aa52c95663da28195b2d5f57341c19`;
 9.68 s CPU).
 
+### Natural faint-word enhancement and Eynollah reinference
+
+The near-erased `enough-tight` crop was frozen for a bounded natural-visibility
+experiment. Eight source-only transformations were compared using median
+contrast on the line-vector faint proposal, paper-proxy standard deviation,
+SSIM to the source, mean RGB change, and clipping. These are acting-safe probes,
+not human truth.
+
+Generic operations exposed the expected failure modes. Paper flattening reduced
+faint-proxy contrast from 0.1112 to 0.0910. Unsharp masking raised it only to
+0.1227 while increasing paper standard deviation from 0.0165 to 0.0237. A blunt
+dark-ink boost reached 0.2645 but visibly strengthened paper fibres and reduced
+SSIM to 0.871.
+
+The stronger bounded idea learned the robust LAB direction from conservative
+paper pixels toward Eynollah's confident ink pixels, estimated a local paper
+background, and amplified only residuals aligned with that page-specific ink
+direction. It did not draw, inpaint, or synthesize strokes. The page-ink vector
+variant raised faint-proxy contrast to 0.2293 (2.06x), retained SSIM 0.911, and
+clipped no channels. A Sato-ridge-gated version reached 0.1720 (1.55x) while
+keeping paper standard deviation within 5.25% of the original and SSIM 0.963.
+
+Exact visibility record:
+`artifacts/natural-faint-word-enhancement-v1/003-18860314-L01-01/experiment.json`
+(SHA-256
+`3a1fa7967c64d156030302a73b103805ab77b1e1fbb9aed34f3ae9bf9af9f703`;
+8.91 s CPU including full-context preparation).
+
+The original, blunt dark-ink, page-ink-vector, and ridge-gated variants were
+then passed through the exact frozen 2022-08-16 Eynollah checkpoint at native
+scale with the same 160-pixel real context. This was a real model rerun, not a
+visibility inference. At p0.50:
+
+| Context input | Faint-proxy selected | Full-page anchor retained | Conservative paper proxy |
+| --- | ---: | ---: | ---: |
+| original | 64/6,571 (0.97%) | 8.91% | 0 |
+| dark-ink | 2,285/6,571 (34.77%) | 72.61% | 0 |
+| ridge-gated ink vector | 2,165/6,571 (32.95%) | 68.99% | 0 |
+| page-ink vector | 2,285/6,571 (34.77%) | **90.65%** | 0 |
+
+At p0.20, page-ink vector selected 3,205/6,571 faint-proxy pixels (48.77%),
+retained 88.33% of the full-page anchor, and selected one conservative
+paper-proxy pixel. It is therefore the least-dominated tested challenger.
+Visually it recovers coherent portions of the erased word, but remains
+fragmented and also recovers legitimate neighboring-line strokes at crop edges.
+The paper proxy is deliberately conservative and cannot prove ownership.
+
+Promote page-ink-vector Eynollah p0.50 as an optional secondary proposal and
+p0.20 only on defer. Keep untouched full-page hybrid output as the anchor. Never
+replace it or union the enhanced result automatically; apply line/word geometry,
+component ranking, and human correction afterward.
+
+Exact reinference record:
+`artifacts/enhanced-eynollah-reinference-v1/003-18860314-L01-01/experiment.json`
+(SHA-256
+`e0ad9207ec3e74cbe959cfd1ccab36b6d9c6159494c5415a20d58043ade0e4ac`;
+9.83 s inference plus 4.02 s model load on CPU).
+
 ### Positive–unknown line conditioning
 
 The second run introduced a rough centered line corridor covering 22%–78% of

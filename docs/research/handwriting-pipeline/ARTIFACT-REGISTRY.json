@@ -769,6 +769,36 @@
       "identity_sha256": null,
       "predecessor_ids": ["20260809-kraken-line-vector-crosspage-v1"],
       "summary": "Balanced anisotropic grouping reduced 36-168 raw evidence components to 10-22 editable left-to-right colour groups while preserving every exact ink pixel. Visual word alignment is promising, but tight splits marks and broad merges neighbors; expose all as correction challengers rather than ownership truth."
+    },
+    {
+      "record_id": "20260809-natural-faint-word-enhancement-v1",
+      "title": "Natural near-erased-word enhancement",
+      "evidence_role": "run_state",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/natural-faint-word-enhancement-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/natural-faint-word-enhancement-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "3a1fa7967c64d156030302a73b103805ab77b1e1fbb9aed34f3ae9bf9af9f703"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-page-adaptive-vector-ink-v1", "20260809-line-conditioned-vector-ink-v1"],
+      "summary": "A page-specific LAB ink-direction transform doubled faint-proxy contrast with no clipping; ridge gating delivered a quieter 1.55x gain. Generic sharpening and blunt darkening strengthened paper too, so only ink-vector variants advance to model reinference."
+    },
+    {
+      "record_id": "20260809-enhanced-eynollah-reinference-v1",
+      "title": "Enhanced Eynollah real-context reinference",
+      "evidence_role": "run_state",
+      "decision": "promoted_suggestion",
+      "acting_visibility": "safe",
+      "output_root": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/enhanced-eynollah-reinference-v1/003-18860314-L01-01",
+      "primary_record": {
+        "path": "/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc/experiments/word-envelope-shrink-wrap-poc/artifacts/enhanced-eynollah-reinference-v1/003-18860314-L01-01/experiment.json",
+        "file_sha256": "e0ad9207ec3e74cbe959cfd1ccab36b6d9c6159494c5415a20d58043ade0e4ac"
+      },
+      "identity_sha256": null,
+      "predecessor_ids": ["20260809-natural-faint-word-enhancement-v1", "20260809-eynollah-crop-preprocessing-v1"],
+      "summary": "Page-ink-vector context raised Eynollah p0.50 faint-proxy selection from 0.97% to 34.77% while retaining 90.65% of the full-page anchor and activating zero conservative paper-proxy pixels. Promote as an optional secondary proposal; fragmentation and neighboring-line recovery still require geometry and human ownership review."
     }
   ]
 }

@@ -1,0 +1,116 @@
+{
+  "baselines": {
+    "generic_clean": {
+      "file_sha256": "06bf425b4a7772412e1d5d81181b83876fec03d5e268404e6d1738a44fc53287",
+      "mask_pixel_sha256": "7d313a7c09be5c697400ac7f03127277b2d546d0f263ad202df2b306713f3e41",
+      "path": "workspaces/word-ink-ground-truth-v1/collections/003/18860314/L01/pages/003-18860314-L01-01/runs/run-407c741e8e13/source/clean.selection.mask.png"
+    },
+    "generic_high_recall": {
+      "file_sha256": "7e86b9e0b0ffb2c385cc293ab7494aeae85967253952e9dbbff0c1aed7d58941",
+      "mask_pixel_sha256": "343a69ccf7e124a6244e9136a59b99a4de49f1cdc5748cc2929727b5d33d391f",
+      "path": "workspaces/word-ink-ground-truth-v1/collections/003/18860314/L01/pages/003-18860314-L01-01/runs/run-407c741e8e13/source/high_recall.selection.mask.png"
+    }
+  },
+  "compatibility_attempts": [
+    {
+      "keras": "3.15.1",
+      "reason": "legacy SavedModel unsupported by Keras 3",
+      "status": "failed_before_inference",
+      "tensorflow": "2.21.0"
+    },
+    {
+      "keras": "2.12.0",
+      "status": "success",
+      "tensorflow": "2.12.0"
+    }
+  ],
+  "input": {
+    "file_sha256": "ac21aa38dbff33823d08e156b214355d85a55a3c8bbdccc0228738b70e41d027",
+    "path": "workspaces/word-ink-ground-truth-v1/collections/003/18860314/L01/pages/003-18860314-L01-01/runs/run-4111a8cd75be/source/working.png",
+    "size_wh": [
+      2834,
+      3780
+    ]
+  },
+  "manifest_sha256": "fe60435a8ad962c9bae002b399d8f152e87a7681bf402bbc8cd972142055a3b9",
+  "metrics": {
+    "clean": {
+      "components": 1024,
+      "components_ge_3px": 1019,
+      "components_ge_8px": 611,
+      "median_component_pixels": 10.0,
+      "page_fraction": 0.0031736696874311555,
+      "pixels": 33998
+    },
+    "high_recall": {
+      "components": 1398,
+      "components_ge_3px": 1155,
+      "components_ge_8px": 718,
+      "median_component_pixels": 8.0,
+      "page_fraction": 0.0050880651798082994,
+      "pixels": 54506
+    },
+    "overlap": {
+      "clean_fraction_retained_by_sbb": 0.7716630390022943,
+      "clean_only_vs_sbb_pixels": 7763,
+      "high_recall_fraction_retained_by_sbb": 0.6540564341540381,
+      "high_recall_only_vs_sbb_pixels": 18856,
+      "sbb_and_clean_pixels": 26235,
+      "sbb_and_high_recall_pixels": 35650,
+      "sbb_fraction_retained_by_clean": 0.20874775219211,
+      "sbb_fraction_retained_by_high_recall": 0.2836614204554496,
+      "sbb_only_vs_clean_pixels": 99443,
+      "sbb_only_vs_high_recall_pixels": 90028
+    },
+    "sbb_2021_03_09": {
+      "components": 207,
+      "components_ge_3px": 165,
+      "components_ge_8px": 150,
+      "median_component_pixels": 160.0,
+      "page_fraction": 0.011731880080503933,
+      "pixels": 125678
+    }
+  },
+  "model": {
+    "keras_version": "2.12.0",
+    "name": "SBB Binarization",
+    "official_repository": "https://github.com/qurator-spk/sbb_binarization",
+    "package_version": "0.1.0",
+    "release": "2021-03-09",
+    "tensorflow_version": "2.12.0",
+    "weights_url": "https://github.com/qurator-spk/sbb_binarization/releases/download/v0.0.11/saved_model_2021_03_09.zip",
+    "weights_zip_sha256": "5098d93b86783c7b723817b791c05a7de041f9a1d10c5515becc00195843f6d9"
+  },
+  "observations": [
+    "SBB strongly suppresses page, fold, and ruled-line background on this faint page.",
+    "SBB visually recovers substantially more coherent dark handwriting than the generic masks.",
+    "SBB still omits portions of faint strokes and words, so it is proposal evidence rather than ownership truth.",
+    "The next safe composition is SBB as high-confidence core plus local source-color growth constrained by line and rough word geometry."
+  ],
+  "outputs": {
+    "binary": {
+      "file_sha256": "604a4dcb8dee2264c1f09538909f4ed9fb71f632f9d1ab884d626dbf457bedb4",
+      "mask_pixel_sha256": "ff7c108659db039a8fdc218dcbdb3bc88c83e6a8a4fb54fc20c394939ebb9e6a",
+      "path": "artifacts/sbb-binarization-trial-20260809/003-18860314-L01-01/sbb-2021-03-09.png"
+    },
+    "comparison_board": {
+      "file_sha256": "60e4246c414daf5d67b9f2e9faac323090447bd7ebb9924703e54821d4d0a286",
+      "path": "artifacts/sbb-binarization-trial-20260809/003-18860314-L01-01/comparison-board.png"
+    },
+    "source_overlay": {
+      "file_sha256": "cae244a34f7caf8603b9251906b4050e6d001b702650228377d1145c0985df9c",
+      "path": "artifacts/sbb-binarization-trial-20260809/003-18860314-L01-01/source-overlay-sbb-vs-generic-high.png"
+    }
+  },
+  "page_id": "003-18860314-L01-01",
+  "runtime": {
+    "device": "CPU",
+    "host_arch": "arm64",
+    "system_seconds": 9.08,
+    "user_seconds": 278.95,
+    "wall_seconds": 56.22
+  },
+  "schema_version": "external-binarizer-trial.v1",
+  "sealed_human_evidence_used": false
+}
+

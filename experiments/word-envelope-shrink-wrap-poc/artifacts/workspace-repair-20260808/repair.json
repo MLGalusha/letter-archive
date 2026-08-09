@@ -1,0 +1,39 @@
+{
+  "catalog_revision": "b0af5c53746b2fba6a77d13d3c874d38820d13c3f02eed41869483103496a4d2",
+  "preserved_page": "001-18881103-L01-01",
+  "reason": [
+    "apply_exif_orientation",
+    "restore_source_color_guided_manual_selector"
+  ],
+  "registry_file_sha256_after": "6767f3fdb3a68936cdfdb2c639471a803ee90929f129bdd40d1eacbc0ceec1dd",
+  "registry_file_sha256_before": "d303c69e33781da7226a3703a9beb0e1711ea99867b170ee3a27fe7845813aca",
+  "replacements": [
+    {
+      "catalog_item_id": "002-19001113-L01-02",
+      "prior_session": "collections/002/19001113/L01/pages/002-19001113-L01-02/runs/run-473c18e2506c",
+      "prior_state_sha256": "a7ff62e299dc2a92229c98bc6c30b468d96656f28887a5f3d8ec7ce26ad65ac9",
+      "replacement_selection_mode": "source_color_guided",
+      "replacement_session": "collections/002/19001113/L01/pages/002-19001113-L01-02/runs/run-6b217db34f1c",
+      "replacement_source_size_wh": [
+        3000,
+        4000
+      ],
+      "replacement_state_sha256": "139d0773e529561ab20f144c2f326808010bfe90da0d66af04e894f2a1256b5d"
+    },
+    {
+      "catalog_item_id": "003-18860314-L01-01",
+      "prior_session": "collections/003/18860314/L01/pages/003-18860314-L01-01/runs/run-407c741e8e13",
+      "prior_state_sha256": "16c588f07547022dec3a756305734f80439b301b3a417fe08a82b327a5af4e66",
+      "replacement_selection_mode": "source_color_guided",
+      "replacement_session": "collections/003/18860314/L01/pages/003-18860314-L01-01/runs/run-4111a8cd75be",
+      "replacement_source_size_wh": [
+        2834,
+        3780
+      ],
+      "replacement_state_sha256": "b4ff57af9d4b3c329c6c13f6b63a396e47a016c95d132b2c4249cf7ad34ae9da"
+    }
+  ],
+  "report_sha256": "22f86539c62727051068b841d4a1dd358491592ae3e420db16fcfae4cc36d8dd",
+  "schema_version": "word-ground-truth-workspace-repair.v1"
+}
+

@@ -1,7 +1,11 @@
 {
   "schema_version": "handwriting-cloud-seed.v1",
   "created_at": "2026-08-09",
-  "branch": "handwriting-cloud-handoff",
+  "acting_repository": "https://github.com/MLGalusha/letter-archive-handwriting-acting-safe",
+  "branch": "main",
+  "history_boundary_tag": "acting-safe-root-2026-08-09",
+  "source_repository": "https://github.com/MLGalusha/letter-archive",
+  "source_research_commit": "d8c6afce0dc4919c93c4c61d2d2f66cbd6ee7918",
   "evidence_visibility": "acting-safe-source-and-frozen-software-output-only",
   "sealed_human_evidence_included": false,
   "purpose": "Minimal cloud-portable evidence needed to reproduce the current page-012 checkpoint and start independent replication without transferring the full local artifact archive.",
@@ -40,6 +44,7 @@
     {
       "record_id": "frozen-eynollah-probability",
       "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/best-ink-pipeline-cohort-v1/probabilities/012-18630108-L01-04/experiment.json",
+      "record_sha256": "d1ed509740c92cbcee3bf5c76dbe2e7a2615ae530c7507d01586cbcd2d4efdff",
       "primary_file": "experiments/word-envelope-shrink-wrap-poc/artifacts/best-ink-pipeline-cohort-v1/probabilities/012-18630108-L01-04/foreground-probability.float16.npy",
       "primary_file_sha256": "2caf0a6e85b671cfdd335c31a3f6cfb1facac2abd120991053eebc6e8ac54646"
     },
@@ -47,12 +52,14 @@
       "record_id": "page-specific-local-ink-reference-v3",
       "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/page-specific-local-ink-reference-v3/012-18630108-L01-04/top-left/experiment.json",
       "record_sha256": "e50e1d3fb8bf2693c3b771777e9b3741c8d294e75c7b3b911b6d78c6c3d63668",
+      "score_file": "experiments/word-envelope-shrink-wrap-poc/artifacts/page-specific-local-ink-reference-v3/012-18630108-L01-04/top-left/local-reference-score.float16.npy",
       "score_file_sha256": "fa704ad1dae14c88f20fd2eb1f6327b6201df07bb79022de7e4f95c3f0523d59"
     },
     {
       "record_id": "kraken7-layout-page012-v1",
       "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/kraken7-layout-page012-v1/012-18630108-L01-04/experiment.json",
       "record_sha256": "82ddcde07a20d38493e0f33df2bb955336d1f70b02d704856c8a70076cd44344",
+      "upright_provider_file": "experiments/word-envelope-shrink-wrap-poc/artifacts/kraken7-layout-page012-v1/012-18630108-L01-04/provider-output-upright.json",
       "upright_provider_sha256": "e113ed25e7da8593e20cbede8217c7a92ca7a9b5b859c5c9ae7f4cd91c640693",
       "kraken_blla_model_sha256": "77a638a83c9e535620827a09e410ed36391e9e8e8126d5796a0f15b978186056"
     },
@@ -60,15 +67,37 @@
       "record_id": "kraken-stroke-adaptive-recovery-v3-m55",
       "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/Kraken-stroke-adaptive-recovery-v3-m55/012-18630108-L01-04/top-left/experiment.json",
       "record_sha256": "1bc4d60ec58477e623b38358cde636e0e9d87bc4dabd279a6e1b422ac91b6c1d",
+      "group_ids_file": "experiments/word-envelope-shrink-wrap-poc/artifacts/Kraken-stroke-adaptive-recovery-v3-m55/012-18630108-L01-04/top-left/adaptive-group-ids.int32.npy",
       "group_ids_file_sha256": "1a7b03b5caa85cfc740fcc95cada09cce2920319e8b9656917ce31f480d07bbd"
     },
     {
       "record_id": "eynollah-taught-group-ranking-v1",
       "path": "experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-taught-group-ranking-v1/012-18630108-L01-04/top-left/experiment.json",
       "record_sha256": "3c8444c8b34119fa6be010019f4bb2fa7838412eaa2a8eaddafca129c219313e",
+      "board_file": "experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-taught-group-ranking-v1/012-18630108-L01-04/top-left/eynollah-taught-group-ranking.png",
       "board_file_sha256": "38a5d1a1cd2c8080d7a0004dd534eb151e4aa5887c405af9afa9c9561d835722"
     }
   ],
+  "external_models": [
+    {
+      "model_id": "sbb-binarization-2022-08-16",
+      "source_revision": "cfdf4446f8e33b2c743a66bf7c1a4686515442ae",
+      "runtime_file": ".model-cache/sbb-binarization/saved_model/2022-08-16/saved_model.pb",
+      "file_sha256": "63cfe676b63569e7cbebf05567448834945e9be9c35bcf3dbce59312ca0d1902"
+    },
+    {
+      "model_id": "kraken-7.0.3-blla",
+      "runtime_locator": "installed kraken package blla.mlmodel",
+      "file_sha256": "77a638a83c9e535620827a09e410ed36391e9e8e8126d5796a0f15b978186056"
+    }
+  ],
+  "portable_registry_baseline": {
+    "path": "docs/research/handwriting-pipeline/ARTIFACT-REGISTRY.json",
+    "entry_count": 65,
+    "record_ids_newline_sha256": "f9879b02cbae951ff50ee52540ff0c5fcff556e3193895bc5bd092fcd568fcb0",
+    "registry_file_sha256_at_export": "0a4e0028938cdc0c8817757c32f10af5329dcd67ea733bee8cb743349c296118",
+    "policy": "The first 65 append-only records predate the portable export. Their absent artifact roots are intentional. Any later appended record must have a present, hash-matching primary record."
+  },
   "excluded": [
     "completed human pages and sealed evaluation artifacts",
     "the approximately 1.8 GiB complete local POC artifact tree",

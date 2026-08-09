@@ -1,0 +1,24 @@
+{
+  "schema_version": "letter-archive-handwriting-acting-safe-export.v1",
+  "created_at": "2026-08-09",
+  "source_repository": "https://github.com/MLGalusha/letter-archive",
+  "source_research_commit": "d8c6afce0dc4919c93c4c61d2d2f66cbd6ee7918",
+  "export_hardening": "Cloud-boundary documentation, validators, and Python 3.11/model-hash setup checks are included in the exported root in addition to the source research commit.",
+  "acting_repository": "https://github.com/MLGalusha/letter-archive-handwriting-acting-safe",
+  "acting_branch": "main",
+  "history_boundary_tag": "acting-safe-root-2026-08-09",
+  "history_policy": "The export root has no parent. The acting repository must never add or fetch the source repository as a remote.",
+  "artifact_policy": "The root contains only the five acting-safe artifact prefixes enumerated below. Future acting-safe experiment artifacts may be appended after validation.",
+  "root_acting_safe_artifact_prefixes": [
+    "experiments/word-envelope-shrink-wrap-poc/artifacts/best-ink-pipeline-cohort-v1/probabilities/012-18630108-L01-04/",
+    "experiments/word-envelope-shrink-wrap-poc/artifacts/page-specific-local-ink-reference-v3/012-18630108-L01-04/top-left/",
+    "experiments/word-envelope-shrink-wrap-poc/artifacts/kraken7-layout-page012-v1/012-18630108-L01-04/",
+    "experiments/word-envelope-shrink-wrap-poc/artifacts/Kraken-stroke-adaptive-recovery-v3-m55/012-18630108-L01-04/top-left/",
+    "experiments/word-envelope-shrink-wrap-poc/artifacts/eynollah-taught-group-ranking-v1/012-18630108-L01-04/top-left/"
+  ],
+  "root_excluded_prefixes": [
+    "experiments/word-envelope-shrink-wrap-poc/artifacts/ (except the five allowlisted prefixes)",
+    "experiments/word-envelope-shrink-wrap-poc/corpus/"
+  ],
+  "sealed_human_or_evaluator_contents_opened_during_export": false
+}

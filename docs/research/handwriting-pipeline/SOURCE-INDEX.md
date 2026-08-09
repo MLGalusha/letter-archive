@@ -4,6 +4,7 @@
 
 | Area | Branch/worktree | Primary material |
 |---|---|---|
+| Acting-safe cloud continuation | Private history-free repository `MLGalusha/letter-archive-handwriting-acting-safe`, branch `main`, boundary tag `acting-safe-root-2026-08-09` | Source/code/docs plus the 89,042,760-byte page-012 and challenger seed enumerated by `CLOUD-SEED-MANIFEST.json`; ordinary Letter Archive remotes are forbidden in an acting environment because their history includes evaluator-only material |
 | Current Letter Archive and rotated-region research | `rotated-region-recovery` at `/Users/masongalusha/Workspace/projects/letter-archive` | `backend/benchmarks/`, `backend/test-results/reassembly-poc/`, Kraken/layout runtime and admin review tools |
 | Candidate-word ownership, fitted envelope, and agent walkthrough | `word-envelope-shrink-wrap-poc` at `/Users/masongalusha/Workspace/projects/letter-archive-word-envelope-shrink-wrap-poc` | `experiments/word-envelope-shrink-wrap-poc/` |
 | Frozen Kraken native-layout history | `kraken7-native-layout` | `backend/benchmarks/layout/`, engine configurations, benchmark runtime |

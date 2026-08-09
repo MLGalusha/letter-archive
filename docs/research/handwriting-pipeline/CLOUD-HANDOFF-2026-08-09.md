@@ -2,13 +2,18 @@
 
 Date: 2026-08-09
 
-Branch: `handwriting-cloud-handoff`
+Acting branch: `main`
 
-Repository: `https://github.com/MLGalusha/letter-archive`
+Acting repository: `https://github.com/MLGalusha/letter-archive-handwriting-acting-safe`
 
-This branch merges the active implementation lineage ending at
-`42a16ad3` with the durable research-document lineage ending at `dd599d63`.
-It is the only branch a cloud agent should use for this continuation.
+This private repository is a history-free, acting-safe export of research source
+commit `d8c6afce0dc4919c93c4c61d2d2f66cbd6ee7918` plus the cloud-boundary
+validators and setup hardening in this root. The source research commit merged
+the active implementation lineage ending at `42a16ad3` with the durable
+research-document lineage ending at `dd599d63`. The ordinary
+`MLGalusha/letter-archive` repository and its `handwriting-cloud-handoff` branch
+contain inherited evaluator-only history and must not be connected to an acting
+cloud agent. Use only the acting-safe repository above.
 
 ## Objective
 
@@ -26,9 +31,10 @@ The desired final output for each word is not a normal rectangle. It is:
 
 1. `README.md` in this directory;
 2. `SOURCE-INDEX.md`;
-3. `RESEARCH-MAP.md`;
-4. `PAGE-012-MISSED-INK-REFERENCE-AND-ADAPTIVE-GROUPING-2026-08-09.md`;
-5. this file.
+3. `HANDOFF-2026-08-08-INK-OWNERSHIP-ITERATION.md`;
+4. `RESEARCH-MAP.md`;
+5. `PAGE-012-MISSED-INK-REFERENCE-AND-ADAPTIVE-GROUPING-2026-08-09.md`;
+6. this file.
 
 Use `ARTIFACT-REGISTRY.json` for exact predecessor links and primary-record
 hashes. Do not read every historical artifact into context. Load only the current
@@ -38,8 +44,9 @@ experiment and the directly relevant negative controls.
 
 The acting agent must never inspect or render a completed human page, sealed word
 mask, sealed answer ledger, or sealed evaluation board. Those are post-freeze
-evaluation evidence only. The tracked cloud seed contains only acting-safe source
-photographs and frozen software outputs.
+evaluation evidence only. The acting-safe repository contains only acting-safe
+source photographs and frozen software outputs. Its root commit has no parent,
+and the `acting-safe-root-2026-08-09` tag is the history boundary.
 
 Do not use OCR/transcript text as permission to consume visible ink. Do not call a
 Kraken polygon, Eynollah mask, local classifier output, or prettier image ground
@@ -136,8 +143,14 @@ Not yet supported:
 ### 1. Verify the cloud checkpoint
 
 - Run `bash scripts/setup-handwriting-cloud.sh`.
+- Run `python3 scripts/validate-handwriting-acting-tree.py` and require a clean
+  current-tree, root-tree, and all-reachable-history result.
 - Run `python3 scripts/validate-handwriting-cloud-seed.py` and require a clean
   result before using the tracked cloud-seed files.
+- Run the artifact registry validator with
+  `--portable-seed-manifest docs/research/handwriting-pipeline/CLOUD-SEED-MANIFEST.json`.
+  It permits absent files only for the exact 65-record pre-export prefix; every
+  later cloud record must exist and match its declared hash.
 - Re-run only the current group-ranking script first. Its mask/group IDs must stay
   bit-identical. Do not start expensive model inference until this passes.
 
@@ -211,7 +224,10 @@ save float16 probabilities, exit, and start model-free analysis in a new process
 
 ## Git and durability
 
-- Work only from `handwriting-cloud-handoff` initially.
+- Work only from `MLGalusha/letter-archive-handwriting-acting-safe` on `main`.
+- Never add the ordinary Letter Archive repository as a remote in an acting
+  environment. It contains evaluator-only history even if the current checkout
+  appears harmless.
 - Keep research branches free of unrelated application changes.
 - Commit meaningful scripts and compact manifests/boards frequently.
 - Before ending a bounded experiment, update `SOURCE-INDEX.md`, append the artifact

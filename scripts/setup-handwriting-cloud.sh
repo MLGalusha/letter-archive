@@ -9,18 +9,48 @@ MODEL_ROOT="$REPO_ROOT/.model-cache"
 export PIP_DISABLE_PIP_VERSION_CHECK=1
 export PIP_NO_CACHE_DIR=1
 
-choose_python() {
-  for candidate in python3.11 python3.12 python3; do
-    if command -v "$candidate" >/dev/null 2>&1; then
+choose_python_311() {
+  local candidate
+  for candidate in python3.11 python3; do
+    if command -v "$candidate" >/dev/null 2>&1 && \
+      "$candidate" -c 'import sys; raise SystemExit(sys.version_info[:2] != (3, 11))'; then
       command -v "$candidate"
       return 0
     fi
   done
+  if command -v uv >/dev/null 2>&1; then
+    uv python install 3.11
+    uv python find 3.11
+    return 0
+  fi
   return 1
 }
 
-BASE_PYTHON="$(choose_python)"
+if ! BASE_PYTHON="$(choose_python_311)"; then
+  echo "Python 3.11 is required for the frozen TensorFlow 2.12 runtime." >&2
+  echo "Install Python 3.11 (or uv) in the cloud environment, then rerun this setup." >&2
+  exit 2
+fi
 mkdir -p "$VENV_ROOT" "$MODEL_ROOT"
+
+verify_sha256() {
+  "$BASE_PYTHON" - "$1" "$2" <<'PY'
+from hashlib import sha256
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+expected = sys.argv[2]
+digest = sha256()
+with path.open("rb") as stream:
+    for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+        digest.update(chunk)
+actual = digest.hexdigest()
+if actual != expected:
+    raise SystemExit(f"SHA-256 mismatch for {path}: expected {expected}, got {actual}")
+print(f"verified {path}: {actual}")
+PY
+}
 
 if [[ ! -x "$VENV_ROOT/word-ink/bin/python" ]]; then
   "$BASE_PYTHON" -m venv "$VENV_ROOT/word-ink"
@@ -62,6 +92,9 @@ snapshot_download(
 )
 PY
 fi
+verify_sha256 \
+  "$EYNOLLAH_MODEL/saved_model.pb" \
+  "63cfe676b63569e7cbebf05567448834945e9be9c35bcf3dbce59312ca0d1902"
 
 # Kraken 7 embeds the exact blla.mlmodel used by the accepted page-012 run.
 if [[ ! -x "$VENV_ROOT/kraken7/bin/python" ]]; then
@@ -69,6 +102,16 @@ if [[ ! -x "$VENV_ROOT/kraken7/bin/python" ]]; then
 fi
 "$VENV_ROOT/kraken7/bin/python" -m pip install --upgrade pip
 "$VENV_ROOT/kraken7/bin/python" -m pip install "kraken==7.0.3"
+
+KRAKEN_MODEL="$("$VENV_ROOT/kraken7/bin/python" - <<'PY'
+import kraken
+from pathlib import Path
+print(Path(kraken.__file__).with_name("blla.mlmodel"))
+PY
+)"
+verify_sha256 \
+  "$KRAKEN_MODEL" \
+  "77a638a83c9e535620827a09e410ed36391e9e8e8126d5796a0f15b978186056"
 
 "$VENV_ROOT/word-ink/bin/python" - <<'PY'
 import cv2, numpy, PIL, scipy, skimage, shapely

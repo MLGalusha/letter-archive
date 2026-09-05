@@ -28,6 +28,16 @@ afterEach(() => {
 });
 
 describe("LetterCard", () => {
+  it("keeps admin picker cards as buttons even with modified clicks", () => {
+    const onClick = vi.fn();
+    render(<LetterCard selection card={{ id: "pick-1", imageType: "letter", title: "Pick me" }} onClick={onClick} />);
+    const button = screen.getByRole("button", { name: "Letter" });
+    expect(button).not.toHaveAttribute("href");
+    fireEvent.click(button, { ctrlKey: true });
+    expect(onClick).toHaveBeenCalledWith("pick-1");
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+
   it("only cools down a card after the auto-preview fully finishes", async () => {
     vi.useFakeTimers();
     const onClick = vi.fn();
@@ -65,13 +75,14 @@ describe("LetterCard", () => {
       />,
     );
 
-    const button = screen.getByRole("button", {
+    const button = screen.getByRole("link", {
       name: /Jimmie → Molly/i,
     });
     const previewToggle = screen.getByRole("button", {
       name: "Show search match preview",
     });
 
+    expect(button).toHaveAttribute("href", "/letter/letter-1");
     expect(button).not.toHaveAttribute("title");
     expect(screen.queryByText("3 matches")).not.toBeInTheDocument();
     expect(screen.queryByText("Transcript match")).not.toBeInTheDocument();
@@ -143,7 +154,7 @@ describe("LetterCard", () => {
       />,
     );
 
-    const button = screen.getByRole("button", {
+    const button = screen.getByRole("link", {
       name: /August 11th, 1947/i,
     });
     const shell = button.closest(".letter-card-shell") as HTMLElement;
@@ -223,7 +234,7 @@ describe("LetterCard", () => {
       />,
     );
 
-    const button = screen.getByRole("button", {
+    const button = screen.getByRole("link", {
       name: /August 13th, 1947/i,
     });
     const shell = button.closest(".letter-card-shell") as HTMLElement;

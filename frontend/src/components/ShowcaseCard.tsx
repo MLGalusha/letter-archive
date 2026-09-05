@@ -17,7 +17,7 @@ export interface ShowcaseItem {
 
 interface ShowcaseCardProps {
   items: ShowcaseItem[];
-  onNavigate: (letterId: string, imageId?: string) => void;
+  onNavigate?: (letterId: string, imageId?: string) => void;
   onInteraction?: () => void;
 }
 
@@ -40,12 +40,21 @@ export default function ShowcaseCard({ items, onNavigate, onInteraction }: Showc
     onInteraction?.();
   };
 
+  const Content = onNavigate ? 'a' : 'div';
+  const params = new URLSearchParams({ from: 'highlight' });
+  if (item.imageId) params.set('image', item.imageId);
+
   return (
-    <button
-      type="button"
-      className={`cd-highlight-card cd-highlight-card--${item.mediaType}`}
-      onClick={() => onNavigate(item.letterId, item.imageId)}
-    >
+    <div className={`cd-highlight-card cd-highlight-card--${item.mediaType}`}>
+      <Content className="cd-highlight-open-link" data-carousel-drag={onNavigate ? true : undefined} draggable={false}
+        href={onNavigate ? `/letter/${item.letterId}?${params.toString()}` : undefined}
+        aria-label={[item.label, item.peopleLine, item.date, item.hook].filter(Boolean).join(', ')}
+        onClick={(event: ReactMouseEvent) => {
+          if (!onNavigate || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          event.preventDefault();
+          onNavigate(item.letterId, item.imageId);
+        }}
+      >
       {items.map((gi, idx) => (
         idx === index && gi.imageUrl ? (
           <ProgressiveImage
@@ -79,23 +88,24 @@ export default function ShowcaseCard({ items, onNavigate, onInteraction }: Showc
           <p className="cd-highlight-hook">{item.hook}</p>
         )}
       </div>
+      </Content>
       {hasMultiple && (
         <>
           <span className="cd-highlight-page-counter">
             {index + 1}/{items.length}
           </span>
-          <div
+          <button type="button"
             className="cd-highlight-zone cd-highlight-zone--prev"
             onClick={handlePrev}
             aria-label="Previous"
           />
-          <div
+          <button type="button"
             className="cd-highlight-zone cd-highlight-zone--next"
             onClick={handleNext}
             aria-label="Next"
           />
         </>
       )}
-    </button>
+    </div>
   );
 }

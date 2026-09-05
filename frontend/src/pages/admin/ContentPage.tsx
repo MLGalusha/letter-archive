@@ -962,6 +962,7 @@ function HomepageTab() {
                       className={`fl-picker-card${item.id === featured?.letter_id ? ' fl-picker-card--selected' : ''}`}
                     >
                       <LetterCard
+                        selection
                         card={item}
                         onClick={(id) => void handleSelectFeatured(id)}
                       />

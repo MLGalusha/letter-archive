@@ -1,4 +1,4 @@
-import { render, screen, act } from "@testing-library/react";
+import { render, screen, act, fireEvent } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import InfiniteCarousel from "../InfiniteCarousel";
 
@@ -26,6 +26,75 @@ describe("InfiniteCarousel", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it("allows opted-in links to drag without navigating, while ordinary clicks still work", () => {
+    const onClick = vi.fn((event) => event.preventDefault());
+    const { container } = render(<InfiniteCarousel suppressClickAfterDrag>{[
+      <a key="a" href="/letter/one" data-carousel-drag draggable={false} onClick={onClick}>Open scan</a>,
+      <div key="b">Other slide</div>,
+    ]}</InfiniteCarousel>);
+    const link = screen.getAllByText("Open scan")[0];
+    fireEvent.mouseDown(link, { button: 0, clientX: 300, clientY: 100 });
+    fireEvent.mouseMove(link, { clientX: 100, clientY: 100 });
+    fireEvent.mouseUp(link);
+    fireEvent.click(link, { detail: 1 });
+    expect(onClick).not.toHaveBeenCalled();
+    expect(container.querySelectorAll('[role="tab"]')[1]).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(link, { detail: 1 });
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not swallow a CTA click after a drag leaves the track", () => {
+    const onClick = vi.fn((event) => event.preventDefault());
+    const { container } = render(<InfiniteCarousel suppressClickAfterDrag>{[
+      <div key="a">Drag surface</div>,
+      <a key="b" href="/collections" onClick={onClick}>Browse collections</a>,
+    ]}</InfiniteCarousel>);
+    const track = container.querySelector('.carousel-track')!;
+    fireEvent.mouseDown(track, { button: 0, clientX: 300, clientY: 100 });
+    fireEvent.mouseMove(track, { clientX: 100, clientY: 100 });
+    fireEvent.mouseLeave(track);
+    const link = screen.getAllByText('Browse collections')[0];
+    fireEvent.mouseDown(link, { button: 0 });
+    fireEvent.mouseUp(link);
+    fireEvent.click(link, { detail: 1 });
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not apply pointer drag suppression to keyboard activation", () => {
+    const onClick = vi.fn((event) => event.preventDefault());
+    const { container } = render(<InfiniteCarousel suppressClickAfterDrag>{[
+      <div key="a">Drag surface</div>,
+      <a key="b" href="/collections" onClick={onClick}>Browse collections</a>,
+    ]}</InfiniteCarousel>);
+    const track = container.querySelector('.carousel-track')!;
+    fireEvent.mouseDown(track, { button: 0, clientX: 300, clientY: 100 });
+    fireEvent.mouseMove(track, { clientX: 100, clientY: 100 });
+    fireEvent.mouseUp(track);
+    fireEvent.click(screen.getAllByText('Browse collections')[0], { detail: 0 });
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("suppresses the same drag click after leaving and re-entering the track", () => {
+    const onClick = vi.fn((event) => event.preventDefault());
+    const { container } = render(<InfiniteCarousel suppressClickAfterDrag>{[
+      <a key="a" href="/letter/one" data-carousel-drag onClick={onClick}>Open scan</a>,
+      <div key="b">Other slide</div>,
+    ]}</InfiniteCarousel>);
+    const link = screen.getAllByText('Open scan')[0];
+    const track = container.querySelector('.carousel-track')!;
+    fireEvent.mouseDown(link, { button: 0, clientX: 300, clientY: 100 });
+    fireEvent.mouseMove(link, { clientX: 100, clientY: 100 });
+    fireEvent.mouseLeave(track);
+    fireEvent.mouseEnter(track);
+    fireEvent.mouseUp(link);
+    fireEvent.click(link, { detail: 1 });
+    expect(onClick).not.toHaveBeenCalled();
+    fireEvent.mouseDown(link, { button: 0 });
+    fireEvent.mouseUp(link);
+    fireEvent.click(link, { detail: 1 });
+    expect(onClick).toHaveBeenCalledTimes(1);
   });
 
   it("renders children as slides", () => {

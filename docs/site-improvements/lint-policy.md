@@ -15,3 +15,7 @@ Remaining debt is mainly React hook/compiler diagnostics requiring individual
 behavioral review. Do not silence whole rule families to make CI appear clean.
 Underscore placeholders and intentionally omitted destructured rest fields follow
 the repository's existing convention; genuinely unused ordinary names still fail.
+
+## Diagnostic uploads
+
+Playwright reports and backend log attachments are best-effort, time-bounded uploads. GitHub artifact-service outages produce an explicit warning without turning passing tests into a failed quality gate. Test, typecheck, build, lint, and dependency-audit steps remain mandatory; failed tests still fail their jobs even if an upload succeeds or is tolerated.

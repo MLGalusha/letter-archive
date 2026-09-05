@@ -7,24 +7,10 @@ import BackToTop from '../components/BackToTop';
 import { saveCollectionsSort, loadCollectionsSort } from '../utils/searchPersistence';
 import useIsMobile from '../hooks/useIsMobile';
 import './CollectionsPage.css';
+import { archiveDateSpan } from '../utils/archiveDateSpan';
 
 function formatDateRange(range: { min: string; max: string } | null | undefined): string | null {
-  if (!range) return null;
-  const fmt = (raw: string) => {
-    const digits = raw.replace(/[^0-9]/g, '').slice(0, 8);
-    if (digits.length < 6) return null;
-    const year = Number(digits.slice(0, 4));
-    const month = Number(digits.slice(4, 6)) - 1;
-    if (month < 0 || month > 11 || year < 1700) return null;
-    const hasDay = digits.length >= 8 && Number(digits.slice(6, 8)) > 0;
-    const d = new Date(year, month, hasDay ? Number(digits.slice(6, 8)) : 1);
-    return { year, month, label: d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) };
-  };
-  const start = fmt(range.min);
-  const end = fmt(range.max);
-  if (!start) return null;
-  if (!end || (start.year === end.year && start.month === end.month)) return start.label;
-  return `${start.label} \u2014 ${end.label}`;
+  return range ? archiveDateSpan([range.min, range.max], false)?.label ?? null : null;
 }
 
 type SortField = 'number' | 'letters' | 'date' | 'title';

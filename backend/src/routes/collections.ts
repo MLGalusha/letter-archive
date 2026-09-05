@@ -121,12 +121,14 @@ router.get('/collections', async (req, res, next) => {
         ))
         .groupBy(letters.collectionId),
 
-      // Date ranges per collection
+      // Preserve filename date precision while comparing consistent eight-character keys.
+      // Prefixing the original value with its lower/upper bound lets MIN/MAX
+      // retain the winning partial date without sorting arrays for each collection.
       db
         .select({
           collectionId: letters.collectionId,
-          minDate: sql<string>`MIN(COALESCE(letter_date::text, date_raw))`,
-          maxDate: sql<string>`MAX(COALESCE(letter_date::text, date_raw))`,
+          minDate: sql<string>`SUBSTRING(MIN(REPLACE(UPPER(date_raw), 'X', '0') || UPPER(date_raw)) FILTER (WHERE date_raw ~ '^[0-9]{2}') FROM 9)`,
+          maxDate: sql<string>`SUBSTRING(MAX(REPLACE(UPPER(date_raw), 'X', '9') || UPPER(date_raw)) FILTER (WHERE date_raw ~ '^[0-9]{2}') FROM 9)`,
         })
         .from(letters)
         .where(and(

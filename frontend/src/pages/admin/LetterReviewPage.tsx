@@ -1,3 +1,4 @@
+import { useReviewNavigationGuard } from "./LetterReview/useReviewNavigationGuard";
 import {
   startTransition,
   useState,
@@ -126,6 +127,7 @@ export default function LetterReviewPage() {
   const {
     autoSaveStatus,
     flushPendingSaves,
+    hasPendingSaves,
     identityUpdateSecondsRemaining,
     identityUpdateState,
     retagState,
@@ -140,6 +142,7 @@ export default function LetterReviewPage() {
     mutationsBlocked,
     syncIdentityMetadata,
   });
+  useReviewNavigationGuard(hasPendingSaves, flushPendingSaves);
   const scheduleStatusReset = useLetterReviewStatusResets(visit);
   const photoDescriptionWorkspace = usePhotoDescriptionWorkspace({
     visit,

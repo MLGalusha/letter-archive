@@ -83,6 +83,7 @@ export function useAutoSave({
   );
   const {
     autoSaveStatus,
+    busyLanes,
     scheduleDebouncedSave,
     flushDebouncedSaves,
     cancelDebouncedSaves: cancelCoordinatorSaves,
@@ -341,6 +342,7 @@ export function useAutoSave({
   ]);
 
   return {
+    hasPendingSaves: busyLanes.size > 0 || autoSaveStatus === 'error',
     autoSaveStatus,
     identityUpdateSecondsRemaining,
     identityUpdateState,

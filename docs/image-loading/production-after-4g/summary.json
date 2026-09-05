@@ -1,0 +1,158 @@
+{
+  "frontendReleaseAtEnd": {
+    "releaseSha": "ec72790c8bbcb51020ef3d000bf80fb9ca555152"
+  },
+  "measuredAt": "2026-09-05T07:14:42.983Z",
+  "sourceRevision": "ec72790c8bbcb51020ef3d000bf80fb9ca555152",
+  "frontendRelease": {
+    "releaseSha": "ec72790c8bbcb51020ef3d000bf80fb9ca555152"
+  },
+  "substitutedBundleSha256": null,
+  "method": {
+    "stepMs": 400,
+    "steps": 16,
+    "scrollViewportFraction": 0.65,
+    "settleMs": 5000,
+    "pollMs": 50,
+    "cache": "fresh browser context per run; origin cache uncontrolled",
+    "notes": "Full wait includes opacity transition. Only observed cards included; unresolved reported separately. No CPU throttle, not a physical phone."
+  },
+  "results": [
+    {
+      "label": "production-after-4g",
+      "base": "https://voicesthatremain.com",
+      "cacheState": "fresh browser",
+      "assets": null,
+      "path": "/",
+      "viewportName": "mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "deviceScaleFactor": 2,
+      "network": "4g",
+      "run": 1,
+      "summary": {
+        "cardsSeen": 82,
+        "scrollCards": 76,
+        "unresolved": 0,
+        "p50FullWaitMs": 0,
+        "p75FullWaitMs": 0,
+        "p95FullWaitMs": 0,
+        "maxFullWaitMs": 0,
+        "p75UsableWaitMs": 0,
+        "over3s": 0,
+        "imageRequests": 90,
+        "wireBytes": 2351277,
+        "requestP75Ms": 451,
+        "lcpMs": 1404,
+        "visibleBlockedMs": 0,
+        "pageErrors": []
+      },
+      "lcp": 1404,
+      "phase": "return"
+    },
+    {
+      "label": "production-after-4g",
+      "base": "https://voicesthatremain.com",
+      "cacheState": "fresh browser",
+      "assets": null,
+      "path": "/",
+      "viewportName": "mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "deviceScaleFactor": 2,
+      "network": "4g",
+      "run": 2,
+      "summary": {
+        "cardsSeen": 82,
+        "scrollCards": 76,
+        "unresolved": 0,
+        "p50FullWaitMs": 0,
+        "p75FullWaitMs": 0,
+        "p95FullWaitMs": 0,
+        "maxFullWaitMs": 0,
+        "p75UsableWaitMs": 0,
+        "over3s": 0,
+        "imageRequests": 90,
+        "wireBytes": 2351302,
+        "requestP75Ms": 410,
+        "lcpMs": 1284,
+        "visibleBlockedMs": 0,
+        "pageErrors": []
+      },
+      "lcp": 1284,
+      "phase": "return"
+    },
+    {
+      "label": "production-after-4g",
+      "base": "https://voicesthatremain.com",
+      "cacheState": "fresh browser",
+      "assets": null,
+      "path": "/",
+      "viewportName": "desktop",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "deviceScaleFactor": 2,
+      "network": "4g",
+      "run": 1,
+      "summary": {
+        "cardsSeen": 96,
+        "scrollCards": 94,
+        "unresolved": 0,
+        "p50FullWaitMs": 0,
+        "p75FullWaitMs": 0,
+        "p95FullWaitMs": 400,
+        "maxFullWaitMs": 600,
+        "p75UsableWaitMs": 0,
+        "over3s": 0,
+        "imageRequests": 96,
+        "wireBytes": 2471991,
+        "requestP75Ms": 872,
+        "lcpMs": 2108,
+        "visibleBlockedMs": 5355,
+        "pageErrors": []
+      },
+      "lcp": 2108,
+      "phase": "return"
+    },
+    {
+      "label": "production-after-4g",
+      "base": "https://voicesthatremain.com",
+      "cacheState": "fresh browser",
+      "assets": null,
+      "path": "/",
+      "viewportName": "desktop",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "deviceScaleFactor": 2,
+      "network": "4g",
+      "run": 2,
+      "summary": {
+        "cardsSeen": 96,
+        "scrollCards": 94,
+        "unresolved": 0,
+        "p50FullWaitMs": 0,
+        "p75FullWaitMs": 0,
+        "p95FullWaitMs": 400,
+        "maxFullWaitMs": 600,
+        "p75UsableWaitMs": 0,
+        "over3s": 0,
+        "imageRequests": 96,
+        "wireBytes": 2471983,
+        "requestP75Ms": 858,
+        "lcpMs": 1760,
+        "visibleBlockedMs": 5356,
+        "pageErrors": []
+      },
+      "lcp": 1760,
+      "phase": "return"
+    }
+  ]
+}

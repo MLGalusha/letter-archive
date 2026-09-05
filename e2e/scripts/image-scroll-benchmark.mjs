@@ -20,17 +20,21 @@ const network = args.network || 'native';
 const stepMs=Number(args['step-ms']||800);
 if (!['native','4g'].includes(network) || !Number.isFinite(stepMs) || stepMs < 250 || stepMs > 2000) throw Error('Invalid network or scroll interval');
 const dir = `docs/image-loading/${label}`;
-await mkdir(dir, {recursive:true});
+await mkdir('docs/image-loading', {recursive:true});
+await mkdir(dir); // A new label is required: never overwrite a recorded experiment.
 const percentile = (v,p) => { const a=v.toSorted((a,b)=>a-b); return a.length ? Math.round(a[Math.max(0,Math.ceil(a.length*p)-1)]) : null; };
-const browser = await chromium.launch({headless:true});
 const results=[];
-const frontendRelease=await fetch(base+'/version.json').then(r=>r.json()).catch(()=>null);
+const contexts=new Map();
+const frontendRelease=await fetch(base+'/version.json',{signal:AbortSignal.timeout(10000)}).then(r=>r.json()).catch(()=>null);
 const bundleHash=args.assets?createHash('sha256').update(await readFile(resolve(args.assets,'index.html'))).digest('hex'):null;
+const browser = await chromium.launch({headless:true});
 try {
   for (const viewportName of (args.viewports || 'mobile,desktop').split(',')) {
     const viewport = viewportName === 'mobile' ? {width:390,height:844} : {width:1440,height:1000};
     for (const path of (args.paths || '/,/collections/009').split(',')) for (let run=1;run<=runs;run++) {
-      const context=await browser.newContext({viewport,deviceScaleFactor:2});
+      const contextKey=viewportName+'|'+path;
+      const context=contexts.get(contextKey) || await browser.newContext({viewport,deviceScaleFactor:2});
+      if (args['reuse-context'] === 'yes') contexts.set(contextKey,context);
       const page=await context.newPage();
       const cdp=await context.newCDPSession(page);
       await cdp.send('Network.enable');
@@ -85,7 +89,7 @@ try {
       await page.goto(base+path,{waitUntil:'domcontentloaded'});
       await page.locator('.letter-card').first().waitFor({timeout:30000});
       await page.waitForTimeout(2000);
-      // Move into the archive, then traverse at a fixed pace without waiting for images.
+      // Start at the first card (featured on Home), then scroll without waiting for images.
       await page.evaluate(()=>{const root=document.querySelector('#app-scroll');window.__scrollImageBench.phase='scroll';root.scrollTop+=document.querySelector('.letter-card').getBoundingClientRect().top-100;});
       for(let step=0;step<16;step++) {
         await page.waitForTimeout(stepMs);
@@ -100,13 +104,15 @@ try {
       const waits=scrollCards.filter(c=>c.fullReady!==null).map(c=>c.fullReady-c.entered);
       const usableWaits=scrollCards.filter(c=>c.usableReady!==null).map(c=>c.usableReady-c.entered);
       const images=[...requests.values()];
-      const result={label,base,assets:args.assets||null,path,viewportName,viewport,deviceScaleFactor:2,network,run,summary:{cardsSeen:state.cards.length,scrollCards:scrollCards.length,unresolved:scrollCards.filter(c=>c.fullReady===null).length,p50FullWaitMs:percentile(waits,.5),p75FullWaitMs:percentile(waits,.75),p95FullWaitMs:percentile(waits,.95),maxFullWaitMs:percentile(waits,1),p75UsableWaitMs:percentile(usableWaits,.75),over3s:waits.filter(n=>n>=3000).length,imageRequests:images.length,wireBytes:images.reduce((n,r)=>n+(r.wireBytes||0),0),requestP75Ms:percentile(images.filter(r=>r.durationMs!==undefined).map(r=>r.durationMs),.75),lcpMs:Math.round(state.lcp),visibleBlockedMs:Math.round(scrollCards.reduce((n,c)=>n+c.visibleBlockedMs,0)),pageErrors:failures},...state,requests:images};
+      const result={label,base,cacheState:args['reuse-context']==='yes' && run>1?'repeat visit':'fresh browser',assets:args.assets||null,path,viewportName,viewport,deviceScaleFactor:2,network,run,summary:{cardsSeen:state.cards.length,scrollCards:scrollCards.length,unresolved:scrollCards.filter(c=>c.fullReady===null).length,p50FullWaitMs:percentile(waits,.5),p75FullWaitMs:percentile(waits,.75),p95FullWaitMs:percentile(waits,.95),maxFullWaitMs:percentile(waits,1),p75UsableWaitMs:percentile(usableWaits,.75),over3s:waits.filter(n=>n>=3000).length,imageRequests:images.length,wireBytes:images.reduce((n,r)=>n+(r.wireBytes||0),0),requestP75Ms:percentile(images.filter(r=>r.durationMs!==undefined).map(r=>r.durationMs),.75),lcpMs:Math.round(state.lcp),visibleBlockedMs:Math.round(scrollCards.reduce((n,c)=>n+c.visibleBlockedMs,0)),pageErrors:failures},...state,requests:images};
       results.push(result);
-      const evidence={measuredAt:new Date().toISOString(),sourceRevision:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),frontendRelease,substitutedBundleSha256:bundleHash,method:{stepMs,steps:16,scrollViewportFraction:.65,settleMs:5000,pollMs:50,cache:'fresh browser context per run; origin cache uncontrolled',notes:'Full wait includes opacity transition. Only observed cards included; unresolved reported separately. No CPU throttle, not a physical phone.'},results};
+      const frontendReleaseAtEnd=await fetch(base+'/version.json',{signal:AbortSignal.timeout(10000)}).then(r=>r.json()).catch(()=>null);
+      if(!args.assets && frontendRelease?.releaseSha && frontendReleaseAtEnd?.releaseSha && frontendRelease.releaseSha!==frontendReleaseAtEnd.releaseSha) throw Error('Production revision changed during measurement; discard this comparison');
+      const evidence={frontendReleaseAtEnd,measuredAt:new Date().toISOString(),sourceRevision:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),frontendRelease,substitutedBundleSha256:bundleHash,method:{stepMs,steps:16,scrollViewportFraction:.65,settleMs:5000,pollMs:50,cache:'fresh browser context per run; origin cache uncontrolled',notes:'Full wait includes opacity transition. Only observed cards included; unresolved reported separately. No CPU throttle, not a physical phone.'},results};
       await writeFile(`${dir}/results.json.gz`,gzipSync(JSON.stringify(evidence)));
       await writeFile(`${dir}/summary.json`,JSON.stringify({...evidence,results:results.map(({cards,samples,requests,...rest})=>rest)},null,2)+'\n');
       console.log(JSON.stringify({path,viewportName,run,...result.summary}));
-      await context.close();
+      if(args['reuse-context']==='yes') await page.close(); else await context.close();
     }
   }
 } finally {await browser.close();}

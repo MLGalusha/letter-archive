@@ -1,0 +1,46 @@
+[
+  {
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "heroHref": "/letter/dcdde044-75ca-4509-af5c-53fa42daed75?from=highlight&image=49e91d82-70b3-44ba-90e1-284ccf7ac2f3",
+    "heroMountedImages": 1,
+    "archiveLink": "/letter/dcdde044-75ca-4509-af5c-53fa42daed75",
+    "highlightHref": "/letter/dcdde044-75ca-4509-af5c-53fa42daed75?from=highlight&image=49e91d82-70b3-44ba-90e1-284ccf7ac2f3",
+    "readerId": "eb997470-6fb7-486d-ac98-cdeb5a03d4ca",
+    "scanState": {
+      "top": 143.984375,
+      "bottom": 606.96875,
+      "focused": true
+    },
+    "transcriptState": {
+      "top": 144.15625,
+      "bottom": 2702.84375,
+      "focused": true
+    },
+    "pageErrors": []
+  },
+  {
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "heroHref": "/letter/dcdde044-75ca-4509-af5c-53fa42daed75?from=highlight&image=49e91d82-70b3-44ba-90e1-284ccf7ac2f3",
+    "heroMountedImages": 1,
+    "archiveLink": "/letter/dcdde044-75ca-4509-af5c-53fa42daed75",
+    "highlightHref": "/letter/eb997470-6fb7-486d-ac98-cdeb5a03d4ca?from=highlight&image=2d47b66f-6abc-4419-a6ae-b6825ec21e80",
+    "readerId": "eb997470-6fb7-486d-ac98-cdeb5a03d4ca",
+    "scanState": {
+      "top": 118.03125,
+      "bottom": 905.828125,
+      "focused": true
+    },
+    "transcriptState": {
+      "top": 118.015625,
+      "bottom": 1659.234375,
+      "focused": true
+    },
+    "pageErrors": []
+  }
+]

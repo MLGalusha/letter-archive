@@ -1,3 +1,4 @@
+import { canonicalSettingKey, readSiteSettings } from '../../services/site-settings.js';
 import { Router } from 'express';
 import { z } from 'zod';
 import { eq, and, or, isNull, gt, count, inArray, sql, desc } from 'drizzle-orm';
@@ -35,11 +36,7 @@ const changePasswordSchema = z.object({
 router.get('/settings', async (req, res) => {
   try {
     const rows = await db.select().from(siteSettings);
-    const result: Record<string, string> = {};
-    for (const row of rows) {
-      result[row.key] = row.value;
-    }
-    res.json(result);
+    res.json(readSiteSettings(rows));
   } catch (error) {
     req.log?.error({ error }, 'Failed to fetch site settings');
     res.status(500).json({ error: 'Internal server error' });
@@ -60,7 +57,8 @@ router.put('/settings', validateBody(updateSettingsSchema), async (req, res) => 
       return;
     }
 
-    for (const [key, value] of entries) {
+    for (const [inputKey, value] of entries) {
+      const key = canonicalSettingKey(inputKey);
       await db
         .insert(siteSettings)
         .values({ key, value })
@@ -74,11 +72,7 @@ router.put('/settings', validateBody(updateSettingsSchema), async (req, res) => 
 
     // Return the full settings map after update
     const rows = await db.select().from(siteSettings);
-    const result: Record<string, string> = {};
-    for (const row of rows) {
-      result[row.key] = row.value;
-    }
-    res.json(result);
+    res.json(readSiteSettings(rows));
   } catch (error) {
     req.log?.error({ error }, 'Failed to update site settings');
     res.status(500).json({ error: 'Internal server error' });

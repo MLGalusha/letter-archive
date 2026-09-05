@@ -1,4 +1,5 @@
 import "./Header.css";
+import { useSiteSettings } from "../../hooks/useSiteSettings";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useHeaderDock } from "../../contexts/HeaderDockContext";
@@ -17,6 +18,7 @@ function preloadAboutRoute() {
 }
 
 export default memo(function Header() {
+  const settings = useSiteSettings();
   const [menuOpen, setMenuOpen] = useState(false);
   const { state, registerSlot } = useHeaderDock();
   const { visible, atTop } = useHeaderScroll();
@@ -128,7 +130,7 @@ export default memo(function Header() {
         <div className={`header-brand-slot${state.hasContent ? " has-active-dock" : ""}`}>
           <Link to="/" className="main-title" onClick={() => setMenuOpen(false)}>
             <span className="main-title-label">A Letter Archive</span>
-            <span className="main-title-name">Voices That Remain</span>
+            <span className="main-title-name">{settings?.site_title?.trim() || "Voices That Remain"}</span>
           </Link>
           <div className="header-dock-region">
             <div ref={registerSlot} className="header-dock-slot" />

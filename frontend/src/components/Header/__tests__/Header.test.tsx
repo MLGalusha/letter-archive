@@ -6,6 +6,11 @@ import Header from "../Header";
 import HeaderDock from "../HeaderDock";
 import { HeaderDockProvider } from "../../../contexts/HeaderDockContext";
 
+const { siteSettings } = vi.hoisted(() => ({ siteSettings: { title: '' } }));
+vi.mock("../../../hooks/useSiteSettings", () => ({
+  useSiteSettings: () => ({ site_title: siteSettings.title }),
+}));
+
 vi.mock("../../../hooks/useHeaderScroll", () => ({
   default: () => ({ visible: true, atTop: true }),
 }));
@@ -40,6 +45,14 @@ describe("Header", () => {
 
     expect(screen.getByText("A Letter Archive")).toBeInTheDocument();
     expect(screen.getByText("Voices That Remain")).toBeInTheDocument();
+  });
+
+  it("uses the configured site title", () => {
+    siteSettings.title = "Family Archive";
+    try {
+      renderHeader();
+      expect(screen.getByText("Family Archive")).toBeInTheDocument();
+    } finally { siteSettings.title = ''; }
   });
 
   it("Home link is active when on /", () => {

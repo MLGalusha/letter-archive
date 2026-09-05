@@ -1,3 +1,4 @@
+import { readSiteSettings } from '../services/site-settings.js';
 import { Router } from 'express';
 import { db, siteSettings } from '../db/index.js';
 import healthRouter from './health.js';
@@ -51,12 +52,8 @@ const PUBLIC_SETTINGS_KEYS = [
 router.get('/settings/public', async (_req, res) => {
   try {
     const rows = await db.select().from(siteSettings);
-    const map: Record<string, string> = {};
-    for (const row of rows) {
-      if (PUBLIC_SETTINGS_KEYS.includes(row.key)) {
-        map[row.key] = row.value;
-      }
-    }
+    const map = Object.fromEntries(Object.entries(readSiteSettings(rows))
+      .filter(([key]) => PUBLIC_SETTINGS_KEYS.includes(key)));
     res.json(map);
   } catch {
     res.status(500).json({ error: 'Internal server error' });

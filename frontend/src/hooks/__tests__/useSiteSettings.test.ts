@@ -67,6 +67,20 @@ describe('useSiteSettings', () => {
     expect(apiGet).toHaveBeenCalledTimes(1);
   });
 
+  it('refetches settings after an admin save invalidates the cache', async () => {
+    const { useSiteSettings, apiGet } = await loadHook();
+    apiGet.mockResolvedValueOnce({ site_title: 'Old title' });
+    const first = renderHook(() => useSiteSettings());
+    await waitFor(() => expect(first.result.current?.site_title).toBe('Old title'));
+    first.unmount();
+    const { invalidateSiteSettings } = await import('../../services/siteSettings');
+    invalidateSiteSettings();
+    apiGet.mockResolvedValueOnce({ site_title: 'New title' });
+    const second = renderHook(() => useSiteSettings());
+    await waitFor(() => expect(second.result.current?.site_title).toBe('New title'));
+    expect(apiGet).toHaveBeenCalledTimes(2);
+  });
+
   it('handles fetch failure gracefully', async () => {
     const { useSiteSettings, apiGet } = await loadHook();
     apiGet.mockRejectedValueOnce(new Error('Network error'));

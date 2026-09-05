@@ -1,3 +1,4 @@
+import { useSiteSettings } from "../hooks/useSiteSettings";
 import { useEffect } from "react";
 import type { JsonLdObject } from "../utils/seo";
 
@@ -39,7 +40,7 @@ function removeMeta(attr: string, key: string) {
 
 export default function SEO({
   title,
-  description = DEFAULT_DESCRIPTION,
+  description,
   ogTitle,
   ogDescription,
   ogImage,
@@ -52,13 +53,16 @@ export default function SEO({
   modifiedTime,
   jsonLd,
 }: SEOProps) {
+  const settings = useSiteSettings();
+  const siteName = settings?.site_title?.trim() || SITE_NAME;
+  const resolvedDescription = description || settings?.site_description?.trim() || DEFAULT_DESCRIPTION;
   const baseUrl = (
     import.meta.env.VITE_SITE_URL ||
     (typeof window !== "undefined" ? window.location.origin : DEFAULT_BASE_URL)
   ).replace(/\/+$/, "");
-  const fullTitle = title ? `${title} | ${SITE_NAME}` : SITE_NAME;
+  const fullTitle = title ? `${title} | ${siteName}` : siteName;
   const resolvedOgTitle = ogTitle || fullTitle;
-  const resolvedOgDescription = ogDescription || description;
+  const resolvedOgDescription = ogDescription || resolvedDescription;
   const resolvedCanonical = canonicalUrl
     ? new URL(canonicalUrl, `${baseUrl}/`).toString()
     : undefined;
@@ -71,7 +75,7 @@ export default function SEO({
   useEffect(() => {
     document.title = fullTitle;
 
-    setMeta("name", "description", description);
+    setMeta("name", "description", resolvedDescription);
     if (robots) setMeta("name", "robots", robots);
     else removeMeta("name", "robots");
 
@@ -79,7 +83,7 @@ export default function SEO({
     setMeta("property", "og:title", resolvedOgTitle);
     setMeta("property", "og:description", resolvedOgDescription);
     setMeta("property", "og:type", ogType);
-    setMeta("property", "og:site_name", SITE_NAME);
+    setMeta("property", "og:site_name", siteName);
     if (resolvedOgUrl) setMeta("property", "og:url", resolvedOgUrl);
     else removeMeta("property", "og:url");
     if (resolvedOgImage) setMeta("property", "og:image", resolvedOgImage);

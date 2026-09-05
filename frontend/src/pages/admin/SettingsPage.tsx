@@ -12,7 +12,6 @@ import {
   deleteAdminUser,
   changePassword,
   getSystemInfo,
-  type SiteSettings,
   type InviteInfo,
   type AdminUserInfo,
   type AdminUsersResponse,
@@ -29,7 +28,6 @@ export default function SettingsPage() {
   const navigate = useNavigate();
 
   // ── Data state ──────────────────────────────────────────
-  const [settings, setSettings] = useState<SiteSettings>({});
   const [adminUsers, setAdminUsers] = useState<AdminUserInfo[]>([]);
   const [currentUserCanDeleteAdminProfiles, setCurrentUserCanDeleteAdminProfiles] = useState(false);
   const [invites, setInvites] = useState<InviteInfo[]>([]);
@@ -86,15 +84,14 @@ export default function SettingsPage() {
 
       if (settingsData.status === 'fulfilled') {
         const s = settingsData.value;
-        setSettings(s);
-        setDonationOneTime(s.donationOneTimeUrl || '');
-        setDonationMonthly(s.donationMonthlyUrl || '');
-        setSiteTitle(s.siteTitle || '');
-        setSiteDescription(s.siteDescription || '');
-        setEmailGeneral(s.contactGeneral || '');
-        setEmailContribute(s.contactContribute || '');
-        setEmailResearch(s.contactResearch || '');
-        setEmailVolunteer(s.contactVolunteer || '');
+        setDonationOneTime(s.donate_onetime_url || '');
+        setDonationMonthly(s.donate_monthly_url || '');
+        setSiteTitle(s.site_title || '');
+        setSiteDescription(s.site_description || '');
+        setEmailGeneral(s.contact_general_email || '');
+        setEmailContribute(s.contact_contribute_email || '');
+        setEmailResearch(s.contact_research_email || '');
+        setEmailVolunteer(s.contact_volunteer_email || '');
         setAutoTranscribe(s.auto_transcribe === 'true');
       }
 
@@ -217,12 +214,10 @@ export default function SettingsPage() {
     setDonationSaving(true);
     setDonationFeedback(null);
     try {
-      const updated = await updateSettings({
-        ...settings,
-        donationOneTimeUrl: donationOneTime,
-        donationMonthlyUrl: donationMonthly,
+      await updateSettings({
+        donate_onetime_url: donationOneTime,
+        donate_monthly_url: donationMonthly,
       });
-      setSettings(updated);
       setDonationFeedback({ type: 'success', message: 'Donation links saved.' });
     } catch (err) {
       setDonationFeedback({ type: 'error', message: getErrorMessage(err, 'Failed to save.') });
@@ -235,12 +230,10 @@ export default function SettingsPage() {
     setMetadataSaving(true);
     setMetadataFeedback(null);
     try {
-      const updated = await updateSettings({
-        ...settings,
-        siteTitle,
-        siteDescription,
+      await updateSettings({
+        site_title: siteTitle,
+        site_description: siteDescription,
       });
-      setSettings(updated);
       setMetadataFeedback({ type: 'success', message: 'Site metadata saved.' });
     } catch (err) {
       setMetadataFeedback({ type: 'error', message: getErrorMessage(err, 'Failed to save.') });
@@ -253,14 +246,12 @@ export default function SettingsPage() {
     setEmailSaving(true);
     setEmailFeedback(null);
     try {
-      const updated = await updateSettings({
-        ...settings,
-        contactGeneral: emailGeneral,
-        contactContribute: emailContribute,
-        contactResearch: emailResearch,
-        contactVolunteer: emailVolunteer,
+      await updateSettings({
+        contact_general_email: emailGeneral,
+        contact_contribute_email: emailContribute,
+        contact_research_email: emailResearch,
+        contact_volunteer_email: emailVolunteer,
       });
-      setSettings(updated);
       setEmailFeedback({ type: 'success', message: 'Contact emails saved.' });
     } catch (err) {
       setEmailFeedback({ type: 'error', message: getErrorMessage(err, 'Failed to save.') });
@@ -276,10 +267,8 @@ export default function SettingsPage() {
     setAutoTranscribeFeedback(null);
     try {
       const updated = await updateSettings({
-        ...settings,
         auto_transcribe: newValue ? 'true' : 'false',
       });
-      setSettings(updated);
       setAutoTranscribe(updated.auto_transcribe === 'true');
       setAutoTranscribeFeedback({ type: 'success', message: newValue ? 'Auto-transcribe enabled.' : 'Auto-transcribe disabled.' });
     } catch (err) {

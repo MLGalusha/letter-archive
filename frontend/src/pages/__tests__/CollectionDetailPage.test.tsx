@@ -54,6 +54,7 @@ vi.mock("../../components/ArchiveList/ArchiveList", () => ({
 
 vi.mock("../../api/client", () => ({
   getImageUrl: (url: string) => url,
+  apiGet: () => Promise.resolve({}),
 }));
 
 vi.mock("../../components/Footer/Footer", () => ({

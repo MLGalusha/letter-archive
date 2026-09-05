@@ -106,6 +106,28 @@ function createMockLetterWithExtras(
 }
 
 test.describe('@mocked Letter Review', () => {
+  test('flushes personal notes before leaving review', async ({ page }) => {
+    const api = await openMockLetterReview(page);
+    await page.getByLabel('Personal Notes').fill('Keep this note on navigation');
+    await page.getByRole('link', { name: 'Voices That Remain Admin' }).click();
+    await expect(page).toHaveURL(/\/admin$/);
+    expect(api.updateLetterRequests.some((request) =>
+      request.body.notes === 'Keep this note on navigation',
+    )).toBe(true);
+  });
+
+  test('keeps review open when saving notes before navigation fails', async ({ page }) => {
+    const letter = createMockLetterReviewLetter();
+    await openMockLetterReviewWithOptions(page, letter, {
+      routeFailures: { updateLetter: { status: 503, error: 'Database offline' } },
+    });
+    await page.getByLabel('Personal Notes').fill('Do not discard this note');
+    await page.getByRole('link', { name: 'Voices That Remain Admin' }).click();
+    await expect(page.locator('.toast')).toContainText('Database offline');
+    await expect(page).toHaveURL(new RegExp(`/admin/letters/${letter.id}$`));
+    await expect(page.getByLabel('Personal Notes')).toHaveValue('Do not discard this note');
+  });
+
   test('shows the request id when the review page fails to load', async ({ page }) => {
     const initialLetter = createMockLetterReviewLetter();
     await installMockLetterReviewApi(page, {

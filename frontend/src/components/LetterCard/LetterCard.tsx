@@ -11,6 +11,7 @@ import { getAppScrollRootForIO } from "../../utils/appScroll";
 interface LetterCardProps {
   card: LetterCardData;
   onClick: (id: string) => void;
+  selection?: boolean;
   sortCue?: {
     label: string;
     value: string;
@@ -138,6 +139,7 @@ function renderHighlightedExcerpt(
 function LetterCard({
   card,
   onClick,
+  selection = false,
   sortCue = null,
 }: LetterCardProps) {
   const shellRef = useRef<HTMLDivElement | null>(null);
@@ -263,7 +265,7 @@ function LetterCard({
     showPreviewForABeat();
   };
 
-  const handleCardTouchStart = (_event: TouchEvent<HTMLAnchorElement>) => {
+  const handleCardTouchStart = (_event: TouchEvent<HTMLAnchorElement | HTMLButtonElement>) => {
     if (!hasSearchPreview) return;
     if (!isTouchDevice) return;
     touchPreviewRetouchRef.current = previewVisible;
@@ -275,7 +277,7 @@ function LetterCard({
     setPreviewVisible(true);
   };
 
-  const handleCardTouchMove = (event: TouchEvent<HTMLAnchorElement>) => {
+  const handleCardTouchMove = (event: TouchEvent<HTMLAnchorElement | HTMLButtonElement>) => {
     if (!isTouchDevice || !touchPreviewActiveRef.current) return;
 
     const touch = event.touches[0];
@@ -294,7 +296,7 @@ function LetterCard({
     }
   };
 
-  const handleCardTouchEnd = (_event: TouchEvent<HTMLAnchorElement>) => {
+  const handleCardTouchEnd = (_event: TouchEvent<HTMLAnchorElement | HTMLButtonElement>) => {
     if (!isTouchDevice) return;
     const startedAt = touchPreviewStartedAtRef.current;
     if (
@@ -314,6 +316,7 @@ function LetterCard({
     }, TOUCH_PREVIEW_RELEASE_HIDE_MS);
   };
 
+  const CardControl = selection ? 'button' : 'a';
   const visibleSearchPreview = previewVisible && hasSearchPreview && searchPreview;
 
   return (
@@ -323,8 +326,9 @@ function LetterCard({
       onMouseEnter={handleCardMouseEnter}
       onMouseLeave={handleCardMouseLeave}
     >
-      <a
-        href={`/letter/${card.id}`}
+      <CardControl
+        type={selection ? "button" : undefined}
+        href={selection ? undefined : `/letter/${card.id}`}
         className={`letter-card letter-card--${card.imageType}${hasSearchPreview ? " letter-card--has-search-match" : ""}${previewVisible ? " letter-card--search-preview-visible" : ""}`}
         onTouchStart={handleCardTouchStart}
         onTouchMove={handleCardTouchMove}
@@ -336,7 +340,7 @@ function LetterCard({
             event.preventDefault();
             return;
           }
-          if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          if (!selection && (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)) return;
           event.preventDefault();
           onClick(card.id);
         }}
@@ -394,7 +398,7 @@ function LetterCard({
             </p>
           )}
         </div>
-      </a>
+      </CardControl>
       {hasSearchPreview && !isTouchDevice && (
         <button
           type="button"

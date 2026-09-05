@@ -915,6 +915,7 @@ function AdminCollectionRoute({
                       className={`acp-picker-card${letter.id === featuredLetterId ? ' acp-picker-card--selected' : ''}`}
                     >
                       <LetterCard
+                        selection
                         card={buildLetterCardData(letter)}
                         onClick={handleSelectFeaturedLetter}
                       />

@@ -28,6 +28,16 @@ afterEach(() => {
 });
 
 describe("LetterCard", () => {
+  it("keeps admin picker cards as buttons even with modified clicks", () => {
+    const onClick = vi.fn();
+    render(<LetterCard selection card={{ id: "pick-1", imageType: "letter", title: "Pick me" }} onClick={onClick} />);
+    const button = screen.getByRole("button", { name: "Letter" });
+    expect(button).not.toHaveAttribute("href");
+    fireEvent.click(button, { ctrlKey: true });
+    expect(onClick).toHaveBeenCalledWith("pick-1");
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+
   it("only cools down a card after the auto-preview fully finishes", async () => {
     vi.useFakeTimers();
     const onClick = vi.fn();

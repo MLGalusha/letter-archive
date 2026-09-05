@@ -201,13 +201,13 @@ export function buildBlogIndexSeo(page: number): SeoPayload {
   };
 }
 
-export function buildBlogPostSeo(post: BlogPost): SeoPayload {
+export function buildBlogPostSeo(post: BlogPost, siteName = SITE_NAME): SeoPayload {
   const title = post.seoTitle || post.title;
   const description =
     post.seoDescription ||
     post.excerpt ||
     truncateText(stripMarkdown(post.bodyMarkdown), 160) ||
-    `Read "${post.title}" on ${SITE_NAME}.`;
+    `Read "${post.title}" on ${siteName}.`;
   const canonicalPath = `/blog/${post.slug}`;
   const breadcrumb = buildBreadcrumbJsonLd([
     { label: 'Home', href: '/' },
@@ -243,11 +243,11 @@ export function buildBlogPostSeo(post: BlogPost): SeoPayload {
             }
           : {
               '@type': 'Organization',
-              name: SITE_NAME,
+              name: siteName,
             },
         publisher: {
           '@type': 'Organization',
-          name: SITE_NAME,
+          name: siteName,
           url: absoluteUrl('/'),
         },
       },
@@ -396,11 +396,11 @@ export function buildCollectionSeo(
   };
 }
 
-export function buildPersonSeo(data: PublicPersonDetail): SeoPayload {
+export function buildPersonSeo(data: PublicPersonDetail, siteName = SITE_NAME): SeoPayload {
   const title = data.person.canonicalName;
   const description = truncateText(
     data.person.biography ||
-      `${title} appears in ${data.stats.total} published letter${data.stats.total === 1 ? '' : 's'} in the ${SITE_NAME}.`,
+      `${title} appears in ${data.stats.total} published letter${data.stats.total === 1 ? '' : 's'} in the ${siteName}.`,
     160
   );
   const canonicalPath = `/people/${data.person.id}`;
@@ -427,11 +427,11 @@ export function buildPersonSeo(data: PublicPersonDetail): SeoPayload {
   };
 }
 
-export function buildPlaceSeo(data: PublicPlaceDetail): SeoPayload {
+export function buildPlaceSeo(data: PublicPlaceDetail, siteName = SITE_NAME): SeoPayload {
   const title = data.place.canonicalName;
   const description = truncateText(
     data.place.notes ||
-      `${title} appears in ${data.stats.total} published letter${data.stats.total === 1 ? '' : 's'} in the ${SITE_NAME}.`,
+      `${title} appears in ${data.stats.total} published letter${data.stats.total === 1 ? '' : 's'} in the ${siteName}.`,
     160
   );
   const canonicalPath = `/places/${data.place.id}`;

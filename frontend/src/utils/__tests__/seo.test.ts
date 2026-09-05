@@ -484,6 +484,12 @@ describe('buildBlogPostSeo', () => {
     updatedAt: '2024-06-10',
   };
 
+  it('uses the configured brand only for generated fallback descriptions', () => {
+    const empty = { ...basePost, seoDescription: '', excerpt: '', bodyMarkdown: '' };
+    expect(buildBlogPostSeo(empty, 'Custom Archive').description).toContain('Custom Archive');
+    expect(buildBlogPostSeo({ ...empty, seoDescription: 'An article about Voices That Remain' }, 'Custom Archive').description).toBe('An article about Voices That Remain');
+  });
+
   it('uses post title when seoTitle is null', () => {
     const seo = buildBlogPostSeo(basePost);
     expect(seo.title).toBe('My First Post');

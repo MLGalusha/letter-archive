@@ -245,7 +245,7 @@ export default function CollectionsPage() {
                         <span className="collection-card-count">
                           {isMobile
                             ? collection.letterCount
-                            : `${collection.letterCount} letter${collection.letterCount !== 1 ? 's' : ''}`}
+                            : `${collection.letterCount} item${collection.letterCount !== 1 ? 's' : ''}`}
                         </span>
                       </div>
 

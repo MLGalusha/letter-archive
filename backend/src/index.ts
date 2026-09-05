@@ -27,14 +27,6 @@ import { notify } from './services/notifications.js';
 import { startNotificationSweeper, stopNotificationSweeper } from './services/notification-sweeper.js';
 import { initNotificationStreamBroadcaster } from './routes/admin/notifications-stream.js';
 
-/* ── Process-level error monitoring ─────────────────────── */
-process.on('uncaughtException', (err) => {
-  logger.fatal({ err }, 'UNCAUGHT EXCEPTION');
-});
-process.on('unhandledRejection', (reason) => {
-  logger.error({ reason }, 'UNHANDLED REJECTION');
-});
-
 const app = express();
 const LEASE_RECOVERY_INTERVAL_MS = 60_000;
 

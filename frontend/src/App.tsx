@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback } from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { createBrowserRouter, RouterProvider, Routes, Route } from "react-router-dom";
 import Header from "./components/Header/Header";
 import ScrollToTop from "./components/ScrollToTop";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -42,7 +42,7 @@ function RouteLoading() {
   );
 }
 
-function App() {
+function AppRoutes() {
   // Registers the public-site scroll container with the appScroll helper
   // module. See utils/appScroll.ts and the scroll-container refactor (#35)
   // for background on why scroll lives on a child div instead of window.
@@ -51,8 +51,7 @@ function App() {
   }, []);
 
   return (
-    <ErrorBoundary>
-    <Router>
+    <>
       <ScrollToTop />
       <Suspense fallback={<RouteLoading />}>
         <Routes>
@@ -107,9 +106,15 @@ function App() {
           />
         </Routes>
       </Suspense>
-    </Router>
-    </ErrorBoundary>
+    </>
   );
 }
 
-export default App;
+const router = createBrowserRouter([{
+  path: "*",
+  element: <ErrorBoundary><AppRoutes /></ErrorBoundary>,
+}]);
+
+export default function App() {
+  return <RouterProvider router={router} />;
+}

@@ -152,8 +152,7 @@ export function buildHomeSeo(): SeoPayload {
   const websiteUrl = absoluteUrl('/');
   return {
     title: 'A Letter Archive',
-    description:
-      'A digital archive of personal letters and historical correspondence, preserved for future generations. Browse, search, and explore letters from across the decades.',
+    description: DEFAULT_DESCRIPTION,
     canonicalPath: '/',
     jsonLd: [
       {

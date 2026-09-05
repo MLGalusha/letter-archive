@@ -173,10 +173,10 @@ export function buildHomeSeo(): SeoPayload {
   };
 }
 
-export function buildBlogIndexSeo(page: number): SeoPayload {
+export function buildBlogIndexSeo(page: number, siteName = SITE_NAME): SeoPayload {
   const title = page > 1 ? `Journal - Page ${page}` : 'Journal';
   const description =
-    'Read field notes, collection highlights, and essays from Voices That Remain as the project grows.';
+    `Read field notes, collection highlights, and essays from ${siteName} as the project grows.`;
   const canonicalPath = page > 1 ? `/blog?page=${page}` : '/blog';
   const breadcrumb = buildBreadcrumbJsonLd([
     { label: 'Home', href: '/' },
@@ -192,7 +192,7 @@ export function buildBlogIndexSeo(page: number): SeoPayload {
       {
         '@context': 'https://schema.org',
         '@type': 'CollectionPage',
-        name: `${SITE_NAME} Journal`,
+        name: `${siteName} Journal`,
         url: absoluteUrl(canonicalPath),
         description,
       },
@@ -268,7 +268,7 @@ export function buildLetterTitle(letter: PublicLetter): string {
   return letter.metadata.date ? `${direction}, ${letter.metadata.date}` : direction;
 }
 
-export function buildLetterDescription(letter: PublicLetter): string {
+export function buildLetterDescription(letter: PublicLetter, siteName = SITE_NAME): string {
   const summary = collapseWhitespace(letter.metadata.description || '');
   if (summary) {
     return truncateText(summary, 160);
@@ -284,12 +284,12 @@ export function buildLetterDescription(letter: PublicLetter): string {
     return transcriptExcerpt;
   }
 
-  return 'Read this historical letter on Voices That Remain.';
+  return `Read this historical letter on ${siteName}.`;
 }
 
-export function buildLetterSeo(letter: PublicLetter): SeoPayload {
+export function buildLetterSeo(letter: PublicLetter, siteName = SITE_NAME): SeoPayload {
   const title = buildLetterTitle(letter);
-  const description = buildLetterDescription(letter);
+  const description = buildLetterDescription(letter, siteName);
   const canonicalPath = `/letter/${letter.id}`;
   const dateCreated = isoDateFromRaw(letter.metadata.dateRaw);
   const keywords = buildKeywords([

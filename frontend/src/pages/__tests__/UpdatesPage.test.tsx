@@ -9,6 +9,7 @@ const listBlogPostsMock = vi.fn();
 const getImageUrlMock = vi.fn((url: string, _opts?: Record<string, unknown>) => `http://localhost:3002${url}`);
 
 vi.mock("../../api/client", () => ({
+  apiGet: vi.fn().mockResolvedValue({}),
   listBlogPosts: (params?: Record<string, unknown>) => listBlogPostsMock(params),
   getImageUrl: (url: string, opts?: Record<string, unknown>) => getImageUrlMock(url, opts),
 }));

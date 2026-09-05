@@ -167,6 +167,9 @@ describe("HomePage archive browsing", () => {
     await user.click(screen.getByRole("button", { name: "Next page" }));
 
     expect(await screen.findByText("2/2")).toBeInTheDocument();
+    const featureLink = document.querySelector('.home-hero-open-link');
+    expect(featureLink).toHaveAttribute('href', '/letter/featured-letter?from=highlight&image=page-2');
+    expect(screen.getByRole('button', { name: 'Next page' }).closest('a')).toBeNull();
   });
 
   it("smoothly scrolls the hero CTA to the full search panel below the header", async () => {

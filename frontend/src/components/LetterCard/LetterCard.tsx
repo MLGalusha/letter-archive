@@ -263,7 +263,7 @@ function LetterCard({
     showPreviewForABeat();
   };
 
-  const handleCardTouchStart = (_event: TouchEvent<HTMLButtonElement>) => {
+  const handleCardTouchStart = (_event: TouchEvent<HTMLAnchorElement>) => {
     if (!hasSearchPreview) return;
     if (!isTouchDevice) return;
     touchPreviewRetouchRef.current = previewVisible;
@@ -275,7 +275,7 @@ function LetterCard({
     setPreviewVisible(true);
   };
 
-  const handleCardTouchMove = (event: TouchEvent<HTMLButtonElement>) => {
+  const handleCardTouchMove = (event: TouchEvent<HTMLAnchorElement>) => {
     if (!isTouchDevice || !touchPreviewActiveRef.current) return;
 
     const touch = event.touches[0];
@@ -294,7 +294,7 @@ function LetterCard({
     }
   };
 
-  const handleCardTouchEnd = (_event: TouchEvent<HTMLButtonElement>) => {
+  const handleCardTouchEnd = (_event: TouchEvent<HTMLAnchorElement>) => {
     if (!isTouchDevice) return;
     const startedAt = touchPreviewStartedAtRef.current;
     if (
@@ -323,18 +323,21 @@ function LetterCard({
       onMouseEnter={handleCardMouseEnter}
       onMouseLeave={handleCardMouseLeave}
     >
-      <button
-        type="button"
+      <a
+        href={`/letter/${card.id}`}
         className={`letter-card letter-card--${card.imageType}${hasSearchPreview ? " letter-card--has-search-match" : ""}${previewVisible ? " letter-card--search-preview-visible" : ""}`}
         onTouchStart={handleCardTouchStart}
         onTouchMove={handleCardTouchMove}
         onTouchEnd={handleCardTouchEnd}
         onTouchCancel={handleCardTouchEnd}
-        onClick={() => {
+        onClick={(event) => {
           if (swallowNextClickRef.current) {
             swallowNextClickRef.current = false;
+            event.preventDefault();
             return;
           }
+          if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          event.preventDefault();
           onClick(card.id);
         }}
         aria-label={ariaLabel || `${mediaLabel}: ${card.title || "Unknown item"}`}
@@ -391,7 +394,7 @@ function LetterCard({
             </p>
           )}
         </div>
-      </button>
+      </a>
       {hasSearchPreview && !isTouchDevice && (
         <button
           type="button"

@@ -611,3 +611,15 @@
     margin-top: 0.6rem;
   }
 }
+
+.home-hero-open-link {
+  position: absolute;
+  inset: 0;
+  color: inherit;
+  text-decoration: none;
+  border-radius: inherit;
+}
+.home-hero-open-link:focus-visible {
+  outline: 3px solid currentColor;
+  outline-offset: -4px;
+}

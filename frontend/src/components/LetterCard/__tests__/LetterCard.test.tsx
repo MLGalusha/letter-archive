@@ -65,13 +65,14 @@ describe("LetterCard", () => {
       />,
     );
 
-    const button = screen.getByRole("button", {
+    const button = screen.getByRole("link", {
       name: /Jimmie → Molly/i,
     });
     const previewToggle = screen.getByRole("button", {
       name: "Show search match preview",
     });
 
+    expect(button).toHaveAttribute("href", "/letter/letter-1");
     expect(button).not.toHaveAttribute("title");
     expect(screen.queryByText("3 matches")).not.toBeInTheDocument();
     expect(screen.queryByText("Transcript match")).not.toBeInTheDocument();
@@ -143,7 +144,7 @@ describe("LetterCard", () => {
       />,
     );
 
-    const button = screen.getByRole("button", {
+    const button = screen.getByRole("link", {
       name: /August 11th, 1947/i,
     });
     const shell = button.closest(".letter-card-shell") as HTMLElement;
@@ -223,7 +224,7 @@ describe("LetterCard", () => {
       />,
     );
 
-    const button = screen.getByRole("button", {
+    const button = screen.getByRole("link", {
       name: /August 13th, 1947/i,
     });
     const shell = button.closest(".letter-card-shell") as HTMLElement;

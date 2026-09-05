@@ -3,7 +3,6 @@ import {
   useEffect,
   useRef,
   useState,
-  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import { useNavigate, Link } from "react-router-dom";
@@ -129,7 +128,11 @@ function HeroLetterCard({
   const handlePointerDown = (e: React.PointerEvent) => {
     pointerStartRef.current = { x: e.clientX, y: e.clientY };
   };
-  const navigateToLetter = (e?: ReactMouseEvent) => {
+  const letterParams = new URLSearchParams({ from: 'highlight' });
+  if (currentImage) letterParams.set('image', currentImage.id);
+  const navigateToLetter = (e: ReactMouseEvent<HTMLAnchorElement>) => {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
     // Suppress click if pointer moved (user was scrolling/swiping)
     const start = pointerStartRef.current;
     if (start && e) {
@@ -141,13 +144,6 @@ function HeroLetterCard({
     params.set("from", "highlight");
     if (currentImage) params.set("image", currentImage.id);
     onNavigate(heroLetter.id, params);
-  };
-  const handleCardKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (event.target !== event.currentTarget) return;
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      navigateToLetter();
-    }
   };
   const handlePrevPage = (event: ReactMouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
@@ -175,15 +171,15 @@ function HeroLetterCard({
 
   return (
     <div
-      role="button"
-      tabIndex={0}
       className={`letter-card home-hero-feature-card letter-card--${heroLetter.imageType || 'letter'}`}
-      aria-label={ariaLabel}
-      onPointerDown={handlePointerDown}
-      onClick={navigateToLetter}
-      onKeyDown={handleCardKeyDown}
       onMouseEnter={handleHeroHover}
     >
+      <a className="home-hero-open-link"
+        href={`/letter/${heroLetter.id}?${letterParams.toString()}`}
+        aria-label={ariaLabel}
+        onPointerDown={handlePointerDown}
+        onClick={navigateToLetter}
+      >
       {heroImages.length > 0 ? (
         heroImages.map((img, idx) => (
           <ProgressiveImage
@@ -232,6 +228,7 @@ function HeroLetterCard({
         {heroDate && <div className="letter-card-date">{heroDate}</div>}
         {heroLetter.hook && <p className="letter-hook">{heroLetter.hook}</p>}
       </div>
+      </a>
       {hasMultiplePages && (
         <>
           <button

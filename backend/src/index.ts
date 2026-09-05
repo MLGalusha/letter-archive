@@ -215,7 +215,7 @@ function gracefulShutdown(signal: string) {
 
   // Force exit after 8s (Cloud Run gives 10s, leave buffer)
   setTimeout(() => {
-    logger.warn({ inFlight }, 'Forced shutdown after timeout');
+    logger.warn('Forced shutdown after timeout');
     process.exit(1);
   }, 8_000).unref();
 }

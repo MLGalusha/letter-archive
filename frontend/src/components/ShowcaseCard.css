@@ -235,3 +235,28 @@
     opacity: 1;
   }
 }
+
+.cd-highlight-open-link {
+  text-decoration: none;
+  position: absolute;
+  inset: 0;
+  color: inherit;
+  border-radius: inherit;
+  -webkit-touch-callout: default;
+}
+
+.cd-highlight-open-link:focus-visible {
+  outline: 3px solid currentColor;
+  outline-offset: -4px;
+}
+
+.cd-highlight-zone {
+  border: 0;
+  color: inherit;
+}
+
+.cd-highlight-zone:focus-visible {
+  opacity: 1;
+  outline: 3px solid currentColor;
+  outline-offset: -4px;
+}

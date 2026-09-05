@@ -915,6 +915,7 @@ function AdminCollectionRoute({
                       className={`acp-picker-card${letter.id === featuredLetterId ? ' acp-picker-card--selected' : ''}`}
                     >
                       <LetterCard
+                        selection
                         card={buildLetterCardData(letter)}
                         onClick={handleSelectFeaturedLetter}
                       />
@@ -1000,7 +1001,6 @@ function AdminCollectionRoute({
                   </div>
                   <ShowcaseCard
                     items={showcaseItems}
-                    onNavigate={() => {/* no-op on admin — no navigation */}}
                   />
                 </div>
               </div>

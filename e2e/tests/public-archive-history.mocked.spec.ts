@@ -73,6 +73,22 @@ function waitForArchiveSearch(
 }
 
 test.describe('@mocked Public archive history', () => {
+  test('opens an archive card in a new tab using its native destination', async ({ page, context }) => {
+    await installMockPublicHomeApi(page);
+    await page.route((url) => isApiPath(url, '/letters/search'), async (route) => {
+      await route.fulfill({ json: { letters: [{ id: 'native-link-letter', title: 'A family letter', imageType: 'letter', verified: true }], page: 1, limit: 24, total: 1, facets: EMPTY_FACETS } });
+    });
+    await page.goto('/');
+    const link = page.locator('a.letter-card');
+    await expect(link).toHaveAttribute('href', '/letter/native-link-letter');
+    const opened = context.waitForEvent('page');
+    await link.click({ button: 'middle' });
+    const tab = await opened;
+    await tab.waitForURL('**/letter/native-link-letter');
+    await expect(page).toHaveURL(/\/$/);
+    await tab.close();
+  });
+
   test('keeps Home URL, input, and requests synchronized through Back and Forward', async ({
     page,
   }) => {

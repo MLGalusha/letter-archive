@@ -3,7 +3,6 @@ import {
   useEffect,
   useRef,
   useState,
-  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import { useNavigate, Link } from "react-router-dom";
@@ -128,10 +127,15 @@ function HeroLetterCard({
   const handlePointerDown = (e: React.PointerEvent) => {
     pointerStartRef.current = { x: e.clientX, y: e.clientY };
   };
-  const navigateToLetter = (e?: ReactMouseEvent) => {
-    // Suppress click if pointer moved (user was scrolling/swiping)
+  const letterParams = new URLSearchParams({ from: 'highlight' });
+  if (currentImage) letterParams.set('image', currentImage.id);
+  const navigateToLetter = (e: ReactMouseEvent<HTMLAnchorElement>) => {
     const start = pointerStartRef.current;
-    if (start && e) {
+    pointerStartRef.current = null;
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    // Keyboard clicks have no pointer coordinates and must not inherit a prior drag.
+    if (start && e.detail > 0) {
       const dx = Math.abs(e.clientX - start.x);
       const dy = Math.abs(e.clientY - start.y);
       if (dx > 8 || dy > 8) return;
@@ -140,13 +144,6 @@ function HeroLetterCard({
     params.set("from", "highlight");
     if (currentImage) params.set("image", currentImage.id);
     onNavigate(heroLetter.id, params);
-  };
-  const handleCardKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (event.target !== event.currentTarget) return;
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      navigateToLetter();
-    }
   };
   const handlePrevPage = (event: ReactMouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
@@ -163,14 +160,15 @@ function HeroLetterCard({
 
   return (
     <div
-      role="button"
-      tabIndex={0}
       className={`letter-card home-hero-feature-card letter-card--${heroLetter.imageType || 'letter'}`}
-      aria-label={ariaLabel}
-      onPointerDown={handlePointerDown}
-      onClick={navigateToLetter}
-      onKeyDown={handleCardKeyDown}
     >
+      <a className="home-hero-open-link" data-carousel-drag draggable={false}
+        href={`/letter/${heroLetter.id}?${letterParams.toString()}`}
+        aria-label={ariaLabel}
+        onPointerDown={handlePointerDown}
+        onPointerCancel={() => { pointerStartRef.current = null; }}
+        onClick={navigateToLetter}
+      >
       {heroImages.length > 0 ? (
         heroImages.map((img, idx) => {
           const previous = (heroPageIndex + heroImages.length - 1) % heroImages.length;
@@ -224,6 +222,7 @@ function HeroLetterCard({
         {heroDate && <div className="letter-card-date">{heroDate}</div>}
         {heroLetter.hook && <p className="letter-hook">{heroLetter.hook}</p>}
       </div>
+      </a>
       {hasMultiplePages && (
         <>
           <button
@@ -367,7 +366,7 @@ export default function HomePage() {
       />
       {isMobile && (heroLetter || !heroLoaded) ? (
         <section className="home-hero home-hero--carousel">
-          <InfiniteCarousel classPrefix="hero-carousel" pauseRef={carouselPauseRef}>
+          <InfiniteCarousel classPrefix="hero-carousel" pauseRef={carouselPauseRef} suppressClickAfterDrag>
             {[
               <div className="home-hero-copy" key="copy">
                 <p className="home-kicker">{heroCopy.kicker}</p>

@@ -225,10 +225,11 @@ describe("CollectionDetailPage", () => {
       renderCollectionDetailPage();
 
       await screen.findByRole("heading", { name: "Collection Nine" });
-      const highlightButtons = screen.getAllByRole("button").filter(
-        (btn) => btn.classList.contains("cd-highlight-card"),
+      const highlightLinks = screen.getAllByRole("link").filter(
+        (link) => link.classList.contains("cd-highlight-open-link"),
       );
-      await user.click(highlightButtons[0]);
+      expect(highlightLinks[0]).toHaveAttribute('href', expect.stringContaining('/letter/letter-2'));
+      await user.click(highlightLinks[0]);
 
       expect(mockNavigate).toHaveBeenCalledWith(
         expect.stringContaining("/letter/letter-2"),

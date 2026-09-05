@@ -110,7 +110,7 @@ export default function HeaderScrubber({
   }, [total, needsWindow]);
 
   // ── Edge scroll via rAF ───────────────────────────────────────
-  const edgeScrollLoop = useCallback((now: number) => {
+  const edgeScrollLoop = useCallback(function tick(now: number) {
     const d = drag.current;
     if (!d.active || d.edgeDir === 0) return;
 
@@ -127,7 +127,7 @@ export default function HeaderScrubber({
       }
     }
 
-    d.edgeRafId = requestAnimationFrame(edgeScrollLoop);
+    d.edgeRafId = requestAnimationFrame(tick);
   }, [total, paintVisuals]);
 
   const startEdgeScroll = useCallback((dir: -1 | 1) => {

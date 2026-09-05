@@ -53,10 +53,8 @@ describe('useAsync', () => {
   });
 
   it('aborts previous request when deps change', async () => {
-    let callCount = 0;
     const fn1 = () =>
       new Promise<string>((resolve) => {
-        callCount++;
         setTimeout(() => resolve('first'), 100);
       });
     const fn2 = () => Promise.resolve('second');

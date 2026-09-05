@@ -15,6 +15,12 @@ export default defineConfig([
       reactHooks.configs.flat.recommended,
       reactRefresh.configs.vite,
     ],
+    rules: {
+      // Underscore parameters and omitted rest fields are intentional placeholders.
+      '@typescript-eslint/no-unused-vars': ['error', {
+        argsIgnorePattern: '^_', varsIgnorePattern: '^_', ignoreRestSiblings: true,
+      }],
+    },
     languageOptions: {
       ecmaVersion: 2020,
       globals: globals.browser,

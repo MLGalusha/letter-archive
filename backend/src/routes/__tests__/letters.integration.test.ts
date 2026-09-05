@@ -404,6 +404,12 @@ describe('letters route integration', () => {
     )).toBe(true);
   });
 
+  it.each([{ page: '1.5' }, { limit: '2.5' }])('rejects fractional pagination before database selection: %j', async (query) => {
+    const response = await invokeRouter(lettersRouter, { method: 'GET', url: '/letters/summaries', query });
+    expect(response.statusCode).toBe(400);
+    expect(cataloguePageMock).not.toHaveBeenCalled();
+  });
+
   it('keeps the total for an empty page and avoids fetching content', async () => {
     cataloguePageMock.mockResolvedValueOnce({ total: 41, units: [], where: { boundedPage: true } });
     const response = await invokeRouter(lettersRouter, { method: 'GET', url: '/letters/summaries', query: { page: '9' } });

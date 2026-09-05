@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 
 // Mock the api client before importing the hook
 vi.mock('../../api/client', () => ({
@@ -78,6 +78,30 @@ describe('useSiteSettings', () => {
     apiGet.mockResolvedValueOnce({ site_title: 'New title' });
     const second = renderHook(() => useSiteSettings());
     await waitFor(() => expect(second.result.current?.site_title).toBe('New title'));
+    expect(apiGet).toHaveBeenCalledTimes(2);
+  });
+
+  it('updates a persistent consumer when a later page retries successfully', async () => {
+    const { useSiteSettings, apiGet } = await loadHook();
+    apiGet.mockRejectedValueOnce(new Error('Temporary network failure'));
+    const header = renderHook(() => useSiteSettings());
+    await waitFor(() => expect(console.warn).toHaveBeenCalled());
+    expect(header.result.current).toBeNull();
+    apiGet.mockResolvedValueOnce({ site_title: 'Recovered title' });
+    const page = renderHook(() => useSiteSettings());
+    await waitFor(() => expect(page.result.current?.site_title).toBe('Recovered title'));
+    expect(header.result.current?.site_title).toBe('Recovered title');
+  });
+
+  it('refreshes mounted consumers after invalidation without remounting', async () => {
+    const { useSiteSettings, apiGet } = await loadHook();
+    apiGet.mockResolvedValueOnce({ site_title: 'Old title' });
+    const header = renderHook(() => useSiteSettings());
+    await waitFor(() => expect(header.result.current?.site_title).toBe('Old title'));
+    apiGet.mockResolvedValueOnce({ site_title: 'New title' });
+    const { invalidateSiteSettings } = await import('../../services/siteSettings');
+    act(() => invalidateSiteSettings());
+    await waitFor(() => expect(header.result.current?.site_title).toBe('New title'));
     expect(apiGet).toHaveBeenCalledTimes(2);
   });
 

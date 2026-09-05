@@ -1,16 +1,13 @@
-import { useState, useEffect } from 'react';
-import { cachedSettings, fetchSettings, type SiteSettings } from '../services/siteSettings';
+import { useEffect, useSyncExternalStore } from 'react';
+import { fetchSettings, getCachedSettings, subscribeToSettings, type SiteSettings } from '../services/siteSettings';
 export type { SiteSettings } from '../services/siteSettings';
 
+const getServerSettings = () => null;
+
 export function useSiteSettings(): SiteSettings | null {
-  const [settings, setSettings] = useState<SiteSettings | null>(cachedSettings);
-
+  const settings = useSyncExternalStore(subscribeToSettings, getCachedSettings, getServerSettings);
   useEffect(() => {
-    if (cachedSettings) return;
-    fetchSettings()
-      .then(setSettings)
-      .catch((err) => console.warn('[SiteSettings] Failed to load:', err));
+    fetchSettings().catch((err) => console.warn('[SiteSettings] Failed to load:', err));
   }, []);
-
   return settings;
 }

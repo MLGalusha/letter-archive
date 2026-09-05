@@ -14,13 +14,24 @@ export interface SiteSettings {
 
 export let cachedSettings: SiteSettings | null = null;
 let pendingFetch: Promise<SiteSettings> | null = null;
+const listeners = new Set<() => void>();
+
+export function getCachedSettings() { return cachedSettings; }
+export function subscribeToSettings(listener: () => void) {
+  listeners.add(listener);
+  return () => { listeners.delete(listener); };
+}
+function notifySettings() { for (const listener of listeners) listener(); }
 
 export function fetchSettings(): Promise<SiteSettings> {
   if (cachedSettings) return Promise.resolve(cachedSettings);
   if (pendingFetch) return pendingFetch;
   const request = apiGet<SiteSettings>('/settings/public')
     .then((data) => {
-      if (pendingFetch === request) cachedSettings = data;
+      if (pendingFetch === request) {
+        cachedSettings = data;
+        notifySettings();
+      }
       return data;
     })
     .finally(() => { if (pendingFetch === request) pendingFetch = null; });
@@ -31,4 +42,6 @@ export function fetchSettings(): Promise<SiteSettings> {
 export function invalidateSiteSettings() {
   cachedSettings = null;
   pendingFetch = null;
+  notifySettings();
+  if (listeners.size) fetchSettings().catch((error) => console.warn('[SiteSettings] Failed to refresh:', error));
 }

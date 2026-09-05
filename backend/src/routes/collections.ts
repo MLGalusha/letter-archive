@@ -14,6 +14,7 @@ import {
   toPublicLetter,
 } from '../services/public-read-model.js';
 import {
+  publicCatalogueChronologySql,
   isPhotoOnlyCatalogueUnit,
   publicCatalogueLetterTypeSql,
   retainRowsWithPublicCatalogueRoot,
@@ -219,7 +220,7 @@ router.get('/collections/:code', async (req, res, next) => {
           orderBy: (p, { asc }) => [asc(p.pageNumber)],
         },
       },
-      orderBy: [asc(letters.letterDate)],
+      orderBy: [publicCatalogueChronologySql(letters.dateRaw, letters.collectionId, letters.typeSequence)],
     });
 
     // Group by (dateRaw, typeSequence) to merge companions into primaries.

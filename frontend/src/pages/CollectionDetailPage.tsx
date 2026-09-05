@@ -129,7 +129,7 @@ export default function CollectionDetailPage() {
         if (cancelled) return;
         setCollection(data);
         setProfile(profileData);
-        // Start preloading carousel-width images for all letters in this collection
+        // Warm a small preview window without downloading the entire collection.
         if (data?.letters) {
           imagePreloadService.preloadCollection(data.letters);
         }
@@ -142,7 +142,7 @@ export default function CollectionDetailPage() {
     }
 
     fetchCollection();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; imagePreloadService.cancelPending(); };
   }, [collectionCode]);
 
   /* ---- Header dock content ---- */

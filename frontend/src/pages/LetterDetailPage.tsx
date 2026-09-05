@@ -237,6 +237,7 @@ export default function LetterDetailPage() {
   useEffect(() => {
     if (!letterId) return;
     imagePreloadService.focusLetter(letterId);
+    return () => imagePreloadService.cancelPending();
   }, [letterId]);
 
   // Keyboard nav

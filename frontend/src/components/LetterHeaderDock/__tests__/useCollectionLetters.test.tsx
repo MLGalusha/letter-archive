@@ -111,4 +111,22 @@ describe('useCollectionLetters', () => {
     } finally { now.mockRestore(); }
   });
 
+  it('refreshes a mounted collection after expiry without dropping its list', async () => {
+    vi.useFakeTimers();
+    try {
+      getArchiveShelfItemsMock.mockResolvedValueOnce(shelfResponse([shelfItem('old', 'mounted-expiry')]));
+      const { result, unmount } = renderHook(() => useCollectionLetters('mounted-expiry'));
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      expect(result.current?.[0].id).toBe('old');
+      const refresh = deferred<ArchiveShelfResponse>();
+      getArchiveShelfItemsMock.mockReturnValueOnce(refresh.promise);
+      await act(async () => { await vi.advanceTimersByTimeAsync(300_000); });
+      expect(result.current?.[0].id).toBe('old');
+      await act(async () => { refresh.resolve(shelfResponse([shelfItem('new', 'mounted-expiry')])); });
+      expect(result.current?.[0].id).toBe('new');
+      unmount();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { vi.useRealTimers(); }
+  });
+
 });

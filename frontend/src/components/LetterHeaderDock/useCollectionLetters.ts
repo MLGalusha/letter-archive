@@ -73,19 +73,24 @@ export default function useCollectionLetters(collectionCode: string): ArchiveShe
 
   useEffect(() => {
     if (!collectionCode) return;
-    if (cachedItems(collectionCode)) return;
-
     let cancelled = false;
+    let refreshTimer: ReturnType<typeof setTimeout>;
 
-    fetchCollection(collectionCode)
-      .then((items) => {
-        if (!cancelled) {
-          setLoaded({ collectionCode, letters: items });
-        }
-      })
-      .catch(() => {});
-
-    return () => { cancelled = true; };
+    const refresh = () => {
+      fetchCollection(collectionCode)
+        .then((items) => {
+          if (!cancelled) setLoaded({ collectionCode, letters: items });
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (cancelled) return;
+          const expiresAt = cache.get(collectionCode)?.expiresAt ?? 0;
+          const delay = expiresAt > Date.now() ? expiresAt - Date.now() : CACHE_TTL_MS;
+          refreshTimer = setTimeout(refresh, delay);
+        });
+    };
+    refresh();
+    return () => { cancelled = true; clearTimeout(refreshTimer); };
   }, [collectionCode]);
 
   return letters;

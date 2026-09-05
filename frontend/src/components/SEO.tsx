@@ -38,6 +38,16 @@ function removeMeta(attr: string, key: string) {
   document.querySelector(`meta[${attr}="${key}"]`)?.remove();
 }
 
+function configuredStructuredData(value: unknown, siteName: string, siteDescription: string): unknown {
+  if (Array.isArray(value)) return value.map((entry) => configuredStructuredData(entry, siteName, siteDescription));
+  if (!value || typeof value !== 'object') return value;
+  const entry = Object.fromEntries(Object.entries(value).map(([key, child]) => [key, configuredStructuredData(child, siteName, siteDescription)]));
+  if (['WebSite', 'Organization'].includes(String(entry['@type'])) && entry.name === SITE_NAME) entry.name = siteName;
+  if (entry['@type'] === 'CollectionPage' && entry.name === `${SITE_NAME} Journal`) entry.name = `${siteName} Journal`;
+  if (entry['@type'] === 'WebSite' && entry.description === DEFAULT_DESCRIPTION) entry.description = siteDescription;
+  return entry;
+}
+
 export default function SEO({
   title,
   description,
@@ -55,7 +65,8 @@ export default function SEO({
 }: SEOProps) {
   const settings = useSiteSettings();
   const siteName = settings?.site_title?.trim() || SITE_NAME;
-  const resolvedDescription = description || settings?.site_description?.trim() || DEFAULT_DESCRIPTION;
+  const defaultDescription = settings?.site_description?.trim() || DEFAULT_DESCRIPTION;
+  const resolvedDescription = description && description !== DEFAULT_DESCRIPTION ? description : defaultDescription;
   const baseUrl = (
     import.meta.env.VITE_SITE_URL ||
     (typeof window !== "undefined" ? window.location.origin : DEFAULT_BASE_URL)
@@ -123,7 +134,7 @@ export default function SEO({
       const script = document.createElement("script");
       script.setAttribute("type", "application/ld+json");
       script.setAttribute("data-seo-jsonld", "");
-      script.textContent = JSON.stringify(entry);
+      script.textContent = JSON.stringify(configuredStructuredData(entry, siteName, defaultDescription));
       document.head.appendChild(script);
     }
   });

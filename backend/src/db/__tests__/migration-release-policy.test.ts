@@ -65,7 +65,12 @@ describe('migration release policy', () => {
       '0054_add_page_source_revisions',
       '0055_add_transcript_confirmation_intent',
       '0056_repair_extra_content_job_ownership',
+      '0057_align_default_site_brand',
     ]);
+  });
+
+  it('allows the compatible branding correction after the maintenance baseline', () => {
+    expect(assertMigrationReleaseAllowed({ journal, appliedMigrations: appliedPrefix(baselineIndex + 1), mode: 'automatic' }).map(({ tag }) => tag)).toEqual(['0057_align_default_site_brand']);
   });
 
   it('allows an automatic release with no pending migrations after baseline', () => {

@@ -400,6 +400,13 @@
       "when": 1777459200000,
       "tag": "0056_repair_extra_content_job_ownership",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1788572766135,
+      "tag": "0057_align_default_site_brand",
+      "breakpoints": true
     }
   ]
 }

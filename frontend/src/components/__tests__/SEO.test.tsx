@@ -15,3 +15,10 @@ it('uses site settings for default metadata and preserves page overrides', () =>
   expect(document.querySelector('meta[name="description"]')?.getAttribute('content')).toBe('Letters from 1947.');
   expect(document.querySelector('meta[property="og:site_name"]')?.getAttribute('content')).toBe('Family Archive');
 });
+
+it('uses the configured name in nested site-owned structured metadata', () => {
+  render(<SEO jsonLd={{ '@type': 'BlogPosting', publisher: { '@type': 'Organization', name: 'Voices That Remain' }, author: { '@type': 'Person', name: 'Historical Author' } }} />);
+  const data = JSON.parse(document.querySelector('script[data-seo-jsonld]')!.textContent!);
+  expect(data.publisher.name).toBe('Family Archive');
+  expect(data.author.name).toBe('Historical Author');
+});

@@ -9,7 +9,10 @@ export function archiveDateSpan(values: (string | null | undefined)[], includeDa
     const month = Number(raw.slice(4, 6));
     const day = Number(raw.slice(6, 8));
     let label: string;
-    if (year.includes('X')) label = `${year.replace(/X/g, '0')}s`;
+    if (year.includes('X')) {
+      const knownPrefix = year.split('X')[0];
+      label = `${knownPrefix.padEnd(4, '0')}s`;
+    }
     else if (!month || month > 12) label = year;
     else label = `${MONTHS[month - 1]} ${includeDay && day >= 1 && day <= 31 ? `${day}, ` : ''}${year}`;
     return [{ lower: raw.replace(/X/g, '0'), upper: raw.replace(/X/g, '9'), label }];

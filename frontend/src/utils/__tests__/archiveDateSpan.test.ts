@@ -9,6 +9,7 @@ describe('archiveDateSpan', () => {
     expect(archiveDateSpan(['19470810', '19471018', '1947XXXX'])?.label).toBe('1947');
   });
   it('preserves month and decade precision', () => {
+    expect(archiveDateSpan(['19X7XXXX'])?.label).toBe('1900s');
     expect(archiveDateSpan(['188XXXXX', '194708XX'])?.label).toBe('1880s — Aug 1947');
     expect(archiveDateSpan(['19470810'])?.label).toBe('Aug 10, 1947');
   });

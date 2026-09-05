@@ -1172,3 +1172,18 @@
   }
 }
 
+
+.letter-content-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  margin-top: 1rem;
+}
+.letter-content-links a {
+  color: inherit;
+  text-underline-offset: 0.2em;
+}
+#letter-transcript,
+#letter-scans {
+  scroll-margin-top: calc(var(--header-height, 5rem) + 1rem);
+}

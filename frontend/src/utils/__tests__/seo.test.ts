@@ -338,6 +338,11 @@ describe('buildLetterSeo', () => {
     ],
   };
 
+  it('uses configured branding when a letter has no authored description', () => {
+    const letter = { ...baseLetter, metadata: { ...baseLetter.metadata, description: '', hook: '' }, transcript: { ...baseLetter.transcript, fullText: '' } };
+    expect(buildLetterSeo(letter, 'Custom Archive').description).toBe('Read this historical letter on Custom Archive.');
+  });
+
   it('builds title with sender, recipient, and date', () => {
     const seo = buildLetterSeo(baseLetter);
     expect(seo.title).toContain('Alice');
@@ -484,6 +489,12 @@ describe('buildBlogPostSeo', () => {
     updatedAt: '2024-06-10',
   };
 
+  it('uses the configured brand only for generated fallback descriptions', () => {
+    const empty = { ...basePost, seoDescription: '', excerpt: '', bodyMarkdown: '' };
+    expect(buildBlogPostSeo(empty, 'Custom Archive').description).toContain('Custom Archive');
+    expect(buildBlogPostSeo({ ...empty, seoDescription: 'An article about Voices That Remain' }, 'Custom Archive').description).toBe('An article about Voices That Remain');
+  });
+
   it('uses post title when seoTitle is null', () => {
     const seo = buildBlogPostSeo(basePost);
     expect(seo.title).toBe('My First Post');
@@ -579,6 +590,9 @@ describe('buildBlogPostSeo', () => {
 // ── buildBlogIndexSeo ────────────────────────────────────────────────────────
 
 describe('buildBlogIndexSeo', () => {
+  it('uses configured branding in the generated journal description', () => {
+    expect(buildBlogIndexSeo(1, 'Custom Archive').description).toContain('Custom Archive');
+  });
   it('returns "Journal" title for page 1', () => {
     const seo = buildBlogIndexSeo(1);
     expect(seo.title).toBe('Journal');

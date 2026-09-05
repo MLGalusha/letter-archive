@@ -15,7 +15,7 @@ export default function ContactPage() {
     <div className="body-layout">
       <SEO
         title="Contact"
-        description="Get in touch with Voices That Remain. Contribute letters, ask research questions, or volunteer to help preserve historical correspondence."
+        description={`Get in touch with ${settings?.site_title?.trim() || 'Voices That Remain'}. Contribute letters, ask research questions, or volunteer to help preserve historical correspondence.`}
         canonicalUrl="/contact"
       />
       <div className="contact-page">

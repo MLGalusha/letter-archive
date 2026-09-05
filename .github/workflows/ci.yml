@@ -37,6 +37,16 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Audit backend production dependencies
+        working-directory: backend
+        timeout-minutes: 3
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Audit frontend production dependencies
+        working-directory: frontend
+        timeout-minutes: 3
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Backend tests
         working-directory: backend
         run: npm test

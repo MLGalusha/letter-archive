@@ -1,9 +1,30 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
+
+// Start the API handshake while the browser loads the application modules.
+function apiConnectionHint(): Plugin {
+  let origin: string | undefined;
+  return {
+    name: 'api-connection-hint',
+    configResolved({ env }) {
+      const configured = env.VITE_API_URL;
+      if (typeof configured !== 'string' || !URL.canParse(configured)) return;
+      const url = new URL(configured);
+      if (url.protocol === 'https:' || url.protocol === 'http:') origin = url.origin;
+    },
+    transformIndexHtml() {
+      return origin ? [{
+        tag: 'link',
+        attrs: { rel: 'preconnect', href: origin, crossorigin: 'use-credentials' },
+        injectTo: 'head',
+      }] : [];
+    },
+  };
+}
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), apiConnectionHint()],
   server: {
     port: 5174,
     // Force browser to always check for updates in development

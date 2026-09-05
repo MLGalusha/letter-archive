@@ -38,7 +38,7 @@ export default function SupportPage() {
     <div className="body-layout">
       <SEO
         title="Support & Contact"
-        description="Help preserve personal letters and historical correspondence. Your support funds digitization, preservation, and public access to Voices That Remain. Get in touch to contribute, research, or volunteer."
+        description={`Help preserve personal letters and historical correspondence. Your support funds digitization, preservation, and public access to ${settings?.site_title?.trim() || 'Voices That Remain'}. Get in touch to contribute, research, or volunteer.`}
         canonicalUrl="/support"
       />
       <div
@@ -46,6 +46,9 @@ export default function SupportPage() {
         style={{ width: '100%', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}
         onClickCapture={handleSupportActionClick}
       >
+        <aside aria-label="Support availability" style={{ padding: '1rem 1.25rem', border: '1px solid currentColor', borderRadius: '0.75rem' }}>
+          Donation and contact options are coming soon. Links on this page are not active yet.
+        </aside>
         <BlockRenderer blocks={blocks} siteSettings={settings} />
       </div>
       <Modal

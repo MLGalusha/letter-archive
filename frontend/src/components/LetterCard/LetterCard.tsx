@@ -2,11 +2,10 @@ import { memo, useEffect, useRef, useState, type MouseEvent, type ReactNode, typ
 import "../ArchiveList/ArchiveList.css";
 import type { ArchiveSearchHighlightRange, LetterCardData } from "../../types/Letter";
 import { getImageUrl } from "../../api/client";
-import { ProgressiveImage } from "../common";
+import { PreviewImage } from "../common/PreviewImage";
 import { getMediaLabel } from "../../utils/letterPreview";
 import { imagePreloadService } from "../../services/imagePreloadService";
 import useIsTouchDevice from "../../hooks/useIsTouchDevice";
-import { getAppScrollRootForIO } from "../../utils/appScroll";
 
 interface LetterCardProps {
   card: LetterCardData;
@@ -146,7 +145,6 @@ function LetterCard({
   const searchPreview = card.searchPreview;
   const hasSearchPreview = Boolean(searchPreview?.excerpt && searchPreview.matchCount > 0);
   const [previewVisible, setPreviewVisible] = useState(false);
-  const [prioritizeImageLoad, setPrioritizeImageLoad] = useState(false);
   const previewTimerRef = useRef<number | null>(null);
   const touchReleaseTimerRef = useRef<number | null>(null);
   const hoverActiveRef = useRef(false);
@@ -170,26 +168,6 @@ function LetterCard({
     primaryChip,
     hook,
   ].filter((value): value is string => Boolean(value)).join(", ");
-
-  useEffect(() => {
-    const node = shellRef.current;
-    if (!node || typeof IntersectionObserver === "undefined") {
-      setPrioritizeImageLoad(true);
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (!entries.some((entry) => entry.isIntersecting)) return;
-        setPrioritizeImageLoad(true);
-        observer.disconnect();
-      },
-      { root: getAppScrollRootForIO(), rootMargin: "1200px 0px" },
-    );
-
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [card.id]);
 
   const clearPreviewTimer = () => {
     if (previewTimerRef.current !== null) {
@@ -347,18 +325,10 @@ function LetterCard({
         aria-label={ariaLabel || `${mediaLabel}: ${card.title || "Unknown item"}`}
       >
         {hasImage ? (
-          <ProgressiveImage
+          <PreviewImage
             className="letter-card-image"
             src={getImageUrl(card.imageUrl!, { width: 480 })}
-            thumbSrc={getImageUrl(card.imageUrl!, { width: 32 })}
-            midSrc={getImageUrl(card.imageUrl!, { width: 240 })}
             alt=""
-            loading={prioritizeImageLoad ? "eager" : "lazy"}
-            decoding="async"
-            fetchPriority={prioritizeImageLoad ? "high" : "low"}
-            context="archive-card"
-            idleUpgrade
-            deferFullUntilVisible={!prioritizeImageLoad}
           />
         ) : (
           <div className="letter-card-fallback" aria-hidden="true">

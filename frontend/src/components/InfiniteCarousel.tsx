@@ -179,7 +179,8 @@ export default function InfiniteCarousel({
   const mouseDownRef = useRef(false);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('a, button')) return;
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    if ((e.target as HTMLElement).closest('button, a:not([data-carousel-drag])')) return;
     mouseDownRef.current = true;
     startDrag(e.clientX, e.clientY);
   }, [startDrag]);

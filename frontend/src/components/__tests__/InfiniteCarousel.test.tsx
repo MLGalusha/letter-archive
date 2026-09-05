@@ -1,4 +1,4 @@
-import { render, screen, act } from "@testing-library/react";
+import { render, screen, act, fireEvent } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import InfiniteCarousel from "../InfiniteCarousel";
 
@@ -26,6 +26,23 @@ describe("InfiniteCarousel", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it("allows opted-in links to drag without navigating, while ordinary clicks still work", () => {
+    const onClick = vi.fn((event) => event.preventDefault());
+    const { container } = render(<InfiniteCarousel suppressClickAfterDrag>{[
+      <a key="a" href="/letter/one" data-carousel-drag draggable={false} onClick={onClick}>Open scan</a>,
+      <div key="b">Other slide</div>,
+    ]}</InfiniteCarousel>);
+    const link = screen.getAllByText("Open scan")[0];
+    fireEvent.mouseDown(link, { button: 0, clientX: 300, clientY: 100 });
+    fireEvent.mouseMove(link, { clientX: 100, clientY: 100 });
+    fireEvent.mouseUp(link);
+    fireEvent.click(link);
+    expect(onClick).not.toHaveBeenCalled();
+    expect(container.querySelectorAll('[role="tab"]')[1]).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(link);
+    expect(onClick).toHaveBeenCalledTimes(1);
   });
 
   it("renders children as slides", () => {

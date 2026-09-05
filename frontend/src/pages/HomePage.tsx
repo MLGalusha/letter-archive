@@ -174,7 +174,7 @@ function HeroLetterCard({
       className={`letter-card home-hero-feature-card letter-card--${heroLetter.imageType || 'letter'}`}
       onMouseEnter={handleHeroHover}
     >
-      <a className="home-hero-open-link"
+      <a className="home-hero-open-link" data-carousel-drag draggable={false}
         href={`/letter/${heroLetter.id}?${letterParams.toString()}`}
         aria-label={ariaLabel}
         onPointerDown={handlePointerDown}
@@ -378,7 +378,7 @@ export default function HomePage() {
       />
       {isMobile && (heroLetter || !heroLoaded) ? (
         <section className="home-hero home-hero--carousel">
-          <InfiniteCarousel classPrefix="hero-carousel" pauseRef={carouselPauseRef}>
+          <InfiniteCarousel classPrefix="hero-carousel" pauseRef={carouselPauseRef} suppressClickAfterDrag>
             {[
               <div className="home-hero-copy" key="copy">
                 <p className="home-kicker">{heroCopy.kicker}</p>

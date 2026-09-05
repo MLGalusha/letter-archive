@@ -32,8 +32,8 @@ export default function useLetterScrubber(
   );
 
   const handlePrev = useCallback(() => {
-    if (!letters || total <= 1) return;
-    if (currentIdx >= 0) {
+    if (total <= 1) return;
+    if (letters && currentIdx >= 0) {
       const prevIdx = currentIdx === 0 ? letters.length - 1 : currentIdx - 1;
       navigate(`/letter/${letters[prevIdx].id}`);
     } else if (adjacent?.prev) {
@@ -42,8 +42,8 @@ export default function useLetterScrubber(
   }, [letters, currentIdx, total, adjacent?.prev, navigate]);
 
   const handleNext = useCallback(() => {
-    if (!letters || total <= 1) return;
-    if (currentIdx >= 0) {
+    if (total <= 1) return;
+    if (letters && currentIdx >= 0) {
       const nextIdx = currentIdx === letters.length - 1 ? 0 : currentIdx + 1;
       navigate(`/letter/${letters[nextIdx].id}`);
     } else if (adjacent?.next) {

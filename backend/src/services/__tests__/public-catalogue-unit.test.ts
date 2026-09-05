@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { sql } from 'drizzle-orm';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import {
+  publicCatalogueChronologySql,
   PUBLIC_CATALOGUE_LETTER_TYPES,
   isPhotoOnlyCatalogueUnit,
   isPublicCatalogueLetterType,
@@ -13,6 +14,17 @@ import {
 } from '../public-catalogue-unit.js';
 
 describe('public catalogue units', () => {
+  it('uses normalized partial dates and complete unit identity in both directions', () => {
+    const dialect = new PgDialect();
+    for (const descending of [false, true]) {
+      const query = dialect.sqlToQuery(publicCatalogueChronologySql(
+        sql.raw('date_raw'), sql.raw('collection_id'), sql.raw('type_sequence'), descending,
+      ));
+      const direction = descending ? 'DESC' : 'ASC';
+      expect(query.sql).toBe(`REPLACE(date_raw, 'X', '0') ${direction}, date_raw ${direction}, collection_id ${direction}, type_sequence ${direction}`);
+    }
+  });
+
   it('keeps positive catalogue roots and companions from the same unit only', () => {
     const rows = [
       { id: 'root', collectionId: '009', dateRaw: '19470810', typeSequence: '01', type: 'L' },

@@ -37,6 +37,20 @@ export function publicCatalogueRepresentativeOrderSql(type: SQLWrapper) {
   return sql`array_position(ARRAY[${publicCatalogueLetterTypesSql()}]::letter_type[], ${type})`;
 }
 
+/** Unknown date components sort at the start of their known range.
+ * Unit identity breaks ties, so every public chronological view agrees.
+ */
+export function publicCatalogueChronologySql(
+  dateRaw: SQLWrapper,
+  collectionId: SQLWrapper,
+  typeSequence: SQLWrapper,
+  descending = false,
+) {
+  return descending
+    ? sql`REPLACE(${dateRaw}, 'X', '0') DESC, ${dateRaw} DESC, ${collectionId} DESC, ${typeSequence} DESC`
+    : sql`REPLACE(${dateRaw}, 'X', '0') ASC, ${dateRaw} ASC, ${collectionId} ASC, ${typeSequence} ASC`;
+}
+
 export interface PublicCatalogueUnitRow {
   collectionId: string;
   dateRaw: string;

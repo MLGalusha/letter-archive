@@ -21,7 +21,7 @@ describe('public catalogue units', () => {
         sql.raw('date_raw'), sql.raw('collection_id'), sql.raw('type_sequence'), descending,
       ));
       const direction = descending ? 'DESC' : 'ASC';
-      expect(query.sql).toBe(`REPLACE(date_raw, 'X', '0') ${direction}, date_raw ${direction}, collection_id ${direction}, type_sequence ${direction}`);
+      expect(query.sql).toBe(`REPLACE(UPPER(date_raw), 'X', '0') ${direction}, date_raw ${direction}, collection_id ${direction}, type_sequence ${direction}`);
     }
   });
 

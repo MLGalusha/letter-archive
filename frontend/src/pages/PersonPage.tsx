@@ -1,3 +1,4 @@
+import { useSiteSettings } from '../hooks/useSiteSettings';
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { getPersonPublic, type PublicPersonDetail } from '../api/entities';
@@ -8,6 +9,7 @@ import { buildPersonSeo } from '../utils/seo';
 import './PersonPage.css';
 
 export default function PersonPage() {
+  const settings = useSiteSettings();
   const navigate = useNavigate();
   const { personId } = useParams<{ personId: string }>();
 
@@ -65,7 +67,7 @@ export default function PersonPage() {
   }
 
   const { person, relationships, stats, letters } = data;
-  const seo = buildPersonSeo(data);
+  const seo = buildPersonSeo(data, settings?.site_title?.trim() || undefined);
 
   return (
     <div className="body-layout">

@@ -38,7 +38,7 @@ export default function SupportPage() {
     <div className="body-layout">
       <SEO
         title="Support & Contact"
-        description="Help preserve personal letters and historical correspondence. Your support funds digitization, preservation, and public access to Voices That Remain. Get in touch to contribute, research, or volunteer."
+        description={`Help preserve personal letters and historical correspondence. Your support funds digitization, preservation, and public access to ${settings?.site_title?.trim() || 'Voices That Remain'}. Get in touch to contribute, research, or volunteer.`}
         canonicalUrl="/support"
       />
       <div

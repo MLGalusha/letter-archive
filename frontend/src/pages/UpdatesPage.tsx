@@ -1,3 +1,4 @@
+import { useSiteSettings } from '../hooks/useSiteSettings';
 import { useState, useEffect, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import SEO from '../components/SEO';
@@ -20,6 +21,8 @@ const SORT_OPTIONS: { field: SortField; label: string; defaultOrder: SortOrder }
 ];
 
 export default function BlogPage() {
+  const settings = useSiteSettings();
+  const siteName = settings?.site_title?.trim() || undefined;
   const [searchParams, setSearchParams] = useSearchParams();
   const currentPageParam = Number(searchParams.get('page') || '1');
   const currentPage =
@@ -31,7 +34,7 @@ export default function BlogPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const blogIndexSeo = buildBlogIndexSeo(currentPage);
+  const blogIndexSeo = buildBlogIndexSeo(currentPage, siteName);
 
   const savedSort = loadJournalSort();
   const [sortField, setSortField] = useState<SortField>(

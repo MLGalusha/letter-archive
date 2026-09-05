@@ -37,7 +37,6 @@
     "drizzle-orm": "^0.45.2",
     "express": "^4.22.2",
     "express-rate-limit": "^8.6.0",
-    "image-size": "^2.0.2",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.2.0",
     "openai": "^4.77.0",
@@ -58,5 +57,8 @@
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^4.1.10"
+  },
+  "overrides": {
+    "qs": "6.16.0"
   }
 }

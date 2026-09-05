@@ -1,4 +1,4 @@
-import { canonicalSettingKey, readAdminSiteSettings } from '../../services/site-settings.js';
+import { siteSettingWrites, readAdminSiteSettings } from '../../services/site-settings.js';
 import { Router } from 'express';
 import { z } from 'zod';
 import { eq, and, or, isNull, gt, count, inArray, sql, desc } from 'drizzle-orm';
@@ -57,16 +57,14 @@ router.put('/settings', validateBody(updateSettingsSchema), async (req, res) => 
       return;
     }
 
-    for (const [inputKey, value] of entries) {
-      const key = canonicalSettingKey(inputKey);
-      await db
-        .insert(siteSettings)
-        .values({ key, value })
-        .onConflictDoUpdate({
-          target: siteSettings.key,
-          set: { value, updatedAt: new Date() },
-        });
-    }
+    // One statement keeps canonical values and old-client aliases in sync.
+    await db
+      .insert(siteSettings)
+      .values(siteSettingWrites(settings))
+      .onConflictDoUpdate({
+        target: siteSettings.key,
+        set: { value: sql`excluded.value`, updatedAt: new Date() },
+      });
 
     req.log?.info({ keys: entries.map(([k]) => k) }, 'Site settings updated');
 

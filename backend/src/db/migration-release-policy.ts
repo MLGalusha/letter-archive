@@ -26,11 +26,7 @@ export const automaticMigrationBaselineTag =
  */
 export const migrationReleasePolicies: Readonly<
   Record<string, MigrationReleaseMode>
-> = Object.freeze({
-  // Correct only the unused seeded brand; compatible with the previous serving
-  // revision, which already hardcodes this name. No schema or contract removal.
-  '0057_align_default_site_brand': 'automatic',
-});
+> = Object.freeze({});
 
 function assertValidJournal(
   journal: readonly MigrationJournalEntry[],

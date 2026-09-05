@@ -1,3 +1,4 @@
+import { useSiteSettings } from '../hooks/useSiteSettings';
 import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
@@ -83,6 +84,8 @@ function formatDateText(text: string): React.ReactNode {
 /* ── component ───────────────────────────────────────────── */
 
 export default function LetterDetailPage() {
+  const settings = useSiteSettings();
+  const siteName = settings?.site_title?.trim() || undefined;
   const { letterId } = useParams<{ letterId: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -315,7 +318,7 @@ export default function LetterDetailPage() {
   }, [letter]);
 
 
-  const seo = useMemo(() => (letter ? buildLetterSeo(letter) : null), [letter]);
+  const seo = useMemo(() => (letter ? buildLetterSeo(letter, siteName) : null), [letter, siteName]);
 
 
   const openViewer = useCallback((pageIndex: number) => {

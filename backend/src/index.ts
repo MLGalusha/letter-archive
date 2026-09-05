@@ -42,48 +42,6 @@ const apiLeaseRecovery = createLeaseRecoveryCoordinator({
   },
 });
 
-/* ── Request flight tracking ────────────────────────────── */
-let totalRequests = 0;
-let inFlight = 0;
-let peakInFlight = 0;
-
-app.use((_req, _res, next) => {
-  totalRequests++;
-  inFlight++;
-  if (inFlight > peakInFlight) peakInFlight = inFlight;
-  const onComplete = () => {
-    inFlight--;
-    _res.removeListener('finish', onComplete);
-    _res.removeListener('close', onComplete);
-  };
-  _res.on('finish', onComplete);
-  _res.on('close', onComplete);
-  next();
-});
-
-/* ── Health / debug endpoint (no auth) ──────────────────── */
-app.get('/debug/health', async (_req, res) => {
-  const mem = process.memoryUsage();
-  let pgStat: Record<string, unknown> = {};
-  try {
-    const [row] = await sql`SELECT numbackends, xact_commit, xact_rollback, blks_hit, blks_read, tup_returned, tup_fetched FROM pg_stat_database WHERE datname = current_database()`;
-    pgStat = row ?? {};
-  } catch (e) {
-    pgStat = { error: String(e) };
-  }
-  res.json({
-    uptime: process.uptime(),
-    requests: { total: totalRequests, inFlight, peakInFlight },
-    memory: {
-      rss: `${(mem.rss / 1024 / 1024).toFixed(1)} MB`,
-      heapUsed: `${(mem.heapUsed / 1024 / 1024).toFixed(1)} MB`,
-      heapTotal: `${(mem.heapTotal / 1024 / 1024).toFixed(1)} MB`,
-      external: `${(mem.external / 1024 / 1024).toFixed(1)} MB`,
-    },
-    pg: pgStat,
-  });
-});
-
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
 
@@ -257,7 +215,7 @@ function gracefulShutdown(signal: string) {
 
   // Force exit after 8s (Cloud Run gives 10s, leave buffer)
   setTimeout(() => {
-    logger.warn({ inFlight }, 'Forced shutdown after timeout');
+    logger.warn('Forced shutdown after timeout');
     process.exit(1);
   }, 8_000).unref();
 }

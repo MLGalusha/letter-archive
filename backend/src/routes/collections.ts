@@ -126,8 +126,8 @@ router.get('/collections', async (req, res, next) => {
       db
         .select({
           collectionId: letters.collectionId,
-          minDate: sql<string>`SUBSTRING(MIN(REPLACE(date_raw, 'X', '0') || date_raw) FILTER (WHERE date_raw ~ '^[0-9]{2}') FROM 9)`,
-          maxDate: sql<string>`SUBSTRING(MAX(REPLACE(date_raw, 'X', '9') || date_raw) FILTER (WHERE date_raw ~ '^[0-9]{2}') FROM 9)`,
+          minDate: sql<string>`SUBSTRING(MIN(REPLACE(UPPER(date_raw), 'X', '0') || UPPER(date_raw)) FILTER (WHERE date_raw ~ '^[0-9]{2}') FROM 9)`,
+          maxDate: sql<string>`SUBSTRING(MAX(REPLACE(UPPER(date_raw), 'X', '9') || UPPER(date_raw)) FILTER (WHERE date_raw ~ '^[0-9]{2}') FROM 9)`,
         })
         .from(letters)
         .where(and(

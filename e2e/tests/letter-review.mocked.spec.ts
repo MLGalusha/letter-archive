@@ -126,6 +126,9 @@ test.describe('@mocked Letter Review', () => {
     await expect(page.locator('.toast')).toContainText('Database offline');
     await expect(page).toHaveURL(new RegExp(`/admin/letters/${letter.id}$`));
     await expect(page.getByLabel('Personal Notes')).toHaveValue('Do not discard this note');
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.getByRole('link', { name: 'Voices That Remain Admin' }).click();
+    await expect(page).toHaveURL(/\/admin$/);
   });
 
   test('shows the request id when the review page fails to load', async ({ page }) => {

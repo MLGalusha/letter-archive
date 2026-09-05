@@ -24,6 +24,21 @@ describe('review navigation protection', () => {
     expect(await screen.findByText('Next page')).toBeVisible();
   });
 
+  it('allows explicit discard after a failed lane cannot be flushed', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
+    const router = createMemoryRouter([
+      { path: '/', element: <Review pending flush={async () => false} /> },
+      { path: '/next', element: <p>Next page</p> },
+    ]);
+    render(<RouterProvider router={router} />);
+    act(() => { screen.getByText('Leave review').click(); });
+    await waitFor(() => expect(confirm).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('Next page')).toBeNull();
+    act(() => { screen.getByText('Leave review').click(); });
+    expect(await screen.findByText('Next page')).toBeVisible();
+    confirm.mockRestore();
+  });
+
   it('warns on document exit only while there are unsaved edits', () => {
     const flush = vi.fn(async () => true);
     const router = createMemoryRouter([{ path: '/', element: <Review pending flush={flush} /> }]);

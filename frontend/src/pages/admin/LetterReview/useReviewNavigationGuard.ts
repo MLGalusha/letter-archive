@@ -33,7 +33,10 @@ export function useReviewNavigationGuard(
       try { saved = await current.current.flush(); } catch { /* Stay on the editor. */ }
       const latest = blockerRef.current;
       if (latest.state === 'blocked') {
-        if (saved) latest.proceed();
+        const discard = !saved && window.confirm(
+          'Changes could not be saved. Leave this review and discard unsaved changes?',
+        );
+        if (saved || discard) latest.proceed();
         else latest.reset();
       }
       saving.current = false;

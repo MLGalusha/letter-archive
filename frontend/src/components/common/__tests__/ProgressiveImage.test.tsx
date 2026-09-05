@@ -42,6 +42,7 @@ describe('ProgressiveImage', () => {
       expect(options).toMatchObject({ root: nested ? container.firstChild : scrollRoot, rootMargin: '200px' });
       expect(mockUseProgressiveImage).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: false }));
       expect(screen.getByAltText('Lazy scan')).not.toHaveAttribute('src');
+      expect(container.querySelector<HTMLElement>('.progressive-image')?.style.aspectRatio).toBe('0.75');
       act(() => notify([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver));
       expect(mockUseProgressiveImage).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: true }));
       expect(screen.getByAltText('Lazy scan')).toHaveAttribute('src', '/full.jpg');

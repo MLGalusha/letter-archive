@@ -76,6 +76,27 @@ describe("InfiniteCarousel", () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
+  it("suppresses the same drag click after leaving and re-entering the track", () => {
+    const onClick = vi.fn((event) => event.preventDefault());
+    const { container } = render(<InfiniteCarousel suppressClickAfterDrag>{[
+      <a key="a" href="/letter/one" data-carousel-drag onClick={onClick}>Open scan</a>,
+      <div key="b">Other slide</div>,
+    ]}</InfiniteCarousel>);
+    const link = screen.getAllByText('Open scan')[0];
+    const track = container.querySelector('.carousel-track')!;
+    fireEvent.mouseDown(link, { button: 0, clientX: 300, clientY: 100 });
+    fireEvent.mouseMove(link, { clientX: 100, clientY: 100 });
+    fireEvent.mouseLeave(track);
+    fireEvent.mouseEnter(track);
+    fireEvent.mouseUp(link);
+    fireEvent.click(link, { detail: 1 });
+    expect(onClick).not.toHaveBeenCalled();
+    fireEvent.mouseDown(link, { button: 0 });
+    fireEvent.mouseUp(link);
+    fireEvent.click(link, { detail: 1 });
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
   it("renders children as slides", () => {
     const { container } = render(
       <InfiniteCarousel>

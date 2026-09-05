@@ -237,6 +237,7 @@
 }
 
 .cd-highlight-open-link {
+  text-decoration: none;
   position: absolute;
   inset: 0;
   color: inherit;

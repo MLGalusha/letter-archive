@@ -202,7 +202,6 @@ export default function InfiniteCarousel({
     if (!mouseDownRef.current) return;
     mouseDownRef.current = false;
     endDrag();
-    draggedRef.current = false;
   }, [endDrag]);
 
   const handleClickCapture = useCallback((e: React.MouseEvent) => {

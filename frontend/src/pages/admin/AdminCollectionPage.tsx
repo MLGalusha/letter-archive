@@ -1001,7 +1001,6 @@ function AdminCollectionRoute({
                   </div>
                   <ShowcaseCard
                     items={showcaseItems}
-                    onNavigate={() => {/* no-op on admin — no navigation */}}
                   />
                 </div>
               </div>

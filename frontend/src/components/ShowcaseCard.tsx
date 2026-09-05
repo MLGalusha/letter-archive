@@ -17,7 +17,7 @@ export interface ShowcaseItem {
 
 interface ShowcaseCardProps {
   items: ShowcaseItem[];
-  onNavigate: (letterId: string, imageId?: string) => void;
+  onNavigate?: (letterId: string, imageId?: string) => void;
   onInteraction?: () => void;
 }
 
@@ -40,16 +40,17 @@ export default function ShowcaseCard({ items, onNavigate, onInteraction }: Showc
     onInteraction?.();
   };
 
+  const Content = onNavigate ? 'a' : 'div';
   const params = new URLSearchParams({ from: 'highlight' });
   if (item.imageId) params.set('image', item.imageId);
 
   return (
     <div className={`cd-highlight-card cd-highlight-card--${item.mediaType}`}>
-      <a className="cd-highlight-open-link" data-carousel-drag draggable={false}
-        href={`/letter/${item.letterId}?${params.toString()}`}
+      <Content className="cd-highlight-open-link" data-carousel-drag={onNavigate ? true : undefined} draggable={false}
+        href={onNavigate ? `/letter/${item.letterId}?${params.toString()}` : undefined}
         aria-label={[item.label, item.peopleLine, item.date, item.hook].filter(Boolean).join(', ')}
-        onClick={(event) => {
-          if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        onClick={(event: ReactMouseEvent) => {
+          if (!onNavigate || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
           event.preventDefault();
           onNavigate(item.letterId, item.imageId);
         }}
@@ -87,7 +88,7 @@ export default function ShowcaseCard({ items, onNavigate, onInteraction }: Showc
           <p className="cd-highlight-hook">{item.hook}</p>
         )}
       </div>
-      </a>
+      </Content>
       {hasMultiple && (
         <>
           <span className="cd-highlight-page-counter">

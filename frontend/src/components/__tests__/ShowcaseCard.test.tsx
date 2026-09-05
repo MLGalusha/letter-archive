@@ -55,4 +55,12 @@ describe('ShowcaseCard image loading', () => {
     expect(onNavigate).toHaveBeenCalledWith('letter-1', 'image-1');
   });
 
+  it('keeps admin previews without a navigation handler free of link destinations', () => {
+    const { container } = render(<ShowcaseCard items={items} />);
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    expect(container.querySelector('[href]')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByRole('img')).toHaveAttribute('src', '/image-1.jpg');
+  });
+
 });

@@ -2,15 +2,22 @@ import { useState, useEffect } from "react";
 import { getArchiveShelfItems, type ArchiveShelfResponse } from "../../api/letters";
 import type { ArchiveShelfItem } from "../../types/Letter";
 
-/** Resolved results — persists for the session */
-const cache = new Map<string, ArchiveShelfItem[]>();
+const CACHE_TTL_MS = 5 * 60 * 1000;
+const MAX_CACHED_COLLECTIONS = 10;
+const cache = new Map<string, { items: ArchiveShelfItem[]; expiresAt: number }>();
+
+function cachedItems(code: string): ArchiveShelfItem[] | undefined {
+  const entry = cache.get(code);
+  return entry && entry.expiresAt > Date.now() ? entry.items : undefined;
+}
 
 /** In-flight promises — prevents duplicate concurrent fetches */
 const pending = new Map<string, Promise<ArchiveShelfItem[]>>();
 
 function fetchCollection(collectionCode: string): Promise<ArchiveShelfItem[]> {
   // Already resolved
-  if (cache.has(collectionCode)) return Promise.resolve(cache.get(collectionCode)!);
+  const cached = cachedItems(collectionCode);
+  if (cached) return Promise.resolve(cached);
 
   // Already in-flight — join existing request
   if (pending.has(collectionCode)) return pending.get(collectionCode)!;
@@ -33,12 +40,13 @@ function fetchCollection(collectionCode: string): Promise<ArchiveShelfItem[]> {
       page++;
     } while (page <= totalPages);
 
-    cache.set(collectionCode, items);
+    cache.delete(collectionCode);
+    cache.set(collectionCode, { items, expiresAt: Date.now() + CACHE_TTL_MS });
+    if (cache.size > MAX_CACHED_COLLECTIONS) cache.delete(cache.keys().next().value!);
     return items;
-  })();
+  })().finally(() => pending.delete(collectionCode));
 
   pending.set(collectionCode, promise);
-  promise.finally(() => pending.delete(collectionCode));
 
   return promise;
 }
@@ -55,7 +63,7 @@ export default function useCollectionLetters(collectionCode: string): ArchiveShe
     letters: ArchiveShelfItem[];
   } | null>(null);
   const letters = (
-    cache.get(collectionCode)
+    cachedItems(collectionCode)
     ?? (
       loaded?.collectionCode === collectionCode
         ? loaded.letters
@@ -65,19 +73,24 @@ export default function useCollectionLetters(collectionCode: string): ArchiveShe
 
   useEffect(() => {
     if (!collectionCode) return;
-    if (cache.has(collectionCode)) return;
-
     let cancelled = false;
+    let refreshTimer: ReturnType<typeof setTimeout>;
 
-    fetchCollection(collectionCode)
-      .then((items) => {
-        if (!cancelled) {
-          setLoaded({ collectionCode, letters: items });
-        }
-      })
-      .catch(() => {});
-
-    return () => { cancelled = true; };
+    const refresh = () => {
+      fetchCollection(collectionCode)
+        .then((items) => {
+          if (!cancelled) setLoaded({ collectionCode, letters: items });
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (cancelled) return;
+          const expiresAt = cache.get(collectionCode)?.expiresAt ?? 0;
+          const delay = expiresAt > Date.now() ? expiresAt - Date.now() : CACHE_TTL_MS;
+          refreshTimer = setTimeout(refresh, delay);
+        });
+    };
+    refresh();
+    return () => { cancelled = true; clearTimeout(refreshTimer); };
   }, [collectionCode]);
 
   return letters;

@@ -1,0 +1,151 @@
+{
+  "measuredAt": "2026-09-05T06:35:51.586Z",
+  "sourceRevision": "d3de8948c6e1ca10813f3cca8873ed9fb6cf2d3f",
+  "method": {
+    "stepMs": 400,
+    "steps": 16,
+    "scrollViewportFraction": 0.65,
+    "settleMs": 5000,
+    "pollMs": 50,
+    "cache": "fresh browser context per run; normal HTTP cache; origin cache uncontrolled",
+    "notes": "Full wait includes opacity transition. Only observed cards included; unresolved reported separately. No CPU throttle, not a physical phone."
+  },
+  "results": [
+    {
+      "label": "single-4g",
+      "base": "https://voicesthatremain.com",
+      "assets": "/tmp/image-loading-build-single",
+      "path": "/",
+      "viewportName": "mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "deviceScaleFactor": 2,
+      "network": "4g",
+      "run": 1,
+      "summary": {
+        "cardsSeen": 82,
+        "scrollCards": 76,
+        "unresolved": 0,
+        "p50FullWaitMs": 0,
+        "p75FullWaitMs": 0,
+        "p95FullWaitMs": 0,
+        "maxFullWaitMs": 0,
+        "p75UsableWaitMs": 0,
+        "over3s": 0,
+        "imageRequests": 90,
+        "wireBytes": 2351365,
+        "requestP75Ms": 446,
+        "lcpMs": 652,
+        "visibleBlockedMs": 0,
+        "pageErrors": []
+      },
+      "lcp": 652,
+      "phase": "return"
+    },
+    {
+      "label": "single-4g",
+      "base": "https://voicesthatremain.com",
+      "assets": "/tmp/image-loading-build-single",
+      "path": "/",
+      "viewportName": "mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "deviceScaleFactor": 2,
+      "network": "4g",
+      "run": 2,
+      "summary": {
+        "cardsSeen": 82,
+        "scrollCards": 76,
+        "unresolved": 0,
+        "p50FullWaitMs": 0,
+        "p75FullWaitMs": 0,
+        "p95FullWaitMs": 0,
+        "maxFullWaitMs": 0,
+        "p75UsableWaitMs": 0,
+        "over3s": 0,
+        "imageRequests": 90,
+        "wireBytes": 2351345,
+        "requestP75Ms": 399,
+        "lcpMs": 540,
+        "visibleBlockedMs": 0,
+        "pageErrors": []
+      },
+      "lcp": 540,
+      "phase": "return"
+    },
+    {
+      "label": "single-4g",
+      "base": "https://voicesthatremain.com",
+      "assets": "/tmp/image-loading-build-single",
+      "path": "/",
+      "viewportName": "desktop",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "deviceScaleFactor": 2,
+      "network": "4g",
+      "run": 1,
+      "summary": {
+        "cardsSeen": 96,
+        "scrollCards": 94,
+        "unresolved": 0,
+        "p50FullWaitMs": 0,
+        "p75FullWaitMs": 0,
+        "p95FullWaitMs": 350,
+        "maxFullWaitMs": 700,
+        "p75UsableWaitMs": 0,
+        "over3s": 0,
+        "imageRequests": 96,
+        "wireBytes": 2472053,
+        "requestP75Ms": 858,
+        "lcpMs": 1352,
+        "visibleBlockedMs": 4906,
+        "pageErrors": []
+      },
+      "lcp": 1352,
+      "phase": "return"
+    },
+    {
+      "label": "single-4g",
+      "base": "https://voicesthatremain.com",
+      "assets": "/tmp/image-loading-build-single",
+      "path": "/",
+      "viewportName": "desktop",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "deviceScaleFactor": 2,
+      "network": "4g",
+      "run": 2,
+      "summary": {
+        "cardsSeen": 96,
+        "scrollCards": 94,
+        "unresolved": 0,
+        "p50FullWaitMs": 0,
+        "p75FullWaitMs": 0,
+        "p95FullWaitMs": 350,
+        "maxFullWaitMs": 600,
+        "p75UsableWaitMs": 0,
+        "over3s": 0,
+        "imageRequests": 96,
+        "wireBytes": 2472069,
+        "requestP75Ms": 864,
+        "lcpMs": 1424,
+        "visibleBlockedMs": 4709,
+        "pageErrors": []
+      },
+      "lcp": 1424,
+      "phase": "return"
+    }
+  ],
+  "frontendRelease": {
+    "releaseSha": "d3de8948c6e1ca10813f3cca8873ed9fb6cf2d3f"
+  },
+  "substitutedBundleSha256": "9cefd011651c72013c8766f39e8fe75d036fc9f6e51bfbf5c079731f38a98069"
+}

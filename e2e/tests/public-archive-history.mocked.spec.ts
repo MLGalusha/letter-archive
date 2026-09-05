@@ -122,3 +122,36 @@ test.describe('@mocked Public archive history', () => {
     await expect(searchInput).toHaveValue('');
   });
 });
+
+test('@mocked archive previews use one size, defer distant cards, and stay loaded on return', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.mouse.move(0, 0);
+  await installMockPublicHomeApi(page);
+  const letters = Array.from({ length: 19 }, (_, i) => ({
+    id: `preview-${i}`, imageUrl: `/images/preview-${i}`, imageType: 'letter',
+    title: `Preview ${i}`, verified: true,
+  }));
+  await page.route((url) => isApiPath(url, '/letters/search'), (route) => route.fulfill({
+    json: { letters, page: 1, limit: 24, total: 19, facets: EMPTY_FACETS },
+  }));
+  const requests: string[] = [];
+  await page.route((url) => url.origin === new URL(API_BASE_URL).origin && url.pathname.startsWith('/images/preview-'), async (route) => {
+    requests.push(route.request().url());
+    await route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="640"><rect width="480" height="640" fill="#d9cdbb"/></svg>' });
+  });
+  await page.goto('/');
+  const cards = page.locator('a.letter-card .preview-image__image');
+  await expect(cards).toHaveCount(19);
+  await expect.poll(() => requests.length).toBeGreaterThan(0);
+  expect(requests.length).toBeLessThan(19);
+  await expect(cards.last()).not.toHaveAttribute('src');
+  await cards.last().scrollIntoViewIfNeeded();
+  await expect.poll(() => cards.last().evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth === 480)).toBe(true);
+  expect(new Set(requests.map((url) => new URL(url).searchParams.get('w')))).toEqual(new Set(['480']));
+  const lastUrl = await cards.last().getAttribute('src');
+  await cards.first().scrollIntoViewIfNeeded();
+  await expect.poll(() => cards.first().evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth === 480)).toBe(true);
+  await cards.last().scrollIntoViewIfNeeded();
+  await expect(cards.last()).toHaveAttribute('src', lastUrl!);
+  expect(requests.filter((url) => url === lastUrl)).toHaveLength(1);
+});

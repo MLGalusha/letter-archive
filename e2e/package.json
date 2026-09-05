@@ -10,7 +10,8 @@
     "test:mocked": "playwright test --config=playwright.mocked.config.ts",
     "test:headed": "playwright test --headed",
     "test:ui": "playwright test --ui",
-    "report": "playwright show-report"
+    "report": "playwright show-report",
+    "benchmark:images": "node scripts/image-scroll-benchmark.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.1",

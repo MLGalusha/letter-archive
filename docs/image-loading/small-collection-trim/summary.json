@@ -1,0 +1,151 @@
+{
+  "measuredAt": "2026-09-05T06:42:48.161Z",
+  "sourceRevision": "3ccb437d1f955c8f7eecf53dc8a79000f0cf2c90",
+  "method": {
+    "stepMs": 800,
+    "steps": 16,
+    "scrollViewportFraction": 0.65,
+    "settleMs": 5000,
+    "pollMs": 50,
+    "cache": "fresh browser context per run; normal HTTP cache; origin cache uncontrolled",
+    "notes": "Full wait includes opacity transition. Only observed cards included; unresolved reported separately. No CPU throttle, not a physical phone."
+  },
+  "results": [
+    {
+      "label": "small-collection-trim",
+      "base": "https://voicesthatremain.com",
+      "assets": "/tmp/image-loading-build-trim",
+      "path": "/collections/007",
+      "viewportName": "mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "deviceScaleFactor": 2,
+      "network": "4g",
+      "run": 1,
+      "summary": {
+        "cardsSeen": 23,
+        "scrollCards": 19,
+        "unresolved": 0,
+        "p50FullWaitMs": 0,
+        "p75FullWaitMs": 0,
+        "p95FullWaitMs": 0,
+        "maxFullWaitMs": 0,
+        "p75UsableWaitMs": 0,
+        "over3s": 0,
+        "imageRequests": 31,
+        "wireBytes": 701715,
+        "requestP75Ms": 652,
+        "lcpMs": 2548,
+        "visibleBlockedMs": 0,
+        "pageErrors": []
+      },
+      "lcp": 2548,
+      "phase": "return"
+    },
+    {
+      "label": "small-collection-trim",
+      "base": "https://voicesthatremain.com",
+      "assets": "/tmp/image-loading-build-trim",
+      "path": "/collections/007",
+      "viewportName": "mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "deviceScaleFactor": 2,
+      "network": "4g",
+      "run": 2,
+      "summary": {
+        "cardsSeen": 23,
+        "scrollCards": 19,
+        "unresolved": 0,
+        "p50FullWaitMs": 0,
+        "p75FullWaitMs": 0,
+        "p95FullWaitMs": 0,
+        "maxFullWaitMs": 0,
+        "p75UsableWaitMs": 0,
+        "over3s": 0,
+        "imageRequests": 30,
+        "wireBytes": 696079,
+        "requestP75Ms": 596,
+        "lcpMs": 2284,
+        "visibleBlockedMs": 0,
+        "pageErrors": []
+      },
+      "lcp": 2284,
+      "phase": "return"
+    },
+    {
+      "label": "small-collection-trim",
+      "base": "https://voicesthatremain.com",
+      "assets": "/tmp/image-loading-build-trim",
+      "path": "/collections/007",
+      "viewportName": "desktop",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "deviceScaleFactor": 2,
+      "network": "4g",
+      "run": 1,
+      "summary": {
+        "cardsSeen": 21,
+        "scrollCards": 15,
+        "unresolved": 0,
+        "p50FullWaitMs": 0,
+        "p75FullWaitMs": 0,
+        "p95FullWaitMs": 0,
+        "maxFullWaitMs": 0,
+        "p75UsableWaitMs": 0,
+        "over3s": 0,
+        "imageRequests": 31,
+        "wireBytes": 696928,
+        "requestP75Ms": 888,
+        "lcpMs": 1304,
+        "visibleBlockedMs": 0,
+        "pageErrors": []
+      },
+      "lcp": 1304,
+      "phase": "return"
+    },
+    {
+      "label": "small-collection-trim",
+      "base": "https://voicesthatremain.com",
+      "assets": "/tmp/image-loading-build-trim",
+      "path": "/collections/007",
+      "viewportName": "desktop",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "deviceScaleFactor": 2,
+      "network": "4g",
+      "run": 2,
+      "summary": {
+        "cardsSeen": 21,
+        "scrollCards": 15,
+        "unresolved": 0,
+        "p50FullWaitMs": 0,
+        "p75FullWaitMs": 0,
+        "p95FullWaitMs": 0,
+        "maxFullWaitMs": 0,
+        "p75UsableWaitMs": 0,
+        "over3s": 0,
+        "imageRequests": 31,
+        "wireBytes": 710326,
+        "requestP75Ms": 898,
+        "lcpMs": 1360,
+        "visibleBlockedMs": 0,
+        "pageErrors": []
+      },
+      "lcp": 1360,
+      "phase": "return"
+    }
+  ],
+  "frontendRelease": {
+    "releaseSha": "d3de8948c6e1ca10813f3cca8873ed9fb6cf2d3f"
+  },
+  "substitutedBundleSha256": "b61475da5f3522384dab364079010ef44e82b77954ae27384d0da951c3ca6df7"
+}

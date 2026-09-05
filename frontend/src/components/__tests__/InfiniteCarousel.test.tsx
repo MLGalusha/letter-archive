@@ -38,10 +38,41 @@ describe("InfiniteCarousel", () => {
     fireEvent.mouseDown(link, { button: 0, clientX: 300, clientY: 100 });
     fireEvent.mouseMove(link, { clientX: 100, clientY: 100 });
     fireEvent.mouseUp(link);
-    fireEvent.click(link);
+    fireEvent.click(link, { detail: 1 });
     expect(onClick).not.toHaveBeenCalled();
     expect(container.querySelectorAll('[role="tab"]')[1]).toHaveAttribute('aria-selected', 'true');
-    fireEvent.click(link);
+    fireEvent.click(link, { detail: 1 });
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not swallow a CTA click after a drag leaves the track", () => {
+    const onClick = vi.fn((event) => event.preventDefault());
+    const { container } = render(<InfiniteCarousel suppressClickAfterDrag>{[
+      <div key="a">Drag surface</div>,
+      <a key="b" href="/collections" onClick={onClick}>Browse collections</a>,
+    ]}</InfiniteCarousel>);
+    const track = container.querySelector('.carousel-track')!;
+    fireEvent.mouseDown(track, { button: 0, clientX: 300, clientY: 100 });
+    fireEvent.mouseMove(track, { clientX: 100, clientY: 100 });
+    fireEvent.mouseLeave(track);
+    const link = screen.getAllByText('Browse collections')[0];
+    fireEvent.mouseDown(link, { button: 0 });
+    fireEvent.mouseUp(link);
+    fireEvent.click(link, { detail: 1 });
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not apply pointer drag suppression to keyboard activation", () => {
+    const onClick = vi.fn((event) => event.preventDefault());
+    const { container } = render(<InfiniteCarousel suppressClickAfterDrag>{[
+      <div key="a">Drag surface</div>,
+      <a key="b" href="/collections" onClick={onClick}>Browse collections</a>,
+    ]}</InfiniteCarousel>);
+    const track = container.querySelector('.carousel-track')!;
+    fireEvent.mouseDown(track, { button: 0, clientX: 300, clientY: 100 });
+    fireEvent.mouseMove(track, { clientX: 100, clientY: 100 });
+    fireEvent.mouseUp(track);
+    fireEvent.click(screen.getAllByText('Browse collections')[0], { detail: 0 });
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 

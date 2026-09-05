@@ -179,6 +179,8 @@ export default function InfiniteCarousel({
   const mouseDownRef = useRef(false);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    // A new gesture must never inherit click suppression from an earlier drag.
+    draggedRef.current = false;
     if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     if ((e.target as HTMLElement).closest('button, a:not([data-carousel-drag])')) return;
     mouseDownRef.current = true;
@@ -200,9 +202,14 @@ export default function InfiniteCarousel({
     if (!mouseDownRef.current) return;
     mouseDownRef.current = false;
     endDrag();
+    draggedRef.current = false;
   }, [endDrag]);
 
   const handleClickCapture = useCallback((e: React.MouseEvent) => {
+    if (e.detail === 0) {
+      draggedRef.current = false;
+      return;
+    }
     if (suppressClickAfterDrag && draggedRef.current) {
       e.stopPropagation();
       e.preventDefault();

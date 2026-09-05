@@ -20,6 +20,15 @@ router.get('/content/featured-letter', async (req, res) => {
       const [letter] = await db
         .select({
           id: letters.id,
+          imageUrl: sql<string | null>`(
+            SELECT '/images/' || preview.id::text ||
+              CASE WHEN preview.checksum_sha256 IS NOT NULL
+                THEN '?v=' || LEFT(preview.checksum_sha256, 8) ELSE '' END
+            FROM letter_pages preview
+            WHERE preview.letter_id = ${letters.id}
+            ORDER BY preview.page_number ASC
+            LIMIT 1
+          )`,
           hook: sql`CASE
             WHEN ${letters.metadataPublished} THEN ${letters.hook}
             WHEN ${letters.type} = 'P'

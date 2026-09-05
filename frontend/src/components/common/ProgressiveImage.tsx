@@ -1,4 +1,4 @@
-import { forwardRef, useState, useEffect, type CSSProperties } from 'react';
+import { forwardRef, useState, useEffect, useRef, type CSSProperties } from 'react';
 import { useProgressiveImage } from '../../hooks/useProgressiveImage';
 import './ProgressiveImage.css';
 
@@ -51,12 +51,33 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
     },
     ref,
   ) {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [hasBeenVisible, setHasBeenVisible] = useState(false);
+    const needsVisibility = loading === 'lazy' || deferFullUntilVisible;
+    const enabled = !needsVisibility || hasBeenVisible;
+
+    useEffect(() => {
+      if (enabled) return;
+      if (typeof IntersectionObserver === 'undefined') {
+        setHasBeenVisible(true);
+        return;
+      }
+      const observer = new IntersectionObserver((entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setHasBeenVisible(true);
+          observer.disconnect();
+        }
+      }, { rootMargin: '200px' });
+      if (containerRef.current) observer.observe(containerRef.current);
+      return () => observer.disconnect();
+    }, [enabled]);
+
     const { thumbLoaded, midLoaded, fullLoaded, currentSrc, naturalWidth, naturalHeight } = useProgressiveImage({
       thumbSrc,
       midSrc,
       fullSrc: src,
       idleUpgrade,
-      deferFullUntilVisible,
+      enabled,
       context,
       fullDelay,
     });
@@ -85,7 +106,7 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
     };
 
     return (
-      <div className={`progressive-image ${className ?? ''}`} style={containerStyle}>
+      <div ref={containerRef} className={`progressive-image ${className ?? ''}`} style={containerStyle}>
         {showPlaceholder && placeholderSrc && (
           <img
             src={placeholderSrc}
@@ -103,7 +124,7 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
         )}
         <img
           ref={ref}
-          src={currentSrc || src}
+          src={enabled ? currentSrc || src : undefined}
           alt={alt}
           className={`progressive-image__full ${imgClassName ?? ''} ${fullLoaded ? '' : 'progressive-image__full--loading'}`}
           style={{ ...imgStyle, objectFit, ...(imgError ? { visibility: 'hidden' as const } : {}) }}

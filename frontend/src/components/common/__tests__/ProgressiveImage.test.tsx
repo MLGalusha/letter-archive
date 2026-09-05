@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ProgressiveImage } from '../ProgressiveImage';
 
@@ -23,6 +23,30 @@ function mockHookReturn(overrides: Partial<ReturnType<typeof useProgressiveImage
 }
 
 describe('ProgressiveImage', () => {
+  it('defers every image tier and the DOM source until a lazy image is near the viewport', () => {
+    let notify: IntersectionObserverCallback;
+    const disconnect = vi.fn();
+    const OriginalObserver = globalThis.IntersectionObserver;
+    globalThis.IntersectionObserver = class {
+      constructor(callback: IntersectionObserverCallback) { notify = callback; }
+      observe = vi.fn();
+      disconnect = disconnect;
+    } as unknown as typeof IntersectionObserver;
+    try {
+      mockHookReturn();
+      const { unmount } = render(<ProgressiveImage src="/full.jpg" thumbSrc="/thumb.jpg" midSrc="/mid.jpg" alt="Lazy scan" loading="lazy" />);
+      expect(mockUseProgressiveImage).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: false }));
+      expect(screen.getByAltText('Lazy scan')).not.toHaveAttribute('src');
+      act(() => notify([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver));
+      expect(mockUseProgressiveImage).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: true }));
+      expect(screen.getByAltText('Lazy scan')).toHaveAttribute('src', '/full.jpg');
+      unmount();
+      expect(disconnect).toHaveBeenCalled();
+    } finally {
+      globalThis.IntersectionObserver = OriginalObserver;
+    }
+  });
+
   it('renders an <img> element with the correct src and alt', () => {
     mockHookReturn({ fullLoaded: true, currentSrc: '/images/full.jpg' });
 

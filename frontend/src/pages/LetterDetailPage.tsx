@@ -467,7 +467,7 @@ export default function LetterDetailPage() {
         {/* ── 3. Scan Image Carousel ──────────────────────── */}
         {carouselImages.length > 0 && (
           <figure className="letter-scan-figure">
-            <div className="scan-carousel" ref={carouselRef} data-swipe-ignore>
+            <div className="scan-carousel" ref={carouselRef} data-swipe-ignore data-image-scroll-root>
               {carouselImages.map((img, idx) => {
                 const isLetter = img.type === "letter";
                 const typeLabel = isLetter

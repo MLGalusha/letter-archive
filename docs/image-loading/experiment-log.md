@@ -50,3 +50,7 @@ After both UI fixes deployed as `ec72790c`, the same production fast-scroll scen
 On the ordinary connection, all observed post-change scrolling previews were ready at their first visible observation. The browser cache already saved most transfer on repeat visits; the second desktop visit changed from 283 requests / 11,883 wire bytes to 96 requests / 4,422 wire bytes. The final small-collection production check sent 31 requests / 0.68–0.72 MB.
 
 Final report delivery includes one instrumentation correction: measure native image load elapsed time even after the browser's Resource Timing buffer fills. A regression test supplies no Resource Timing entry and verifies a 250 ms load is recorded as 250 ms, not zero. The scrolling benchmark does not consume that telemetry and its results remain independent.
+
+### Review corrections
+
+Production runs now abort if either deployment-revision lookup fails, returns a non-success HTTP response or lacks a valid revision. Local/substituted previews may explicitly proceed without a deployed revision. Six Node checks cover these cases and run ahead of the mocked browser suite in CI. Revisit artifacts' overall cache description was corrected to match the already-recorded per-run `cacheState`; raw measurements and results were not changed.

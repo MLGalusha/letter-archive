@@ -9,6 +9,7 @@ import { resolve, sep } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { readFrontendRelease, cacheDescription } from './image-benchmark-metadata.mjs';
 process.chdir(fileURLToPath(new URL('../..', import.meta.url)));
 const args = Object.fromEntries(process.argv.slice(2).reduce((pairs, v, i, all) => v.startsWith('--') ? [...pairs, [v.slice(2), all[i+1]]] : pairs, []));
 const base = args.base || 'https://voicesthatremain.com';
@@ -25,7 +26,8 @@ await mkdir(dir); // A new label is required: never overwrite a recorded experim
 const percentile = (v,p) => { const a=v.toSorted((a,b)=>a-b); return a.length ? Math.round(a[Math.max(0,Math.ceil(a.length*p)-1)]) : null; };
 const results=[];
 const contexts=new Map();
-const frontendRelease=await fetch(base+'/version.json',{signal:AbortSignal.timeout(10000)}).then(r=>r.json()).catch(()=>null);
+const requireRevision=!args.assets && !['localhost','127.0.0.1','[::1]'].includes(new URL(base).hostname);
+const frontendRelease=await readFrontendRelease(base,{required:requireRevision});
 const bundleHash=args.assets?createHash('sha256').update(await readFile(resolve(args.assets,'index.html'))).digest('hex'):null;
 const browser = await chromium.launch({headless:true});
 try {
@@ -106,9 +108,9 @@ try {
       const images=[...requests.values()];
       const result={label,base,cacheState:args['reuse-context']==='yes' && run>1?'repeat visit':'fresh browser',assets:args.assets||null,path,viewportName,viewport,deviceScaleFactor:2,network,run,summary:{cardsSeen:state.cards.length,scrollCards:scrollCards.length,unresolved:scrollCards.filter(c=>c.fullReady===null).length,p50FullWaitMs:percentile(waits,.5),p75FullWaitMs:percentile(waits,.75),p95FullWaitMs:percentile(waits,.95),maxFullWaitMs:percentile(waits,1),p75UsableWaitMs:percentile(usableWaits,.75),over3s:waits.filter(n=>n>=3000).length,imageRequests:images.length,wireBytes:images.reduce((n,r)=>n+(r.wireBytes||0),0),requestP75Ms:percentile(images.filter(r=>r.durationMs!==undefined).map(r=>r.durationMs),.75),lcpMs:Math.round(state.lcp),visibleBlockedMs:Math.round(scrollCards.reduce((n,c)=>n+c.visibleBlockedMs,0)),pageErrors:failures},...state,requests:images};
       results.push(result);
-      const frontendReleaseAtEnd=await fetch(base+'/version.json',{signal:AbortSignal.timeout(10000)}).then(r=>r.json()).catch(()=>null);
+      const frontendReleaseAtEnd=await readFrontendRelease(base,{required:requireRevision});
       if(!args.assets && frontendRelease?.releaseSha && frontendReleaseAtEnd?.releaseSha && frontendRelease.releaseSha!==frontendReleaseAtEnd.releaseSha) throw Error('Production revision changed during measurement; discard this comparison');
-      const evidence={frontendReleaseAtEnd,measuredAt:new Date().toISOString(),sourceRevision:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),frontendRelease,substitutedBundleSha256:bundleHash,method:{stepMs,steps:16,scrollViewportFraction:.65,settleMs:5000,pollMs:50,cache:'fresh browser context per run; origin cache uncontrolled',notes:'Full wait includes opacity transition. Only observed cards included; unresolved reported separately. No CPU throttle, not a physical phone.'},results};
+      const evidence={frontendReleaseAtEnd,measuredAt:new Date().toISOString(),sourceRevision:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),frontendRelease,substitutedBundleSha256:bundleHash,method:{stepMs,steps:16,scrollViewportFraction:.65,settleMs:5000,pollMs:50,cache:cacheDescription(args['reuse-context']==='yes'),notes:'Full wait includes opacity transition. Only observed cards included; unresolved reported separately. No CPU throttle, not a physical phone.'},results};
       await writeFile(`${dir}/results.json.gz`,gzipSync(JSON.stringify(evidence)));
       await writeFile(`${dir}/summary.json`,JSON.stringify({...evidence,results:results.map(({cards,samples,requests,...rest})=>rest)},null,2)+'\n');
       console.log(JSON.stringify({path,viewportName,run,...result.summary}));

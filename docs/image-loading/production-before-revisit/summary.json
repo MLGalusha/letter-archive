@@ -14,8 +14,9 @@
     "scrollViewportFraction": 0.65,
     "settleMs": 5000,
     "pollMs": 50,
-    "cache": "fresh browser context per run; origin cache uncontrolled",
-    "notes": "Full wait includes opacity transition. Only observed cards included; unresolved reported separately. No CPU throttle, not a physical phone."
+    "cache": "shared context per viewport/path; first visit fresh, later visits reuse browser cache; origin cache uncontrolled",
+    "notes": "Full wait includes opacity transition. Only observed cards included; unresolved reported separately. No CPU throttle, not a physical phone.",
+    "metadataCorrection": "Corrected method description to match the already-recorded per-run cacheState; measurements unchanged."
   },
   "results": [
     {

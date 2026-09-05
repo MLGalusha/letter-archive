@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { invokeRouter } from '../../test/express-test-utils.js';
 
 const {
+  cataloguePageMock,
   findCollectionsMock,
   findLettersMock,
   findFirstLetterMock,
@@ -23,6 +24,7 @@ const {
   sqlJoinMock,
   publicProjectionState,
 } = vi.hoisted(() => ({
+  cataloguePageMock: vi.fn(),
   findCollectionsMock: vi.fn(),
   findLettersMock: vi.fn(),
   findFirstLetterMock: vi.fn(),
@@ -44,6 +46,8 @@ const {
   sqlJoinMock: vi.fn(),
   publicProjectionState: { enabled: false },
 }));
+
+vi.mock('../../services/public-catalogue-page.js', () => ({ getPublicCataloguePage: cataloguePageMock }));
 
 vi.mock('drizzle-orm', () => ({
   eq: eqMock,
@@ -137,6 +141,7 @@ describe('letters route integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     publicProjectionState.enabled = false;
+    cataloguePageMock.mockResolvedValue({ total: 1, units: [{ collectionId: 'collection-9', dateRaw: '19470810', typeSequence: 1 }], where: { boundedPage: true } });
 
     eqMock.mockImplementation((left, right) => ({ op: 'eq', left, right }));
     andMock.mockImplementation((...conditions) => ({ op: 'and', conditions }));
@@ -175,6 +180,10 @@ describe('letters route integration', () => {
   });
 
   it('groups published letters by date and type sequence', async () => {
+    cataloguePageMock.mockResolvedValueOnce({ total: 2, units: [
+      { collectionId: 'collection-9', dateRaw: '19470810', typeSequence: 1 },
+      { collectionId: 'collection-9', dateRaw: '19470811', typeSequence: 1 },
+    ], where: { boundedPage: true } });
     findCollectionsMock.mockResolvedValueOnce([
       {
         id: 'collection-9',
@@ -241,6 +250,7 @@ describe('letters route integration', () => {
       total: 2,
     });
     expect(findCollectionsMock).toHaveBeenCalledTimes(1);
+    expect(findLettersMock.mock.calls[0][0].where).toEqual({ boundedPage: true });
     expect(transformLettersWithRelatedToDTOMock).toHaveBeenCalledWith([
       {
         letter: {
@@ -392,6 +402,19 @@ describe('letters route integration', () => {
       && values.includes('letters.metadataPublished')
       && values.includes('letters.sender')
     )).toBe(true);
+  });
+
+  it.each([{ page: '1.5' }, { limit: '2.5' }])('rejects fractional pagination before database selection: %j', async (query) => {
+    const response = await invokeRouter(lettersRouter, { method: 'GET', url: '/letters/summaries', query });
+    expect(response.statusCode).toBe(400);
+    expect(cataloguePageMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps the total for an empty page and avoids fetching content', async () => {
+    cataloguePageMock.mockResolvedValueOnce({ total: 41, units: [], where: { boundedPage: true } });
+    const response = await invokeRouter(lettersRouter, { method: 'GET', url: '/letters/summaries', query: { page: '9' } });
+    expect(response.body).toEqual({ letters: [], total: 41, page: 9, limit: 20 });
+    expect(findLettersMock).not.toHaveBeenCalled();
   });
 
   it('returns lightweight shelf summaries for public archive browsing', async () => {

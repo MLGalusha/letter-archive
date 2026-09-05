@@ -1,0 +1,91 @@
+{
+  "frontendReleaseAtEnd": {
+    "releaseSha": "d3de8948c6e1ca10813f3cca8873ed9fb6cf2d3f"
+  },
+  "measuredAt": "2026-09-05T06:52:18.179Z",
+  "sourceRevision": "5ba19060c0a57d35d6997a30405f08bed56aff41",
+  "frontendRelease": {
+    "releaseSha": "d3de8948c6e1ca10813f3cca8873ed9fb6cf2d3f"
+  },
+  "substitutedBundleSha256": null,
+  "method": {
+    "stepMs": 800,
+    "steps": 16,
+    "scrollViewportFraction": 0.65,
+    "settleMs": 5000,
+    "pollMs": 50,
+    "cache": "shared context per viewport/path; first visit fresh, later visits reuse browser cache; origin cache uncontrolled",
+    "notes": "Full wait includes opacity transition. Only observed cards included; unresolved reported separately. No CPU throttle, not a physical phone.",
+    "metadataCorrection": "Corrected method description to match the already-recorded per-run cacheState; measurements unchanged."
+  },
+  "results": [
+    {
+      "label": "production-before-revisit",
+      "base": "https://voicesthatremain.com",
+      "cacheState": "fresh browser",
+      "assets": null,
+      "path": "/",
+      "viewportName": "desktop",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "deviceScaleFactor": 2,
+      "network": "native",
+      "run": 1,
+      "summary": {
+        "cardsSeen": 96,
+        "scrollCards": 94,
+        "unresolved": 0,
+        "p50FullWaitMs": 0,
+        "p75FullWaitMs": 0,
+        "p95FullWaitMs": 0,
+        "maxFullWaitMs": 0,
+        "p75UsableWaitMs": 0,
+        "over3s": 0,
+        "imageRequests": 283,
+        "wireBytes": 3281078,
+        "requestP75Ms": 292,
+        "lcpMs": 2040,
+        "visibleBlockedMs": 0,
+        "pageErrors": []
+      },
+      "lcp": 2040,
+      "phase": "return"
+    },
+    {
+      "label": "production-before-revisit",
+      "base": "https://voicesthatremain.com",
+      "cacheState": "repeat visit",
+      "assets": null,
+      "path": "/",
+      "viewportName": "desktop",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "deviceScaleFactor": 2,
+      "network": "native",
+      "run": 2,
+      "summary": {
+        "cardsSeen": 96,
+        "scrollCards": 94,
+        "unresolved": 0,
+        "p50FullWaitMs": 0,
+        "p75FullWaitMs": 0,
+        "p95FullWaitMs": 0,
+        "maxFullWaitMs": 0,
+        "p75UsableWaitMs": 0,
+        "over3s": 0,
+        "imageRequests": 283,
+        "wireBytes": 11883,
+        "requestP75Ms": 161,
+        "lcpMs": 1040,
+        "visibleBlockedMs": 0,
+        "pageErrors": []
+      },
+      "lcp": 1040,
+      "phase": "return"
+    }
+  ]
+}

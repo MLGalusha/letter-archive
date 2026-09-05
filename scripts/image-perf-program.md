@@ -12,7 +12,7 @@ node e2e/scripts/image-scroll-benchmark.mjs --label baseline-4g --network 4g --s
 ```
 
 Or use `npm run benchmark:images -- --label baseline --runs 2` in `e2e/`.
-Runs are serial and bounded to 1–5 repetitions. No production data writes or cache-busting.
+Runs are serial and bounded to 1–5 repetitions. Use a fresh label for each experiment; existing evidence directories are never overwritten. Add `--reuse-context yes` to measure repeat visits within one browser context (the first run is fresh). No production data writes or cache-busting.
 The default target is the production homepage and Collection 009. `--paths /collections/007`
 selects the small-collection case. `--viewports mobile` selects a single viewport.
 

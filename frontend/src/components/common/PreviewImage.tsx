@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { getAppScrollRootForIO } from '../../utils/appScroll';
 import './PreviewImage.css';
 import { recordImageLoad } from '../../utils/imagePerformance';
@@ -8,6 +8,11 @@ export function PreviewImage({ src, alt, className }: { src: string; alt: string
   const containerRef = useRef<HTMLDivElement>(null);
   const [nearViewport, setNearViewport] = useState(() => typeof IntersectionObserver === 'undefined');
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const loadStartedAt = useRef(0);
+
+  useLayoutEffect(() => {
+    if (nearViewport) loadStartedAt.current = performance.now();
+  }, [nearViewport, src]);
 
   useEffect(() => {
     if (nearViewport) return;
@@ -31,8 +36,14 @@ export function PreviewImage({ src, alt, className }: { src: string; alt: string
         draggable={false}
         onLoad={() => {
           const timing = performance.getEntriesByName(src, 'resource').at(-1) as PerformanceResourceTiming | undefined;
-          recordImageLoad({ url: src, context: 'archive-card', tier: 'full', durationMs: timing?.duration ?? 0,
-            cached: Boolean(timing && timing.transferSize === 0 && timing.decodedBodySize > 0) });
+          // Keep measuring after a long session fills the Resource Timing buffer.
+          recordImageLoad({
+            url: src,
+            context: 'archive-card',
+            tier: 'full',
+            durationMs: Math.max(0, performance.now() - loadStartedAt.current),
+            cached: Boolean(timing && timing.transferSize === 0 && timing.decodedBodySize > 0),
+          });
         }}
         onError={() => setFailedSrc(src)}
         style={failedSrc === src ? { visibility: 'hidden' } : undefined}

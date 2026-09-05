@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, within, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
@@ -136,6 +136,19 @@ describe('SettingsPage', () => {
     revokeInviteMock.mockResolvedValue(undefined);
     deleteAdminUserMock.mockResolvedValue(undefined);
     changePasswordMock.mockResolvedValue(undefined);
+  });
+
+  it('loads and saves canonical metadata keys without overwriting other sections', async () => {
+    getSettingsMock.mockResolvedValueOnce({ site_title: 'Existing archive', site_description: 'Existing description', contact_general_email: 'owner@example.test' });
+    const user = userEvent.setup();
+    renderPage();
+    const title = await screen.findByLabelText('Site Title');
+    expect(title).toHaveValue('Existing archive');
+    await user.clear(title);
+    await user.type(title, 'Family Archive');
+    const section = screen.getByRole('heading', { name: 'Site Metadata' }).closest('.settings-subsection')!;
+    await user.click(within(section as HTMLElement).getByRole('button', { name: 'Save' }));
+    expect(updateSettingsMock).toHaveBeenCalledWith({ site_title: 'Family Archive', site_description: 'Existing description' });
   });
 
   it('shows admin profiles, pending invite count, and generates the correct invite URL', async () => {

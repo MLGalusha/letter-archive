@@ -1,8 +1,10 @@
+import { useSiteSettings } from '../../hooks/useSiteSettings';
 import { memo } from "react";
 import { Link } from "react-router-dom";
 import "./Footer.css";
 
 export default memo(function Footer() {
+  const settings = useSiteSettings();
   return (
     <footer className="footer">
       <div className="footer-inner">
@@ -46,7 +48,7 @@ export default memo(function Footer() {
         </div>
 
         <div className="footer-bottom">
-          <span className="footer-brand">Voices That Remain</span>
+          <span className="footer-brand">{settings?.site_title?.trim() || 'Voices That Remain'}</span>
           <span className="footer-dot">&middot;</span>
           <span className="footer-copy">&copy; {new Date().getFullYear()}</span>
         </div>

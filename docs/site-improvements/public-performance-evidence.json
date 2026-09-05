@@ -121,6 +121,35 @@
         "imageRequests": 37,
         "reportedResponseBytes": 1280332
       }
+    ],
+    "final_public_ui": [
+      {
+        "trial": 1,
+        "title": "Collection 009 | Voices That Remain",
+        "ttfbMs": 171,
+        "domContentLoadedMs": 398,
+        "lcpMs": 1380,
+        "imageRequests": 37,
+        "reportedResponseBytes": 1285247
+      },
+      {
+        "trial": 2,
+        "title": "Collection 009 | Voices That Remain",
+        "ttfbMs": 116,
+        "domContentLoadedMs": 386,
+        "lcpMs": 1520,
+        "imageRequests": 37,
+        "reportedResponseBytes": 1285247
+      },
+      {
+        "trial": 3,
+        "title": "Collection 009 | Voices That Remain",
+        "ttfbMs": 117,
+        "domContentLoadedMs": 311,
+        "lcpMs": 1264,
+        "imageRequests": 37,
+        "reportedResponseBytes": 1275249
+      }
     ]
   },
   "overview_payload": {
@@ -137,5 +166,7 @@
       "items": 24
     }
   },
-  "interpretation": "Image requests fell from 91\u201398 to 37 in every post-visibility trial. Compressed overview payload fell 67 percent for the same 24 items. Small, variable timing samples do not establish consistent LCP improvement."
+  "interpretation": "Initial image requests fell from 91\u201398 to 37 in every post-visibility trial, including the final three. Compressed overview payload fell 67 percent for the same 24 items. Final LCP samples were 1264\u20131520 ms, but the small sample and variation across earlier runs do not establish a sustained real-user latency improvement.",
+  "finalPublicUiFrontendRevision": "c327ab3c2b22dce70aa43738c9772c1f04b3d4f8",
+  "finalPublicUiBackendRevision": "9454156f1b1406a609f3be9fd307e67a040d72c2"
 }

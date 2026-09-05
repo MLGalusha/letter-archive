@@ -1,3 +1,4 @@
+import { archiveDateSpan } from '../utils/archiveDateSpan';
 import type { CollectionProfileCorrespondent, KeyPerson } from "../api/collections";
 import type { LetterImageType, PublicLetter } from "../types/Letter";
 import { getMediaLabel, getPrimaryMediaType } from "../utils/letterPreview";
@@ -22,25 +23,6 @@ export interface CollectionStats {
   formatBreakdown: string;
 }
 
-function parseDateRaw(raw: string | undefined | null): Date | null {
-  if (!raw || raw.length < 8) return null;
-  const digits = raw.replace(/[^0-9]/g, "").slice(0, 8);
-  if (digits.length < 8) return null;
-  const year = Number(digits.slice(0, 4));
-  const month = Number(digits.slice(4, 6)) - 1;
-  const day = Number(digits.slice(6, 8));
-  if (month < 0 || month > 11 || day < 1 || day > 31) return null;
-  return new Date(year, month, day);
-}
-
-function formatDateShort(d: Date): string {
-  return d.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
-
 function pluralize(count: number, singular: string, plural?: string): string {
   return count === 1 ? `${count} ${singular}` : `${count} ${plural || singular + "s"}`;
 }
@@ -62,25 +44,7 @@ const FORMAT_DISPLAY_ORDER: LetterImageType[] = [
 ];
 
 export function computeCollectionStats(letters: CollectionLetter[]): CollectionStats {
-  const dated = letters
-    .map((l) => ({ letter: l, date: parseDateRaw(l.metadata.dateRaw) }))
-    .filter((entry): entry is { letter: CollectionLetter; date: Date } => entry.date !== null)
-    .sort((a, b) => a.date.getTime() - b.date.getTime());
-
-  // Date span
-  let dateSpan: CollectionStats["dateSpan"] = null;
-  if (dated.length >= 2) {
-    const start = dated[0].date;
-    const end = dated[dated.length - 1].date;
-    dateSpan = {
-      start: formatDateShort(start),
-      end: formatDateShort(end),
-      label: `${formatDateShort(start)} \u2014 ${formatDateShort(end)}`,
-    };
-  } else if (dated.length === 1) {
-    const d = formatDateShort(dated[0].date);
-    dateSpan = { start: d, end: d, label: d };
-  }
+  const dateSpan = archiveDateSpan(letters.map((letter) => letter.metadata.dateRaw));
 
   // Format breakdown
   const formatCounts = new Map<LetterImageType, number>();

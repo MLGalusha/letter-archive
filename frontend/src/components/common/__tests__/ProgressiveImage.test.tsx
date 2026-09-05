@@ -23,7 +23,7 @@ function mockHookReturn(overrides: Partial<ReturnType<typeof useProgressiveImage
 }
 
 describe('ProgressiveImage', () => {
-  it('defers every image tier and the DOM source until a lazy image is near the viewport', () => {
+  it.each([false, true])('defers image tiers until near the applicable scrollport (nested=%s)', (nested) => {
     let notify: IntersectionObserverCallback;
     let options: IntersectionObserverInit | undefined;
     const scrollRoot = document.createElement('div');
@@ -38,8 +38,8 @@ describe('ProgressiveImage', () => {
     } as unknown as typeof IntersectionObserver;
     try {
       mockHookReturn();
-      const { unmount } = render(<ProgressiveImage src="/full.jpg" thumbSrc="/thumb.jpg" midSrc="/mid.jpg" alt="Lazy scan" loading="lazy" />);
-      expect(options).toMatchObject({ root: scrollRoot, rootMargin: '200px' });
+      const { container, unmount } = render(<div data-image-scroll-root={nested ? '' : undefined}><ProgressiveImage src="/full.jpg" thumbSrc="/thumb.jpg" midSrc="/mid.jpg" alt="Lazy scan" loading="lazy" /></div>);
+      expect(options).toMatchObject({ root: nested ? container.firstChild : scrollRoot, rootMargin: '200px' });
       expect(mockUseProgressiveImage).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: false }));
       expect(screen.getByAltText('Lazy scan')).not.toHaveAttribute('src');
       act(() => notify([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver));

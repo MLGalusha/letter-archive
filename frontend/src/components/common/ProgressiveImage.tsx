@@ -68,7 +68,7 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
           setHasBeenVisible(true);
           observer.disconnect();
         }
-      }, { root: getAppScrollRootForIO(), rootMargin: '200px' });
+      }, { root: containerRef.current?.closest('[data-image-scroll-root]') ?? getAppScrollRootForIO(), rootMargin: '200px' });
       if (containerRef.current) observer.observe(containerRef.current);
       return () => observer.disconnect();
     }, [enabled]);

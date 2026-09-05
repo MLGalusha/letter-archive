@@ -27,10 +27,6 @@ import { notify } from './services/notifications.js';
 import { startNotificationSweeper, stopNotificationSweeper } from './services/notification-sweeper.js';
 import { initNotificationStreamBroadcaster } from './routes/admin/notifications-stream.js';
 
-import { installFatalErrorLogging } from './utils/fatal-errors.js';
-
-installFatalErrorLogging(logger);
-
 const app = express();
 const LEASE_RECOVERY_INTERVAL_MS = 60_000;
 

@@ -1,18 +1,9 @@
 import { archiveDateSpan } from '../utils/archiveDateSpan';
-import type { CollectionProfileCorrespondent, KeyPerson } from "../api/collections";
-import type { LetterImageType, PublicLetter } from "../types/Letter";
+import type { CollectionProfileCorrespondent, KeyPerson, PublicCollectionItem } from "../api/collections";
+import type { LetterImageType } from "../types/Letter";
 import { getMediaLabel, getPrimaryMediaType } from "../utils/letterPreview";
 
-/** Fields shared by public projections and full admin letters in collection UI. */
-type CollectionLetter = Pick<
-  PublicLetter,
-  | "id"
-  | "images"
-  | "metadata"
-  | "transcriptStatus"
-  | "metadataContentStatus"
-  | "photoDescription"
->;
+type CollectionLetter = PublicCollectionItem;
 
 /* ------------------------------------------------------------------ */
 /*  Stats                                                              */

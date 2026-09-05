@@ -12,6 +12,12 @@ const nativeAfter=await read('production-after-native');
 const revisitBefore=await read('production-before-revisit');
 const revisitAfter=await read('production-after-revisit');
 const smallAfter=await read('production-after-small-collection');
+const releaseCheck=await read('final-release-check');
+const releaseRepeat=await read('final-release-repeat');
+const lateRows=[['First release check',releaseCheck],['Repeat',releaseRepeat]].flatMap(([label,evidence])=>evidence.results.map(r=>({label,viewport:r.viewportName,p95:r.summary.p95FullWaitMs,unresolved:r.summary.unresolved,observed:r.summary.scrollCards})));
+const lateWarning='Efficiency improved, but consistent fast loading is not yet achieved. A later check of the final release stalled while new backend instances started; a repeat recovered but remained slower than the paired comparison below. Cloud request logs confirm multi-second server response times. Cold starts and per-instance image caches are plausible contributors, not a proven complete diagnosis.';
+const lateMd=lateRows.map(r=>`| ${r.label} | ${r.viewport} | ${r.p95} ms | ${r.unresolved} / ${r.observed} |`).join('\n');
+const lateHtml=lateRows.map(r=>`<tr><td>${r.label}</td><td>${r.viewport}</td><td>${r.p95} ms</td><td>${r.unresolved} / ${r.observed}</td></tr>`).join('');
 const mean=(runs,key)=>runs.reduce((sum,r)=>sum+r.summary[key],0)/runs.length;
 const range=(runs,key)=>{const values=runs.map(r=>r.summary[key]);const low=Math.min(...values),high=Math.max(...values);return low===high?String(low):`${low}–${high}`;};
 const number=n=>Math.round(n).toLocaleString('en-US');
@@ -49,7 +55,19 @@ Two focused changes reduce the work needed to browse the archive: each grid card
 
 [Open the visual comparison](report.html) · [Experiment log](experiment-log.md) · [Run the benchmark](../../scripts/image-perf-program.md)
 
-## Production results
+## Latest release check — remaining delay
+
+${lateWarning}
+
+Final deployed frontend: \`${releaseCheck.frontendRelease.releaseSha}\`. Same 4 Mbps / 80 ms fast-scroll method, one trial per viewport in each check.
+
+| Check | Viewport | P95 readiness among completed images | Unresolved / observed scrolling images |
+|---|---|---:|---:|
+${lateMd}
+
+The first check ended with unresolved images; its P95 excludes those unfinished images and understates the overall wait. Its incomplete transfer totals are not efficiency savings. The repeat completed all previews at 90 mobile / 96 desktop image requests and approximately 2.35 / 2.47 MB, confirming the reduced workload. Completed requests in the first check waited a median 6.0 seconds (mobile) / 4.4 seconds (desktop) for response headers. Server logs independently recorded multi-second image requests and instance startups in the same interval. Do not interpret the earlier 400 ms desktop result as a consistent production service level. See [release observations](final-release-observations.json).
+
+## Paired production comparison
 
 Before frontend: \`${before.frontendRelease.releaseSha}\`  
 After frontend: \`${after.frontendRelease.releaseSha}\`
@@ -60,7 +78,7 @@ The same production homepage was scrolled 16 times at 400 ms intervals, 65% of a
 |---|---:|---:|---:|
 ${mdRows}
 
-Request/data values are two-run means. P95 describes the slow end of the images observed in each run, not a real-user population percentile. Readiness includes the old loader's opacity fade. Images may finish after scrolling out of view. Zero means ready at the first 50 ms observation; it does not mean zero network latency. All final observed scrolling images resolved, with no page exceptions. The report generator also verifies that each paired run requested the exact same set of 480-pixel preview URLs; the saving comes from removing extra tiers, not omitting previews.
+Request/data values are two-run means. P95 describes the slow end of the images observed in each run, not a real-user population percentile. Readiness includes the old loader's opacity fade. Images may finish after scrolling out of view. Zero means ready at the first 50 ms observation; it does not mean zero network latency. All scrolling images in these paired comparison trials resolved, with no page exceptions. The report generator also verifies that each paired run requested the exact same set of 480-pixel preview URLs; the saving comes from removing extra tiers, not omitting previews.
 
 ### Same scroll point, first desktop trial
 
@@ -105,14 +123,15 @@ await writeFile(`${root}/report.html`,`<!doctype html>
 <style>
 :root{font-family:system-ui,sans-serif;color:#172c30;background:#f5f4ef}body{margin:0}main{max-width:1080px;margin:40px auto;padding:0 24px 60px}h1{font-size:clamp(28px,5vw,44px);letter-spacing:-.04em;margin-bottom:12px}p{max-width:80ch;line-height:1.55;color:#475b5d}a{color:#166b70}select{font:inherit;padding:10px;border:1px solid #bcc6c4;background:white;border-radius:6px}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:24px 0}.metric{background:white;padding:22px;border-radius:10px}.metric strong{display:block;font-size:30px;margin:8px 0}.muted{font-size:14px;color:#526566}.images{display:grid;grid-template-columns:1fr 1fr;gap:18px}figure{margin:0}figcaption{font-weight:650;margin:8px 0}img{width:100%;height:auto;border-radius:8px}section{margin-top:30px}svg{width:100%;height:auto;background:white;border-radius:10px}table{border-collapse:collapse;width:100%;background:white}th,td{text-align:left;padding:12px;border-bottom:1px solid #e1e5e2}.table{overflow:auto}.legend span{display:inline-block;margin:6px 22px 6px 0}.before{color:#916552}.after{color:#087d75}@media(max-width:640px){main{padding:0 16px}.metrics{grid-template-columns:1fr}.images{grid-template-columns:1fr}}
 </style></head><body><main>
-<p>VOICES THAT REMAIN · PRODUCTION MEASUREMENTS</p><h1>Less waiting as you scroll.</h1>
+<p>VOICES THAT REMAIN · PRODUCTION MEASUREMENTS</p><h1>Fewer image requests. Delays remain.</h1>
 <p>Same 480-pixel archive previews. One image request per card. Measured on the deployed site before and after the fixes.</p>
-<label for="device">Comparison: </label><select id="device"><option value="desktop">Desktop · 1440 × 1000</option><option value="mobile">Mobile viewport · 390 × 844</option></select>
+<section aria-label="Latest release check"><h2>Latest check: loading is still inconsistent</h2><p>${lateWarning}</p><div class="table"><table><thead><tr><th>Check</th><th>Viewport</th><th>P95 completed</th><th>Unresolved / observed</th></tr></thead><tbody>${lateHtml}</tbody></table></div><p class="muted">Unresolved images are excluded from P95, so the first check understates the overall wait. The repeat completed every preview with the reduced request and byte totals. No cloud configuration changed.</p></section>
+<h2>Earlier paired comparison</h2><label for="device">Comparison: </label><select id="device"><option value="desktop">Desktop · 1440 × 1000</option><option value="mobile">Mobile viewport · 390 × 844</option></select>
 <div class="metrics" aria-live="polite"><div class="metric">Image requests<strong id="requests"></strong><span class="muted" id="request-change"></span></div><div class="metric">Image data<strong id="bytes"></strong><span class="muted" id="byte-change"></span></div><div class="metric">Slow-end readiness (P95)<strong id="wait" style="font-size:23px"></strong><span class="muted">Milliseconds; range across two trials</span></div></div>
 <p class="muted">Fast scrolling: one 65%-viewport step every 400 ms. Simulated 4 Mbps download and 80 ms latency. Two fresh-browser trials at 2× pixel density; one machine, not physical-phone or real-user statistics.</p>
 <section><h2>Did later batches get slower?</h2><div class="legend"><span class="before">■ Before</span><span class="after">■ After</span></div><svg id="chart" viewBox="0 0 1000 310" role="img" aria-label="Per-image readiness delay through the first scrolling trial"></svg><p class="muted">Images in the order first encountered, first trial. Time from entering view until full-quality display, including any fade. Some images finish after leaving the viewport. Zero means ready at the first observation (50 ms sampling).</p></section>
 <section><h2>The same scroll point</h2><div class="images"><figure><figcaption>Before</figcaption><img id="before-image" alt="Production archive at the recorded scroll point before the change"></figure><figure><figcaption>After</figcaption><img id="after-image" alt="Production archive at the same scroll point after the change"></figure></div></section>
-<section><h2>What changed</h2><p>Grid cards now load one correctly sized image instead of competing thumbnail, intermediate and final requests. Small result sets also stop downloading reader-sized scans for every item. Reading and zoom views keep their larger-image behavior.</p><p>No cloud capacity, billing settings, image encoding or publication cache policy changed. All observed final scrolling images resolved without page exceptions. These results do not guarantee zero delay on every connection or after an API cold start.</p><p><a href="report.md">Detailed report</a> · <a href="experiment-log.md">Experiment history</a> · <a href="README.md">Evidence and release proof</a></p></section>
+<section><h2>What changed</h2><p>Grid cards now load one correctly sized image instead of competing thumbnail, intermediate and final requests. Small result sets also stop downloading reader-sized scans for every item. Reading and zoom views keep their larger-image behavior.</p><p>No cloud capacity, billing settings, image encoding or publication cache policy changed. All images in the earlier paired comparison resolved; the later release checks above expose remaining delays. These results do not guarantee zero delay on every connection or after an API cold start.</p><p><a href="report.md">Detailed report</a> · <a href="experiment-log.md">Experiment history</a> · <a href="README.md">Evidence and release proof</a></p></section>
 <script>
 const data=${payload};const byId=id=>document.getElementById(id);const fmt=n=>Math.round(n).toLocaleString();
 function draw(){const v=byId('device').value,c=data[v];byId('requests').textContent=c.requests.map(fmt).join(' → ');byId('request-change').textContent=Math.round((1-c.requests[1]/c.requests[0])*100)+'% fewer requests';byId('bytes').textContent=c.bytes.map(n=>(n/1e6).toFixed(2)).join(' → ')+' MB';byId('byte-change').textContent=Math.round((1-c.bytes[1]/c.bytes[0])*100)+'% less image data';byId('wait').textContent=c.p95.join(' → ');byId('before-image').src='production-before-4g/'+v+'-home-scroll.jpg';byId('after-image').src='production-after-4g/'+v+'-home-scroll.jpg';const plotWidth=Math.max(320,byId('chart').clientWidth),right=plotWidth-20;byId('chart').setAttribute('viewBox','0 0 '+plotWidth+' 310');const max=Math.max(3500,...c.waits.flat()),n=Math.max(...c.waits.map(a=>a.length)),width=(right-65)/n,parts=['<title>Readiness delay by image, before and after</title>'];for(let tick=0;tick<=max;tick+=1000){const y=260-tick/max*220;parts.push('<line x1="65" x2="'+right+'" y1="'+y+'" y2="'+y+'" stroke="#e0e6e3"/><text x="52" y="'+(y+4)+'" text-anchor="end" fill="#526566" font-size="14">'+(tick/1000)+' s</text>');}c.waits.forEach((list,series)=>list.forEach((wait,i)=>{const h=wait/max*220;parts.push('<rect x="'+(65+i*width+series*width/2)+'" y="'+(260-h)+'" width="'+Math.max(1,width/2-.5)+'" height="'+Math.max(1,h)+'" fill="'+(series?'#087d75':'#916552')+'"><title>'+(series?'After':'Before')+' · image '+(i+1)+' · '+wait+' ms</title></rect>');}));parts.push('<text x="65" y="289" font-size="14" fill="#526566">First images</text><text x="'+right+'" y="289" text-anchor="end" font-size="14" fill="#526566">Later images →</text>');byId('chart').innerHTML=parts.join('');}byId('device').addEventListener('change',draw);window.addEventListener('resize',draw);draw();

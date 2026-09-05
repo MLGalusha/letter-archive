@@ -1,0 +1,1984 @@
+{
+  "frontendRelease": {
+    "releaseSha": "d2c104725fa2215b16e536fec00ddce3682ca80e"
+  },
+  "measuredAt": "2026-09-05T08:01:12.513Z",
+  "mainCi": {
+    "runId": 33953391334,
+    "conclusion": "success"
+  },
+  "cloudBuild": {
+    "id": "ad2db486-3a9e-42d8-8525-cfb22e47cc65",
+    "status": "SUCCESS"
+  },
+  "backendRelease": "d3de8948c6e1ca10813f3cca8873ed9fb6cf2d3f",
+  "health": {
+    "ok": true,
+    "db": "connected"
+  },
+  "headerWaitMedianMs": {
+    "mobile": 6022,
+    "desktop": 4409
+  },
+  "cloudLogWindow": {
+    "start": "2026-09-05T08:00:40Z",
+    "end": "2026-09-05T08:02:00Z"
+  },
+  "cloudLogs": [
+    {
+      "httpRequest": {
+        "latency": "4.613193328s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:05.395854Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "6.449243369s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:05.395426Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "4.008338298s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:05.393486Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "5.077309896s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:05.392981Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "5.616950866s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:05.390499Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "6.306282940s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:05.390087Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "5.297010507s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:05.026113Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "3.113893278s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:04.986274Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "7.700427018s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:04.986210Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "5.508977467s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:04.985272Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "2.519538434s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:04.984716Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "5.759705525s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:04.984126Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "2.910139151s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:04.982907Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "3.214278750s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:04.980788Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "5.399560652s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:04.627718Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "5.629258560s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:04.625747Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "7.701489018s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:04.625423Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "4.609013335s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:04.597870Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "4.168841070s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:04.595694Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "4.059653432s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:04.595395Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "1.998729691s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:04.591195Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "1.891856604s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:04.588008Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "7.819983948s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:04.084040Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "4.317299573s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:04.081706Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "6.192337351s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:04.080689Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "3.911473464s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:04.080500Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "4.293813255s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:04.080196Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "1.504358363s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:04.079014Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "1.200284333s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:04.078973Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "1.412249949s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:04.077416Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "3.195930879s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:03.666999Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "12.180087772s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:03.666969Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "11.590195867s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:03.666458Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "13.103789512s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:03.666174Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "9.815898493s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:03.665671Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "8.819328190s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:03.664631Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "7.825106674s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:03.662779Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "0.743966311s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:03.662302Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "2.376931086s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:03.281278Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "10.578507610s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:03.279971Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "9.982696894s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:03.279724Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "4.886046773s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:03.279591Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "3.416720996s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:03.278323Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "11.616661993s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:03.277878Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "3.306926684s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:03.275295Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "0.603178990s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:03.275062Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "3.874541123s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.855332Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "7.907958186s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.855100Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "10.384796950s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.853664Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "5.699935718s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.853286Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "8.925881262s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.853259Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "0.016339327s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.852754Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "0.016373107s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.850198Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "0.561080386s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.845370Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "11.979430426s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.505834Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "5.007781036s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.504926Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "6.176083131s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.503090Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "9.021742448s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.503077Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "12.616000807s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.503041Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "7.827331003s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.502838Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "10.886800524s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.502757Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "11.118362144s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.502048Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "6.534208496s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.502010Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "15.875931396s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.501887Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "5.718297656s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.501811Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "13.238924170s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.501770Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "6.685520384s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.501662Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "6.852739837s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.501215Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "12.771643845s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.500801Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "0.016721727s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.498681Z"
+    },
+    {
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "textPayload": "Starting new instance. Reason: AUTOSCALING - Instance started due to configured scaling factors (e.g. CPU utilization, request throughput, etc.) or no existing capacity for current traffic.",
+      "timestamp": "2026-09-05T08:01:02.390989Z"
+    },
+    {
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "textPayload": "Starting new instance. Reason: AUTOSCALING - Instance started due to configured scaling factors (e.g. CPU utilization, request throughput, etc.) or no existing capacity for current traffic.",
+      "timestamp": "2026-09-05T08:01:02.385768Z"
+    },
+    {
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "textPayload": "Starting new instance. Reason: AUTOSCALING - Instance started due to configured scaling factors (e.g. CPU utilization, request throughput, etc.) or no existing capacity for current traffic.",
+      "timestamp": "2026-09-05T08:01:02.379197Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "4.826151993s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.361079Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "7.490398170s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.360815Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "6.456548946s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.360713Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "10.889074292s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.360656Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "2.119702660s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.360414Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "2.612304342s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.360391Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "7.205849222s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.359817Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "4.513752334s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.359381Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "5.896414072s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.358752Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "4.794105463s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.358645Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "5.109820912s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.358509Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "5.300234513s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.358331Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "3.821547836s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.358199Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "4.395378899s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.358036Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "3.708889929s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.357807Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "3.595002842s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.357390Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "2.794599693s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.356971Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "2.198852841s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.356706Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "2.002883344s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.356462Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "1.999007754s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.353623Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "0.016268178s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.352969Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "1.610774837s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.338195Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "0.012824348s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:01:02.337218Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "2.069075714s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:57.612396Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "4.923877513s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:57.328889Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "5.650715181s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:57.325289Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "11.090314671s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:50.469779Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "10.786445560s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:50.468385Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "11.582483212s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:50.468247Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "9.990210359s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:50.467040Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "10.497985505s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:50.466781Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "10.785739090s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:50.466461Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "9.382988355s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:50.466109Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "8.894360478s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:50.465978Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "9.517041175s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:50.465842Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "7.889393067s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:50.465437Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "12.300433242s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:50.465330Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "8.212119340s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:50.464687Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "7.494871303s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:50.464675Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "6.998659258s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:50.464583Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "12.190492731s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:50.464436Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "6.309832541s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:50.463540Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "6.592192458s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:50.463318Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "5.097658780s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:50.457237Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "5.899757470s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:50.454607Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "9.410152972s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:50.454431Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "5.500457380s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:50.453574Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "5.207272682s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:50.446715Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "4.554723211s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:47.186120Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "3.346936840s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:47.182183Z"
+    },
+    {
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "textPayload": "Starting new instance. Reason: AUTOSCALING - Instance started due to configured scaling factors (e.g. CPU utilization, request throughput, etc.) or no existing capacity for current traffic.",
+      "timestamp": "2026-09-05T08:00:47.044623Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "2.940940071s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:47.033935Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "10.438813315s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:47.032482Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "12.964697828s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:47.032268Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "3.550514515s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:47.032169Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "12.743061467s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:47.032110Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "12.042128341s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:47.032032Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "9.944155092s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:47.031539Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "12.649523329s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:47.031102Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "11.643287356s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:47.031043Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "3.140493616s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:47.030897Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "9.553819792s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:47.030745Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "9.253908295s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:47.030477Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "11.737367737s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:47.030190Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "10.538801205s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:47.030016Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "11.050481200s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:47.029903Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "10.852100038s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:47.029594Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "9.447013949s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:47.029521Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "7.659394492s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:47.029028Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "7.658720252s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:47.028824Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "8.144109056s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:47.028430Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "7.052321876s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:47.028192Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "7.551702589s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:47.027861Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "7.269046057s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:44.350523Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "8.123611262s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:44.349637Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "8.924368423s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:43.954397Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "5.830799157s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:43.953728Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "6.437548904s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:43.953634Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "6.843714958s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:43.953166Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "7.420077338s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:43.948471Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "8.941916262s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:43.946001Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "5.327057105s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:43.559686Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "5.233942733s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:43.558354Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "6.017126317s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:43.558140Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "5.025174085s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:43.557854Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "5.908248365s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:41.025762Z"
+    },
+    {
+      "httpRequest": {
+        "latency": "5.493970293s",
+        "status": 200
+      },
+      "resource": {
+        "labels": {
+          "revision_name": "letter-archive-backend-r-d3de8948c6-7b44a90d"
+        }
+      },
+      "timestamp": "2026-09-05T08:00:41.024677Z"
+    }
+  ],
+  "interpretation": "Multi-second server image latency and new backend instance starts occurred in the same interval. The code uses per-process transformed-image caches; cold starts or cache misses are plausible contributors. These observations do not isolate database, mounted storage, encoding, or request-queue duration. No cloud configuration, capacity or billing changes were made.",
+  "liveUi": [
+    {
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "heroHref": "/letter/dcdde044-75ca-4509-af5c-53fa42daed75?from=highlight&image=49e91d82-70b3-44ba-90e1-284ccf7ac2f3",
+      "heroMountedImages": 1,
+      "archiveLink": "/letter/dcdde044-75ca-4509-af5c-53fa42daed75",
+      "highlightHref": "/letter/dcdde044-75ca-4509-af5c-53fa42daed75?from=highlight&image=49e91d82-70b3-44ba-90e1-284ccf7ac2f3",
+      "readerId": "eb997470-6fb7-486d-ac98-cdeb5a03d4ca",
+      "scanState": {
+        "top": 143.984375,
+        "bottom": 565.984375,
+        "focused": true
+      },
+      "transcriptState": {
+        "top": 188.234375,
+        "bottom": 2746.921875,
+        "focused": true
+      },
+      "pageErrors": []
+    },
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "heroHref": "/letter/dcdde044-75ca-4509-af5c-53fa42daed75?from=highlight&image=49e91d82-70b3-44ba-90e1-284ccf7ac2f3",
+      "heroMountedImages": 1,
+      "archiveLink": "/letter/dcdde044-75ca-4509-af5c-53fa42daed75",
+      "highlightHref": "/letter/eb997470-6fb7-486d-ac98-cdeb5a03d4ca?from=highlight&image=2d47b66f-6abc-4419-a6ae-b6825ec21e80",
+      "readerId": "eb997470-6fb7-486d-ac98-cdeb5a03d4ca",
+      "scanState": {
+        "top": 118.03125,
+        "bottom": 618.03125,
+        "focused": true
+      },
+      "transcriptState": {
+        "top": 406,
+        "bottom": 1947.21875,
+        "focused": true
+      },
+      "pageErrors": []
+    }
+  ]
+}

@@ -54,3 +54,13 @@ Final report delivery includes one instrumentation correction: measure native im
 ### Review corrections
 
 Production runs now abort if either deployment-revision lookup fails, returns a non-success HTTP response or lacks a valid revision. Local/substituted previews may explicitly proceed without a deployed revision. Six Node checks cover these cases and run ahead of the mocked browser suite in CI. Revisit artifacts' overall cache description was corrected to match the already-recorded per-run `cacheState`; raw measurements and results were not changed.
+
+## Final release check: performance is still inconsistent
+
+The final timing-guard frontend d2c1047 deployed successfully through main CI 33953391334 and Cloud Build ad2db486-3a9e-42d8-8525-cfb22e47cc65. The backend remained d3de8948, with successful health/readiness checks. Functional public UI checks also passed on both viewports.
+
+A final fresh-browser 4 Mbps / 80 ms fast-scroll check exposed a remaining delay. Mobile ended with 20 of 50 observed scrolling cards unresolved; desktop ended with 47 of 90 unresolved. P95 among completed cards was 8.35 / 8.00 seconds and excludes unfinished images. The incomplete run must not be used to claim byte savings. Median response-header waits were 6.0 / 4.4 seconds. Read-only Cloud Run logs confirm multi-second image requests and new backend instance starts during this interval. Cache misses or cold starts are plausible contributors; the logs do not isolate database, storage, encoding or queue time.
+
+A repeat at the same release completed every image and confirmed 90 / 96 requests and 2.35 / 2.47 MB, but P95 remained 2.65 seconds mobile / 2.00 seconds desktop. These results qualify the earlier paired comparison; the 400 ms desktop result is not a consistent service-level claim. Both raw runs, screenshots, summaries and allowlisted cloud observations are retained. The visible report leads with these late results. No cloud resource configuration changed.
+
+The next backend investigation should distinguish per-request publication lookup, mounted-file access, transform-cache hit/miss and encoding time. Any persistent preview storage or warm-capacity changes need a cost discussion first. The existing in-process cache disappears with an instance; this is code evidence, not proof that it alone caused the observed stalls.

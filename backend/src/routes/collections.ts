@@ -1,3 +1,4 @@
+import { toPublicCollectionItem } from '../services/public-collection-overview.js';
 import { Router } from 'express';
 import { eq, and, sql, asc } from 'drizzle-orm';
 import { db, letters, collections } from '../db/index.js';
@@ -206,15 +207,23 @@ router.get('/collections/:code', async (req, res, next) => {
       return;
     }
 
-    // Get published letters in this collection
+    const overview = req.query.view === 'overview';
+    // Overview requests omit processing payloads and reading text at the database boundary.
     const allLetters = await db.query.letters.findMany({
       where: and(
         eq(letters.collectionId, collection.id),
         eq(letters.visibility, 'PUBLISHED')
       ),
+      ...(overview ? { columns: {
+        transcriptionText: false, transcriptionJson: false, readingText: false,
+        extraContentTranscript: false, metadataJson: false, metadataV2Json: false,
+        entityExtractionJson: false, aiNotes: false, notes: false, summary: false,
+        metadataConfirmationGuidance: false,
+      } as const } : {}),
       with: {
-        collection: true,
+        collection: { columns: { title: true, collectionCode: true } },
         pages: {
+          ...(overview ? { columns: { lineSegments: false } as const } : {}),
           orderBy: (p, { asc }) => [asc(p.pageNumber)],
         },
       },
@@ -271,7 +280,7 @@ router.get('/collections/:code', async (req, res, next) => {
       && await collectionProfilePublicationIsCurrent(collection.id);
     const result = {
       ...toPublicCollection(collection, profileSourceCurrent),
-      letters: collectionLetters,
+      letters: overview ? collectionLetters.map(toPublicCollectionItem) : collectionLetters,
       letterCount: collectionLetters.length,
     };
     res.json(result);

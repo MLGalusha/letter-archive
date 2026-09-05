@@ -1,0 +1,85 @@
+{
+  "measuredAt": "2026-09-05T06:44:24.631Z",
+  "sourceRevision": "3ccb437d1f955c8f7eecf53dc8a79000f0cf2c90",
+  "frontendRelease": {
+    "releaseSha": "d3de8948c6e1ca10813f3cca8873ed9fb6cf2d3f"
+  },
+  "substitutedBundleSha256": "9cefd011651c72013c8766f39e8fe75d036fc9f6e51bfbf5c079731f38a98069",
+  "method": {
+    "stepMs": 800,
+    "steps": 16,
+    "scrollViewportFraction": 0.65,
+    "settleMs": 5000,
+    "pollMs": 50,
+    "cache": "fresh browser context per run; origin cache uncontrolled",
+    "notes": "Full wait includes opacity transition. Only observed cards included; unresolved reported separately. No CPU throttle, not a physical phone."
+  },
+  "results": [
+    {
+      "label": "small-collection-control-repeat",
+      "base": "https://voicesthatremain.com",
+      "assets": "/tmp/image-loading-build-single",
+      "path": "/collections/007",
+      "viewportName": "mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "deviceScaleFactor": 2,
+      "network": "4g",
+      "run": 1,
+      "summary": {
+        "cardsSeen": 23,
+        "scrollCards": 19,
+        "unresolved": 0,
+        "p50FullWaitMs": 0,
+        "p75FullWaitMs": 0,
+        "p95FullWaitMs": 1699,
+        "maxFullWaitMs": 1699,
+        "p75UsableWaitMs": 0,
+        "over3s": 0,
+        "imageRequests": 47,
+        "wireBytes": 1541957,
+        "requestP75Ms": 3057,
+        "lcpMs": 2324,
+        "visibleBlockedMs": 4393,
+        "pageErrors": []
+      },
+      "lcp": 2324,
+      "phase": "return"
+    },
+    {
+      "label": "small-collection-control-repeat",
+      "base": "https://voicesthatremain.com",
+      "assets": "/tmp/image-loading-build-single",
+      "path": "/collections/007",
+      "viewportName": "desktop",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "deviceScaleFactor": 2,
+      "network": "4g",
+      "run": 1,
+      "summary": {
+        "cardsSeen": 21,
+        "scrollCards": 15,
+        "unresolved": 0,
+        "p50FullWaitMs": 0,
+        "p75FullWaitMs": 0,
+        "p95FullWaitMs": 49,
+        "maxFullWaitMs": 49,
+        "p75UsableWaitMs": 0,
+        "over3s": 0,
+        "imageRequests": 47,
+        "wireBytes": 1517423,
+        "requestP75Ms": 2044,
+        "lcpMs": 1316,
+        "visibleBlockedMs": 50,
+        "pageErrors": []
+      },
+      "lcp": 1316,
+      "phase": "return"
+    }
+  ]
+}

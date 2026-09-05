@@ -1,0 +1,274 @@
+{
+  "measuredAt": "2026-09-05T06:32:00.358Z",
+  "sourceRevision": "d3de8948c6e1ca10813f3cca8873ed9fb6cf2d3f",
+  "method": {
+    "stepMs": 800,
+    "steps": 16,
+    "scrollViewportFraction": 0.65,
+    "settleMs": 5000,
+    "pollMs": 50,
+    "cache": "fresh browser context per run; normal HTTP cache; origin cache uncontrolled",
+    "notes": "Full wait includes opacity transition. Only observed cards included; unresolved reported separately. No CPU throttle, not a physical phone."
+  },
+  "results": [
+    {
+      "label": "baseline-native",
+      "base": "https://voicesthatremain.com",
+      "path": "/",
+      "viewportName": "mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "deviceScaleFactor": 2,
+      "network": "native",
+      "run": 1,
+      "summary": {
+        "cardsSeen": 82,
+        "scrollCards": 76,
+        "unresolved": 0,
+        "p50FullWaitMs": 0,
+        "p75FullWaitMs": 0,
+        "p95FullWaitMs": 202,
+        "maxFullWaitMs": 3300,
+        "p75UsableWaitMs": 0,
+        "over3s": 1,
+        "imageRequests": 265,
+        "wireBytes": 3121686,
+        "requestP75Ms": 1114,
+        "lcpMs": 772,
+        "visibleBlockedMs": 5400,
+        "pageErrors": []
+      },
+      "lcp": 772,
+      "phase": "return"
+    },
+    {
+      "label": "baseline-native",
+      "base": "https://voicesthatremain.com",
+      "path": "/",
+      "viewportName": "mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "deviceScaleFactor": 2,
+      "network": "native",
+      "run": 2,
+      "summary": {
+        "cardsSeen": 82,
+        "scrollCards": 76,
+        "unresolved": 0,
+        "p50FullWaitMs": 0,
+        "p75FullWaitMs": 0,
+        "p95FullWaitMs": 548,
+        "maxFullWaitMs": 701,
+        "p75UsableWaitMs": 0,
+        "over3s": 0,
+        "imageRequests": 265,
+        "wireBytes": 3121702,
+        "requestP75Ms": 621,
+        "lcpMs": 628,
+        "visibleBlockedMs": 2946,
+        "pageErrors": []
+      },
+      "lcp": 628,
+      "phase": "return"
+    },
+    {
+      "label": "baseline-native",
+      "base": "https://voicesthatremain.com",
+      "path": "/collections/009",
+      "viewportName": "mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "deviceScaleFactor": 2,
+      "network": "native",
+      "run": 1,
+      "summary": {
+        "cardsSeen": 27,
+        "scrollCards": 24,
+        "unresolved": 0,
+        "p50FullWaitMs": 0,
+        "p75FullWaitMs": 0,
+        "p95FullWaitMs": 0,
+        "maxFullWaitMs": 0,
+        "p75UsableWaitMs": 0,
+        "over3s": 0,
+        "imageRequests": 80,
+        "wireBytes": 1407774,
+        "requestP75Ms": 751,
+        "lcpMs": 2320,
+        "visibleBlockedMs": 0,
+        "pageErrors": []
+      },
+      "lcp": 2320,
+      "phase": "return"
+    },
+    {
+      "label": "baseline-native",
+      "base": "https://voicesthatremain.com",
+      "path": "/collections/009",
+      "viewportName": "mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "deviceScaleFactor": 2,
+      "network": "native",
+      "run": 2,
+      "summary": {
+        "cardsSeen": 28,
+        "scrollCards": 24,
+        "unresolved": 0,
+        "p50FullWaitMs": 0,
+        "p75FullWaitMs": 0,
+        "p95FullWaitMs": 451,
+        "maxFullWaitMs": 649,
+        "p75UsableWaitMs": 0,
+        "over3s": 0,
+        "imageRequests": 81,
+        "wireBytes": 1407731,
+        "requestP75Ms": 718,
+        "lcpMs": 2020,
+        "visibleBlockedMs": 1099,
+        "pageErrors": []
+      },
+      "lcp": 2020,
+      "phase": "return"
+    },
+    {
+      "label": "baseline-native",
+      "base": "https://voicesthatremain.com",
+      "path": "/",
+      "viewportName": "desktop",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "deviceScaleFactor": 2,
+      "network": "native",
+      "run": 1,
+      "summary": {
+        "cardsSeen": 96,
+        "scrollCards": 94,
+        "unresolved": 0,
+        "p50FullWaitMs": 0,
+        "p75FullWaitMs": 0,
+        "p95FullWaitMs": 0,
+        "maxFullWaitMs": 750,
+        "p75UsableWaitMs": 0,
+        "over3s": 0,
+        "imageRequests": 283,
+        "wireBytes": 3281110,
+        "requestP75Ms": 597,
+        "lcpMs": 2076,
+        "visibleBlockedMs": 1248,
+        "pageErrors": []
+      },
+      "lcp": 2076,
+      "phase": "return"
+    },
+    {
+      "label": "baseline-native",
+      "base": "https://voicesthatremain.com",
+      "path": "/",
+      "viewportName": "desktop",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "deviceScaleFactor": 2,
+      "network": "native",
+      "run": 2,
+      "summary": {
+        "cardsSeen": 96,
+        "scrollCards": 94,
+        "unresolved": 0,
+        "p50FullWaitMs": 0,
+        "p75FullWaitMs": 0,
+        "p95FullWaitMs": 299,
+        "maxFullWaitMs": 944,
+        "p75UsableWaitMs": 0,
+        "over3s": 0,
+        "imageRequests": 283,
+        "wireBytes": 3281098,
+        "requestP75Ms": 467,
+        "lcpMs": 1280,
+        "visibleBlockedMs": 2698,
+        "pageErrors": []
+      },
+      "lcp": 1280,
+      "phase": "return"
+    },
+    {
+      "label": "baseline-native",
+      "base": "https://voicesthatremain.com",
+      "path": "/collections/009",
+      "viewportName": "desktop",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "deviceScaleFactor": 2,
+      "network": "native",
+      "run": 1,
+      "summary": {
+        "cardsSeen": 26,
+        "scrollCards": 20,
+        "unresolved": 0,
+        "p50FullWaitMs": 0,
+        "p75FullWaitMs": 0,
+        "p95FullWaitMs": 0,
+        "maxFullWaitMs": 100,
+        "p75UsableWaitMs": 0,
+        "over3s": 0,
+        "imageRequests": 81,
+        "wireBytes": 1407775,
+        "requestP75Ms": 218,
+        "lcpMs": 1280,
+        "visibleBlockedMs": 100,
+        "pageErrors": []
+      },
+      "lcp": 1280,
+      "phase": "return"
+    },
+    {
+      "label": "baseline-native",
+      "base": "https://voicesthatremain.com",
+      "path": "/collections/009",
+      "viewportName": "desktop",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "deviceScaleFactor": 2,
+      "network": "native",
+      "run": 2,
+      "summary": {
+        "cardsSeen": 26,
+        "scrollCards": 20,
+        "unresolved": 0,
+        "p50FullWaitMs": 0,
+        "p75FullWaitMs": 0,
+        "p95FullWaitMs": 250,
+        "maxFullWaitMs": 250,
+        "p75UsableWaitMs": 0,
+        "over3s": 0,
+        "imageRequests": 81,
+        "wireBytes": 1407777,
+        "requestP75Ms": 182,
+        "lcpMs": 1300,
+        "visibleBlockedMs": 550,
+        "pageErrors": []
+      },
+      "lcp": 1300,
+      "phase": "return"
+    }
+  ],
+  "frontendRelease": {
+    "releaseSha": "d3de8948c6e1ca10813f3cca8873ed9fb6cf2d3f"
+  }
+}

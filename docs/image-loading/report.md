@@ -4,7 +4,22 @@ Two focused changes reduce the work needed to browse the archive: each grid card
 
 [Open the visual comparison](report.html) · [Experiment log](experiment-log.md) · [Run the benchmark](../../scripts/image-perf-program.md)
 
-## Production results
+## Latest release check — remaining delay
+
+Efficiency improved, but consistent fast loading is not yet achieved. A later check of the final release stalled while new backend instances started; a repeat recovered but remained slower than the paired comparison below. Cloud request logs confirm multi-second server response times. Cold starts and per-instance image caches are plausible contributors, not a proven complete diagnosis.
+
+Final deployed frontend: `d2c104725fa2215b16e536fec00ddce3682ca80e`. Same 4 Mbps / 80 ms fast-scroll method, one trial per viewport in each check.
+
+| Check | Viewport | P95 readiness among completed images | Unresolved / observed scrolling images |
+|---|---|---:|---:|
+| First release check | mobile | 8351 ms | 20 / 50 |
+| First release check | desktop | 8001 ms | 47 / 90 |
+| Repeat | mobile | 2651 ms | 0 / 76 |
+| Repeat | desktop | 2000 ms | 0 / 94 |
+
+The first check ended with unresolved images; its P95 excludes those unfinished images and understates the overall wait. Its incomplete transfer totals are not efficiency savings. The repeat completed all previews at 90 mobile / 96 desktop image requests and approximately 2.35 / 2.47 MB, confirming the reduced workload. Completed requests in the first check waited a median 6.0 seconds (mobile) / 4.4 seconds (desktop) for response headers. Server logs independently recorded multi-second image requests and instance startups in the same interval. Do not interpret the earlier 400 ms desktop result as a consistent production service level. See [release observations](final-release-observations.json).
+
+## Paired production comparison
 
 Before frontend: `d3de8948c6e1ca10813f3cca8873ed9fb6cf2d3f`  
 After frontend: `ec72790c8bbcb51020ef3d000bf80fb9ca555152`
@@ -16,7 +31,7 @@ The same production homepage was scrolled 16 times at 400 ms intervals, 65% of a
 | desktop | 283 → 96 (66% fewer) | 3.28 → 2.47 MB (25% less) | 2452–3050 → 400 ms |
 | mobile | 265 → 90 (66% fewer) | 3.12 → 2.35 MB (25% less) | 500–700 → 0 ms |
 
-Request/data values are two-run means. P95 describes the slow end of the images observed in each run, not a real-user population percentile. Readiness includes the old loader's opacity fade. Images may finish after scrolling out of view. Zero means ready at the first 50 ms observation; it does not mean zero network latency. All final observed scrolling images resolved, with no page exceptions. The report generator also verifies that each paired run requested the exact same set of 480-pixel preview URLs; the saving comes from removing extra tiers, not omitting previews.
+Request/data values are two-run means. P95 describes the slow end of the images observed in each run, not a real-user population percentile. Readiness includes the old loader's opacity fade. Images may finish after scrolling out of view. Zero means ready at the first 50 ms observation; it does not mean zero network latency. All scrolling images in these paired comparison trials resolved, with no page exceptions. The report generator also verifies that each paired run requested the exact same set of 480-pixel preview URLs; the saving comes from removing extra tiers, not omitting previews.
 
 ### Same scroll point, first desktop trial
 

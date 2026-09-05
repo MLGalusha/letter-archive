@@ -2,6 +2,8 @@
 
 [Visual comparison](report.html) · [Detailed report](report.md)
 
+**Latest verification exposed remaining delays.** The frontend savings are measured, but consistently fast production loading is not established. The report now leads with the failed late check and its recovery repeat.
+
 The archive preview loader now uses one display-size request per card. Removing whole-result-set reader preloading also reduces small-collection traffic. Image widths, server encoding and publication cache policy are preserved.
 
 [Experiment log and measurements](experiment-log.md) · [Repeatable loop](../../scripts/image-perf-program.md)
@@ -16,6 +18,9 @@ Each evidence directory contains a readable `summary.json`, a compressed raw `re
 - `production-before-revisit` / `production-after-revisit`: first and repeat visits within the same browser context.
 - `production-single-image-check`: a short production check after PR 79, before PR 80 deployed.
 - `production-after-small-collection`: verifies Collection 007 after PR 80 deployed.
+- `final-release-check`: final deployed revision d2c1047; stalled requests and unresolved previews. Kept as failed performance evidence.
+- `final-release-repeat`: a repeat at the same revision; all previews completed, but P95 remained 2.0–2.65 seconds.
+- `final-release-observations.json`: allowlisted server request and instance-start logs, health, release proof and successful mobile/desktop UI checks.
 
 The final production comparison is captured after both focused fixes deploy; see the report and final evidence directories below. These artifacts are measurements from one Chromium browser on one machine; they do not establish field performance or guarantee zero delay on other connections.
 
@@ -31,3 +36,5 @@ Required unit tests, builds, type checks, lint, dependency audits, mocked browse
 The performance comparison and live UI verification measured frontend revision `ec72790c8bbcb51020ef3d000bf80fb9ca555152`. The unchanged backend remained on `d3de8948c6e1ca10813f3cca8873ed9fb6cf2d3f`, with healthy readiness and database connectivity. No backend, deployment configuration or migration files changed in this series.
 
 The final report delivery also guards native image telemetry against a missing Resource Timing entry after long browsing sessions. Its elapsed-time test passes without affecting image URLs, sizes or scheduling. The final deployment proof is recorded on the report delivery PR; the full before/after measurements above retain their exact measured revision.
+
+PR 81 is merged and deployed at `d2c104725fa2215b16e536fec00ddce3682ca80e`. [Main CI and production release passed](https://github.com/MLGalusha/letter-archive/actions/runs/33953391334); Cloud Build `ad2db486-3a9e-42d8-8525-cfb22e47cc65` succeeded. Its two benchmark metadata review threads were fixed and resolved. The production version and backend readiness were verified. Functional UI checks passed on both viewports; the separate final performance check failed, as recorded above.

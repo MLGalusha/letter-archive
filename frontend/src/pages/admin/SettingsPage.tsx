@@ -600,7 +600,7 @@ export default function SettingsPage() {
           {/* Site Metadata */}
           <div className="settings-subsection">
             <h3>Site Metadata</h3>
-            <p className="settings-subsection-desc">Title and description for search engines and the public site header.</p>
+            <p className="settings-subsection-desc">Site name for the public header and page titles, plus the default page description. Changes appear after pages load; link previews that do not run JavaScript still use the built-in defaults.</p>
             <div className="settings-form">
               <div className="settings-form-row">
                 <label htmlFor="site-title">Site Title</label>

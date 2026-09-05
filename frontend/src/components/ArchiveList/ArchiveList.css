@@ -543,3 +543,8 @@
     -webkit-line-clamp: 2;
   }
 }
+
+/* Public links retain Safari's copy/open link menu; picker buttons keep their touch behavior. */
+a.letter-card {
+  -webkit-touch-callout: default;
+}

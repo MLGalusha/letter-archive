@@ -47,8 +47,8 @@ export function publicCatalogueChronologySql(
   descending = false,
 ) {
   return descending
-    ? sql`REPLACE(${dateRaw}, 'X', '0') DESC, ${dateRaw} DESC, ${collectionId} DESC, ${typeSequence} DESC`
-    : sql`REPLACE(${dateRaw}, 'X', '0') ASC, ${dateRaw} ASC, ${collectionId} ASC, ${typeSequence} ASC`;
+    ? sql`REPLACE(UPPER(${dateRaw}), 'X', '0') DESC, ${dateRaw} DESC, ${collectionId} DESC, ${typeSequence} DESC`
+    : sql`REPLACE(UPPER(${dateRaw}), 'X', '0') ASC, ${dateRaw} ASC, ${collectionId} ASC, ${typeSequence} ASC`;
 }
 
 export interface PublicCatalogueUnitRow {

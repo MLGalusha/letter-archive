@@ -30,6 +30,8 @@ export const publicLetterQuerySchema = letterQuerySchema
   .omit({ visibility: true, workflow: true, sort: true })
   .extend({
     visibility: z.literal('PUBLISHED').default('PUBLISHED'),
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
     sort: z.enum(['createdAt', 'letterDate', 'sender']).default('createdAt'),
   })
   .strict();

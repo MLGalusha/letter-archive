@@ -47,7 +47,7 @@ export default function ShowcaseCard({ items, onNavigate, onInteraction }: Showc
       onClick={() => onNavigate(item.letterId, item.imageId)}
     >
       {items.map((gi, idx) => (
-        gi.imageUrl ? (
+        idx === index && gi.imageUrl ? (
           <ProgressiveImage
             key={gi.imageId || idx}
             className="cd-highlight-img"
@@ -55,8 +55,8 @@ export default function ShowcaseCard({ items, onNavigate, onInteraction }: Showc
             thumbSrc={getImageUrl(gi.imageUrl, { width: 32 })}
             midSrc={getImageUrl(gi.imageUrl, { width: 320 })}
             alt={idx === index ? (gi.hook || gi.label) : ''}
-            loading={idx === 0 ? 'eager' : 'lazy'}
-            fetchPriority={idx === 0 ? 'high' : undefined}
+            loading="eager"
+            fetchPriority="high"
             style={{ opacity: idx === index ? 1 : 0 }}
             idleUpgrade
             context="showcase"

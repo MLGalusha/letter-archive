@@ -1,0 +1,13 @@
+{
+  "collection": "009",
+  "items": 24,
+  "before": {
+    "jsonBytes": 57027,
+    "gzipBytes": 10936
+  },
+  "after": {
+    "jsonBytes": 14987,
+    "gzipBytes": 3655
+  },
+  "method": "Same published API response projected to overview, gzip default settings; excludes transport headers."
+}

@@ -613,6 +613,7 @@
 }
 
 .home-hero-open-link {
+  -webkit-touch-callout: default;
   position: absolute;
   inset: 0;
   color: inherit;

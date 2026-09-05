@@ -16,3 +16,12 @@ export function readSiteSettings(rows: Array<{ key: string; value: string; updat
   for (const row of ordered) settings[canonicalSettingKey(row.key)] = row.value;
   return settings;
 }
+
+/** Existing admin bundles still read camelCase fields during rolling releases. */
+export function readAdminSiteSettings(rows: Parameters<typeof readSiteSettings>[0]) {
+  const settings = readSiteSettings(rows);
+  for (const [legacy, canonical] of Object.entries(LEGACY_KEYS)) {
+    if (canonical in settings) settings[legacy] = settings[canonical];
+  }
+  return settings;
+}

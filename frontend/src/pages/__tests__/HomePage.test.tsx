@@ -245,6 +245,26 @@ describe("HomePage archive browsing", () => {
     expect(scrollToMock).toHaveBeenLastCalledWith(0, 868);
   });
 
+  it("shows the featured card while unrelated content and detail requests are pending", async () => {
+    getFeaturedLetterMock.mockResolvedValueOnce({ id: 'featured-letter', hook: 'Ready to read', imageUrl: '/images/first-page', imageType: 'letter' });
+    const pending = new Promise(() => {});
+    listBlogPostsMock.mockReturnValueOnce(pending);
+    getContentPageMock.mockReturnValueOnce(pending);
+    getLetterByIdMock.mockReturnValueOnce(pending);
+    render(<MemoryRouter><HeaderDockProvider><HomePage /></HeaderDockProvider></MemoryRouter>);
+    expect(await screen.findByText('Ready to read')).toBeInTheDocument();
+  });
+
+  it("keeps only the current and adjacent featured page images mounted", async () => {
+    getFeaturedLetterMock.mockResolvedValueOnce({ id: 'featured-letter', hook: 'A long letter', imageUrl: '/images/first-page', imageType: 'letter' });
+    getLetterByIdMock.mockResolvedValueOnce({ images: Array.from({ length: 30 }, (_, index) => ({ id: `page-${index}`, type: 'letter', imageUrl: `/images/page-${index}` })) });
+    render(<MemoryRouter><HeaderDockProvider><HomePage /></HeaderDockProvider></MemoryRouter>);
+    expect(await screen.findByText('1/30')).toBeInTheDocument();
+    expect(document.querySelectorAll('.home-hero-feature-card .letter-card-image')).toHaveLength(3);
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Next page' }));
+    expect(document.querySelectorAll('.home-hero-feature-card .letter-card-image')).toHaveLength(3);
+  });
+
   it("formats featured letter dates into human-readable month names", async () => {
     getFeaturedLetterMock.mockResolvedValueOnce({
       id: "featured-letter",

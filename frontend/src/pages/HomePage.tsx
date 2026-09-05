@@ -13,7 +13,6 @@ import Footer from "../components/Footer/Footer";
 import BackToSearch from "../components/BackToSearch";
 import { getContentPage, getFeaturedLetter, getImageUrl, listBlogPosts, type BlogPost, type FeaturedLetter } from "../api/client";
 import { ProgressiveImage } from "../components/common";
-import { imagePreloadService } from "../services/imagePreloadService";
 import { getLetterById } from "../api/letters";
 import type { LetterImage } from "../types/Letter";
 import { buildHomeSeo } from "../utils/seo";
@@ -159,21 +158,9 @@ function HeroLetterCard({
     onInteraction?.();
   };
 
-  const handleHeroHover = () => {
-    // Preload all hero images at carousel width for instant letter detail view
-    for (const img of heroImages) {
-      const url = getImageUrl(img.imageUrl, { width: 800 });
-      if (!imagePreloadService.isPreloaded(url)) {
-        const preload = new Image();
-        preload.src = url;
-      }
-    }
-  };
-
   return (
     <div
       className={`letter-card home-hero-feature-card letter-card--${heroLetter.imageType || 'letter'}`}
-      onMouseEnter={handleHeroHover}
     >
       <a className="home-hero-open-link" data-carousel-drag draggable={false}
         href={`/letter/${heroLetter.id}?${letterParams.toString()}`}
@@ -183,7 +170,11 @@ function HeroLetterCard({
         onClick={navigateToLetter}
       >
       {heroImages.length > 0 ? (
-        heroImages.map((img, idx) => (
+        heroImages.map((img, idx) => {
+          const previous = (heroPageIndex + heroImages.length - 1) % heroImages.length;
+          const next = (heroPageIndex + 1) % heroImages.length;
+          if (idx !== heroPageIndex && idx !== previous && idx !== next) return null;
+          return (
           <ProgressiveImage
             key={img.id}
             className="letter-card-image"
@@ -191,14 +182,15 @@ function HeroLetterCard({
             thumbSrc={getImageUrl(img.imageUrl, { width: 32 })}
             midSrc={getImageUrl(img.imageUrl, { width: 480 })}
             alt={`Scan of letter${heroLetter.sender ? ` from ${heroLetter.sender}` : ''}${heroLetter.recipient ? ` to ${heroLetter.recipient}` : ''}`}
-            loading={idx === 0 ? "eager" : "lazy"}
-            fetchPriority={idx === 0 ? "high" : undefined}
+            loading={idx === heroPageIndex ? "eager" : "lazy"}
+            fetchPriority={idx === heroPageIndex ? "high" : undefined}
             decoding="async"
             style={{ opacity: idx === heroPageIndex ? 1 : 0 }}
             idleUpgrade
             context="hero"
           />
-        ))
+        );
+        })
       ) : heroLetter.imageUrl ? (
         <ProgressiveImage
           className="letter-card-image"
@@ -295,38 +287,32 @@ export default function HomePage() {
   useEffect(() => {
     let cancelled = false;
 
-    // Start featured letter fetch, and eagerly chain getLetterById as soon as it resolves
-    // (don't wait for blogPosts/contentPage before fetching images)
+    // Independent content must not hold up the featured image's first paint.
     const featuredPromise = getFeaturedLetter().catch(() => null);
-    const imagesPromise = featuredPromise.then((featured) => {
-      if (!featured || cancelled) return null;
-      return getLetterById(featured.id).catch(() => null);
-    });
-
-    Promise.all([
-      listBlogPosts({ limit: 1 }).catch(() => ({ posts: [], total: 0 })),
-      featuredPromise,
-      getContentPage('home').catch(() => null),
-      imagesPromise,
-    ]).then(([blogData, featured, homePage, letterDetails]) => {
+    featuredPromise.then((featured) => {
       if (cancelled) return;
-      if (blogData.posts.length > 0) setLatestBlogPost(blogData.posts[0]);
-      if (homePage) {
-        const json = homePage.contentJson as { hero?: { kicker?: string; heading?: string; subtitle?: string } };
-        if (json?.hero) {
-          setHeroCopy((prev) => ({
-            kicker: json.hero!.kicker || prev.kicker,
-            heading: json.hero!.heading || prev.heading,
-            subtitle: json.hero!.subtitle || prev.subtitle,
-          }));
-        }
-      }
       setHeroLetter(featured);
       setHeroLoaded(true);
-      if (featured) {
-        setHeroImages(letterDetails?.images || []);
-      }
     });
+    featuredPromise.then(async (featured) => {
+      if (!featured || cancelled) return;
+      const details = await getLetterById(featured.id).catch(() => null);
+      if (!cancelled) setHeroImages(details?.images || []);
+    });
+    listBlogPosts({ limit: 1 }).then((data) => {
+      if (!cancelled && data.posts.length) setLatestBlogPost(data.posts[0]);
+    }).catch(() => {});
+    getContentPage('home').then((homePage) => {
+      if (cancelled || !homePage) return;
+      const json = homePage.contentJson as { hero?: { kicker?: string; heading?: string; subtitle?: string } };
+      if (json?.hero) {
+        setHeroCopy((prev) => ({
+          kicker: json.hero!.kicker || prev.kicker,
+          heading: json.hero!.heading || prev.heading,
+          subtitle: json.hero!.subtitle || prev.subtitle,
+        }));
+      }
+    }).catch(() => {});
 
     return () => { cancelled = true; };
   }, []);

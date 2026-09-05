@@ -1,0 +1,16 @@
+[
+  {
+    "cohort": "1000 four-page letters",
+    "letters": 1000,
+    "pages": 4000,
+    "before_requests": 5000,
+    "after_requests": 6
+  },
+  {
+    "cohort": "Published collection 009",
+    "letters": 24,
+    "pages": 68,
+    "before_requests": 92,
+    "after_requests": 6
+  }
+]

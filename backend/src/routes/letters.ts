@@ -21,6 +21,7 @@ import {
   toPublicLetter,
 } from '../services/public-read-model.js';
 import {
+  publicCatalogueChronologySql,
   isPhotoOnlyCatalogueUnit,
   publicCatalogueLetterTypeSql,
   publicCatalogueRepresentativeOrderSql,
@@ -243,7 +244,9 @@ router.get('/letters', async (req, res, next) => {
           orderBy: (p, { asc: pageAsc }) => [pageAsc(p.pageNumber)],
         },
       },
-      orderBy: [sortFn(getSortExpression())],
+      orderBy: query.sort === 'letterDate'
+        ? [publicCatalogueChronologySql(letters.dateRaw, letters.collectionId, letters.typeSequence, query.sortOrder === 'desc')]
+        : [sortFn(getSortExpression())],
     }) : [];
 
     // Group letters by (collectionId, dateRaw, typeSequence) — all types on the
@@ -382,7 +385,9 @@ router.get('/letters/summaries', async (req, res, next) => {
           orderBy: (page, { asc: pageAsc }) => [pageAsc(page.pageNumber)],
         },
       },
-      orderBy: [sortFn(getSortExpression())],
+      orderBy: query.sort === 'letterDate'
+        ? [publicCatalogueChronologySql(letters.dateRaw, letters.collectionId, letters.typeSequence, query.sortOrder === 'desc')]
+        : [sortFn(getSortExpression())],
     }) : [];
 
     // Group by (collectionId, dateRaw, typeSequence) — merge companion types
@@ -628,7 +633,7 @@ router.get('/letters/:letterId/adjacent', async (req, res, next) => {
           orderBy: (p, { asc: pageAsc }) => [pageAsc(p.pageNumber)],
         },
       },
-      orderBy: [asc(letters.dateRaw), asc(letters.createdAt)],
+      orderBy: [publicCatalogueChronologySql(letters.dateRaw, letters.collectionId, letters.typeSequence)],
     });
 
     // Deduplicate public catalogue roots by correspondence-unit identity using
@@ -1524,9 +1529,9 @@ function buildArchiveSearchOrderBy(query: ArchiveSearchQuery) {
   const resolvedSort = query.sort === 'relevance' && !hasSearch ? 'createdAt' : query.sort;
 
   if (resolvedSort === 'letterDate') {
-    return query.sortOrder === 'asc'
-      ? sql`REPLACE(sg."dateRaw", 'X', '0') ASC, sg."createdAt" DESC`
-      : sql`REPLACE(sg."dateRaw", 'X', '0') DESC, sg."createdAt" DESC`;
+    return publicCatalogueChronologySql(
+      sql`sg."dateRaw"`, sql`sg."collectionId"`, sql`sg."typeSequence"`, query.sortOrder === 'desc',
+    );
   }
 
   if (resolvedSort === 'createdAt') {

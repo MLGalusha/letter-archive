@@ -1,7 +1,7 @@
 import { and, eq, or, sql, type SQL } from 'drizzle-orm';
 import { db, letters } from '../db/index.js';
 import type { PublicLetterQuery } from '../schemas/letter.js';
-import { publicCatalogueLetterTypeSql, publicCatalogueRepresentativeOrderSql } from './public-catalogue-unit.js';
+import { publicCatalogueChronologySql, publicCatalogueLetterTypeSql, publicCatalogueRepresentativeOrderSql } from './public-catalogue-unit.js';
 
 interface CatalogueUnit {
   collectionId: string;
@@ -12,8 +12,9 @@ interface CatalogueUnit {
 /** Select small unit keys before loading page images or text for the requested page. */
 export function cataloguePageSql(conditions: SQL[], query: PublicLetterQuery) {
   const direction = query.sortOrder === 'asc' ? sql`ASC` : sql`DESC`;
-  const sort = query.sort === 'sender' ? sql`sender` : query.sort === 'createdAt'
-    ? sql`created_at` : sql`REPLACE(date_raw, 'X', '0')`;
+  const chronology = publicCatalogueChronologySql(sql`date_raw`, sql`collection_id`, sql`type_sequence`, query.sortOrder === 'desc');
+  const ordering = query.sort === 'letterDate' ? chronology
+    : sql`${query.sort === 'sender' ? sql`sender` : sql`created_at`} ${direction}, ${chronology}`;
   return sql`
     WITH roots AS (
       SELECT DISTINCT ON (collection_id, date_raw, type_sequence)
@@ -25,9 +26,9 @@ export function cataloguePageSql(conditions: SQL[], query: PublicLetterQuery) {
         ${publicCatalogueRepresentativeOrderSql(letters.type)}, ${letters.id}
     ), page AS (
       SELECT collection_id AS "collectionId", date_raw AS "dateRaw", type_sequence AS "typeSequence",
-        ROW_NUMBER() OVER (ORDER BY ${sort} ${direction}, date_raw ${direction}, collection_id ${direction}, type_sequence ${direction}) AS position
+        ROW_NUMBER() OVER (ORDER BY ${ordering}) AS position
       FROM roots
-      ORDER BY ${sort} ${direction}, date_raw ${direction}, collection_id ${direction}, type_sequence ${direction}
+      ORDER BY ${ordering}
       LIMIT ${query.limit} OFFSET ${(query.page - 1) * query.limit}
     )
     SELECT (SELECT COUNT(*)::int FROM roots) AS total,

@@ -84,4 +84,49 @@ describe('useCollectionLetters', () => {
     });
     expect(result.current?.map((letter) => letter.id)).toEqual(['b-1']);
   });
+  it('handles a rejected request and retries on a later mount', async () => {
+    getArchiveShelfItemsMock.mockRejectedValueOnce(new Error('offline'));
+    const first = renderHook(() => useCollectionLetters('retry-collection'));
+    await act(async () => { await Promise.resolve(); });
+    expect(first.result.current).toBeNull();
+    first.unmount();
+    getArchiveShelfItemsMock.mockResolvedValueOnce(shelfResponse([shelfItem('recovered', 'retry-collection')]));
+    const second = renderHook(() => useCollectionLetters('retry-collection'));
+    await waitFor(() => expect(second.result.current?.[0].id).toBe('recovered'));
+    expect(getArchiveShelfItemsMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('refreshes an expired collection on a later mount', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000);
+    try {
+      getArchiveShelfItemsMock.mockResolvedValue(shelfResponse([shelfItem('old', 'expires')]));
+      const first = renderHook(() => useCollectionLetters('expires'));
+      await waitFor(() => expect(first.result.current?.[0].id).toBe('old'));
+      first.unmount();
+      now.mockReturnValue(301_001);
+      getArchiveShelfItemsMock.mockResolvedValue(shelfResponse([shelfItem('new', 'expires')]));
+      const second = renderHook(() => useCollectionLetters('expires'));
+      await waitFor(() => expect(second.result.current?.[0].id).toBe('new'));
+      expect(getArchiveShelfItemsMock).toHaveBeenCalledTimes(2);
+    } finally { now.mockRestore(); }
+  });
+
+  it('refreshes a mounted collection after expiry without dropping its list', async () => {
+    vi.useFakeTimers();
+    try {
+      getArchiveShelfItemsMock.mockResolvedValueOnce(shelfResponse([shelfItem('old', 'mounted-expiry')]));
+      const { result, unmount } = renderHook(() => useCollectionLetters('mounted-expiry'));
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      expect(result.current?.[0].id).toBe('old');
+      const refresh = deferred<ArchiveShelfResponse>();
+      getArchiveShelfItemsMock.mockReturnValueOnce(refresh.promise);
+      await act(async () => { await vi.advanceTimersByTimeAsync(300_000); });
+      expect(result.current?.[0].id).toBe('old');
+      await act(async () => { refresh.resolve(shelfResponse([shelfItem('new', 'mounted-expiry')])); });
+      expect(result.current?.[0].id).toBe('new');
+      unmount();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { vi.useRealTimers(); }
+  });
+
 });

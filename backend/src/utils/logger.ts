@@ -1,3 +1,4 @@
+import { installFatalErrorLogging } from './fatal-errors.js';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
@@ -286,24 +287,7 @@ export function installProcessLogging(log: pino.Logger = logger): void {
     );
   });
 
-  process.on('unhandledRejection', (reason) => {
-    log.error(
-      {
-        reason,
-      },
-      'Unhandled promise rejection',
-    );
-  });
-
-  process.on('uncaughtExceptionMonitor', (error, origin) => {
-    log.fatal(
-      {
-        err: error,
-        origin,
-      },
-      'Uncaught exception',
-    );
-  });
+  installFatalErrorLogging(log);
 }
 
 installProcessLogging(logger);

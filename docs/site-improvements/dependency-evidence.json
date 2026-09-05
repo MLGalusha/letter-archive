@@ -1,0 +1,30 @@
+{
+  "measuredAt": "2026-09-05",
+  "counts": {
+    "frontend-final": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    },
+    "backend-final": {
+      "info": 0,
+      "low": 0,
+      "moderate": 4,
+      "high": 0,
+      "critical": 0,
+      "total": 4
+    },
+    "backend-production": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    }
+  },
+  "remainingScope": "Backend development-only Drizzle/esbuild toolchain; no forced incompatible changes."
+}

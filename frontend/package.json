@@ -14,7 +14,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "lint:ci": "node --test scripts/lint-baseline.node-test.mjs && node scripts/check-lint.mjs"
   },
   "dependencies": {
     "@chenglou/pretext": "^0.0.8",

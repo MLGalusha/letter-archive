@@ -9,16 +9,7 @@
  *   [margin: text]                  — marginal notes
  */
 
-/** Marker types and their CSS class suffixes */
-const MARKER_TYPES = [
-  'illegible',
-  'unclear',
-  'crossed out',
-  'insertion',
-  'margin',
-] as const;
-
-export type MarkerType = (typeof MARKER_TYPES)[number];
+export type MarkerType = 'illegible' | 'unclear' | 'crossed out' | 'insertion' | 'margin';
 
 export interface TranscriptMarker {
   type: MarkerType;

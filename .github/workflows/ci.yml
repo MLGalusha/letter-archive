@@ -55,6 +55,10 @@ jobs:
         working-directory: backend
         run: npm run build
 
+      - name: Frontend lint regression check
+        working-directory: frontend
+        run: npm run lint:ci
+
       - name: Frontend unit tests
         working-directory: frontend
         run: npm test
@@ -112,12 +116,19 @@ jobs:
         run: npm run test:mocked
 
       - name: Upload mocked Playwright report
+        id: playwright_mocked_report
+        continue-on-error: true
+        timeout-minutes: 2
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: playwright-mocked-report
           path: e2e/playwright-report
           if-no-files-found: ignore
+
+      - name: Report diagnostic upload failure
+        if: always() && steps.playwright_mocked_report.outcome == 'failure'
+        run: echo "::warning::Diagnostic upload failed; test results remain in this job's logs."
 
   e2e-smoke:
     name: E2E Smoke
@@ -228,6 +239,9 @@ jobs:
         run: npx playwright test tests/admin-auth.spec.ts tests/navigation.spec.ts --workers=1
 
       - name: Upload Playwright report
+        id: playwright_smoke_report
+        continue-on-error: true
+        timeout-minutes: 2
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -235,13 +249,24 @@ jobs:
           path: e2e/playwright-report
           if-no-files-found: ignore
 
+      - name: Report diagnostic upload failure
+        if: always() && steps.playwright_smoke_report.outcome == 'failure'
+        run: echo "::warning::Diagnostic upload failed; test results remain in this job's logs."
+
       - name: Upload backend structured logs
+        id: backend_structured_logs_smoke
+        continue-on-error: true
+        timeout-minutes: 2
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: backend-structured-logs-smoke
           path: backend/logs
           if-no-files-found: ignore
+
+      - name: Report diagnostic upload failure
+        if: always() && steps.backend_structured_logs_smoke.outcome == 'failure'
+        run: echo "::warning::Diagnostic upload failed; test results remain in this job's logs."
 
       - name: Dump backend logs on failure
         if: failure()
@@ -360,6 +385,9 @@ jobs:
         run: npx playwright test --workers=1
 
       - name: Upload Playwright report
+        id: playwright_full_report
+        continue-on-error: true
+        timeout-minutes: 2
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -367,13 +395,24 @@ jobs:
           path: e2e/playwright-report
           if-no-files-found: ignore
 
+      - name: Report diagnostic upload failure
+        if: always() && steps.playwright_full_report.outcome == 'failure'
+        run: echo "::warning::Diagnostic upload failed; test results remain in this job's logs."
+
       - name: Upload backend structured logs
+        id: backend_structured_logs_full
+        continue-on-error: true
+        timeout-minutes: 2
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: backend-structured-logs-full
           path: backend/logs
           if-no-files-found: ignore
+
+      - name: Report diagnostic upload failure
+        if: always() && steps.backend_structured_logs_full.outcome == 'failure'
+        run: echo "::warning::Diagnostic upload failed; test results remain in this job's logs."
 
       - name: Dump backend logs on failure
         if: failure()

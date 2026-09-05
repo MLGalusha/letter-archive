@@ -27,6 +27,11 @@ describe('letter DTO date formatting', () => {
     )).toBe('1947');
   });
 
+  it('normalizes lowercase unknown date digits', () => {
+    expect(formatLetterDate(letterDateInput(null, '1947xxxx'))).toBe('1947');
+    expect(formatLetterDate(letterDateInput(null, '194708xx'))).toBe('August 1947');
+  });
+
   it('falls back when a stored extracted date is not canonical ISO', () => {
     expect(formatLetterDate(
       letterDateInput('not-a-date', '18860315'),

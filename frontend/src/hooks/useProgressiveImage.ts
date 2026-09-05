@@ -3,6 +3,7 @@ import { recordImageLoad } from '../utils/imagePerformance';
 import { imagePreloadService } from '../services/imagePreloadService';
 
 export interface ProgressiveImageOptions {
+  enabled?: boolean;
   thumbSrc: string;
   midSrc?: string;
   fullSrc: string;
@@ -93,6 +94,7 @@ export function useProgressiveImage(
     thumbSrc,
     midSrc,
     fullSrc,
+    enabled = true,
     idleUpgrade = false,
     deferFullUntilVisible = false,
     context = 'unknown',
@@ -113,6 +115,7 @@ export function useProgressiveImage(
   const dimsSetRef = useRef(false);
 
   useEffect(() => {
+    if (!enabled) return;
     const alreadyPreloaded = imagePreloadService.isPreloaded(fullSrc);
     const dims = alreadyPreloaded ? imagePreloadService.getDimensions(fullSrc) : null;
     setThumbLoaded(false);
@@ -182,7 +185,7 @@ export function useProgressiveImage(
       }
       imgsRef.current = [];
     };
-  }, [thumbSrc, midSrc, fullSrc, idleUpgrade, deferFullUntilVisible, context, fullDelay]);
+  }, [enabled, thumbSrc, midSrc, fullSrc, idleUpgrade, deferFullUntilVisible, context, fullDelay]);
 
   const currentSrc = fullLoaded ? fullSrc : midLoaded && midSrc ? midSrc : thumbLoaded ? thumbSrc : '';
 

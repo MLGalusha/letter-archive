@@ -1,3 +1,4 @@
+import { getPublicCataloguePage } from '../services/public-catalogue-page.js';
 import { Router } from 'express';
 import { eq, and, or, inArray, ilike, asc, desc, sql, type SQLWrapper } from 'drizzle-orm';
 import { db, letters, collections, letterPages, type LetterType } from '../db/index.js';
@@ -20,6 +21,7 @@ import {
   toPublicLetter,
 } from '../services/public-read-model.js';
 import {
+  publicCatalogueChronologySql,
   isPhotoOnlyCatalogueUnit,
   publicCatalogueLetterTypeSql,
   publicCatalogueRepresentativeOrderSql,
@@ -202,6 +204,7 @@ router.get('/letters', async (req, res, next) => {
     // For date sorting, use dateRaw with X replaced by 0
     // This makes unknown dates sort at the start of their range:
     // 18XXXXXX → 18000000, so "1800s" comes before "1801"
+    const cataloguePage = await getPublicCataloguePage(conditions, query);
     const sortFn = query.sortOrder === 'asc' ? asc : desc;
     const getSortExpression = () => {
       switch (query.sort) {
@@ -216,10 +219,9 @@ router.get('/letters', async (req, res, next) => {
       }
     };
 
-    // Fetch all letters (no workflow filter yet) - we need all types to determine primary
-    // Note: We fetch more than limit to account for filtering after grouping
-    const results = await db.query.letters.findMany({
-      where: and(...conditions),
+    // Load only this page of catalogue units, including their published companions.
+    const results = cataloguePage.units.length ? await db.query.letters.findMany({
+      where: cataloguePage.where,
       columns: {
         // Exclude large text/JSONB fields not needed for list view
         transcriptionText: false,
@@ -242,8 +244,10 @@ router.get('/letters', async (req, res, next) => {
           orderBy: (p, { asc: pageAsc }) => [pageAsc(p.pageNumber)],
         },
       },
-      orderBy: [sortFn(getSortExpression())],
-    });
+      orderBy: query.sort === 'letterDate'
+        ? [publicCatalogueChronologySql(letters.dateRaw, letters.collectionId, letters.typeSequence, query.sortOrder === 'desc')]
+        : [sortFn(getSortExpression())],
+    }) : [];
 
     // Group letters by (collectionId, dateRaw, typeSequence) — all types on the
     // same date merge into one group so covers/telegrams don't appear as separate entries
@@ -266,11 +270,11 @@ router.get('/letters', async (req, res, next) => {
       filteredResults.push(primary);
     }
 
-    // Apply pagination after filtering
-    const paginatedResults = filteredResults.slice(
-      (query.page - 1) * query.limit,
-      query.page * query.limit
-    );
+    const paginatedResults = cataloguePage.units.flatMap((unit) => {
+      const primary = filteredResults.find((letter) => letter.collectionId === unit.collectionId
+        && letter.dateRaw === unit.dateRaw && letter.typeSequence === unit.typeSequence);
+      return primary ? [primary] : [];
+    });
 
     // Enrich primary letters with related content from the already-loaded groupMap
     const enrichedResults = paginatedResults.map((letter) => {
@@ -291,7 +295,7 @@ router.get('/letters', async (req, res, next) => {
 
     const duration = Date.now() - start;
     req.log.info(
-      { resultCount: transformedLetters.length, totalGroups: filteredResults.length, page: query.page, duration },
+      { resultCount: transformedLetters.length, totalGroups: cataloguePage.total, page: query.page, duration },
       'Letters list completed'
     );
     logIfSlow(req.log, 'letters list query', duration, TIMING_THRESHOLDS.DB_QUERY);
@@ -300,7 +304,7 @@ router.get('/letters', async (req, res, next) => {
       letters: transformedLetters,
       page: query.page,
       limit: query.limit,
-      total: filteredResults.length,
+      total: cataloguePage.total,
     });
   } catch (error) {
     next(error);
@@ -326,6 +330,7 @@ router.get('/letters/summaries', async (req, res, next) => {
       }
     }
 
+    const cataloguePage = await getPublicCataloguePage(conditions, query);
     const sortFn = query.sortOrder === 'asc' ? asc : desc;
     const getSortExpression = () => {
       switch (query.sort) {
@@ -339,8 +344,8 @@ router.get('/letters/summaries', async (req, res, next) => {
       }
     };
 
-    const results = await db.query.letters.findMany({
-      where: and(...conditions),
+    const results = cataloguePage.units.length ? await db.query.letters.findMany({
+      where: cataloguePage.where,
       columns: {
         id: true,
         collectionId: true,
@@ -380,8 +385,10 @@ router.get('/letters/summaries', async (req, res, next) => {
           orderBy: (page, { asc: pageAsc }) => [pageAsc(page.pageNumber)],
         },
       },
-      orderBy: [sortFn(getSortExpression())],
-    });
+      orderBy: query.sort === 'letterDate'
+        ? [publicCatalogueChronologySql(letters.dateRaw, letters.collectionId, letters.typeSequence, query.sortOrder === 'desc')]
+        : [sortFn(getSortExpression())],
+    }) : [];
 
     // Group by (collectionId, dateRaw, typeSequence) — merge companion types
     // (e.g. L + C on same date) into one group, matching the adjacent API
@@ -403,10 +410,11 @@ router.get('/letters/summaries', async (req, res, next) => {
       filteredResults.push(primary);
     }
 
-    const paginatedResults = filteredResults.slice(
-      (query.page - 1) * query.limit,
-      query.page * query.limit,
-    );
+    const paginatedResults = cataloguePage.units.flatMap((unit) => {
+      const primary = filteredResults.find((letter) => letter.collectionId === unit.collectionId
+        && letter.dateRaw === unit.dateRaw && letter.typeSequence === unit.typeSequence);
+      return primary ? [primary] : [];
+    });
 
     const transformedLetters = paginatedResults.map((letter) => {
       const key = `${letter.collectionId}:${letter.dateRaw}:${letter.typeSequence}`;
@@ -416,7 +424,7 @@ router.get('/letters/summaries', async (req, res, next) => {
 
     const duration = Date.now() - start;
     req.log.info(
-      { resultCount: transformedLetters.length, totalGroups: filteredResults.length, page: query.page, duration },
+      { resultCount: transformedLetters.length, totalGroups: cataloguePage.total, page: query.page, duration },
       'Letters summary query completed',
     );
     logIfSlow(req.log, 'letters summary query', duration, TIMING_THRESHOLDS.DB_QUERY);
@@ -425,7 +433,7 @@ router.get('/letters/summaries', async (req, res, next) => {
       letters: transformedLetters,
       page: query.page,
       limit: query.limit,
-      total: filteredResults.length,
+      total: cataloguePage.total,
     });
   } catch (error) {
     next(error);
@@ -625,7 +633,7 @@ router.get('/letters/:letterId/adjacent', async (req, res, next) => {
           orderBy: (p, { asc: pageAsc }) => [pageAsc(p.pageNumber)],
         },
       },
-      orderBy: [asc(letters.dateRaw), asc(letters.createdAt)],
+      orderBy: [publicCatalogueChronologySql(letters.dateRaw, letters.collectionId, letters.typeSequence)],
     });
 
     // Deduplicate public catalogue roots by correspondence-unit identity using
@@ -1521,9 +1529,9 @@ function buildArchiveSearchOrderBy(query: ArchiveSearchQuery) {
   const resolvedSort = query.sort === 'relevance' && !hasSearch ? 'createdAt' : query.sort;
 
   if (resolvedSort === 'letterDate') {
-    return query.sortOrder === 'asc'
-      ? sql`REPLACE(sg."dateRaw", 'X', '0') ASC, sg."createdAt" DESC`
-      : sql`REPLACE(sg."dateRaw", 'X', '0') DESC, sg."createdAt" DESC`;
+    return publicCatalogueChronologySql(
+      sql`sg."dateRaw"`, sql`sg."collectionId"`, sql`sg."typeSequence"`, query.sortOrder === 'desc',
+    );
   }
 
   if (resolvedSort === 'createdAt') {

@@ -18,8 +18,12 @@ export interface CollectionInfo {
   primaryRecipient?: string | null;
 }
 
+export type PublicCollectionItem = Pick<PublicLetter,
+  'id' | 'images' | 'transcriptStatus' | 'metadataContentStatus' | 'photoDescription'
+> & { metadata: Pick<PublicLetter['metadata'], 'sender' | 'recipient' | 'date' | 'dateRaw' | 'hook' | 'verified'> };
+
 export interface CollectionWithLetters extends CollectionInfo {
-  letters: PublicLetter[];
+  letters: PublicCollectionItem[];
   profileNarrative?: string | null;
   profileStatus?: ContentStatus;
   profileStartHereLetterId?: string | null;
@@ -95,7 +99,7 @@ export async function listCollections(): Promise<CollectionInfo[]> {
  * Fetch a single collection by code (public - only includes published letters)
  */
 export async function getCollectionByCode(code: string): Promise<CollectionWithLetters> {
-  return apiGet<CollectionWithLetters>(`/collections/${code}`);
+  return apiGet<CollectionWithLetters>(`/collections/${code}?view=overview`);
 }
 
 /**

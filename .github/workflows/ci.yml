@@ -7,6 +7,11 @@ on:
       - main
   workflow_dispatch:
 
+# Superseded PR runs can stop; production/main runs must finish independently.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   quality:
     name: Tests, Typecheck, Build
@@ -81,9 +86,16 @@ jobs:
         working-directory: e2e
         run: npm ci
 
+      - name: Cache Playwright browser
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('e2e/package-lock.json') }}
+
       - name: Install Playwright browser
+        timeout-minutes: 8
         working-directory: e2e
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps --only-shell chromium
 
       - name: Run mocked e2e
         working-directory: e2e
@@ -151,9 +163,16 @@ jobs:
         working-directory: backend
         run: npm run drizzle:migrate
 
+      - name: Cache Playwright browser
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('e2e/package-lock.json') }}
+
       - name: Install Playwright browser
+        timeout-minutes: 8
         working-directory: e2e
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps --only-shell chromium
 
       - name: Start backend
         working-directory: backend
@@ -277,9 +296,16 @@ jobs:
         working-directory: backend
         run: npm run drizzle:migrate
 
+      - name: Cache Playwright browser
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('e2e/package-lock.json') }}
+
       - name: Install Playwright browser
+        timeout-minutes: 8
         working-directory: e2e
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps --only-shell chromium
 
       - name: Start backend
         working-directory: backend

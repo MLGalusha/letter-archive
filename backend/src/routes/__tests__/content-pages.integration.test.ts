@@ -228,6 +228,7 @@ describe('public content pages route', () => {
     };
     const publicRepresentative = {
       id: 'representative-letter',
+      imageUrl: '/images/first-page?v=12345678',
       hook: 'Current public hook',
       summary: 'Current public summary',
       letterDate: null,
@@ -272,6 +273,10 @@ describe('public content pages route', () => {
       imageType: 'L',
       source: 'auto',
     });
+    const projection = selectMock.mock.calls[2][0];
+    expect(projection.imageUrl.strings.join(' ')).toContain('ORDER BY preview.page_number ASC');
+    expect(projection.imageUrl.values).toEqual(['letters.id']);
+    expect(response.body).toMatchObject({ imageUrl: '/images/first-page?v=12345678' });
     expect(insertMock).toHaveBeenCalledTimes(1);
     const insertBuilder = insertMock.mock.results[0]?.value as {
       values: ReturnType<typeof vi.fn>;

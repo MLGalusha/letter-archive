@@ -329,6 +329,7 @@ function getOrdinalSuffix(day: number): string {
  *   XXXXXXXX → "Unknown"
  */
 export function formatPartialDate(dateRaw: string): string {
+  dateRaw = dateRaw.toUpperCase();
   const yearPart = dateRaw.slice(0, 4);
   const monthPart = dateRaw.slice(4, 6);
   const dayPart = dateRaw.slice(6, 8);

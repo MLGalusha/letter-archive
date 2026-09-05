@@ -32,7 +32,7 @@ type SortOrder = 'asc' | 'desc';
 
 const SORT_OPTIONS: { field: SortField; label: string; defaultOrder: SortOrder }[] = [
   { field: 'number', label: 'Collection', defaultOrder: 'asc' },
-  { field: 'letters', label: 'Letter count', defaultOrder: 'desc' },
+  { field: 'letters', label: 'Item count', defaultOrder: 'desc' },
   { field: 'date', label: 'Date', defaultOrder: 'desc' },
   { field: 'title', label: 'Title', defaultOrder: 'asc' },
 ];
@@ -141,14 +141,16 @@ export default function CollectionsPage() {
             a love story told across distance. Pick one and step inside.
           </p>
           <div className="collections-hero-bottom">
-            <div className="collections-summary">
+            <div className="collections-summary" aria-busy={loading}>
+              {showLoadingShell ? <span className="summary-stat">Loading collection totals…</span> : error ? <span className="summary-stat">Collection totals unavailable</span> : <>
               <span className="summary-stat">
                 <strong>{collections.length}</strong> collection{collections.length !== 1 ? 's' : ''}
               </span>
               <span className="summary-divider">/</span>
               <span className="summary-stat">
-                <strong>{totalLetters}</strong> letters
+                <strong>{totalLetters}</strong> archive item{totalLetters !== 1 ? 's' : ''}
               </span>
+              </>}
             </div>
             <div className="collections-sort" ref={sortRef} onKeyDown={(e) => { if (e.key === 'Escape') setSortOpen(false); }}>
               <button
@@ -265,7 +267,7 @@ export default function CollectionsPage() {
                         <p className="collection-card-teaser">{teaser}</p>
                       )}
 
-                      <span className="collection-card-cta">Read the letters &rarr;</span>
+                      <span className="collection-card-cta">Explore the collection &rarr;</span>
                     </Link>
                   );
                 })}

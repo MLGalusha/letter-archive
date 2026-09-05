@@ -453,6 +453,12 @@ export default function LetterDetailPage() {
             <p className="letter-dateline">{formatDateText(dateline)}</p>
           )}
 
+          {(hasTranscript || carouselImages.length > 0) && (
+            <nav className="letter-content-links" aria-label="On this page">
+              {hasTranscript && <a href="#letter-transcript">Read transcript</a>}
+              {carouselImages.length > 0 && <a href="#letter-scans">View original scans</a>}
+            </nav>
+          )}
         </header>
 
         {/* ── 2. Summary ───────────────────────────────────── */}
@@ -465,7 +471,7 @@ export default function LetterDetailPage() {
 
         {/* ── 3. Scan Image Carousel ──────────────────────── */}
         {carouselImages.length > 0 && (
-          <figure className="letter-scan-figure">
+          <figure id="letter-scans" className="letter-scan-figure" tabIndex={-1}>
             <div className="scan-carousel" ref={carouselRef} data-swipe-ignore>
               {carouselImages.map((img, idx) => {
                 const isLetter = img.type === "letter";
@@ -532,7 +538,7 @@ export default function LetterDetailPage() {
 
         {/* ── 4. Transcript ────────────────────────────────── */}
         {hasTranscript && (
-          <section className={`letter-transcript-section${transcriptSectionClass}${transcriptMode === "original" ? " transcript-original-mode" : ""}`} ref={transcriptSectionRef}>
+          <section id="letter-transcript" tabIndex={-1} className={`letter-transcript-section${transcriptSectionClass}${transcriptMode === "original" ? " transcript-original-mode" : ""}`} ref={transcriptSectionRef}>
             <div className="transcript-header-row">
               <div className="transcript-label">Transcript</div>
               {letter.transcriptStatus === "VERIFIED" ? (

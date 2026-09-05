@@ -131,11 +131,12 @@ function HeroLetterCard({
   const letterParams = new URLSearchParams({ from: 'highlight' });
   if (currentImage) letterParams.set('image', currentImage.id);
   const navigateToLetter = (e: ReactMouseEvent<HTMLAnchorElement>) => {
+    const start = pointerStartRef.current;
+    pointerStartRef.current = null;
     if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     e.preventDefault();
-    // Suppress click if pointer moved (user was scrolling/swiping)
-    const start = pointerStartRef.current;
-    if (start && e) {
+    // Keyboard clicks have no pointer coordinates and must not inherit a prior drag.
+    if (start && e.detail > 0) {
       const dx = Math.abs(e.clientX - start.x);
       const dy = Math.abs(e.clientY - start.y);
       if (dx > 8 || dy > 8) return;
@@ -178,6 +179,7 @@ function HeroLetterCard({
         href={`/letter/${heroLetter.id}?${letterParams.toString()}`}
         aria-label={ariaLabel}
         onPointerDown={handlePointerDown}
+        onPointerCancel={() => { pointerStartRef.current = null; }}
         onClick={navigateToLetter}
       >
       {heroImages.length > 0 ? (

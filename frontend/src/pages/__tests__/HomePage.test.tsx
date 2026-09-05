@@ -1,10 +1,12 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import HomePage from "../HomePage";
 import { HeaderDockProvider } from "../../contexts/HeaderDockContext";
 import type { ArchiveShelfItem } from "../../types/Letter";
+
+function LocationProbe() { const location = useLocation(); return <output data-testid="location">{location.pathname}</output>; }
 
 const listBlogPostsMock = vi.fn();
 const searchArchiveShelfMock = vi.fn();
@@ -158,6 +160,7 @@ describe("HomePage archive browsing", () => {
       <MemoryRouter>
         <HeaderDockProvider>
           <HomePage />
+          <LocationProbe />
         </HeaderDockProvider>
       </MemoryRouter>,
     );
@@ -170,6 +173,9 @@ describe("HomePage archive browsing", () => {
     const featureLink = document.querySelector('.home-hero-open-link');
     expect(featureLink).toHaveAttribute('href', '/letter/featured-letter?from=highlight&image=page-2');
     expect(screen.getByRole('button', { name: 'Next page' }).closest('a')).toBeNull();
+    fireEvent(featureLink!, new MouseEvent('pointerdown', { bubbles: true, clientX: 300, clientY: 200 }));
+    fireEvent.click(featureLink!, { detail: 0, clientX: 0, clientY: 0 });
+    expect(screen.getByTestId('location')).toHaveTextContent('/letter/featured-letter');
   });
 
   it("smoothly scrolls the hero CTA to the full search panel below the header", async () => {

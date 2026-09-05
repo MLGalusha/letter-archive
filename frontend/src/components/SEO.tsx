@@ -1,3 +1,4 @@
+import { useSiteSettings } from "../hooks/useSiteSettings";
 import { useEffect } from "react";
 import type { JsonLdObject } from "../utils/seo";
 
@@ -37,9 +38,19 @@ function removeMeta(attr: string, key: string) {
   document.querySelector(`meta[${attr}="${key}"]`)?.remove();
 }
 
+function configuredStructuredData(value: unknown, siteName: string, siteDescription: string): unknown {
+  if (Array.isArray(value)) return value.map((entry) => configuredStructuredData(entry, siteName, siteDescription));
+  if (!value || typeof value !== 'object') return value;
+  const entry = Object.fromEntries(Object.entries(value).map(([key, child]) => [key, configuredStructuredData(child, siteName, siteDescription)]));
+  if (['WebSite', 'Organization'].includes(String(entry['@type'])) && entry.name === SITE_NAME) entry.name = siteName;
+  if (entry['@type'] === 'CollectionPage' && entry.name === `${SITE_NAME} Journal`) entry.name = `${siteName} Journal`;
+  if (entry['@type'] === 'WebSite' && entry.description === DEFAULT_DESCRIPTION) entry.description = siteDescription;
+  return entry;
+}
+
 export default function SEO({
   title,
-  description = DEFAULT_DESCRIPTION,
+  description,
   ogTitle,
   ogDescription,
   ogImage,
@@ -52,13 +63,17 @@ export default function SEO({
   modifiedTime,
   jsonLd,
 }: SEOProps) {
+  const settings = useSiteSettings();
+  const siteName = settings?.site_title?.trim() || SITE_NAME;
+  const defaultDescription = settings?.site_description?.trim() || DEFAULT_DESCRIPTION;
+  const resolvedDescription = description && description !== DEFAULT_DESCRIPTION ? description : defaultDescription;
   const baseUrl = (
     import.meta.env.VITE_SITE_URL ||
     (typeof window !== "undefined" ? window.location.origin : DEFAULT_BASE_URL)
   ).replace(/\/+$/, "");
-  const fullTitle = title ? `${title} | ${SITE_NAME}` : SITE_NAME;
+  const fullTitle = title ? `${title} | ${siteName}` : siteName;
   const resolvedOgTitle = ogTitle || fullTitle;
-  const resolvedOgDescription = ogDescription || description;
+  const resolvedOgDescription = ogDescription || resolvedDescription;
   const resolvedCanonical = canonicalUrl
     ? new URL(canonicalUrl, `${baseUrl}/`).toString()
     : undefined;
@@ -71,7 +86,7 @@ export default function SEO({
   useEffect(() => {
     document.title = fullTitle;
 
-    setMeta("name", "description", description);
+    setMeta("name", "description", resolvedDescription);
     if (robots) setMeta("name", "robots", robots);
     else removeMeta("name", "robots");
 
@@ -79,7 +94,7 @@ export default function SEO({
     setMeta("property", "og:title", resolvedOgTitle);
     setMeta("property", "og:description", resolvedOgDescription);
     setMeta("property", "og:type", ogType);
-    setMeta("property", "og:site_name", SITE_NAME);
+    setMeta("property", "og:site_name", siteName);
     if (resolvedOgUrl) setMeta("property", "og:url", resolvedOgUrl);
     else removeMeta("property", "og:url");
     if (resolvedOgImage) setMeta("property", "og:image", resolvedOgImage);
@@ -119,7 +134,7 @@ export default function SEO({
       const script = document.createElement("script");
       script.setAttribute("type", "application/ld+json");
       script.setAttribute("data-seo-jsonld", "");
-      script.textContent = JSON.stringify(entry);
+      script.textContent = JSON.stringify(configuredStructuredData(entry, siteName, defaultDescription));
       document.head.appendChild(script);
     }
   });

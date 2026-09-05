@@ -1,3 +1,4 @@
+import { useSiteSettings } from '../hooks/useSiteSettings';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { getPlacePublic, type PublicPlaceDetail } from '../api/entities';
 import SEO from '../components/SEO';
@@ -8,6 +9,7 @@ import { buildPlaceSeo } from '../utils/seo';
 import './PlacePage.css';
 
 export default function PlacePage() {
+  const settings = useSiteSettings();
   const navigate = useNavigate();
   const { placeId } = useParams<{ placeId: string }>();
 
@@ -52,7 +54,7 @@ export default function PlacePage() {
   }
 
   const { place, stats, letters } = data;
-  const seo = buildPlaceSeo(data);
+  const seo = buildPlaceSeo(data, settings?.site_title?.trim() || undefined);
 
   return (
     <div className="body-layout">

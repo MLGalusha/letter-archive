@@ -14,7 +14,7 @@ router.get('/health', (_req, res) => {
 
 // Readiness probe — validates database connectivity.
 // Useful for deployment checks and monitoring dashboards.
-router.get('/health/ready', async (_req, res) => {
+router.get('/health/ready', async (req, res) => {
   try {
     const [row] = await sql`SELECT 1 AS ok`;
     if (row?.ok === 1) {
@@ -23,8 +23,8 @@ router.get('/health/ready', async (_req, res) => {
       res.status(503).json({ ok: false, db: 'unexpected response' });
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    res.status(503).json({ ok: false, db: 'disconnected', error: message });
+    req.log?.error({ err }, 'Database readiness check failed');
+    res.status(503).json({ ok: false, db: 'disconnected' });
   }
 });
 

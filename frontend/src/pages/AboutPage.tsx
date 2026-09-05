@@ -1,3 +1,4 @@
+import { useSiteSettings } from '../hooks/useSiteSettings';
 import SEO from '../components/SEO';
 import { listCollections, type CollectionInfo } from '../api/collections';
 import { getContentPage } from '../api/client';
@@ -8,6 +9,7 @@ import Footer from '../components/Footer/Footer';
 import { useAsync } from '../hooks/useAsync';
 
 export default function AboutPage() {
+  const settings = useSiteSettings();
   const { data } = useAsync(async () => {
     const [collectionsResult, contentResult] = await Promise.allSettled([
       listCollections(),
@@ -34,7 +36,7 @@ export default function AboutPage() {
     <div className="body-layout">
       <SEO
         title="About"
-        description="Learn about Voices That Remain — a project to digitize, transcribe, and preserve personal letters and historical correspondence for future generations."
+        description={`Learn about ${settings?.site_title?.trim() || 'Voices That Remain'} — a project to digitize, transcribe, and preserve personal letters and historical correspondence for future generations.`}
         canonicalUrl="/about"
       />
       <div className="about-page" style={{ width: '100%', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>

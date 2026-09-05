@@ -1,3 +1,4 @@
+import { invalidateSiteSettings } from '../../services/siteSettings';
 import { apiGet, apiPut, apiPost, apiDelete } from '../client';
 
 interface SiteSettings {
@@ -40,7 +41,11 @@ interface SystemInfo {
 export type { SiteSettings, InviteInfo, AdminUserInfo, AdminUsersResponse, SystemInfo };
 
 export function getSettings(): Promise<SiteSettings> { return apiGet('/admin/settings'); }
-export function updateSettings(settings: SiteSettings): Promise<SiteSettings> { return apiPut('/admin/settings', settings); }
+export async function updateSettings(settings: SiteSettings): Promise<SiteSettings> {
+  const saved = await apiPut<SiteSettings>('/admin/settings', settings);
+  invalidateSiteSettings();
+  return saved;
+}
 export function getInvites(): Promise<InviteInfo[]> { return apiGet('/admin/settings/invites'); }
 export function getAdminUsers(): Promise<AdminUsersResponse> { return apiGet('/admin/settings/admin-users'); }
 export function revokeInvite(id: string): Promise<void> { return apiDelete(`/admin/settings/invites/${id}`); }

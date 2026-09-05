@@ -431,6 +431,22 @@ describe('collections route integration', () => {
     ]);
   });
 
+  it('returns an overview without loading or exposing reading and processing payloads', async () => {
+    getCollectionByCodeMock.mockResolvedValueOnce({ id: 'collection-9', collectionCode: '009', title: 'Nine', description: null, createdAt: '2024-01-01', hook: null, profileStatus: 'EMPTY' });
+    lettersFindManyMock.mockResolvedValueOnce([{ id: 'letter-1', dateRaw: '19470810', typeSequence: 1, type: 'L' }]);
+    transformLettersWithRelatedToDTOMock.mockReturnValueOnce([{ id: 'letter-1', images: [], metadata: { sender: 'Alice', hook: 'A preview', verified: true, description: 'Long summary' }, transcriptStatus: 'VERIFIED', metadataContentStatus: 'VERIFIED', transcript: { fullText: 'Long transcript' }, readingText: 'Long reading text' }]);
+    const response = await invokeRouter(collectionsRouter, { method: 'GET', url: '/collections/009', query: { view: 'overview' } });
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toMatchObject({ letterCount: 1, letters: [{ id: 'letter-1', metadata: { sender: 'Alice', hook: 'A preview', verified: true } }] });
+    const item = (response.body as { letters: Record<string, unknown>[] }).letters[0];
+    expect(item).not.toHaveProperty('transcript');
+    expect(item).not.toHaveProperty('readingText');
+    expect(item.metadata).not.toHaveProperty('description');
+    const query = lettersFindManyMock.mock.calls[0][0];
+    expect(query.columns).toMatchObject({ transcriptionText: false, transcriptionJson: false, metadataV2Json: false });
+    expect(query.with.pages.columns.lineSegments).toBe(false);
+  });
+
   it('withholds a detail hook revoked after the collection and letters are read', async () => {
     getCollectionByCodeMock.mockResolvedValueOnce({
       id: 'collection-9',

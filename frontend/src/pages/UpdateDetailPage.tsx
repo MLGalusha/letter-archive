@@ -1,3 +1,4 @@
+import { useSiteSettings } from '../hooks/useSiteSettings';
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
@@ -53,6 +54,7 @@ const MARKDOWN_COMPONENTS: import('react-markdown').Components = {
 };
 
 export default function BlogDetailPage() {
+  const settings = useSiteSettings();
   const { slug } = useParams<{ slug: string }>();
   const [post, setPost] = useState<BlogPost | null>(null);
   const [loading, setLoading] = useState(true);
@@ -108,7 +110,7 @@ export default function BlogDetailPage() {
     );
   }
 
-  const seo = buildBlogPostSeo(post);
+  const seo = buildBlogPostSeo(post, settings?.site_title?.trim() || undefined);
   const deck = post.excerpt || truncateText(stripMarkdown(post.bodyMarkdown), 280);
   const publishedDate = post.publishedAt || post.createdAt;
 

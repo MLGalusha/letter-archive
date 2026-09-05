@@ -25,16 +25,21 @@ function mockHookReturn(overrides: Partial<ReturnType<typeof useProgressiveImage
 describe('ProgressiveImage', () => {
   it('defers every image tier and the DOM source until a lazy image is near the viewport', () => {
     let notify: IntersectionObserverCallback;
+    let options: IntersectionObserverInit | undefined;
+    const scrollRoot = document.createElement('div');
+    scrollRoot.id = 'app-scroll';
+    document.body.append(scrollRoot);
     const disconnect = vi.fn();
     const OriginalObserver = globalThis.IntersectionObserver;
     globalThis.IntersectionObserver = class {
-      constructor(callback: IntersectionObserverCallback) { notify = callback; }
+      constructor(callback: IntersectionObserverCallback, init?: IntersectionObserverInit) { notify = callback; options = init; }
       observe = vi.fn();
       disconnect = disconnect;
     } as unknown as typeof IntersectionObserver;
     try {
       mockHookReturn();
       const { unmount } = render(<ProgressiveImage src="/full.jpg" thumbSrc="/thumb.jpg" midSrc="/mid.jpg" alt="Lazy scan" loading="lazy" />);
+      expect(options).toMatchObject({ root: scrollRoot, rootMargin: '200px' });
       expect(mockUseProgressiveImage).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: false }));
       expect(screen.getByAltText('Lazy scan')).not.toHaveAttribute('src');
       act(() => notify([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver));
@@ -44,6 +49,7 @@ describe('ProgressiveImage', () => {
       expect(disconnect).toHaveBeenCalled();
     } finally {
       globalThis.IntersectionObserver = OriginalObserver;
+      scrollRoot.remove();
     }
   });
 

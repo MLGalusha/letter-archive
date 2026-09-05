@@ -1,6 +1,7 @@
 import { forwardRef, useState, useEffect, useRef, type CSSProperties } from 'react';
 import { useProgressiveImage } from '../../hooks/useProgressiveImage';
 import './ProgressiveImage.css';
+import { getAppScrollRootForIO } from '../../utils/appScroll';
 
 export interface ProgressiveImageProps {
   src: string;
@@ -67,7 +68,7 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
           setHasBeenVisible(true);
           observer.disconnect();
         }
-      }, { rootMargin: '200px' });
+      }, { root: getAppScrollRootForIO(), rootMargin: '200px' });
       if (containerRef.current) observer.observe(containerRef.current);
       return () => observer.disconnect();
     }, [enabled]);

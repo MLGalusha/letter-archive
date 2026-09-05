@@ -1,27 +1,9 @@
 # Site improvements — September 2026
 
-## Scope
+The implementation and measurement record is in [the full report](2026-09-05-site-improvements-report.md). It covers 17 focused PRs, their validation, measured improvements, delivery issues, and remaining follow-up.
 
-Work begins from origin/main at 11280b24 in an isolated checkout. The original
-rotated-region-recovery checkout and uncommitted handwriting work are excluded.
-The research-only placement fixture, native Python test, and lab transport findings
-from the audit are not present on this baseline and will not be imported.
+Work began from origin/main at `11280b24` in the isolated `letter-archive-site-improvements` checkout. The original `rotated-region-recovery` checkout and its handwriting/research work remain excluded. No handwriting migration or research-runtime changes were imported.
 
-## Delivery policy
+Required tests, builds, typechecks, browser checks, and review resolution gate each merge. Production releases remain sequential and tied to the exact merged revision. [PR 76](https://github.com/MLGalusha/letter-archive/pull/76) is the final CI/reporting delivery gate.
 
-One focused PR per fix. Required CI checks must pass before merge. Inspect review
-comments and resulting production release; measure affected behavior. Never force
-merge or weaken a test to hide a failure. Record deferred product decisions.
-
-## Work
-
-| Fix | Verification | Delivery |
-| --- | --- | --- |
-| Protect pending review autosaves on navigation and document exit | Browser checks cover saved notes and failed-save retention; hook checks cover waiting and exit warning; production build passes | PR pending |
-
-## Next
-
-Fatal API lifecycle; shared public ordering/date ranges; bounded data and image
-loading; navigation cache recovery; truthful settings/link semantics/loading UX;
-public initial metadata; dependency and CI hygiene. Product-specific content and
-unavailable donation/contact setup remain deferred.
+Measured gains include about 61% fewer initial collection image requests and 67% less compressed collection-overview data for the same 24 items. Variable browser timings do not establish a consistent LCP improvement. Initial HTML metadata, larger-collection aggregation, existing lint debt, and editorial/support activation remain explicit follow-up items in the report.

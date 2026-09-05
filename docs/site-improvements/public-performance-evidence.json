@@ -1,0 +1,141 @@
+{
+  "route": "https://voicesthatremain.com/collections/009",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "method": "Headless Chromium; three fresh browser contexts per stage; direct navigation; sample five seconds after collection heading appears. Image count is distinct initiated image URLs. Content-Length sums are approximate. No network or CPU throttle.",
+  "stages": {
+    "baseline": [
+      {
+        "trial": 1,
+        "title": "Collection 009 | Voices That Remain",
+        "ttfbMs": 177,
+        "domContentLoadedMs": 440,
+        "lcpMs": 2120,
+        "imageRequests": 95,
+        "reportedResponseBytes": 1514389
+      },
+      {
+        "trial": 2,
+        "title": "Collection 009 | Voices That Remain",
+        "ttfbMs": 115,
+        "domContentLoadedMs": 295,
+        "lcpMs": 2216,
+        "imageRequests": 91,
+        "reportedResponseBytes": 1325814
+      },
+      {
+        "trial": 3,
+        "title": "Collection 009 | Voices That Remain",
+        "ttfbMs": 207,
+        "domContentLoadedMs": 374,
+        "lcpMs": 4584,
+        "imageRequests": 98,
+        "reportedResponseBytes": 1750477
+      }
+    ],
+    "scheduler_only": [
+      {
+        "trial": 1,
+        "title": "Collection 009 | Voices That Remain",
+        "ttfbMs": 187,
+        "domContentLoadedMs": 413,
+        "lcpMs": 6296,
+        "imageRequests": 94,
+        "reportedResponseBytes": 782064
+      },
+      {
+        "trial": 2,
+        "title": "Collection 009 | Voices That Remain",
+        "ttfbMs": 123,
+        "domContentLoadedMs": 339,
+        "lcpMs": 8264,
+        "imageRequests": 94,
+        "reportedResponseBytes": 1699927
+      },
+      {
+        "trial": 3,
+        "title": "Collection 009 | Voices That Remain",
+        "ttfbMs": 118,
+        "domContentLoadedMs": 295,
+        "lcpMs": 1592,
+        "imageRequests": 94,
+        "reportedResponseBytes": 1521348
+      }
+    ],
+    "visibility_fix": [
+      {
+        "trial": 1,
+        "title": "Collection 009 | Voices That Remain",
+        "ttfbMs": 153,
+        "domContentLoadedMs": 364,
+        "lcpMs": 4972,
+        "imageRequests": 37,
+        "reportedResponseBytes": 855513
+      },
+      {
+        "trial": 2,
+        "title": "Collection 009 | Voices That Remain",
+        "ttfbMs": 171,
+        "domContentLoadedMs": 362,
+        "lcpMs": 1704,
+        "imageRequests": 37,
+        "reportedResponseBytes": 1179723
+      },
+      {
+        "trial": 3,
+        "title": "Collection 009 | Voices That Remain",
+        "ttfbMs": 136,
+        "domContentLoadedMs": 343,
+        "lcpMs": 2628,
+        "imageRequests": 37,
+        "reportedResponseBytes": 1280318
+      }
+    ],
+    "lightweight_overview": [
+      {
+        "trial": 1,
+        "title": "Collection 009 | Voices That Remain",
+        "ttfbMs": 158,
+        "domContentLoadedMs": 378,
+        "lcpMs": 4160,
+        "imageRequests": 37,
+        "reportedResponseBytes": 871418
+      },
+      {
+        "trial": 2,
+        "title": "Collection 009 | Voices That Remain",
+        "ttfbMs": 113,
+        "domContentLoadedMs": 275,
+        "lcpMs": 4888,
+        "imageRequests": 37,
+        "reportedResponseBytes": 1280332
+      },
+      {
+        "trial": 3,
+        "title": "Collection 009 | Voices That Remain",
+        "ttfbMs": 118,
+        "domContentLoadedMs": 330,
+        "lcpMs": 1324,
+        "imageRequests": 37,
+        "reportedResponseBytes": 1280332
+      }
+    ]
+  },
+  "overview_payload": {
+    "measuredAt": "2026-09-05T03:41:02.362Z",
+    "collection": "009",
+    "full": {
+      "rawBytes": 57027,
+      "gzipBytes": 10936,
+      "items": 24
+    },
+    "overview": {
+      "rawBytes": 14987,
+      "gzipBytes": 3655,
+      "items": 24
+    }
+  },
+  "interpretation": "Image requests fell from 91\u201398 to 37 in every post-visibility trial. Compressed overview payload fell 67 percent for the same 24 items. Small, variable timing samples do not establish consistent LCP improvement."
+}

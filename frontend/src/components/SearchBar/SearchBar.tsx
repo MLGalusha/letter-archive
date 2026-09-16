@@ -89,6 +89,8 @@ export default function SearchBar({
   const [internalShowFilters, setInternalShowFilters] = useState(
     isCompact ? false : hasAdvancedRefinementFilters,
   );
+  const [hasYearDraft, setHasYearDraft] = useState(false);
+  const [yearResetKey, setYearResetKey] = useState(0);
   const [openChoiceField, setOpenChoiceField] = useState<string | null>(null);
   const searchIdBase = useId().replace(/:/g, "");
   const searchRootRef = useRef<HTMLDivElement | null>(null);
@@ -349,6 +351,8 @@ export default function SearchBar({
   }, [selectedFormats, updateFilter]);
 
   const clearAll = useCallback(() => {
+    setHasYearDraft(false);
+    setYearResetKey((key) => key + 1);
     onQueryChange("");
     onFiltersChange({});
     if (isCompact) {
@@ -507,6 +511,8 @@ export default function SearchBar({
             <SuggestionHint suggestion={placeSuggestion} />
           </div>
           <YearRangeFields
+            key={yearResetKey}
+            onDraftChange={setHasYearDraft}
             id={searchIdBase}
             value={filters.dateRange ?? (filters.year ? { start: filters.year, end: filters.year } : undefined)}
             onChange={(dateRange) => updateFilter({ year: null, dateRange })}
@@ -652,7 +658,7 @@ export default function SearchBar({
                     type="button"
                     className="clear-filters"
                     onClick={clearAll}
-                    disabled={!hasActiveFilters}
+                    disabled={!hasActiveFilters && !hasYearDraft}
                   >
                     Clear All
                   </button>
@@ -720,7 +726,7 @@ export default function SearchBar({
               type="button"
               className="clear-filters"
               onClick={clearAll}
-              disabled={!hasActiveFilters}
+              disabled={!hasActiveFilters && !hasYearDraft}
             >
               Clear All
             </button>

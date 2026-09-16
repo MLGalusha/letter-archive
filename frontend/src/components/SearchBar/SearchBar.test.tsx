@@ -35,6 +35,31 @@ describe("SearchBar", () => {
     relationships: [{ value: "romantic-partner", count: 7 }],
   };
 
+  it.each(['war', ''])('clears an invalid year draft with query %j', async (initialQuery) => {
+    const user = userEvent.setup();
+    const onFiltersChange = vi.fn();
+    function Harness() {
+      const [query, setQuery] = useState(initialQuery);
+      const [filters, setFilters] = useState<SearchFilters>({});
+      return <SearchBar query={query} filters={filters} facets={baseFacets} total={12}
+        loading={false} refineOpen onQueryChange={setQuery}
+        onFiltersChange={(next) => { onFiltersChange(next); setFilters(next); }} />;
+    }
+    render(<Harness />);
+    await user.type(screen.getByLabelText('From year'), '-1');
+    await user.tab();
+    expect(screen.getByRole('alert')).toHaveTextContent('1 to 9999');
+    expect(onFiltersChange).not.toHaveBeenCalled();
+    const clearAll = screen.getByRole('button', { name: 'Clear All' });
+    expect(clearAll).toBeEnabled();
+    await user.click(clearAll);
+    expect(screen.getByLabelText('From year')).toHaveValue('');
+    expect(screen.getByLabelText('To year')).toHaveValue('');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(clearAll).toBeDisabled();
+    expect(onFiltersChange).toHaveBeenCalledExactlyOnceWith({});
+  });
+
   it("renders archive facets and notifies callers when a facet is selected", async () => {
     const user = userEvent.setup();
     const handleQueryChange = vi.fn();

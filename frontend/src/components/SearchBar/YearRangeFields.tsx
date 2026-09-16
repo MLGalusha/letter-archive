@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { SearchFilters } from '../../utils/archiveSearch';
 
 type Range = SearchFilters['dateRange'];
@@ -11,10 +11,11 @@ function rangeError(start: string, end: string): string {
 }
 
 /** Year entry is independent of the truncated, query-dependent year facets. */
-export default function YearRangeFields({ id, value, onChange }: {
+export default function YearRangeFields({ id, value, onChange, onDraftChange }: {
   id: string;
   value: Range;
   onChange: (range: Range) => void;
+  onDraftChange?: (hasDraft: boolean) => void;
 }) {
   const external = `${value?.start ?? ''}:${value?.end ?? ''}`;
   const [previous, setPrevious] = useState(external);
@@ -22,7 +23,11 @@ export default function YearRangeFields({ id, value, onChange }: {
   const [end, setEnd] = useState(String(value?.end ?? ''));
   const [error, setError] = useState(() => rangeError(String(value?.start ?? ''), String(value?.end ?? '')));
 
-  // Clear filters and browser Back are authoritative over an unfinished edit.
+  const hasDraft = start !== String(value?.start ?? '') || end !== String(value?.end ?? '');
+  useEffect(() => { onDraftChange?.(hasDraft); }, [hasDraft, onDraftChange]);
+
+  // Incoming range changes replace unfinished edits. SearchBar also remounts
+  // these fields on explicit Clear All, even if the applied range was empty.
   if (previous !== external) {
     setPrevious(external);
     setStart(String(value?.start ?? ''));

@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import { useState } from 'react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
 import YearRangeFields from './YearRangeFields';
@@ -12,6 +13,38 @@ describe('year range entry', () => {
     expect(onChange).not.toHaveBeenCalled();
     await user.keyboard('{Enter}');
     expect(onChange).toHaveBeenLastCalledWith({ end: 1863 });
+  });
+
+  it('does not recommit an unchanged range on blur or after Enter', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    function Harness() {
+      const [range, setRange] = useState<{ start?: number; end?: number }>({ start: 1860, end: 1863 });
+      return <YearRangeFields id="test" value={range} onChange={(next) => {
+        onChange(next); setRange(next ?? {});
+      }} />;
+    }
+    render(<Harness />);
+    await user.click(screen.getByLabelText('From year'));
+    await user.tab();
+    expect(onChange).not.toHaveBeenCalled();
+    const end = screen.getByLabelText('To year');
+    await user.clear(end);
+    await user.type(end, '1864{Enter}');
+    expect(onChange).toHaveBeenCalledExactlyOnceWith({ start: 1860, end: 1864 });
+    await user.tab();
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([undefined, {}])('does not commit an already empty range %j on blur', async (value) => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<YearRangeFields id="test" value={value} onChange={onChange} />);
+    await user.click(screen.getByLabelText('From year'));
+    await user.tab();
+    await user.keyboard('{Enter}');
+    await user.tab();
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it('rejects inverted and malformed ranges without changing the applied filter', async () => {

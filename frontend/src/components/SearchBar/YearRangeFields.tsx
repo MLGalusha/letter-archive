@@ -39,10 +39,12 @@ export default function YearRangeFields({ id, value, onChange, onDraftChange }: 
     const nextError = rangeError(start, end);
     setError(nextError);
     if (nextError) return;
-    onChange(start || end ? {
+    const next = start || end ? {
       ...(start ? { start: Number(start) } : {}),
       ...(end ? { end: Number(end) } : {}),
-    } : undefined);
+    } : undefined;
+    if (next?.start === value?.start && next?.end === value?.end) return;
+    onChange(next);
   };
 
   return (

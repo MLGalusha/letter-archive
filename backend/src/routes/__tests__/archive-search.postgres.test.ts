@@ -245,4 +245,27 @@ describe.skipIf(!enabled)('public archive search against PostgreSQL', () => {
     }
   });
 
+  it('uses provider-owned words for Roman numerals and sanitized metadata', async () => {
+    const [roman] = await client`INSERT INTO letters ${client({ collection_id: collection, date_raw: '19510103', sender: 'MollyⅣ', recipient: 'Mollly' })} RETURNING id`;
+    const [marker] = await client`INSERT INTO letters ${client({ collection_id: collection, date_raw: '19510104', sender: 'Molly--- Page 77 ---' })} RETURNING id`;
+    try {
+      const response = await search({ search: 'Mollly' });
+      const romanMatch = response.letters.find((item) => item.id === roman!.id);
+      expect(romanMatch?.searchPreview).toMatchObject(icu
+        ? { matchedFieldLabel: 'Sender', excerpt: 'MollyⅣ', highlightRanges: [{ start: 0, end: 5 }] }
+        : { matchedFieldLabel: 'Recipient', excerpt: 'Mollly', highlightRanges: [{ start: 0, end: 6 }] });
+      expect(romanMatch).not.toHaveProperty('searchWordMap');
+      expect(response.letters.find((item) => item.id === marker!.id)?.searchPreview)
+        .toMatchObject({ matchedFieldLabel: 'Sender', excerpt: 'Molly', highlightRanges: [{ start: 0, end: 5 }] });
+      const words = await client`SELECT word, similarity(word, lower('Mollly')) AS score
+        FROM regexp_split_to_table(lower('MollyⅣ'), '[^[:alnum:]]+') AS word`;
+      for (const token of words) {
+        expect(archiveWordSimilarity('unused', 'unused', { source: [token.word], term: ['mollly'] }))
+          .toBeCloseTo(token.score, 6);
+      }
+    } finally {
+      await client`DELETE FROM letters WHERE id IN (${roman!.id}, ${marker!.id})`;
+    }
+  });
+
 });

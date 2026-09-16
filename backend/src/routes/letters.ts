@@ -104,6 +104,7 @@ type ArchiveLabeledFacetRow = {
 
 type ArchiveSearchRow = {
   searchCaseMap?: Record<string, string> | null;
+  searchWordMap?: Record<string, string[]> | null;
   normalizedSearch?: string | null;
   id: string;
   collectionId: string;
@@ -826,6 +827,7 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
   const ctes = buildArchiveSearchCtes(query, collectionIds);
   const orderBy = buildArchiveSearchOrderBy(query);
   const offset = (query.page - 1) * query.limit;
+  const fuzzyTerms = archiveSearchTerms(query.search || '').filter(canFuzzyMatchArchiveTerm);
 
   // Run main rows query and combined facets query in parallel (2 queries instead of 9)
   // This evaluates the expensive CTE only twice instead of 9 times
@@ -906,6 +908,12 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
             || COALESCE(sg.senders, ARRAY[]::text[]) || COALESCE(sg.recipients, ARRAY[]::text[])
             || COALESCE(sg.places, ARRAY[]::text[]) || ARRAY[sg."dateRaw"]) AS value
         ) ELSE NULL END AS "searchCaseMap",
+        CASE WHEN ${fuzzyTerms.length > 0} THEN (
+          SELECT jsonb_object_agg(value, regexp_split_to_array(lower(${archiveSearchSourceSql(sql`value`)}), '[^[:alnum:]]+'))
+          FROM unnest(COALESCE(sg.senders, ARRAY[]::text[]) || COALESCE(sg.recipients, ARRAY[]::text[])
+            || COALESCE(sg.places, ARRAY[]::text[])
+            || ARRAY[${sql.join(fuzzyTerms.map((term) => sql`${term}`), sql`, `)}]::text[]) AS value
+        ) ELSE NULL END AS "searchWordMap",
         COUNT(*) OVER()::int AS "totalCount"
       FROM scoped_groups sg
       LEFT JOIN primary_page_counts ppc
@@ -1422,11 +1430,15 @@ function getArchiveTypedSearchFields() {
   ];
 }
 
+function archiveSearchSourceSql(expression: SQLWrapper) {
+  return sql`regexp_replace(COALESCE(${expression}, ''), '---[ \t\r\n\f\v]*Page[ \t\r\n\f\v]+[0-9]+[ \t\r\n\f\v]*---', ' ', 'gi')`;
+}
+
 function buildArchiveTypedMatchSql(search: string) {
   const terms = archiveSearchTerms(search);
   const sources = getArchiveTypedSearchFields().flatMap((field) => field.expressions.map((expression) => {
     // Preview text removes generated page separators; they must not admit results either.
-    const source = sql`regexp_replace(COALESCE(${expression}, ''), '---[ \t\r\n\f\v]*Page[ \t\r\n\f\v]+[0-9]+[ \t\r\n\f\v]*---', ' ', 'gi')`;
+    const source = archiveSearchSourceSql(expression);
     const matches = terms.map((term) => {
       const literal = sql`lower(${source}) LIKE lower(${archiveLiteralPattern(term)})`;
       if (!field.fuzzy || !canFuzzyMatchArchiveTerm(term)) return literal;
@@ -1577,7 +1589,9 @@ function buildArchiveSearchPreview(
         const folded = row.searchCaseMap && Object.hasOwn(row.searchCaseMap, original)
           ? row.searchCaseMap[original] : original.toLowerCase();
         return scoreArchivePreviewValue(prepareArchivePreviewText(original), search, searchTerms, field.fuzzy,
-          prepareArchivePreviewText(folded));
+          prepareArchivePreviewText(folded),
+          field.fuzzy && row.searchWordMap && Object.hasOwn(row.searchWordMap, original) ? row.searchWordMap[original] : undefined,
+          row.searchWordMap);
       })
       .filter((candidate): candidate is ArchivePreviewCandidate => candidate !== null)
       .sort((left, right) => right.score - left.score || right.totalMatches - left.totalMatches
@@ -1670,6 +1684,8 @@ function scoreArchivePreviewValue(
   searchTerms: string[],
   allowFuzzy: boolean,
   foldedValue: string,
+  sourceWords?: string[],
+  wordMap?: Record<string, string[]> | null,
 ): ArchivePreviewCandidate | null {
   const originalTerms = rawSearch.trim().split(/\s+/u);
   // Deduplicate only after pairing: differently typed terms can fold identically
@@ -1679,7 +1695,8 @@ function scoreArchivePreviewValue(
     const originalTerm = originalTerms[index]!;
     terms.set(JSON.stringify([term, canFuzzyMatchArchiveTerm(originalTerm)]), { term, originalTerm });
   });
-  const termRanges = [...terms.values()].map(({ term, originalTerm }) => archiveTermRanges(value, term, allowFuzzy, foldedValue, originalTerm));
+  const termRanges = [...terms.values()].map(({ term, originalTerm }) => archiveTermRanges(value, term, allowFuzzy, foldedValue, originalTerm,
+    sourceWords && wordMap && Object.hasOwn(wordMap, originalTerm) ? { source: sourceWords, term: wordMap[originalTerm]! } : undefined));
   if (termRanges.some((ranges) => ranges.length === 0)) return null;
   const ranges = mergeArchiveHighlightRanges(termRanges.flat());
   if (!ranges.length) return null;

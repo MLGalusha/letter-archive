@@ -3,7 +3,7 @@ import { memo } from "react";
 export interface FacetItem {
   key: string;
   label: string;
-  count: number;
+  count?: number;
   active: boolean;
   onClick: () => void;
 }
@@ -27,7 +27,7 @@ export default memo(function FacetRow({
             onClick={item.onClick}
           >
             <span>{item.label}</span>
-            <span className="search-facet-count">{item.count}</span>
+            {item.count !== undefined && <span className="search-facet-count">{item.count}</span>}
           </button>
         ))}
       </div>
@@ -40,6 +40,7 @@ export default memo(function FacetRow({
     item.key === next.items[i].key &&
     item.label === next.items[i].label &&
     item.count === next.items[i].count &&
-    item.active === next.items[i].active
+    item.active === next.items[i].active &&
+    item.onClick === next.items[i].onClick
   );
 });

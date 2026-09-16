@@ -11,9 +11,11 @@ export default memo(function FilterChoiceField({
   open,
   searchable = false,
   allowClear = false,
+  allowCustom = false,
   clearLabel = "Any",
   multiple = false,
   maxSelections,
+  maxValueLength = 120,
   compact = false,
   closeOnSelect = false,
   onChange,
@@ -27,9 +29,11 @@ export default memo(function FilterChoiceField({
   open: boolean;
   searchable?: boolean;
   allowClear?: boolean;
+  allowCustom?: boolean;
   clearLabel?: string;
   multiple?: boolean;
   maxSelections?: number;
+  maxValueLength?: number;
   compact?: boolean;
   closeOnSelect?: boolean;
   onChange: (value: string) => void;
@@ -61,10 +65,10 @@ export default memo(function FilterChoiceField({
   const optionsRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (open && searchable && options.length > 6) {
+    if (open && (allowCustom || (searchable && options.length > 6))) {
       searchInputRef.current?.focus();
     }
-    if (open && !(searchable && options.length > 6)) {
+    if (open && !(allowCustom || (searchable && options.length > 6))) {
       {
         const target = optionsRef.current?.querySelector<HTMLButtonElement>("button.active:not(:disabled)")
           ?? optionsRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)");
@@ -87,7 +91,7 @@ export default memo(function FilterChoiceField({
     if (!open) {
       setSearchTerm("");
     }
-  }, [open, searchable]);
+  }, [open, searchable, allowCustom]);
 
   useEffect(() => {
     if (!open) return;
@@ -109,7 +113,14 @@ export default memo(function FilterChoiceField({
     return () => window.removeEventListener("resize", measureDirection);
   }, [filteredOptions.length, open]);
 
-  const hasSearch = searchable && options.length > 6;
+  const hasSearch = allowCustom || (searchable && options.length > 6);
+  const customValue = searchTerm.trim();
+  const canAddCustom = allowCustom && customValue.length > 0 && customValue.length <= maxValueLength
+    && !customValue.includes(',')
+    && !options.some((option) => option.value.toLowerCase() === customValue.toLowerCase())
+    && !selectedValues.some((selected) => selected.toLowerCase() === customValue.toLowerCase())
+    && (!maxSelections || selectedValues.length < maxSelections)
+    && [...selectedValues, customValue].join(',').length <= maxValueLength;
 
   const handleOptionClick = (optionValue: string) => {
     if (multiple) {
@@ -117,7 +128,8 @@ export default memo(function FilterChoiceField({
       if (isSelected) {
         const next = selectedValues.filter((v) => v !== optionValue);
         onChange(next.join(","));
-      } else if (!maxSelections || selectedValues.length < maxSelections) {
+      } else if ((!maxSelections || selectedValues.length < maxSelections)
+        && [...selectedValues, optionValue].join(",").length <= maxValueLength) {
         onChange([...selectedValues, optionValue].join(","));
       }
     } else {
@@ -173,6 +185,12 @@ export default memo(function FilterChoiceField({
             />
           )}
           <div ref={optionsRef} className={`filter-choice-options${compact ? " filter-choice-options--compact" : ""}`} id={`${id}-choices`} role="group" aria-label={label}>
+            {allowCustom && (
+              <button type="button" className="filter-choice-option" disabled={!canAddCustom}
+                onClick={() => { if (canAddCustom) { handleOptionClick(customValue); setSearchTerm(''); } }}>
+                Use typed {label.toLowerCase()}{customValue ? `: ${customValue}` : ''}
+              </button>
+            )}
             {allowClear && (
               <button
                 type="button"
@@ -188,7 +206,8 @@ export default memo(function FilterChoiceField({
                 const isActive = multiple
                   ? selectedValues.includes(option.value)
                   : option.value === value;
-                const isDisabled = multiple && !isActive && maxSelections != null && selectedValues.length >= maxSelections;
+                const isDisabled = multiple && !isActive && ((maxSelections != null && selectedValues.length >= maxSelections)
+                  || [...selectedValues, option.value].join(",").length > maxValueLength);
                 return (
                   <button
                     key={option.value}

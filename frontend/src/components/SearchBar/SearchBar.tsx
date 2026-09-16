@@ -7,15 +7,14 @@ import {
   ARCHIVE_FORMAT_LABELS,
   ARCHIVE_FORMAT_ORDER,
   COMBINED_SORT_OPTIONS,
-  formatFacetLabel,
   getBestSuggestion,
 } from "./searchBarUtils";
 import type { FilterChoiceOption } from "./searchBarUtils";
+import { buildFacetChoiceOptions, normalizeTopicChoices } from "./searchBarUtils";
 import FilterChoiceField from "./FilterChoiceField";
 import FacetRow from "./FacetRow";
 import SuggestionHint from "./SuggestionHint";
 import YearRangeFields from "./YearRangeFields";
-import { useRememberedSearchFacets } from "./rememberedSearchFacets";
 
 interface SearchBarProps {
   query: string;
@@ -190,6 +189,8 @@ export default function SearchBar({
     });
   }, [filters, onFiltersChange]);
 
+  const selectedTopics = useMemo(() => normalizeTopicChoices(filters.topic), [filters.topic]);
+
   // Count active filters for the badge on the refine button.
   // In compact mode, format chips are inside the flyout so they count.
   // In full mode, format chips are in the toolbar so they don't count.
@@ -200,7 +201,7 @@ export default function SearchBar({
     if (filters.sender) count++;
     if (filters.recipient) count++;
     if (filters.place) count++;
-    if (filters.topic?.length) count += filters.topic.length;
+    if (selectedTopics.length) count += selectedTopics.length;
     if (filters.tone?.length) count += filters.tone.length;
     if (filters.relationship?.length) count += filters.relationship.length;
     if (filters.year) count++;
@@ -208,7 +209,7 @@ export default function SearchBar({
     if (filters.hasTranscript !== undefined && filters.hasTranscript !== null) count++;
     if (filters.verified !== undefined && filters.verified !== null) count++;
     return count;
-  }, [filters, selectedFormats, hideCollectionFilter]);
+  }, [filters, selectedFormats, selectedTopics, hideCollectionFilter]);
   // Resolve the effective sort: user's explicit choice wins, otherwise the
   // page default. This never depends on query presence — the sort the user
   // sees should not silently flip when they start or stop typing.
@@ -254,24 +255,8 @@ export default function SearchBar({
     return () => document.removeEventListener("mousedown", close);
   }, [setSortDropdownOpen, sortDropdownOpen]);
 
-  const rememberedFacets = useRememberedSearchFacets(facets);
-
-  const toneChoiceOptions = useMemo<FilterChoiceOption[]>(() => {
-    return Array.from(rememberedFacets.tones)
-      .map((value) => ({
-        value,
-        label: formatFacetLabel(value),
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-  }, [rememberedFacets.tones]);
-  const relationshipChoiceOptions = useMemo<FilterChoiceOption[]>(() => {
-    return Array.from(rememberedFacets.relationships)
-      .map((value) => ({
-        value,
-        label: formatFacetLabel(value),
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-  }, [rememberedFacets.relationships]);
+  const toneChoiceOptions = useMemo(() => buildFacetChoiceOptions(facets.tones, filters.tone), [facets.tones, filters.tone]);
+  const relationshipChoiceOptions = useMemo(() => buildFacetChoiceOptions(facets.relationships, filters.relationship), [facets.relationships, filters.relationship]);
   const verificationChoiceOptions = useMemo<FilterChoiceOption[]>(
     () => [
       { value: "all", label: "All" },
@@ -284,10 +269,10 @@ export default function SearchBar({
     () => hideCollectionFilter ? null : getBestSuggestion(
       filters.collection,
       facets.collections.map((facet) => ({
-        value: facet.label,
+        value: facet.value,
         display: facet.label === facet.value ? facet.label : `${facet.label} (${facet.value})`,
         count: facet.count,
-        aliases: [facet.value],
+        aliases: [facet.label],
       })),
     ),
     [facets.collections, filters.collection, hideCollectionFilter],
@@ -303,24 +288,24 @@ export default function SearchBar({
   const senderSuggestion = useMemo(
     () => getBestSuggestion(
       filters.sender,
-      facets.correspondents.map((facet) => ({
+      (facets.senders || []).map((facet) => ({
         value: facet.value,
         display: facet.value,
         count: facet.count,
       })),
     ),
-    [facets.correspondents, filters.sender],
+    [facets.senders, filters.sender],
   );
   const recipientSuggestion = useMemo(
     () => getBestSuggestion(
       filters.recipient,
-      facets.correspondents.map((facet) => ({
+      (facets.recipients || []).map((facet) => ({
         value: facet.value,
         display: facet.value,
         count: facet.count,
       })),
     ),
-    [facets.correspondents, filters.recipient],
+    [facets.recipients, filters.recipient],
   );
   const placeSuggestion = useMemo(
     () => getBestSuggestion(
@@ -333,14 +318,11 @@ export default function SearchBar({
     ),
     [facets.places, filters.place],
   );
-  const topicChoiceOptions = useMemo(() => {
-    return Array.from(rememberedFacets.topics)
-      .map((category) => ({
-        value: category,
-        label: formatFacetLabel(category),
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-  }, [rememberedFacets.topics]);
+  const hasOmittedSuggestions = facets.truncated?.some((facet) =>
+    ['senders', 'recipients', 'places', 'topics'].includes(facet)
+    || (facet === 'collections' && !hideCollectionFilter),
+  );
+  const topicChoiceOptions = useMemo(() => buildFacetChoiceOptions(facets.topics, selectedTopics), [facets.topics, selectedTopics]);
 
   const toggleFormatFilter = useCallback((format: LetterImageType) => {
     const nextFormats = selectedFormats?.includes(format)
@@ -376,7 +358,7 @@ export default function SearchBar({
     return ARCHIVE_FORMAT_ORDER.map((format) => ({
       key: format,
       label: ARCHIVE_FORMAT_LABELS[format],
-      count: formatCounts.get(format) || 0,
+      count: formatCounts.get(format),
       active: selectedFormats?.includes(format) || false,
       onClick: () => toggleFormatFilter(format),
     }));
@@ -538,24 +520,27 @@ export default function SearchBar({
 
       <div className="filter-section">
         <span className="filter-section-label">Content &amp; Status</span>
+        <p className="filter-suggestion-hint">Selections within one filter match any chosen option. Different filters narrow results together. Format, topic, tone, and relationship counts apply the other filters, excluding selections in that same field. Name, collection, and location suggestions count matches within the current results.</p>
+        {hasOmittedSuggestions && <p className="filter-suggestion-hint">Some suggestions are omitted. Type a name, collection, location, or topic category to filter beyond the suggestions.</p>}
         <div className="filter-section-row">
           <div className="filter-group">
             <label className="filter-label" htmlFor={topicFilterId}>Topic</label>
             <FilterChoiceField
               id={topicFilterId}
               label="Topic"
-              value={filters.topic?.join(",") || ""}
+              value={selectedTopics.join(",")}
               placeholder="All"
               options={topicChoiceOptions}
               allowClear
               clearLabel="All"
-              searchable={topicChoiceOptions.length > 6}
+              searchable
+              allowCustom
               multiple
               maxSelections={2}
               compact
               open={openChoiceField === topicFilterId}
               onOpenChange={(open) => setOpenChoiceField(open ? topicFilterId : null)}
-              onChange={(value) => updateFilter({ topic: value ? value.split(",") : null })}
+              onChange={(value) => updateFilter({ topic: value ? normalizeTopicChoices(value.split(",")) : null })}
             />
           </div>
           <div className="filter-group">
@@ -566,6 +551,7 @@ export default function SearchBar({
               value={filters.tone?.join(",") || ""}
               placeholder="All"
               options={toneChoiceOptions}
+              maxValueLength={80}
               allowClear
               clearLabel="All"
               searchable={toneChoiceOptions.length > 6}
@@ -584,6 +570,7 @@ export default function SearchBar({
               value={filters.relationship?.join(",") || ""}
               placeholder="All"
               options={relationshipChoiceOptions}
+              maxValueLength={80}
               allowClear
               clearLabel="All"
               searchable

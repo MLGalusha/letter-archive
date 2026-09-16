@@ -105,7 +105,7 @@ describe.skipIf(!enabled)('public archive search against PostgreSQL', () => {
   async function search(query: Record<string, string>) {
     const response = await invokeRouter(router, { method: 'GET', url: '/letters/search', query, timeoutMs: 15_000 });
     expect(response.statusCode).toBe(200);
-    return response.body as { total: number; letters: Array<{ id: string; searchPreview?: { matchedFieldLabel: string; matchCount: number; excerpt: string; highlightRanges: Array<{ start: number; end: number }> } }> };
+    return response.body as { total: number; facets: Record<string, Array<{ value: string; count: number }>> & { truncated: string[] }; letters: Array<{ id: string; searchPreview?: { matchedFieldLabel: string; matchCount: number; excerpt: string; highlightRanges: Array<{ start: number; end: number }> } }> };
   }
 
   it('restricts SQL eligibility to published permitted fields and grouped public roots', async () => {
@@ -306,6 +306,80 @@ describe.skipIf(!enabled)('public archive search against PostgreSQL', () => {
       expect(changed).toMatchObject({ letters: [], total: 6 });
     } finally {
       await client`DELETE FROM letters WHERE transcription_text = 'paginationneedle'`;
+    }
+  });
+
+  it('uses role-specific partial-name counts and independent OR facet dimensions', async () => {
+    const rows = [
+      { type_sequence: 1, sender: 'Ann', recipient: 'Molly', primary_topics: ['work/engineering', 'work/travel'], emotional_tone: 'hopeful', sender_recipient_relationship: 'friend' },
+      { type_sequence: 2, sender: 'Anna', recipient: 'Molly', primary_topics: ['family/home'], emotional_tone: 'hopeful', sender_recipient_relationship: 'sibling' },
+      { type_sequence: 3, sender: 'Chris', recipient: 'Molly', primary_topics: ['work/study'], emotional_tone: 'sad', sender_recipient_relationship: 'sibling' },
+      { type_sequence: 4, sender: 'Dana', recipient: 'Other', primary_topics: ['homework/test'], emotional_tone: 'hopeful', sender_recipient_relationship: 'friend' },
+    ];
+    for (const row of rows) await client`INSERT INTO letters ${client({ collection_id: collection, date_raw: '19200101', transcription_text: 'facetneedle', ...row })}`;
+    for (const type of ['C', 'P', 'E', 'V', 'A', 'D', 'N', 'T']) await client`INSERT INTO letters ${client({ collection_id: collection, date_raw: '19200101', type_sequence: 1, type, sender: 'Ann', primary_topics: ['work/engineering'] })}`;
+    try {
+      const initial = await search({ search: 'facetneedle' });
+      expect(initial.facets.senders).toContainEqual({ value: 'Ann', count: 2 });
+      expect(initial.facets.senders.some((facet) => facet.value === 'Molly')).toBe(false);
+      expect(initial.facets.recipients).toContainEqual({ value: 'Molly', count: 3 });
+      expect((await search({ search: 'facetneedle', sender: 'Ann' })).total).toBe(2);
+      expect((await search({ search: 'facetneedle', recipient: 'Molly' })).total).toBe(3);
+      expect(initial.facets.formats).toHaveLength(9);
+      expect(initial.facets.formats.find((facet) => facet.value === 'cover')?.count).toBe(1);
+      expect(initial.facets.topics).toContainEqual({ value: 'work', count: 2 });
+      expect((await search({ search: 'facetneedle', topic: 'work' })).total).toBe(2);
+      expect((await search({ search: 'facetneedle', topic: 'work,family' })).total).toBe(3);
+      const selected = await search({ search: 'facetneedle', topic: 'work', tone: 'hopeful' });
+      expect(selected.total).toBe(1);
+      expect(selected.facets.topics).toContainEqual({ value: 'family', count: 1 });
+      expect(selected.facets.tones).toContainEqual({ value: 'sad', count: 1 });
+      const relationship = await search({ search: 'facetneedle', topic: 'work', relationship: 'friend' });
+      expect(relationship.facets.relationships).toContainEqual({ value: 'sibling', count: 1 });
+      const format = await search({ search: 'facetneedle', format: 'cover' });
+      expect(format.total).toBe(1);
+      expect(format.facets.formats.find((facet) => facet.value === 'letter')?.count).toBe(4);
+    } finally {
+      await client`DELETE FROM letters WHERE date_raw = '19200101'`;
+    }
+  });
+
+  it('keeps literal partial-place counts and unique collection suggestions honest', async () => {
+    const other = '10000000-0000-0000-0000-000000000002';
+    await client`INSERT INTO collections VALUES (${other}, 'quartz-other', 'quartz')`;
+    for (const [index, place] of ['Paris', 'Paris, France', '100% Town', '100X Town'].entries()) {
+      await client`INSERT INTO letters ${client({ collection_id: index === 1 ? other : collection, date_raw: '19050101', type_sequence: index + 1, location_written: place, transcription_text: 'placefacetneedle' })}`;
+    }
+    try {
+      const initial = await search({ search: 'placefacetneedle' });
+      expect(initial.facets.places).toContainEqual({ value: 'Paris', count: 2 });
+      expect((await search({ search: 'placefacetneedle', place: 'Paris' })).total).toBe(2);
+      expect(initial.facets.places).toContainEqual({ value: '100% Town', count: 1 });
+      expect((await search({ search: 'placefacetneedle', place: '100% Town' })).total).toBe(1);
+      expect(initial.facets.collections).toContainEqual({ value: 'quartz', label: 'quartz', count: 3 });
+      expect((await search({ search: 'placefacetneedle', collection: 'quartz' })).total).toBe(3);
+      expect((await search({ search: 'placefacetneedle', collection: 'quartz-other' })).total).toBe(1);
+      // Unknown complete codes remain free text, including shared title/code fragments.
+      expect((await search({ search: 'placefacetneedle', collection: 'quar' })).total).toBe(4);
+    } finally {
+      await client`DELETE FROM letters WHERE date_raw = '19050101'`;
+      await client`DELETE FROM collections WHERE id = ${other}`;
+    }
+  });
+
+  it('reports truncated suggestions while omitted literal categories remain filterable', async () => {
+    const topics = [...Array.from({ length: 53 }, (_, index) => `category${String(index).padStart(2, '0')}/detail`), 'literal%/detail'];
+    await client`INSERT INTO letters ${client({ collection_id: collection, date_raw: '19100101', transcription_text: 'boundedneedle', primary_topics: topics })}`;
+    try {
+      const result = await search({ search: 'boundedneedle' });
+      expect(result.facets.topics).toHaveLength(50);
+      expect(result.facets.truncated).toContain('topics');
+      expect((await search({ search: 'boundedneedle', topic: 'category52' })).total).toBe(1);
+      expect((await search({ search: 'boundedneedle', topic: 'category5' })).total).toBe(0);
+      expect((await search({ search: 'boundedneedle', topic: 'literal%' })).total).toBe(1);
+      expect((await search({ search: 'boundedneedle', topic: 'literal_' })).total).toBe(0);
+    } finally {
+      await client`DELETE FROM letters WHERE date_raw = '19100101'`;
     }
   });
 

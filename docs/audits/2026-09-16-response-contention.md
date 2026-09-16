@@ -60,6 +60,8 @@ Raw evidence: [default worker pool](evidence/2026-09-16-response-contention.json
 
 ## Recommended follow-up
 
+Implementation and production verification are tracked in [#96](https://github.com/MLGalusha/letter-archive/issues/96).
+
 First implement a small, bounded image-transform scheduler in the existing API process, with a finite pending queue and clear overload/cancellation behavior. Compare a conservative active limit below the worker-pool size against the current behavior in a controlled staging workload. This experiment supports trying two active transforms; it does not establish that two is optimal for the production one-CPU instance. Preserve authorization and publication validation before any shared result is served.
 
 Acceptance should include mixed image/search p50/p95, image completion time, queue wait, process memory and CPU, and identical search/image output. Record query completion and response finish under the same request ID. Verify errors, client disconnects, and queue saturation release capacity; do not introduce an unbounded queue. Queueing images can delay image completion, so faster search alone is insufficient to accept the change. No new service, paid minimum instance, or permanent thread-count change is needed to test this mitigation.

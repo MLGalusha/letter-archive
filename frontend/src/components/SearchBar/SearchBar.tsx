@@ -267,10 +267,10 @@ export default function SearchBar({
     () => hideCollectionFilter ? null : getBestSuggestion(
       filters.collection,
       facets.collections.map((facet) => ({
-        value: facet.label,
+        value: facet.value,
         display: facet.label === facet.value ? facet.label : `${facet.label} (${facet.value})`,
         count: facet.count,
-        aliases: [facet.value],
+        aliases: [facet.label],
       })),
     ),
     [facets.collections, filters.collection, hideCollectionFilter],
@@ -514,7 +514,7 @@ export default function SearchBar({
 
       <div className="filter-section">
         <span className="filter-section-label">Content &amp; Status</span>
-        <p className="filter-suggestion-hint">Selections within one filter match any chosen option. Different filters narrow results together. Counts show each option with the other filters applied.</p>
+        <p className="filter-suggestion-hint">Selections within one filter match any chosen option. Different filters narrow results together. Format, topic, tone, and relationship counts apply the other filters, excluding selections in that same field. Name, collection, and location suggestions count matches within the current results.</p>
         {Boolean(facets.truncated?.length) && <p className="filter-suggestion-hint">Some suggestions are omitted. Type a name, collection, location, or topic category to filter beyond the suggestions.</p>}
         <div className="filter-section-row">
           <div className="filter-group">

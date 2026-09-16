@@ -987,14 +987,17 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
         GROUP BY person_name ORDER BY COUNT(*) DESC, person_name ASC LIMIT 9
       ) candidate
       UNION ALL
-      SELECT 'places' AS facet, value, NULL AS label, count FROM (
-        SELECT value, COUNT(*)::int AS count FROM (
-          SELECT DISTINCT sg."collectionId", sg."dateRaw", sg."typeSequence", place_name AS value
-          FROM scoped_groups sg
-          CROSS JOIN LATERAL UNNEST(COALESCE(sg.places, ARRAY[]::text[])) AS place_name
-          WHERE place_name IS NOT NULL AND place_name <> ''
-        ) gpl GROUP BY value ORDER BY count DESC, value ASC LIMIT 9
-      ) pl
+      SELECT 'places' AS facet, candidate.value, NULL AS label, (
+        SELECT COUNT(*)::int FROM scoped_groups matched
+        WHERE EXISTS (SELECT 1 FROM UNNEST(matched.places) place_name
+          WHERE STRPOS(LOWER(place_name), LOWER(candidate.value)) > 0)
+      ) AS count
+      FROM (
+        SELECT place_name AS value FROM scoped_groups
+        CROSS JOIN LATERAL UNNEST(places) place_name
+        WHERE place_name IS NOT NULL AND place_name <> ''
+        GROUP BY place_name ORDER BY COUNT(*) DESC, place_name ASC LIMIT 9
+      ) candidate
       UNION ALL
       SELECT 'years' AS facet, value::text, NULL AS label, count FROM (
         SELECT SUBSTRING("dateRaw", 1, 4)::int AS value, COUNT(*)::int AS count
@@ -1088,10 +1091,13 @@ async function resolveArchiveCollectionIds(collectionQuery?: string) {
       ilike(collections.collectionCode, `%${escapedCollection}%`),
       ilike(collections.title, `%${escapedCollection}%`),
     ),
-    columns: { id: true },
+    columns: { id: true, collectionCode: true },
   });
 
-  return matchingCollections.map((collection) => collection.id);
+  // A complete unique code identifies one collection; other text keeps the
+  // existing partial code/title lookup used by the free-entry field.
+  const exactCode = matchingCollections.find((collection) => collection.collectionCode === collectionQuery);
+  return exactCode ? [exactCode.id] : matchingCollections.map((collection) => collection.id);
 }
 
 function emptyArchiveSearchResponse(page: number, limit: number) {
@@ -1215,11 +1221,10 @@ function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string
     )`);
   }
   if (query.place) {
-    const placeNeedle = `%${query.place}%`;
     baseScopedFilters.push(sql`EXISTS (
       SELECT 1
       FROM UNNEST(COALESCE(gf.places, ARRAY[]::text[])) AS place_name
-      WHERE place_name ILIKE ${placeNeedle}
+      WHERE STRPOS(LOWER(place_name), LOWER(${query.place})) > 0
     )`);
   }
   const topicFilters = [sql`TRUE`];

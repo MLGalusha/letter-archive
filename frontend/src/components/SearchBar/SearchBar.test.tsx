@@ -577,6 +577,16 @@ describe("SearchBar", () => {
     expect(onFiltersChange).toHaveBeenLastCalledWith({ sender: 'Ann', format: ['letter'] });
   });
 
+  it('applies a collection suggestion code while displaying its title', async () => {
+    const user = userEvent.setup();
+    const onFiltersChange = vi.fn();
+    render(<SearchBar query="" filters={{ collection: 'Collection N' }} facets={baseFacets} total={12} loading={false} refineOpen onQueryChange={vi.fn()} onFiltersChange={onFiltersChange} />);
+    expect(screen.getByText('Collection Nine (009)')).toBeInTheDocument();
+    await user.click(screen.getByRole('textbox', { name: 'Collection' }));
+    await user.keyboard('{Enter}');
+    expect(onFiltersChange).toHaveBeenLastCalledWith({ collection: '009' });
+  });
+
   it('uses the selected correspondent role and leaves omitted format counts unknown', () => {
     const facets = { ...baseFacets, correspondents: [{ value: 'Molly', count: 8 }], senders: [{ value: 'Ann', count: 2 }], recipients: [{ value: 'Molly', count: 3 }] };
     const view = (filters: SearchFilters) => <SearchBar query="" filters={filters} facets={facets} total={12} loading={false} refineOpen onQueryChange={vi.fn()} onFiltersChange={vi.fn()} />;

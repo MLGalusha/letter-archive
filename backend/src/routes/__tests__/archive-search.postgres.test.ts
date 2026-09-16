@@ -344,6 +344,29 @@ describe.skipIf(!enabled)('public archive search against PostgreSQL', () => {
     }
   });
 
+  it('keeps literal partial-place counts and unique collection suggestions honest', async () => {
+    const other = '10000000-0000-0000-0000-000000000002';
+    await client`INSERT INTO collections VALUES (${other}, 'quartz-other', 'quartz')`;
+    for (const [index, place] of ['Paris', 'Paris, France', '100% Town', '100X Town'].entries()) {
+      await client`INSERT INTO letters ${client({ collection_id: index === 1 ? other : collection, date_raw: '19050101', type_sequence: index + 1, location_written: place, transcription_text: 'placefacetneedle' })}`;
+    }
+    try {
+      const initial = await search({ search: 'placefacetneedle' });
+      expect(initial.facets.places).toContainEqual({ value: 'Paris', count: 2 });
+      expect((await search({ search: 'placefacetneedle', place: 'Paris' })).total).toBe(2);
+      expect(initial.facets.places).toContainEqual({ value: '100% Town', count: 1 });
+      expect((await search({ search: 'placefacetneedle', place: '100% Town' })).total).toBe(1);
+      expect(initial.facets.collections).toContainEqual({ value: 'quartz', label: 'quartz', count: 3 });
+      expect((await search({ search: 'placefacetneedle', collection: 'quartz' })).total).toBe(3);
+      expect((await search({ search: 'placefacetneedle', collection: 'quartz-other' })).total).toBe(1);
+      // Unknown complete codes remain free text, including shared title/code fragments.
+      expect((await search({ search: 'placefacetneedle', collection: 'quar' })).total).toBe(4);
+    } finally {
+      await client`DELETE FROM letters WHERE date_raw = '19050101'`;
+      await client`DELETE FROM collections WHERE id = ${other}`;
+    }
+  });
+
   it('reports truncated suggestions while omitted literal categories remain filterable', async () => {
     const topics = [...Array.from({ length: 53 }, (_, index) => `category${String(index).padStart(2, '0')}/detail`), 'literal%/detail'];
     await client`INSERT INTO letters ${client({ collection_id: collection, date_raw: '19100101', transcription_text: 'boundedneedle', primary_topics: topics })}`;

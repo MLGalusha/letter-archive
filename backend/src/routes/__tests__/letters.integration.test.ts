@@ -956,7 +956,6 @@ describe('letters route integration', () => {
       },
     ])
       .mockResolvedValueOnce([
-        { facet: 'total', value: null, label: null, count: 1 },
         { facet: 'formats', value: 'letter', label: null, count: 1 },
         { facet: 'collections', value: '009', label: 'Collection Nine', count: 1 },
         { facet: 'correspondents', value: 'Jimmie', label: null, count: 1 },
@@ -1210,7 +1209,6 @@ describe('letters route integration', () => {
         },
       ])
       .mockResolvedValueOnce([
-        { facet: 'total', value: null, label: null, count: 1 },
         { facet: 'formats', value: 'letter', label: null, count: 1 },
         { facet: 'collections', value: '009', label: 'Collection Nine', count: 1 },
       ]);
@@ -1267,7 +1265,6 @@ describe('letters route integration', () => {
         },
       ])
       .mockResolvedValueOnce([
-        { facet: 'total', value: null, label: null, count: 1 },
         { facet: 'formats', value: 'letter', label: null, count: 1 },
         { facet: 'collections', value: '009', label: 'Collection Nine', count: 1 },
         { facet: 'correspondents', value: 'Jimmie', label: null, count: 1 },
@@ -1344,14 +1341,17 @@ describe('letters route integration', () => {
   });
 
   it('retains aggregate totals when an offset page has no rows', async () => {
-    executeMock.mockResolvedValueOnce([]).mockResolvedValueOnce([
-      { facet: 'total', value: null, label: null, count: 94 },
-    ]);
+    executeMock.mockResolvedValueOnce([{ id: null, totalCount: 94 }]).mockResolvedValueOnce([]);
     const response = await invokeRouter(lettersRouter, {
       method: 'GET', url: '/letters/search', query: { page: '5', limit: '24' },
     });
     expect(response.statusCode).toBe(200);
     expect(response.body).toMatchObject({ letters: [], total: 94, page: 5, limit: 24 });
+    expect(executeMock).toHaveBeenCalledTimes(2);
+    const rowStatement = JSON.stringify(executeMock.mock.calls[0]?.[0]);
+    expect(rowStatement).toContain('SELECT COUNT(*)::int AS');
+    expect(rowStatement).toContain('LEFT JOIN paged_groups sg ON TRUE');
+    expect(rowStatement).toContain('totals.');
   });
 
 });

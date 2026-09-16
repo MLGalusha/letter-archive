@@ -295,6 +295,8 @@ describe.skipIf(!enabled)('public archive search against PostgreSQL', () => {
           expect(new Set(seen).size).toBe(7);
         }
       }
+      const literalEmptyPage = await search({ search: 'pa', year: '1930', page: '99' });
+      expect(literalEmptyPage).toMatchObject({ letters: [], total: 7 });
       const empty = await search({ search: 'unfindablezzzz', page: '99' });
       expect(empty).toMatchObject({ letters: [], total: 0 });
       // Later requests see publication changes, not a cached historical total.

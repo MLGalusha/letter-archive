@@ -871,7 +871,14 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
           sg."typeSequence",
           letter_pages.page_number ASC
       )
+      , paged_groups AS (
+        SELECT * FROM scoped_groups sg
+        ORDER BY ${orderBy}
+        LIMIT ${query.limit}
+        OFFSET ${offset}
+      )
       SELECT
+        totals."totalCount",
         sg.id,
         sg."collectionId",
         sg."collectionCode",
@@ -901,20 +908,21 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
         sg."extraContentTranscripts",
         sg."transcriptionTexts",
         lower(${query.search || ''}) AS "normalizedSearch",
-        CASE WHEN ${Boolean(query.search)} THEN (
+        CASE WHEN sg.id IS NOT NULL AND ${Boolean(query.search)} THEN (
           SELECT jsonb_object_agg(value, lower(value))
           FROM unnest(COALESCE(sg."transcriptionTexts", ARRAY[]::text[])
             || COALESCE(sg."extraContentTranscripts", ARRAY[]::text[])
             || COALESCE(sg.senders, ARRAY[]::text[]) || COALESCE(sg.recipients, ARRAY[]::text[])
             || COALESCE(sg.places, ARRAY[]::text[]) || ARRAY[sg."dateRaw"]) AS value
         ) ELSE NULL END AS "searchCaseMap",
-        CASE WHEN ${fuzzyTerms.length > 0} THEN (
+        CASE WHEN sg.id IS NOT NULL AND ${fuzzyTerms.length > 0} THEN (
           SELECT jsonb_object_agg(value, regexp_split_to_array(lower(${archiveSearchSourceSql(sql`value`)}), '[^[:alnum:]]+'))
           FROM unnest(COALESCE(sg.senders, ARRAY[]::text[]) || COALESCE(sg.recipients, ARRAY[]::text[])
             || COALESCE(sg.places, ARRAY[]::text[])
             || ARRAY[${sql.join(fuzzyTerms.map((term) => sql`${term}`), sql`, `)}]::text[]) AS value
         ) ELSE NULL END AS "searchWordMap"
-      FROM scoped_groups sg
+      FROM (SELECT COUNT(*)::int AS "totalCount" FROM scoped_groups) totals
+      LEFT JOIN paged_groups sg ON TRUE
       LEFT JOIN primary_page_counts ppc
         ON ppc."collectionId" = sg."collectionId"
         AND ppc."dateRaw" = sg."dateRaw"
@@ -924,15 +932,10 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
         AND dp."dateRaw" = sg."dateRaw"
         AND dp."typeSequence" = sg."typeSequence"
       ORDER BY ${orderBy}
-      LIMIT ${query.limit}
-      OFFSET ${offset}
     `),
     // Combined facets query — evaluates the CTE once for all 8 facets
     db.execute(sql`
       ${ctes}
-      SELECT 'total' AS facet, NULL::text AS value, NULL::text AS label, COUNT(*)::int AS count
-      FROM scoped_groups
-      UNION ALL
       SELECT 'formats' AS facet, value, label, count FROM (
         SELECT format AS value, NULL AS label, COUNT(*)::int AS count
         FROM (
@@ -1006,13 +1009,16 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
     `),
   ]);
 
-  const rows = getRows<ArchiveSearchRow>(rowsResult);
+  // The singleton aggregate preserves the row statement's snapshot even on an
+  // empty page. Its LEFT JOIN placeholder is not an archive result.
+  type CountedArchiveRow = ArchiveSearchRow & { totalCount: number | string | bigint };
+  const countedRows = getRows<CountedArchiveRow | { id: null; totalCount: number | string | bigint }>(rowsResult);
+  const total = Number(countedRows[0]?.totalCount ?? 0);
+  const rows = countedRows.filter((row): row is CountedArchiveRow => row.id !== null);
 
   // Split combined facets result by facet type
   type FacetRow = { facet: string; value: string | number | null; label: string | null; count: number | string | bigint };
   const allFacets = getRows<FacetRow>(facetsResult);
-  // The aggregate exists even when LIMIT/OFFSET returns no result rows.
-  const total = Number(allFacets.find((row) => row.facet === 'total')?.count ?? 0);
   const facetsByType = new Map<string, FacetRow[]>();
   for (const row of allFacets) {
     const list = facetsByType.get(row.facet) || [];

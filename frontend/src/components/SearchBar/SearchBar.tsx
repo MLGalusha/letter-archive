@@ -7,15 +7,14 @@ import {
   ARCHIVE_FORMAT_LABELS,
   ARCHIVE_FORMAT_ORDER,
   COMBINED_SORT_OPTIONS,
-  formatFacetLabel,
   getBestSuggestion,
 } from "./searchBarUtils";
 import type { FilterChoiceOption } from "./searchBarUtils";
+import { buildFacetChoiceOptions } from "./searchBarUtils";
 import FilterChoiceField from "./FilterChoiceField";
 import FacetRow from "./FacetRow";
 import SuggestionHint from "./SuggestionHint";
 import YearRangeFields from "./YearRangeFields";
-import { useRememberedSearchFacets } from "./rememberedSearchFacets";
 
 interface SearchBarProps {
   query: string;
@@ -254,24 +253,8 @@ export default function SearchBar({
     return () => document.removeEventListener("mousedown", close);
   }, [setSortDropdownOpen, sortDropdownOpen]);
 
-  const rememberedFacets = useRememberedSearchFacets(facets);
-
-  const toneChoiceOptions = useMemo<FilterChoiceOption[]>(() => {
-    return Array.from(rememberedFacets.tones)
-      .map((value) => ({
-        value,
-        label: formatFacetLabel(value),
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-  }, [rememberedFacets.tones]);
-  const relationshipChoiceOptions = useMemo<FilterChoiceOption[]>(() => {
-    return Array.from(rememberedFacets.relationships)
-      .map((value) => ({
-        value,
-        label: formatFacetLabel(value),
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-  }, [rememberedFacets.relationships]);
+  const toneChoiceOptions = useMemo(() => buildFacetChoiceOptions(facets.tones, filters.tone), [facets.tones, filters.tone]);
+  const relationshipChoiceOptions = useMemo(() => buildFacetChoiceOptions(facets.relationships, filters.relationship), [facets.relationships, filters.relationship]);
   const verificationChoiceOptions = useMemo<FilterChoiceOption[]>(
     () => [
       { value: "all", label: "All" },
@@ -303,24 +286,24 @@ export default function SearchBar({
   const senderSuggestion = useMemo(
     () => getBestSuggestion(
       filters.sender,
-      facets.correspondents.map((facet) => ({
+      (facets.senders || []).map((facet) => ({
         value: facet.value,
         display: facet.value,
         count: facet.count,
       })),
     ),
-    [facets.correspondents, filters.sender],
+    [facets.senders, filters.sender],
   );
   const recipientSuggestion = useMemo(
     () => getBestSuggestion(
       filters.recipient,
-      facets.correspondents.map((facet) => ({
+      (facets.recipients || []).map((facet) => ({
         value: facet.value,
         display: facet.value,
         count: facet.count,
       })),
     ),
-    [facets.correspondents, filters.recipient],
+    [facets.recipients, filters.recipient],
   );
   const placeSuggestion = useMemo(
     () => getBestSuggestion(
@@ -333,14 +316,7 @@ export default function SearchBar({
     ),
     [facets.places, filters.place],
   );
-  const topicChoiceOptions = useMemo(() => {
-    return Array.from(rememberedFacets.topics)
-      .map((category) => ({
-        value: category,
-        label: formatFacetLabel(category),
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-  }, [rememberedFacets.topics]);
+  const topicChoiceOptions = useMemo(() => buildFacetChoiceOptions(facets.topics, filters.topic), [facets.topics, filters.topic]);
 
   const toggleFormatFilter = useCallback((format: LetterImageType) => {
     const nextFormats = selectedFormats?.includes(format)
@@ -376,7 +352,7 @@ export default function SearchBar({
     return ARCHIVE_FORMAT_ORDER.map((format) => ({
       key: format,
       label: ARCHIVE_FORMAT_LABELS[format],
-      count: formatCounts.get(format) || 0,
+      count: formatCounts.get(format),
       active: selectedFormats?.includes(format) || false,
       onClick: () => toggleFormatFilter(format),
     }));
@@ -538,6 +514,8 @@ export default function SearchBar({
 
       <div className="filter-section">
         <span className="filter-section-label">Content &amp; Status</span>
+        <p className="filter-suggestion-hint">Selections within one filter match any chosen option. Different filters narrow results together. Counts show each option with the other filters applied.</p>
+        {Boolean(facets.truncated?.length) && <p className="filter-suggestion-hint">Some suggestions are omitted. Type a name, collection, location, or topic category to filter beyond the suggestions.</p>}
         <div className="filter-section-row">
           <div className="filter-group">
             <label className="filter-label" htmlFor={topicFilterId}>Topic</label>
@@ -549,7 +527,8 @@ export default function SearchBar({
               options={topicChoiceOptions}
               allowClear
               clearLabel="All"
-              searchable={topicChoiceOptions.length > 6}
+              searchable
+              allowCustom
               multiple
               maxSelections={2}
               compact
@@ -566,6 +545,7 @@ export default function SearchBar({
               value={filters.tone?.join(",") || ""}
               placeholder="All"
               options={toneChoiceOptions}
+              maxValueLength={80}
               allowClear
               clearLabel="All"
               searchable={toneChoiceOptions.length > 6}
@@ -584,6 +564,7 @@ export default function SearchBar({
               value={filters.relationship?.join(",") || ""}
               placeholder="All"
               options={relationshipChoiceOptions}
+              maxValueLength={80}
               allowClear
               clearLabel="All"
               searchable

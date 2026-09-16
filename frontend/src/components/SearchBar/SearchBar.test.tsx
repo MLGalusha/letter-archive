@@ -30,7 +30,7 @@ describe("SearchBar", () => {
     correspondents: [{ value: "Jimmie", count: 23 }],
     places: [{ value: "Overland Park, Kans.", count: 4 }],
     years: [{ value: 1947, count: 27 }],
-    topics: [{ value: "family/marriage", count: 9 }],
+    topics: [{ value: "family", count: 9 }],
     tones: [{ value: "hopeful", count: 5 }],
     relationships: [{ value: "romantic-partner", count: 7 }],
   };
@@ -437,71 +437,21 @@ describe("SearchBar", () => {
     expect(handleFiltersChange).not.toHaveBeenCalled();
   });
 
-  it("retains committed facet choices while later search responses narrow and expand", async () => {
+  it("uses current facet choices plus selected values rather than session history", async () => {
     const user = userEvent.setup();
-    const narrowedFacets: ArchiveSearchFacets = {
-      ...baseFacets,
-      years: [],
-      topics: [],
-      tones: [],
-      relationships: [],
-    };
-    const expandedFacets: ArchiveSearchFacets = {
-      ...narrowedFacets,
-      years: [{ value: 2000, count: 1 }],
-      topics: [{ value: "work/career", count: 1 }],
-      tones: [{ value: "joyful", count: 1 }],
-      relationships: [{ value: "sibling", count: 1 }],
-    };
-    const renderSearchBar = (facets: ArchiveSearchFacets) => (
-      <SearchBar
-        query=""
-        filters={{}}
-        facets={facets}
-        total={12}
-        loading={false}
-        refineOpen
-        onQueryChange={vi.fn()}
-        onFiltersChange={vi.fn()}
-      />
-    );
-    const { rerender } = render(renderSearchBar(baseFacets));
-
-    async function expectChoice(label: string, option: string) {
-      const trigger = screen.getByRole("button", { name: label });
-      if (trigger.getAttribute("aria-expanded") !== "true") {
-        await user.click(trigger);
-      }
-      expect(
-        within(screen.getByRole("group", { name: label }))
-          .getByRole("button", { name: option }),
-      ).toBeInTheDocument();
-    }
-
-    await expectChoice("Tone", "Hopeful");
-    await expectChoice("Relationship", "Romantic Partner");
-    await expectChoice("Topic", "Family");
-
-    rerender(renderSearchBar(narrowedFacets));
-
-    await expectChoice("Tone", "Hopeful");
-    await expectChoice("Relationship", "Romantic Partner");
-    await expectChoice("Topic", "Family");
-
-    rerender(renderSearchBar(expandedFacets));
-
-    await expectChoice("Tone", "Joyful");
-    await expectChoice("Relationship", "Sibling");
-    await expectChoice("Topic", "Work");
-
-    rerender(renderSearchBar(narrowedFacets));
-
-    await expectChoice("Tone", "Hopeful");
-    await expectChoice("Tone", "Joyful");
-    await expectChoice("Relationship", "Romantic Partner");
-    await expectChoice("Relationship", "Sibling");
-    await expectChoice("Topic", "Family");
-    await expectChoice("Topic", "Work");
+    const onFiltersChange = vi.fn();
+    const view = (facets: ArchiveSearchFacets) => <SearchBar query="" filters={{ topic: ['family'] }} facets={facets} total={12} loading={false} refineOpen onQueryChange={vi.fn()} onFiltersChange={onFiltersChange} />;
+    const { rerender } = render(view(baseFacets));
+    await user.click(screen.getByRole('button', { name: 'Topic' }));
+    expect(screen.getByRole('button', { name: /^Family/ })).toBeInTheDocument();
+    rerender(view({ ...baseFacets, topics: [{ value: 'work', count: 2 }], tones: [] }));
+    expect(screen.getByRole('button', { name: /^Family/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Work/ })).toBeInTheDocument();
+    rerender(view({ ...baseFacets, topics: [], tones: [] }));
+    expect(screen.getByRole('button', { name: /^Family/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Work/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Tone' }));
+    expect(screen.queryByRole('button', { name: /^Hopeful/ })).not.toBeInTheDocument();
   });
 
   it("does not remember facet choices from an abandoned render", async () => {
@@ -518,7 +468,7 @@ describe("SearchBar", () => {
     const transientFacets: ArchiveSearchFacets = {
       ...narrowedFacets,
       years: [{ value: 2000, count: 1 }],
-      topics: [{ value: "work/career", count: 1 }],
+      topics: [{ value: "work", count: 1 }],
     };
 
     function SuspendAfterSearchBar({ active }: { active: boolean }) {
@@ -590,7 +540,7 @@ describe("SearchBar", () => {
 
     await user.click(screen.getByRole("button", { name: "Topic" }));
     const topicChoices = within(screen.getByRole("group", { name: "Topic" }));
-    expect(topicChoices.getByRole("button", { name: "Family" })).toBeInTheDocument();
+    expect(topicChoices.queryByRole("button", { name: /^Family/ })).not.toBeInTheDocument();
     expect(topicChoices.queryByRole("button", { name: "Work" })).not.toBeInTheDocument();
 
     expect(screen.getByRole("textbox", { name: "From year" })).toBeInTheDocument();
@@ -615,6 +565,27 @@ describe("SearchBar", () => {
     await user.keyboard('{Escape}');
     expect(trigger).toHaveFocus();
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('preserves the latest other filters when a format count has not changed', async () => {
+    const user = userEvent.setup();
+    const onFiltersChange = vi.fn();
+    const view = (filters: SearchFilters) => <SearchBar query="" filters={filters} facets={baseFacets} total={12} loading={false} refineOpen onQueryChange={vi.fn()} onFiltersChange={onFiltersChange} />;
+    const { rerender } = render(view({}));
+    rerender(view({ sender: 'Ann' }));
+    await user.click(screen.getByRole('button', { name: /Letters/ }));
+    expect(onFiltersChange).toHaveBeenLastCalledWith({ sender: 'Ann', format: ['letter'] });
+  });
+
+  it('uses the selected correspondent role and leaves omitted format counts unknown', () => {
+    const facets = { ...baseFacets, correspondents: [{ value: 'Molly', count: 8 }], senders: [{ value: 'Ann', count: 2 }], recipients: [{ value: 'Molly', count: 3 }] };
+    const view = (filters: SearchFilters) => <SearchBar query="" filters={filters} facets={facets} total={12} loading={false} refineOpen onQueryChange={vi.fn()} onFiltersChange={vi.fn()} />;
+    const { container, rerender } = render(view({ sender: 'Mol' }));
+    expect(container.querySelector('.filter-suggestion-hint strong')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Photos' }).querySelector('.search-facet-count')).toBeNull();
+    rerender(view({ recipient: 'Mol' }));
+    expect(container.querySelector('.filter-suggestion-hint strong')).toHaveTextContent('Molly');
+    expect(container.querySelector('.filter-suggestion-hint strong')?.parentElement).toHaveTextContent('3 items');
   });
 
 });

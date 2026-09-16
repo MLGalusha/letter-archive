@@ -942,7 +942,7 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
           SELECT DISTINCT bsg."collectionId", bsg."dateRaw", bsg."typeSequence", UNNEST(bsg.formats) AS format
           FROM base_scoped_groups bsg
         ) gf
-        GROUP BY format ORDER BY count DESC, format ASC LIMIT 6
+        GROUP BY format ORDER BY count DESC, format ASC
       ) f
       UNION ALL
       SELECT 'collections' AS facet, value, label, count FROM (
@@ -951,7 +951,7 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
           COUNT(*)::int AS count
         FROM scoped_groups sg
         GROUP BY sg."collectionCode", sg."collectionTitle"
-        ORDER BY count DESC, sg."collectionCode" ASC LIMIT 8
+        ORDER BY count DESC, sg."collectionCode" ASC LIMIT 9
       ) c
       UNION ALL
       SELECT 'correspondents' AS facet, value, NULL AS label, count FROM (
@@ -960,8 +960,32 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
           FROM scoped_groups sg
           CROSS JOIN LATERAL UNNEST(COALESCE(sg.senders, ARRAY[]::text[]) || COALESCE(sg.recipients, ARRAY[]::text[])) AS person_name
           WHERE person_name IS NOT NULL AND person_name <> ''
-        ) gp GROUP BY value ORDER BY count DESC, value ASC LIMIT 8
+        ) gp GROUP BY value ORDER BY count DESC, value ASC LIMIT 9
       ) p
+      UNION ALL
+      SELECT 'senders' AS facet, candidate.value, NULL AS label, (
+        SELECT COUNT(*)::int FROM scoped_groups matched
+        WHERE EXISTS (SELECT 1 FROM UNNEST(matched.senders) person_name
+          WHERE STRPOS(LOWER(person_name), LOWER(candidate.value)) > 0)
+      ) AS count
+      FROM (
+        SELECT person_name AS value FROM scoped_groups
+        CROSS JOIN LATERAL UNNEST(senders) person_name
+        WHERE person_name IS NOT NULL AND person_name <> ''
+        GROUP BY person_name ORDER BY COUNT(*) DESC, person_name ASC LIMIT 9
+      ) candidate
+      UNION ALL
+      SELECT 'recipients' AS facet, candidate.value, NULL AS label, (
+        SELECT COUNT(*)::int FROM scoped_groups matched
+        WHERE EXISTS (SELECT 1 FROM UNNEST(matched.recipients) person_name
+          WHERE STRPOS(LOWER(person_name), LOWER(candidate.value)) > 0)
+      ) AS count
+      FROM (
+        SELECT person_name AS value FROM scoped_groups
+        CROSS JOIN LATERAL UNNEST(recipients) person_name
+        WHERE person_name IS NOT NULL AND person_name <> ''
+        GROUP BY person_name ORDER BY COUNT(*) DESC, person_name ASC LIMIT 9
+      ) candidate
       UNION ALL
       SELECT 'places' AS facet, value, NULL AS label, count FROM (
         SELECT value, COUNT(*)::int AS count FROM (
@@ -969,7 +993,7 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
           FROM scoped_groups sg
           CROSS JOIN LATERAL UNNEST(COALESCE(sg.places, ARRAY[]::text[])) AS place_name
           WHERE place_name IS NOT NULL AND place_name <> ''
-        ) gpl GROUP BY value ORDER BY count DESC, value ASC LIMIT 8
+        ) gpl GROUP BY value ORDER BY count DESC, value ASC LIMIT 9
       ) pl
       UNION ALL
       SELECT 'years' AS facet, value::text, NULL AS label, count FROM (
@@ -977,34 +1001,34 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
         FROM scoped_groups
         WHERE SUBSTRING("dateRaw", 1, 4) ~ '^[0-9]{4}$'
         GROUP BY SUBSTRING("dateRaw", 1, 4)
-        ORDER BY SUBSTRING("dateRaw", 1, 4) DESC LIMIT 8
+        ORDER BY SUBSTRING("dateRaw", 1, 4) DESC LIMIT 9
       ) y
       UNION ALL
       SELECT 'topics' AS facet, value, NULL AS label, count FROM (
         SELECT value, COUNT(*)::int AS count FROM (
-          SELECT DISTINCT sg."collectionId", sg."dateRaw", sg."typeSequence", topic_name AS value
-          FROM scoped_groups sg
+          SELECT DISTINCT sg."collectionId", sg."dateRaw", sg."typeSequence", LOWER(BTRIM(SPLIT_PART(topic_name, '/', 1))) AS value
+          FROM topic_facet_groups sg
           CROSS JOIN LATERAL UNNEST(COALESCE(sg.topics, ARRAY[]::text[])) AS topic_name
           WHERE topic_name IS NOT NULL AND topic_name <> ''
-        ) gt GROUP BY value ORDER BY count DESC, value ASC LIMIT 10
+        ) gt GROUP BY value ORDER BY count DESC, value ASC LIMIT 51
       ) t
       UNION ALL
       SELECT 'tones' AS facet, value, NULL AS label, count FROM (
         SELECT value, COUNT(*)::int AS count FROM (
           SELECT DISTINCT sg."collectionId", sg."dateRaw", sg."typeSequence", tone_name AS value
-          FROM scoped_groups sg
+          FROM tone_facet_groups sg
           CROSS JOIN LATERAL UNNEST(COALESCE(sg.tones, ARRAY[]::text[])) AS tone_name
           WHERE tone_name IS NOT NULL AND tone_name <> ''
-        ) gtn GROUP BY value ORDER BY count DESC, value ASC LIMIT 8
+        ) gtn GROUP BY value ORDER BY count DESC, value ASC
       ) tn
       UNION ALL
       SELECT 'relationships' AS facet, value, NULL AS label, count FROM (
         SELECT value, COUNT(*)::int AS count FROM (
           SELECT DISTINCT sg."collectionId", sg."dateRaw", sg."typeSequence", relationship_name AS value
-          FROM scoped_groups sg
+          FROM relationship_facet_groups sg
           CROSS JOIN LATERAL UNNEST(COALESCE(sg.relationships, ARRAY[]::text[])) AS relationship_name
           WHERE relationship_name IS NOT NULL AND relationship_name <> ''
-        ) gr GROUP BY value ORDER BY count DESC, value ASC LIMIT 8
+        ) gr GROUP BY value ORDER BY count DESC, value ASC
       ) r
     `),
   ]);
@@ -1026,13 +1050,24 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
     facetsByType.set(row.facet, list);
   }
 
+  const facetLimits: Record<string, number> = { collections: 8, correspondents: 8, senders: 8, recipients: 8, places: 8, years: 8, topics: 50 };
+  const truncated = Object.entries(facetLimits)
+    .filter(([facet, limit]) => (facetsByType.get(facet)?.length ?? 0) > limit)
+    .map(([facet]) => facet);
+  for (const [facet, limit] of Object.entries(facetLimits)) {
+    facetsByType.set(facet, (facetsByType.get(facet) || []).slice(0, limit));
+  }
+
   return {
     letters: rows.map((row) => transformArchiveSearchRow(row, query)),
     page: query.page,
     limit: query.limit,
     total,
     facets: {
-      formats: mapArchiveFormatFacets(facetsByType.get('formats') || []),
+      formats: completeArchiveFormatFacets(facetsByType.get('formats') || []),
+      senders: mapArchiveTextFacets(facetsByType.get('senders') || []),
+      recipients: mapArchiveTextFacets(facetsByType.get('recipients') || []),
+      truncated,
       collections: mapArchiveCollectionFacets((facetsByType.get('collections') || []) as unknown as ArchiveLabeledFacetRow[]),
       correspondents: mapArchiveTextFacets(facetsByType.get('correspondents') || []),
       places: mapArchiveTextFacets(facetsByType.get('places') || []),
@@ -1066,7 +1101,10 @@ function emptyArchiveSearchResponse(page: number, limit: number) {
     limit,
     total: 0,
     facets: {
-      formats: [] as ArchiveFormatFacet[],
+      formats: completeArchiveFormatFacets([]),
+      senders: [] as ArchiveFacetValue[],
+      recipients: [] as ArchiveFacetValue[],
+      truncated: [] as string[],
       collections: [] as ArchiveCollectionFacet[],
       correspondents: [] as ArchiveFacetValue[],
       places: [] as ArchiveFacetValue[],
@@ -1163,19 +1201,17 @@ function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string
     }
   }
   if (query.sender) {
-    const senderNeedle = `%${query.sender}%`;
     baseScopedFilters.push(sql`EXISTS (
       SELECT 1
       FROM UNNEST(COALESCE(gf.senders, ARRAY[]::text[])) AS sender_name
-      WHERE sender_name ILIKE ${senderNeedle}
+      WHERE STRPOS(LOWER(sender_name), LOWER(${query.sender})) > 0
     )`);
   }
   if (query.recipient) {
-    const recipientNeedle = `%${query.recipient}%`;
     baseScopedFilters.push(sql`EXISTS (
       SELECT 1
       FROM UNNEST(COALESCE(gf.recipients, ARRAY[]::text[])) AS recipient_name
-      WHERE recipient_name ILIKE ${recipientNeedle}
+      WHERE STRPOS(LOWER(recipient_name), LOWER(${query.recipient})) > 0
     )`);
   }
   if (query.place) {
@@ -1186,21 +1222,25 @@ function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string
       WHERE place_name ILIKE ${placeNeedle}
     )`);
   }
+  const topicFilters = [sql`TRUE`];
+  const toneFilters = [sql`TRUE`];
+  const relationshipFilters = [sql`TRUE`];
   if (query.topic) {
     const topics = query.topic.split(",").map((t: string) => t.trim()).filter(Boolean);
     if (topics.length === 1) {
-      const topicNeedle = `%${topics[0]}%`;
-      baseScopedFilters.push(sql`EXISTS (
+      const topicNeedle = topics[0]!.toLowerCase();
+      topicFilters.push(sql`EXISTS (
         SELECT 1
         FROM UNNEST(COALESCE(gf.topics, ARRAY[]::text[])) AS topic_name
-        WHERE topic_name ILIKE ${topicNeedle}
+        WHERE LOWER(BTRIM(topic_name)) = ${topicNeedle}
+          OR STARTS_WITH(LOWER(BTRIM(topic_name)), ${topicNeedle + '/'})
       )`);
     } else if (topics.length > 1) {
       const conditions = topics.map((t: string) => {
-        const needle = `%${t}%`;
-        return sql`topic_name ILIKE ${needle}`;
+        const needle = t.toLowerCase();
+        return sql`(LOWER(BTRIM(topic_name)) = ${needle} OR STARTS_WITH(LOWER(BTRIM(topic_name)), ${needle + '/'}))`;
       });
-      baseScopedFilters.push(sql`EXISTS (
+      topicFilters.push(sql`EXISTS (
         SELECT 1
         FROM UNNEST(COALESCE(gf.topics, ARRAY[]::text[])) AS topic_name
         WHERE ${sql.join(conditions, sql` OR `)}
@@ -1210,19 +1250,19 @@ function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string
   if (query.tone) {
     const tones = query.tone.split(",").map((t: string) => t.trim()).filter(Boolean);
     if (tones.length === 1) {
-      baseScopedFilters.push(sql`${tones[0]} = ANY(COALESCE(gf.tones, ARRAY[]::text[]))`);
+      toneFilters.push(sql`${tones[0]} = ANY(COALESCE(gf.tones, ARRAY[]::text[]))`);
     } else if (tones.length > 1) {
       const conditions = tones.map((t: string) => sql`${t} = ANY(COALESCE(gf.tones, ARRAY[]::text[]))`);
-      baseScopedFilters.push(sql`(${sql.join(conditions, sql` OR `)})`);
+      toneFilters.push(sql`(${sql.join(conditions, sql` OR `)})`);
     }
   }
   if (query.relationship) {
     const rels = query.relationship.split(",").map((r: string) => r.trim()).filter(Boolean);
     if (rels.length === 1) {
-      baseScopedFilters.push(sql`${rels[0]} = ANY(COALESCE(gf.relationships, ARRAY[]::text[]))`);
+      relationshipFilters.push(sql`${rels[0]} = ANY(COALESCE(gf.relationships, ARRAY[]::text[]))`);
     } else if (rels.length > 1) {
       const conditions = rels.map((r: string) => sql`${r} = ANY(COALESCE(gf.relationships, ARRAY[]::text[]))`);
-      baseScopedFilters.push(sql`(${sql.join(conditions, sql` OR `)})`);
+      relationshipFilters.push(sql`(${sql.join(conditions, sql` OR `)})`);
     }
   }
   if (query.year) {
@@ -1346,12 +1386,15 @@ function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string
         ${publicCatalogueRepresentativeOrderSql(sql`l.type`)},
         l.id ASC
     ),
-    base_scoped_groups AS (
+    facet_base_groups AS (
       SELECT
         mg."collectionId",
         mg."dateRaw",
         mg."typeSequence",
         mg."searchRank",
+        (${sql.join(topicFilters, sql` AND `)}) AS "matchesTopic",
+        (${sql.join(toneFilters, sql` AND `)}) AS "matchesTone",
+        (${sql.join(relationshipFilters, sql` AND `)}) AS "matchesRelationship",
         gf.formats,
         gf.senders,
         gf.recipients,
@@ -1387,6 +1430,22 @@ function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string
         AND pr."dateRaw" = mg."dateRaw"
         AND pr."typeSequence" = mg."typeSequence"
       WHERE ${sql.join(baseScopedFilters, sql` AND `)}
+    ),
+    base_scoped_groups AS (
+      SELECT * FROM facet_base_groups
+      WHERE "matchesTopic" AND "matchesTone" AND "matchesRelationship"
+    ),
+    topic_facet_groups AS (
+      SELECT * FROM facet_base_groups bsg
+      WHERE "matchesTone" AND "matchesRelationship" AND ${formatFilter}
+    ),
+    tone_facet_groups AS (
+      SELECT * FROM facet_base_groups bsg
+      WHERE "matchesTopic" AND "matchesRelationship" AND ${formatFilter}
+    ),
+    relationship_facet_groups AS (
+      SELECT * FROM facet_base_groups bsg
+      WHERE "matchesTopic" AND "matchesTone" AND ${formatFilter}
     ),
     scoped_groups AS (
       SELECT *
@@ -1826,6 +1885,13 @@ function chooseArchiveExcerptWindow(
   }
 
   return bestWindow;
+}
+
+function completeArchiveFormatFacets(rows: ArchiveFacetRow[]): ArchiveFormatFacet[] {
+  const counts = new Map(mapArchiveFormatFacets(rows).map((facet) => [facet.value, facet.count]));
+  return Object.entries(ARCHIVE_FORMAT_LABELS).map(([value, label]) => ({
+    value, label, count: counts.get(value) ?? 0,
+  }));
 }
 
 function mapArchiveFormatFacets(rows: ArchiveFacetRow[]): ArchiveFormatFacet[] {

@@ -275,6 +275,10 @@ export interface ArchiveSearchFacets {
   formats: ArchiveFormatFacet[];
   collections: ArchiveCollectionFacet[];
   correspondents: ArchiveFacetValue[];
+  senders?: ArchiveFacetValue[];
+  recipients?: ArchiveFacetValue[];
+  /** Facet lists omitted additional values; absence never means a zero count. */
+  truncated?: string[];
   places: ArchiveFacetValue[];
   years: ArchiveYearFacet[];
   topics: ArchiveFacetValue[];

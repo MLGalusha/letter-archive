@@ -1012,13 +1012,8 @@ describe('letters route integration', () => {
       limit: 5,
       total: 1,
       facets: {
-        formats: [
-          {
-            value: 'letter',
-            label: 'Letters',
-            count: 1,
-          },
-        ],
+        senders: [], recipients: [], truncated: [],
+        formats: expect.arrayContaining([{ value: 'letter', label: 'Letters', count: 1 }]),
         collections: [
           {
             value: '009',

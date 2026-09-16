@@ -193,3 +193,17 @@ export function filterChoiceOptions(options: FilterChoiceOption[], query: string
     return haystacks.some((haystack) => normalizeSuggestionText(haystack).includes(needle));
   });
 }
+
+/** Current response plus selected values; choices never depend on browsing history. */
+export function buildFacetChoiceOptions(
+  facets: Array<{ value: string; count: number }>,
+  selected: string[] | null | undefined,
+): FilterChoiceOption[] {
+  const choices = new Map(facets.map((facet) => [facet.value, {
+    value: facet.value, label: formatFacetLabel(facet.value), count: facet.count,
+  } as FilterChoiceOption]));
+  for (const value of selected || []) {
+    if (!choices.has(value)) choices.set(value, { value, label: formatFacetLabel(value) });
+  }
+  return [...choices.values()].sort((left, right) => left.label.localeCompare(right.label));
+}

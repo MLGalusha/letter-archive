@@ -103,6 +103,8 @@ type ArchiveLabeledFacetRow = {
 };
 
 type ArchiveSearchRow = {
+  searchCaseMap?: Record<string, string> | null;
+  normalizedSearch?: string | null;
   id: string;
   collectionId: string;
   collectionCode: string;
@@ -896,6 +898,14 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
         sg."photoDescriptions",
         sg."extraContentTranscripts",
         sg."transcriptionTexts",
+        lower(${query.search || ''}) AS "normalizedSearch",
+        CASE WHEN ${Boolean(query.search)} THEN (
+          SELECT jsonb_object_agg(value, lower(value))
+          FROM unnest(COALESCE(sg."transcriptionTexts", ARRAY[]::text[])
+            || COALESCE(sg."extraContentTranscripts", ARRAY[]::text[])
+            || COALESCE(sg.senders, ARRAY[]::text[]) || COALESCE(sg.recipients, ARRAY[]::text[])
+            || COALESCE(sg.places, ARRAY[]::text[]) || ARRAY[sg."dateRaw"]) AS value
+        ) ELSE NULL END AS "searchCaseMap",
         COUNT(*) OVER()::int AS "totalCount"
       FROM scoped_groups sg
       LEFT JOIN primary_page_counts ppc
@@ -1416,13 +1426,13 @@ function buildArchiveTypedMatchSql(search: string) {
   const terms = archiveSearchTerms(search);
   const sources = getArchiveTypedSearchFields().flatMap((field) => field.expressions.map((expression) => {
     // Preview text removes generated page separators; they must not admit results either.
-    const source = sql`regexp_replace(COALESCE(${expression}, ''), '---[[:space:]]*Page[[:space:]]+[0-9]+[[:space:]]*---', ' ', 'gi')`;
+    const source = sql`regexp_replace(COALESCE(${expression}, ''), '---[ \t\r\n\f\v]*Page[ \t\r\n\f\v]+[0-9]+[ \t\r\n\f\v]*---', ' ', 'gi')`;
     const matches = terms.map((term) => {
-      const literal = sql`${source} ILIKE ${archiveLiteralPattern(term)}`;
+      const literal = sql`lower(${source}) LIKE lower(${archiveLiteralPattern(term)})`;
       if (!field.fuzzy || !canFuzzyMatchArchiveTerm(term)) return literal;
       return sql`(${literal} OR EXISTS (
         SELECT 1 FROM regexp_split_to_table(lower(${source}), '[^[:alnum:]]+') AS word
-        WHERE similarity(word, ${term}) >= ${ARCHIVE_TYPO_SIMILARITY}
+        WHERE similarity(word, lower(${term})) >= ${ARCHIVE_TYPO_SIMILARITY}
       ))`;
     });
     return sql`(${sql.join(matches, sql` AND `)})`;
@@ -1558,10 +1568,15 @@ function buildArchiveSearchPreview(
   const search = query.search?.trim();
   if (!search) return undefined;
 
-  const searchTerms = getArchiveSearchTerms(search);
+  const searchTerms = getArchiveSearchTerms(row.normalizedSearch ?? search.toLowerCase());
   for (const field of getArchiveTypedSearchFields()) {
-    const candidates = dedupeArchivePreviewValues(field.values(row, formattedDate))
-      .map((value) => scoreArchivePreviewValue(value, search, searchTerms, field.fuzzy))
+    const candidates = [...new Set(field.values(row, formattedDate))]
+      .map((original) => {
+        const folded = row.searchCaseMap && Object.hasOwn(row.searchCaseMap, original)
+          ? row.searchCaseMap[original] : original.toLowerCase();
+        return scoreArchivePreviewValue(prepareArchivePreviewText(original), search, searchTerms, field.fuzzy,
+          prepareArchivePreviewText(folded));
+      })
       .filter((candidate): candidate is ArchivePreviewCandidate => candidate !== null)
       .sort((left, right) => right.score - left.score || right.totalMatches - left.totalMatches
         || left.excerpt.localeCompare(right.excerpt));
@@ -1585,16 +1600,6 @@ type ArchivePreviewCandidate = {
   score: number;
   totalMatches: number;
 };
-
-function dedupeArchivePreviewValues(values: string[]) {
-  return Array.from(
-    new Set(
-      values
-        .map((value) => prepareArchivePreviewText(value))
-        .filter((value): value is string => value.length > 0),
-    ),
-  );
-}
 
 function toIsoDateString(value: Date | string) {
   if (value instanceof Date) {
@@ -1652,7 +1657,7 @@ function collapseArchiveWhitespace(value: string) {
 function prepareArchivePreviewText(value: string) {
   return collapseArchiveWhitespace(
     value
-      .replace(/---\s*Page\s+\d+\s*---/gi, ' ')
+      .replace(/---[ \t\r\n\f\v]*Page[ \t\r\n\f\v]+[0-9]+[ \t\r\n\f\v]*---/gi, ' ')
       .replace(/\r\n/g, '\n'),
   );
 }
@@ -1662,8 +1667,9 @@ function scoreArchivePreviewValue(
   rawSearch: string,
   searchTerms: string[],
   allowFuzzy: boolean,
+  foldedValue: string,
 ): ArchivePreviewCandidate | null {
-  const termRanges = searchTerms.map((term) => archiveTermRanges(value, term, allowFuzzy));
+  const termRanges = searchTerms.map((term) => archiveTermRanges(value, term, allowFuzzy, foldedValue));
   if (termRanges.some((ranges) => ranges.length === 0)) return null;
   const ranges = mergeArchiveHighlightRanges(termRanges.flat());
   if (!ranges.length) return null;

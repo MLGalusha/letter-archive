@@ -79,6 +79,9 @@ describe.skipIf(!enabled)('public archive search against PostgreSQL', () => {
       { key: 'noOperators', transcription_text: 'fox goose', date_raw: '19500112' },
       { key: 'hyphen', sender: 'Anne-Marie', date_raw: '19500113' },
       { key: 'quote', transcription_text: 'She said "lantern".', date_raw: '19500114' },
+      { key: 'turkish', transcription_text: 'İstanbul', date_raw: '19500120' },
+      { key: 'sigma', transcription_text: 'ΟΣ', date_raw: '19500121' },
+      { key: 'nbspMarker', transcription_text: 'amber--- Page\u00a01 ---lamp', date_raw: '19500122' },
       { key: 'accent', sender: 'Éléonore', date_raw: '19500115' },
       { key: 'pageSeparator', transcription_text: '--- Page 77 ---\nDocument', date_raw: '19500116' },
     ];
@@ -140,6 +143,7 @@ describe.skipIf(!enabled)('public archive search against PostgreSQL', () => {
     ['red lantern', ['phrase', 'separated']], ['lantern red red', ['phrase', 'separated']],
     ['Mollly', ['typoName']], ['fox OR goose', ['operators']], ['fox -goose', ['operators']],
     ['Anne-Marie', ['hyphen']], ['"lantern"', ['quote']], ['ÉLÉONORE', ['accent']],
+    ['İstanbul', ['turkish']], ['istanbul', ['turkish']], ['οσ', ['sigma']], ['ος', []], ['Page', ['nbspMarker']],
     ['77', []], ['quartz%', []], ['\"quartz\"', []],
   ] as Array<[string, string[]]>)('agrees on literal input and previews for %s', async (query, keys) => {
     const response = await search({ search: query, limit: '100' });

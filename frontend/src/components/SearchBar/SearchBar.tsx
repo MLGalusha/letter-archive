@@ -14,6 +14,7 @@ import type { FilterChoiceOption } from "./searchBarUtils";
 import FilterChoiceField from "./FilterChoiceField";
 import FacetRow from "./FacetRow";
 import SuggestionHint from "./SuggestionHint";
+import YearRangeFields from "./YearRangeFields";
 import { useRememberedSearchFacets } from "./rememberedSearchFacets";
 
 interface SearchBarProps {
@@ -88,6 +89,8 @@ export default function SearchBar({
   const [internalShowFilters, setInternalShowFilters] = useState(
     isCompact ? false : hasAdvancedRefinementFilters,
   );
+  const [hasYearDraft, setHasYearDraft] = useState(false);
+  const [yearResetKey, setYearResetKey] = useState(0);
   const [openChoiceField, setOpenChoiceField] = useState<string | null>(null);
   const searchIdBase = useId().replace(/:/g, "");
   const searchRootRef = useRef<HTMLDivElement | null>(null);
@@ -133,15 +136,17 @@ export default function SearchBar({
   useEffect(() => {
     if (!showFilters) return;
 
-    const handlePointerDown = (event: PointerEvent) => {
+    // Click follows native blur, allowing year drafts to commit first. Capture
+    // also catches outside controls that stop their own click propagation.
+    const handleOutsideClick = (event: MouseEvent) => {
       if (!(event.target instanceof Node)) return;
       if (!searchRootRef.current?.contains(event.target)) {
         setRefineOpen(false);
       }
     };
 
-    document.addEventListener("pointerdown", handlePointerDown);
-    return () => document.removeEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("click", handleOutsideClick, true);
+    return () => document.removeEventListener("click", handleOutsideClick, true);
   }, [setRefineOpen, showFilters]);
 
   const hasActiveFilters = Boolean(
@@ -275,21 +280,6 @@ export default function SearchBar({
     ],
     [],
   );
-  const yearChoiceOptions = useMemo<FilterChoiceOption[]>(() => {
-    const dataYears = [...rememberedFacets.years];
-    if (dataYears.length === 0) return [];
-    const dataMin = Math.min(...dataYears);
-    const dataMax = Math.max(...dataYears);
-    const currentYear = new Date().getFullYear();
-    const min = Math.max(1700, dataMin - 50);
-    const max = Math.min(currentYear, dataMax + 50);
-    const opts: FilterChoiceOption[] = [];
-    for (let y = min; y <= max; y++) {
-      opts.push({ value: String(y), label: String(y) });
-    }
-    return opts;
-  }, [rememberedFacets.years]);
-
   const collectionSuggestion = useMemo(
     () => hideCollectionFilter ? null : getBestSuggestion(
       filters.collection,
@@ -363,6 +353,8 @@ export default function SearchBar({
   }, [selectedFormats, updateFilter]);
 
   const clearAll = useCallback(() => {
+    setHasYearDraft(false);
+    setYearResetKey((key) => key + 1);
     onQueryChange("");
     onFiltersChange({});
     if (isCompact) {
@@ -520,46 +512,13 @@ export default function SearchBar({
             />
             <SuggestionHint suggestion={placeSuggestion} />
           </div>
-          <div className="filter-group filter-group-year-range">
-            <label className="filter-label" htmlFor={`${searchIdBase}-year-from`}>Year Range</label>
-            <div className="year-range-pair">
-              <FilterChoiceField
-                id={`${searchIdBase}-year-from`}
-                label="From year"
-                value={filters.dateRange?.start ? String(filters.dateRange.start) : ""}
-                placeholder="From"
-                options={yearChoiceOptions}
-                allowClear
-                clearLabel="Any"
-                compact
-                closeOnSelect
-                open={openChoiceField === `${searchIdBase}-year-from`}
-                onOpenChange={(open) => setOpenChoiceField(open ? `${searchIdBase}-year-from` : null)}
-                onChange={(value) => {
-                  const start = value ? Number(value) : undefined;
-                  updateFilter({ year: null, dateRange: start || filters.dateRange?.end ? { start, end: filters.dateRange?.end } : undefined });
-                }}
-              />
-              <span className="year-range-sep">&ndash;</span>
-              <FilterChoiceField
-                id={`${searchIdBase}-year-to`}
-                label="To year"
-                value={filters.dateRange?.end ? String(filters.dateRange.end) : ""}
-                placeholder="To"
-                options={yearChoiceOptions}
-                allowClear
-                clearLabel="Any"
-                compact
-                closeOnSelect
-                open={openChoiceField === `${searchIdBase}-year-to`}
-                onOpenChange={(open) => setOpenChoiceField(open ? `${searchIdBase}-year-to` : null)}
-                onChange={(value) => {
-                  const end = value ? Number(value) : undefined;
-                  updateFilter({ year: null, dateRange: filters.dateRange?.start || end ? { start: filters.dateRange?.start, end } : undefined });
-                }}
-              />
-            </div>
-          </div>
+          <YearRangeFields
+            key={yearResetKey}
+            onDraftChange={setHasYearDraft}
+            id={searchIdBase}
+            value={filters.dateRange ?? (filters.year ? { start: filters.year, end: filters.year } : undefined)}
+            onChange={(dateRange) => updateFilter({ year: null, dateRange })}
+          />
         </div>
       </div>
 
@@ -701,7 +660,7 @@ export default function SearchBar({
                     type="button"
                     className="clear-filters"
                     onClick={clearAll}
-                    disabled={!hasActiveFilters}
+                    disabled={!hasActiveFilters && !hasYearDraft}
                   >
                     Clear All
                   </button>
@@ -769,7 +728,7 @@ export default function SearchBar({
               type="button"
               className="clear-filters"
               onClick={clearAll}
-              disabled={!hasActiveFilters}
+              disabled={!hasActiveFilters && !hasYearDraft}
             >
               Clear All
             </button>

@@ -673,3 +673,55 @@ describe('useArchiveSearch defaults and fixed configuration', () => {
     });
   });
 });
+
+describe('useArchiveSearch invalid URL year ranges', () => {
+  it('preserves reversed bounds without requesting results until corrected', async () => {
+    const harness = renderArchiveHarness({ initialEntries: ['/?yearFrom=1900&yearTo=1863'] });
+    await advance(500);
+    expect(harness.result.current.archive.filters.dateRange).toEqual({ start: 1900, end: 1863 });
+    expect(currentParams(harness).get('yearFrom')).toBe('1900');
+    expect(currentParams(harness).get('yearTo')).toBe('1863');
+    expect(harness.result.current.archive.archiveError).toMatch(/From year.*To year/);
+    expect(harness.result.current.archive.archiveLoading).toBe(false);
+    await act(async () => harness.result.current.archive.handleArchiveLoadMore());
+    expect(searchArchiveShelfMock).not.toHaveBeenCalled();
+
+    act(() => harness.result.current.archive.setFilters({ dateRange: { end: 1863 } }));
+    await advance(180);
+    expect(searchArchiveShelfMock).toHaveBeenCalledTimes(1);
+    expect(lastArchiveRequest()).toMatchObject({ yearTo: 1863, page: 1 });
+    expect(lastArchiveRequest()?.yearFrom).toBeUndefined();
+    expect(harness.result.current.archive.archiveError).toBeNull();
+  });
+
+  it('blocks pagination of retained results while the URL range is invalid', async () => {
+    searchArchiveShelfMock.mockResolvedValueOnce({ ...emptyArchiveResponse(), total: 48 });
+    const harness = renderArchiveHarness();
+    await advance(180);
+    expect(harness.result.current.archive.archiveResults.total).toBe(48);
+    await navigate(harness, '/?yearFrom=1900&yearTo=1863');
+    await advance(180);
+    await act(async () => harness.result.current.archive.handleArchiveLoadMore());
+    expect(searchArchiveShelfMock).toHaveBeenCalledTimes(1);
+    expect(harness.result.current.archive.archiveLoadingMore).toBe(false);
+  });
+
+  it('ignores an older response after Back selects an invalid range and resumes after clearing', async () => {
+    let resolve!: (response: ReturnType<typeof emptyArchiveResponse>) => void;
+    searchArchiveShelfMock.mockReturnValueOnce(new Promise((done) => { resolve = done; }));
+    const harness = renderArchiveHarness({ initialEntries: ['/?yearFrom=1900&yearTo=1863', '/?yearTo=1863'] });
+    await advance(180);
+    expect(searchArchiveShelfMock).toHaveBeenCalledTimes(1);
+    await navigate(harness, -1);
+    await advance(500);
+    expect(searchArchiveShelfMock).toHaveBeenCalledTimes(1);
+    await act(async () => resolve({ ...emptyArchiveResponse(), total: 99 }));
+    expect(harness.result.current.archive.archiveError).toMatch(/From year.*To year/);
+    expect(harness.result.current.archive.archiveResults.total).toBe(0);
+    expect(harness.result.current.archive.archiveLoading).toBe(false);
+    act(() => harness.result.current.archive.setFilters({}));
+    await advance(180);
+    expect(searchArchiveShelfMock).toHaveBeenCalledTimes(2);
+    expect(harness.result.current.archive.archiveError).toBeNull();
+  });
+});

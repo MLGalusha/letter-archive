@@ -35,6 +35,52 @@ describe("SearchBar", () => {
     relationships: [{ value: "romantic-partner", count: 7 }],
   };
 
+  it.each(['full', 'compact'] as const)('commits a valid year before outside dismissal in %s layout', async (variant) => {
+    const user = userEvent.setup();
+    const onFiltersChange = vi.fn();
+    function Harness() {
+      const [filters, setFilters] = useState<SearchFilters>({});
+      return <><SearchBar query="" filters={filters} facets={baseFacets} total={12}
+        loading={false} variant={variant} onQueryChange={vi.fn()}
+        onFiltersChange={(next) => { onFiltersChange(next); setFilters(next); }} />
+        <button onClick={(event) => event.stopPropagation()}>Outside the archive</button></>;
+    }
+    render(<Harness />);
+    await user.click(screen.getByRole('button', { name: /Open archive refine controls/ }));
+    await user.type(screen.getByLabelText('To year'), '1863');
+    expect(onFiltersChange).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Outside the archive' }));
+    expect(onFiltersChange).toHaveBeenCalledExactlyOnceWith({ year: null, dateRange: { end: 1863 } });
+    expect(screen.queryByLabelText('To year')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Open archive refine controls/ }));
+    expect(screen.getByLabelText('To year')).toHaveValue('1863');
+  });
+
+  it.each(['war', ''])('clears an invalid year draft with query %j', async (initialQuery) => {
+    const user = userEvent.setup();
+    const onFiltersChange = vi.fn();
+    function Harness() {
+      const [query, setQuery] = useState(initialQuery);
+      const [filters, setFilters] = useState<SearchFilters>({});
+      return <SearchBar query={query} filters={filters} facets={baseFacets} total={12}
+        loading={false} refineOpen onQueryChange={setQuery}
+        onFiltersChange={(next) => { onFiltersChange(next); setFilters(next); }} />;
+    }
+    render(<Harness />);
+    await user.type(screen.getByLabelText('From year'), '-1');
+    await user.tab();
+    expect(screen.getByRole('alert')).toHaveTextContent('1 to 9999');
+    expect(onFiltersChange).not.toHaveBeenCalled();
+    const clearAll = screen.getByRole('button', { name: 'Clear All' });
+    expect(clearAll).toBeEnabled();
+    await user.click(clearAll);
+    expect(screen.getByLabelText('From year')).toHaveValue('');
+    expect(screen.getByLabelText('To year')).toHaveValue('');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(clearAll).toBeDisabled();
+    expect(onFiltersChange).toHaveBeenCalledExactlyOnceWith({});
+  });
+
   it("renders archive facets and notifies callers when a facet is selected", async () => {
     const user = userEvent.setup();
     const handleQueryChange = vi.fn();
@@ -435,21 +481,18 @@ describe("SearchBar", () => {
     await expectChoice("Tone", "Hopeful");
     await expectChoice("Relationship", "Romantic Partner");
     await expectChoice("Topic", "Family");
-    await expectChoice("From year", "1947");
 
     rerender(renderSearchBar(narrowedFacets));
 
     await expectChoice("Tone", "Hopeful");
     await expectChoice("Relationship", "Romantic Partner");
     await expectChoice("Topic", "Family");
-    await expectChoice("From year", "1947");
 
     rerender(renderSearchBar(expandedFacets));
 
     await expectChoice("Tone", "Joyful");
     await expectChoice("Relationship", "Sibling");
     await expectChoice("Topic", "Work");
-    await expectChoice("From year", "2000");
 
     rerender(renderSearchBar(narrowedFacets));
 
@@ -459,8 +502,6 @@ describe("SearchBar", () => {
     await expectChoice("Relationship", "Sibling");
     await expectChoice("Topic", "Family");
     await expectChoice("Topic", "Work");
-    await expectChoice("From year", "1947");
-    await expectChoice("From year", "2000");
   });
 
   it("does not remember facet choices from an abandoned render", async () => {
@@ -552,9 +593,6 @@ describe("SearchBar", () => {
     expect(topicChoices.getByRole("button", { name: "Family" })).toBeInTheDocument();
     expect(topicChoices.queryByRole("button", { name: "Work" })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "From year" }));
-    const yearChoices = within(screen.getByRole("listbox", { name: "From year" }));
-    expect(yearChoices.getByRole("button", { name: "1947" })).toBeInTheDocument();
-    expect(yearChoices.queryByRole("button", { name: "2000" })).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "From year" })).toBeInTheDocument();
   });
 });

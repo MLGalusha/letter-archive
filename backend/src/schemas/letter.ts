@@ -79,9 +79,9 @@ export const archiveSearchQuerySchema = z.object({
   topic: z.string().trim().max(120).optional(),
   tone: z.string().trim().max(80).optional(),
   relationship: z.string().trim().max(80).optional(),
-  year: z.coerce.number().int().min(0).max(9999).optional(),
-  yearFrom: z.coerce.number().int().min(0).max(9999).optional(),
-  yearTo: z.coerce.number().int().min(0).max(9999).optional(),
+  year: z.coerce.number().int().min(1).max(9999).optional(),
+  yearFrom: z.coerce.number().int().min(1).max(9999).optional(),
+  yearTo: z.coerce.number().int().min(1).max(9999).optional(),
   hasTranscript: z
     .enum(['true', 'false'])
     .transform((value) => value === 'true')
@@ -92,6 +92,9 @@ export const archiveSearchQuerySchema = z.object({
     .optional(),
   sort: z.enum(archiveSearchSorts).default('relevance'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
+}).refine((value) => value.yearFrom === undefined || value.yearTo === undefined || value.yearFrom <= value.yearTo, {
+  message: 'From year must be before or equal to To year',
+  path: ['yearTo'],
 });
 
 export type ArchiveSearchQuery = z.infer<typeof archiveSearchQuerySchema>;

@@ -450,12 +450,16 @@
   background: rgba(255, 255, 255, 0.88);
 }
 
-.year-range-pair .filter-choice {
+.year-range-entry {
+  display: flex;
+  align-items: center;
   flex: 1 1 0;
   min-width: 0;
 }
 
-.year-range-pair .filter-choice-trigger {
+.year-range-entry .filter-input {
+  min-width: 0;
+  width: 100%;
   border: none;
   border-radius: 0;
   background: transparent;

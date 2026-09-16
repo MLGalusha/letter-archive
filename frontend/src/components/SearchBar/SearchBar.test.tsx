@@ -435,21 +435,18 @@ describe("SearchBar", () => {
     await expectChoice("Tone", "Hopeful");
     await expectChoice("Relationship", "Romantic Partner");
     await expectChoice("Topic", "Family");
-    await expectChoice("From year", "1947");
 
     rerender(renderSearchBar(narrowedFacets));
 
     await expectChoice("Tone", "Hopeful");
     await expectChoice("Relationship", "Romantic Partner");
     await expectChoice("Topic", "Family");
-    await expectChoice("From year", "1947");
 
     rerender(renderSearchBar(expandedFacets));
 
     await expectChoice("Tone", "Joyful");
     await expectChoice("Relationship", "Sibling");
     await expectChoice("Topic", "Work");
-    await expectChoice("From year", "2000");
 
     rerender(renderSearchBar(narrowedFacets));
 
@@ -459,8 +456,6 @@ describe("SearchBar", () => {
     await expectChoice("Relationship", "Sibling");
     await expectChoice("Topic", "Family");
     await expectChoice("Topic", "Work");
-    await expectChoice("From year", "1947");
-    await expectChoice("From year", "2000");
   });
 
   it("does not remember facet choices from an abandoned render", async () => {
@@ -552,9 +547,6 @@ describe("SearchBar", () => {
     expect(topicChoices.getByRole("button", { name: "Family" })).toBeInTheDocument();
     expect(topicChoices.queryByRole("button", { name: "Work" })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "From year" }));
-    const yearChoices = within(screen.getByRole("listbox", { name: "From year" }));
-    expect(yearChoices.getByRole("button", { name: "1947" })).toBeInTheDocument();
-    expect(yearChoices.queryByRole("button", { name: "2000" })).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "From year" })).toBeInTheDocument();
   });
 });

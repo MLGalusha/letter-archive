@@ -318,6 +318,10 @@ export default function SearchBar({
     ),
     [facets.places, filters.place],
   );
+  const hasOmittedSuggestions = facets.truncated?.some((facet) =>
+    ['senders', 'recipients', 'places', 'topics'].includes(facet)
+    || (facet === 'collections' && !hideCollectionFilter),
+  );
   const topicChoiceOptions = useMemo(() => buildFacetChoiceOptions(facets.topics, selectedTopics), [facets.topics, selectedTopics]);
 
   const toggleFormatFilter = useCallback((format: LetterImageType) => {
@@ -517,7 +521,7 @@ export default function SearchBar({
       <div className="filter-section">
         <span className="filter-section-label">Content &amp; Status</span>
         <p className="filter-suggestion-hint">Selections within one filter match any chosen option. Different filters narrow results together. Format, topic, tone, and relationship counts apply the other filters, excluding selections in that same field. Name, collection, and location suggestions count matches within the current results.</p>
-        {Boolean(facets.truncated?.length) && <p className="filter-suggestion-hint">Some suggestions are omitted. Type a name, collection, location, or topic category to filter beyond the suggestions.</p>}
+        {hasOmittedSuggestions && <p className="filter-suggestion-hint">Some suggestions are omitted. Type a name, collection, location, or topic category to filter beyond the suggestions.</p>}
         <div className="filter-section-row">
           <div className="filter-group">
             <label className="filter-label" htmlFor={topicFilterId}>Topic</label>

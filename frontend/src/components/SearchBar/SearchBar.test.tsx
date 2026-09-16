@@ -618,4 +618,16 @@ describe("SearchBar", () => {
     expect(onFiltersChange).toHaveBeenLastCalledWith({ topic: ['work'] });
   });
 
+  it('warns about omitted suggestions only for fields visible in this panel', () => {
+    const view = (truncated: string[], hideCollectionFilter = false) => <SearchBar query="" filters={{}} facets={{ ...baseFacets, truncated }} total={12} loading={false} refineOpen hideCollectionFilter={hideCollectionFilter} onQueryChange={vi.fn()} onFiltersChange={vi.fn()} />;
+    const { rerender } = render(view(['years', 'correspondents']));
+    expect(screen.queryByText(/Some suggestions are omitted/)).not.toBeInTheDocument();
+    rerender(view(['collections'], true));
+    expect(screen.queryByText(/Some suggestions are omitted/)).not.toBeInTheDocument();
+    for (const facet of ['collections', 'senders', 'recipients', 'places', 'topics']) {
+      rerender(view([facet]));
+      expect(screen.getByText(/Some suggestions are omitted/)).toBeInTheDocument();
+    }
+  });
+
 });

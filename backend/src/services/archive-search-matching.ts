@@ -15,11 +15,11 @@ export function canFuzzyMatchArchiveTerm(term: string): boolean {
   return [...term].length >= 4 && /^\p{L}+$/u.test(term);
 }
 
-/** pg_trgm ignores separators and unions the padded trigrams of each word. */
+/** pg_trgm words contain letters/decimal digits; other numerals are separators. */
 export function archiveWordSimilarity(left: string, right: string): number {
   const trigrams = (text: string) => {
     const result = new Set<string>();
-    for (const word of text.toLowerCase().match(/[\p{L}\p{N}]+/gu) || []) {
+    for (const word of text.toLowerCase().match(/[\p{L}\p{Nd}]+/gu) || []) {
       const chars = [...`  ${word} `];
       for (let i = 0; i < chars.length - 2; i++) result.add(chars.slice(i, i + 3).join(''));
     }
@@ -56,7 +56,7 @@ export function archiveTermRanges(value: string, term: string, allowFuzzy: boole
   }
   // A literal occurrence always explains the term before approximate names/places.
   if (ranges.length || !allowFuzzy || !canFuzzyMatchArchiveTerm(originalTerm)) return ranges;
-  for (const token of lowered.matchAll(/[\p{L}\p{N}]+/gu)) {
+  for (const token of lowered.matchAll(/[\p{L}\p{Nd}]+/gu)) {
     if (archiveWordSimilarity(token[0], term) >= ARCHIVE_TYPO_SIMILARITY) {
       ranges.push({ start: offsets[token.index]!.start, end: offsets[token.index + token[0].length - 1]!.end });
     }

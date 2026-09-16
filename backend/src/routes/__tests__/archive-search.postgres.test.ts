@@ -230,4 +230,19 @@ describe.skipIf(!enabled)('public archive search against PostgreSQL', () => {
     }
   });
 
+  it('uses PostgreSQL word boundaries for a superscript number beside a name', async () => {
+    const [sender] = await client`INSERT INTO letters ${client({ collection_id: collection, date_raw: '19510102', sender: 'Molly²' })} RETURNING id`;
+    try {
+      const response = await search({ search: 'Mollly' });
+      const match = response.letters.find((item) => item.id === sender!.id);
+      expect(match).toBeDefined();
+      expect(match?.searchPreview)
+        .toMatchObject({ matchedFieldLabel: 'Sender', excerpt: 'Molly²', highlightRanges: [{ start: 0, end: 5 }] });
+      const [comparison] = await client`SELECT similarity(lower('Molly²'), lower('Mollly')) AS score`;
+      expect(archiveWordSimilarity('Molly²', 'Mollly')).toBeCloseTo(comparison!.score, 6);
+    } finally {
+      await client`DELETE FROM letters WHERE id = ${sender!.id}`;
+    }
+  });
+
 });

@@ -35,6 +35,27 @@ describe("SearchBar", () => {
     relationships: [{ value: "romantic-partner", count: 7 }],
   };
 
+  it.each(['full', 'compact'] as const)('commits a valid year before outside dismissal in %s layout', async (variant) => {
+    const user = userEvent.setup();
+    const onFiltersChange = vi.fn();
+    function Harness() {
+      const [filters, setFilters] = useState<SearchFilters>({});
+      return <><SearchBar query="" filters={filters} facets={baseFacets} total={12}
+        loading={false} variant={variant} onQueryChange={vi.fn()}
+        onFiltersChange={(next) => { onFiltersChange(next); setFilters(next); }} />
+        <button onClick={(event) => event.stopPropagation()}>Outside the archive</button></>;
+    }
+    render(<Harness />);
+    await user.click(screen.getByRole('button', { name: /Open archive refine controls/ }));
+    await user.type(screen.getByLabelText('To year'), '1863');
+    expect(onFiltersChange).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Outside the archive' }));
+    expect(onFiltersChange).toHaveBeenCalledExactlyOnceWith({ year: null, dateRange: { end: 1863 } });
+    expect(screen.queryByLabelText('To year')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Open archive refine controls/ }));
+    expect(screen.getByLabelText('To year')).toHaveValue('1863');
+  });
+
   it.each(['war', ''])('clears an invalid year draft with query %j', async (initialQuery) => {
     const user = userEvent.setup();
     const onFiltersChange = vi.fn();

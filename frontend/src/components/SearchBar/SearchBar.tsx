@@ -136,15 +136,17 @@ export default function SearchBar({
   useEffect(() => {
     if (!showFilters) return;
 
-    const handlePointerDown = (event: PointerEvent) => {
+    // Click follows native blur, allowing year drafts to commit first. Capture
+    // also catches outside controls that stop their own click propagation.
+    const handleOutsideClick = (event: MouseEvent) => {
       if (!(event.target instanceof Node)) return;
       if (!searchRootRef.current?.contains(event.target)) {
         setRefineOpen(false);
       }
     };
 
-    document.addEventListener("pointerdown", handlePointerDown);
-    return () => document.removeEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("click", handleOutsideClick, true);
+    return () => document.removeEventListener("click", handleOutsideClick, true);
   }, [setRefineOpen, showFilters]);
 
   const hasActiveFilters = Boolean(

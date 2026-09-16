@@ -102,6 +102,17 @@ describe.skipIf(!enabled)('public archive search against PostgreSQL', () => {
     expect((await search({ search: 'quartz', sort: 'letterDate', sortOrder: 'asc' })).letters.map((item) => item.id).sort()).toEqual(expected);
   });
 
+  it('does not explain a sender match with an unsearched formatted date', async () => {
+    const [inserted] = await client`INSERT INTO letters ${client({ collection_id: collection, date_raw: '19470810', type_sequence: 2, sender: 'August' })} RETURNING id`;
+    try {
+      const response = await search({ search: 'August' });
+      expect(response.letters.find((item) => item.id === inserted!.id)?.searchPreview)
+        .toMatchObject({ matchedFieldLabel: 'Sender', excerpt: 'August', matchCount: 1 });
+    } finally {
+      await client`DELETE FROM letters WHERE id = ${inserted!.id}`;
+    }
+  });
+
   it('explains compact date matches using the matching date text', async () => {
     const response = await search({ search: '19470810' });
     expect(response.letters.find((item) => item.id === ids.transcript)?.searchPreview).toMatchObject({ matchedFieldLabel: 'Date', excerpt: '19470810', matchCount: 1 });

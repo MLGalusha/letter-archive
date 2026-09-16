@@ -1396,8 +1396,8 @@ function getArchiveTypedSearchFields() {
       label: 'Date',
       fuzzy: false,
       expressions: [sql`l.date_raw`],
-      // Retain raw dates so a query such as 19470817 can explain its match.
-      values: (row: ArchiveSearchRow, date: string) => [date, row.dateRaw],
+      // Explain only the raw date searched by SQL, not display-only month names.
+      values: (row: ArchiveSearchRow, _date: string) => [row.dateRaw],
     },
     {
       label: 'Sender',

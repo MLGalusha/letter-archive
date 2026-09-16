@@ -844,13 +844,33 @@ describe('useArchiveSearch invalid URL year ranges', () => {
     expect(harness.result.current.archive.archiveLoadingMore).toBe(false);
   });
 
+  it('aborts an in-flight next page when history selects an invalid range', async () => {
+    searchArchiveShelfMock.mockResolvedValueOnce(pageResponse(1, 'retained'));
+    const harness = renderArchiveHarness();
+    await advance(0);
+    const more = deferredResponse();
+    searchArchiveShelfMock.mockReturnValueOnce(more.promise);
+    let pending!: Promise<void>;
+    act(() => { pending = harness.result.current.archive.handleArchiveLoadMore(); });
+    const signal = searchArchiveShelfMock.mock.calls[1][1] as AbortSignal;
+    await navigate(harness, '/?yearFrom=1900&yearTo=1863');
+    expect(signal.aborted).toBe(true);
+    expect(harness.result.current.archive.archiveLoadingMore).toBe(false);
+    await act(async () => { more.resolve(pageResponse(2, 'obsolete')); await pending; });
+    expect(searchArchiveShelfMock).toHaveBeenCalledTimes(2);
+    expect(harness.result.current.archive.archiveResults.letters.map((letter) => letter.id)).toEqual(['retained']);
+    expect(harness.result.current.archive.archiveError).toMatch(/From year.*To year/);
+  });
+
   it('ignores an older response after Back selects an invalid range and resumes after clearing', async () => {
     let resolve!: (response: ReturnType<typeof emptyArchiveResponse>) => void;
     searchArchiveShelfMock.mockReturnValueOnce(new Promise((done) => { resolve = done; }));
     const harness = renderArchiveHarness({ initialEntries: ['/?yearFrom=1900&yearTo=1863', '/?yearTo=1863'] });
     await advance(180);
     expect(searchArchiveShelfMock).toHaveBeenCalledTimes(1);
+    const signal = searchArchiveShelfMock.mock.calls[0][1] as AbortSignal;
     await navigate(harness, -1);
+    expect(signal.aborted).toBe(true);
     await advance(500);
     expect(searchArchiveShelfMock).toHaveBeenCalledTimes(1);
     await act(async () => resolve({ ...emptyArchiveResponse(), total: 99 }));

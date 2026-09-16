@@ -2,7 +2,8 @@ import { getFileExtension } from "../../../utils/filename-parser";
 import type { CollectionGroup, LetterGroup, UploadedImage } from "./types";
 
 export function generateId(): string {
-  return Math.random().toString(36).substring(2, 11);
+  // These IDs only identify local upload previews, not persisted or secret data.
+  return Math.floor(Math.random() * 36 ** 9).toString(36).padStart(9, "0");
 }
 
 export function groupImagesByCollection(

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import LetterCard from "../LetterCard";
 
@@ -43,6 +43,46 @@ describe("LetterCard", () => {
     fireEvent.click(button, { ctrlKey: true });
     expect(onClick).toHaveBeenCalledWith("pick-1");
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("opens the letter when its hover excerpt is clicked", () => {
+    const onClick = vi.fn();
+    render(<LetterCard card={previewCard} onClick={onClick} />);
+    const shell = screen.getByRole('link').closest('.letter-card-shell')!;
+    const over = new Event('pointerover', { bubbles: true });
+    Object.defineProperty(over, 'pointerType', { value: 'mouse' });
+    fireEvent(shell, over);
+    const preview = screen.getByRole('region');
+    fireEvent.click(within(preview).getByText('Molly'));
+    expect(onClick).toHaveBeenCalledExactlyOnceWith('letter-1');
+  });
+
+  it("preserves native preview links and selection without navigating on a text drag", () => {
+    const onClick = vi.fn();
+    render(<LetterCard card={previewCard} onClick={onClick} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Search match preview' }));
+    const preview = screen.getByRole('region');
+    const link = within(preview).getByRole('link');
+    expect(link).toHaveAttribute('href', '/letter/letter-1');
+    for (const modifier of ['ctrlKey', 'metaKey', 'shiftKey', 'altKey']) {
+      // Observe React's result, then stop jsdom from attempting native navigation.
+      document.addEventListener('click', (event) => {
+        expect(event.defaultPrevented).toBe(false);
+        event.preventDefault();
+      }, { once: true });
+      fireEvent.click(link, { [modifier]: true });
+    }
+    expect(onClick).not.toHaveBeenCalled();
+    const selected = window.getSelection()!;
+    const range = document.createRange();
+    range.selectNodeContents(within(preview).getByText('Molly'));
+    selected.addRange(range);
+    fireEvent.click(link, { detail: 1 });
+    expect(onClick).not.toHaveBeenCalled();
+    // Keyboard activation still works even while the excerpt has selected text.
+    fireEvent.click(link, { detail: 0 });
+    expect(onClick).toHaveBeenCalledExactlyOnceWith('letter-1');
+    selected.removeAllRanges();
   });
 
   it("keeps explanations available until dismissal and never highlights the hook", async () => {

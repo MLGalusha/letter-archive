@@ -349,7 +349,6 @@
   position: absolute;
   inset: auto 0.75rem 0.75rem;
   z-index: 2;
-  padding: 0.58rem 0.72rem 0.62rem;
   border-radius: 16px;
   border: 1px solid rgba(255, 250, 242, 0.18);
   background: rgba(17, 14, 11, 0.9);
@@ -361,6 +360,28 @@
   max-height: min(72%, 17rem);
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+.letter-card-search-match-link {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.58rem 0.72rem 0.62rem;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
+}
+
+.letter-card-search-match-link:focus-visible {
+  outline: 2px solid rgba(255, 227, 130, 0.8);
+  outline-offset: -3px;
 }
 
 .letter-card-search-match-count {
@@ -488,8 +509,11 @@
   .letter-card-search-match {
     inset: 3.5rem 0.45rem auto;
     max-height: min(54%, 8.25rem);
-    padding: 0.48rem 0.56rem 0.52rem;
     border-radius: 12px;
+  }
+
+  .letter-card-search-match-link {
+    padding: 0.48rem 0.56rem 0.52rem;
   }
 
   .letter-card-search-match-count {

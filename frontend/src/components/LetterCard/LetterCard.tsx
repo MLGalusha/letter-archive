@@ -1,4 +1,4 @@
-import { memo, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useId, useRef, useState, type ReactNode, type MouseEvent } from "react";
 import "../ArchiveList/ArchiveList.css";
 import type { ArchiveSearchHighlightRange, LetterCardData } from "../../types/Letter";
 import { getImageUrl } from "../../api/client";
@@ -122,6 +122,15 @@ function LetterCard({
     }
   };
 
+  const handleCardClick = (event: MouseEvent<HTMLAnchorElement | HTMLButtonElement>) => {
+    if (!selection && (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)) return;
+    event.preventDefault();
+    // Selecting excerpt text should not open the letter when the pointer is released.
+    const selectedText = window.getSelection();
+    if (event.detail > 0 && selectedText && !selectedText.isCollapsed &&
+      (event.currentTarget.contains(selectedText.anchorNode) || event.currentTarget.contains(selectedText.focusNode))) return;
+    onClick(card.id);
+  };
   const CardControl = selection ? 'button' : 'a';
   const visibleSearchPreview = previewVisible && hasSearchPreview && searchPreview;
 
@@ -135,11 +144,7 @@ function LetterCard({
         type={selection ? "button" : undefined}
         href={selection ? undefined : `/letter/${card.id}`}
         className={`letter-card letter-card--${card.imageType}${hasSearchPreview ? " letter-card--has-search-match" : ""}${previewVisible ? " letter-card--search-preview-visible" : ""}`}
-        onClick={(event) => {
-          if (!selection && (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)) return;
-          event.preventDefault();
-          onClick(card.id);
-        }}
+        onClick={handleCardClick}
         aria-label={ariaLabel || `${mediaLabel}: ${card.title || "Unknown item"}`}
       >
         {hasImage ? (
@@ -176,6 +181,13 @@ function LetterCard({
       </CardControl>
         {visibleSearchPreview && (
           <div ref={previewRef} id={previewId} className="letter-card-search-match" role="region" aria-label="Search match preview" tabIndex={0} onFocus={() => setPinned(true)}>
+            <CardControl
+              type={selection ? "button" : undefined}
+              href={selection ? undefined : `/letter/${card.id}`}
+              className="letter-card-search-match-link"
+              onClick={handleCardClick}
+              aria-label={`${selection ? 'Select' : 'Open'} letter: ${ariaLabel || card.title || 'Unknown item'}`}
+            >
             <div className="letter-card-search-match-count">
               {visibleSearchPreview.matchCount} {visibleSearchPreview.matchCount === 1 ? "match" : "matches"}
             </div>
@@ -185,6 +197,7 @@ function LetterCard({
             <div className="letter-card-search-match-excerpt">
               {renderHighlightedExcerpt(visibleSearchPreview.excerpt, visibleSearchPreview.highlightRanges)}
             </div>
+            </CardControl>
           </div>
         )}
       {hasSearchPreview && (

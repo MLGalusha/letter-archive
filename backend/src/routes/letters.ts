@@ -1672,7 +1672,14 @@ function scoreArchivePreviewValue(
   foldedValue: string,
 ): ArchivePreviewCandidate | null {
   const originalTerms = rawSearch.trim().split(/\s+/u);
-  const termRanges = searchTerms.map((term, index) => archiveTermRanges(value, term, allowFuzzy, foldedValue, originalTerms[index]));
+  // Deduplicate only after pairing: differently typed terms can fold identically
+  // while one remains literal-only. Repeats should not rescan long transcripts.
+  const terms = new Map<string, { term: string; originalTerm: string }>();
+  searchTerms.forEach((term, index) => {
+    const originalTerm = originalTerms[index]!;
+    terms.set(JSON.stringify([term, canFuzzyMatchArchiveTerm(originalTerm)]), { term, originalTerm });
+  });
+  const termRanges = [...terms.values()].map(({ term, originalTerm }) => archiveTermRanges(value, term, allowFuzzy, foldedValue, originalTerm));
   if (termRanges.some((ranges) => ranges.length === 0)) return null;
   const ranges = mergeArchiveHighlightRanges(termRanges.flat());
   if (!ranges.length) return null;

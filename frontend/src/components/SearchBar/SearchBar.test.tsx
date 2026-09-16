@@ -598,4 +598,24 @@ describe("SearchBar", () => {
     expect(container.querySelector('.filter-suggestion-hint strong')?.parentElement).toHaveTextContent('3 items');
   });
 
+  it.each([['Family'], ['Family', 'family']])('treats incoming topic spellings %j as one selected choice', async (...initialTopics) => {
+    const user = userEvent.setup();
+    const onFiltersChange = vi.fn();
+    function Harness() {
+      const [filters, setFilters] = useState<SearchFilters>({ topic: initialTopics });
+      return <SearchBar query="" filters={filters} facets={{ ...baseFacets, topics: [...baseFacets.topics, { value: 'work', count: 3 }] }} total={12} loading={false} refineOpen onQueryChange={vi.fn()} onFiltersChange={(next) => { onFiltersChange(next); setFilters(next); }} />;
+    }
+    render(<Harness />);
+    expect(onFiltersChange).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Topic' }));
+    const choices = within(screen.getByRole('group', { name: 'Topic' }));
+    expect(onFiltersChange).not.toHaveBeenCalled();
+    expect(choices.getAllByRole('button', { name: /^Family/ })).toHaveLength(1);
+    expect(choices.getByRole('button', { name: /^Family/ })).toHaveAttribute('aria-pressed', 'true');
+    await user.click(choices.getByRole('button', { name: /^Work/ }));
+    expect(onFiltersChange).toHaveBeenLastCalledWith({ topic: ['family', 'work'] });
+    await user.click(choices.getByRole('button', { name: /^Family/ }));
+    expect(onFiltersChange).toHaveBeenLastCalledWith({ topic: ['work'] });
+  });
+
 });

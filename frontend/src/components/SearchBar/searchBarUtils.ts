@@ -207,3 +207,8 @@ export function buildFacetChoiceOptions(
   }
   return [...choices.values()].sort((left, right) => left.label.localeCompare(right.label));
 }
+
+/** Topic filtering is case-insensitive; keep one identity without altering punctuation. */
+export function normalizeTopicChoices(values: string[] | null | undefined): string[] {
+  return [...new Set((values || []).map((value) => value.trim().toLowerCase()).filter(Boolean))];
+}

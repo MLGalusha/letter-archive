@@ -10,7 +10,7 @@ import {
   getBestSuggestion,
 } from "./searchBarUtils";
 import type { FilterChoiceOption } from "./searchBarUtils";
-import { buildFacetChoiceOptions } from "./searchBarUtils";
+import { buildFacetChoiceOptions, normalizeTopicChoices } from "./searchBarUtils";
 import FilterChoiceField from "./FilterChoiceField";
 import FacetRow from "./FacetRow";
 import SuggestionHint from "./SuggestionHint";
@@ -189,6 +189,8 @@ export default function SearchBar({
     });
   }, [filters, onFiltersChange]);
 
+  const selectedTopics = useMemo(() => normalizeTopicChoices(filters.topic), [filters.topic]);
+
   // Count active filters for the badge on the refine button.
   // In compact mode, format chips are inside the flyout so they count.
   // In full mode, format chips are in the toolbar so they don't count.
@@ -199,7 +201,7 @@ export default function SearchBar({
     if (filters.sender) count++;
     if (filters.recipient) count++;
     if (filters.place) count++;
-    if (filters.topic?.length) count += filters.topic.length;
+    if (selectedTopics.length) count += selectedTopics.length;
     if (filters.tone?.length) count += filters.tone.length;
     if (filters.relationship?.length) count += filters.relationship.length;
     if (filters.year) count++;
@@ -207,7 +209,7 @@ export default function SearchBar({
     if (filters.hasTranscript !== undefined && filters.hasTranscript !== null) count++;
     if (filters.verified !== undefined && filters.verified !== null) count++;
     return count;
-  }, [filters, selectedFormats, hideCollectionFilter]);
+  }, [filters, selectedFormats, selectedTopics, hideCollectionFilter]);
   // Resolve the effective sort: user's explicit choice wins, otherwise the
   // page default. This never depends on query presence — the sort the user
   // sees should not silently flip when they start or stop typing.
@@ -316,7 +318,7 @@ export default function SearchBar({
     ),
     [facets.places, filters.place],
   );
-  const topicChoiceOptions = useMemo(() => buildFacetChoiceOptions(facets.topics, filters.topic), [facets.topics, filters.topic]);
+  const topicChoiceOptions = useMemo(() => buildFacetChoiceOptions(facets.topics, selectedTopics), [facets.topics, selectedTopics]);
 
   const toggleFormatFilter = useCallback((format: LetterImageType) => {
     const nextFormats = selectedFormats?.includes(format)
@@ -522,7 +524,7 @@ export default function SearchBar({
             <FilterChoiceField
               id={topicFilterId}
               label="Topic"
-              value={filters.topic?.join(",") || ""}
+              value={selectedTopics.join(",")}
               placeholder="All"
               options={topicChoiceOptions}
               allowClear
@@ -534,7 +536,7 @@ export default function SearchBar({
               compact
               open={openChoiceField === topicFilterId}
               onOpenChange={(open) => setOpenChoiceField(open ? topicFilterId : null)}
-              onChange={(value) => updateFilter({ topic: value ? value.split(",") : null })}
+              onChange={(value) => updateFilter({ topic: value ? normalizeTopicChoices(value.split(",")) : null })}
             />
           </div>
           <div className="filter-group">

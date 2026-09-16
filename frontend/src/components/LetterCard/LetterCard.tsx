@@ -157,7 +157,6 @@ function LetterCard({
   const primaryChip = card.primaryChip;
   const date = card.date || card.dateRaw;
   const hook = card.hook?.trim();
-  const hookHighlightRanges = searchPreview?.hookHighlightRanges ?? [];
   const peopleLine = getCorrespondentLine(card);
   const hasImage = Boolean(card.imageUrl);
   const fallbackLabel = date || mediaLabel;
@@ -364,7 +363,7 @@ function LetterCard({
           {date && <div className="letter-card-date">{date}</div>}
           {hook && (
             <p className="letter-hook">
-              {renderHighlightedExcerpt(hook, hookHighlightRanges)}
+              {hook}
             </p>
           )}
         </div>

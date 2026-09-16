@@ -721,7 +721,7 @@ export default function SearchBar({
           <p className="search-kicker">{searchKicker || "Archive-Wide Search"}</p>
           <h2 className="search-title">{searchTitle || "Search the Archive"}</h2>
           <p className="search-description">
-            Search names, phrases, places, dates, transcripts, telegram text, and photo descriptions.
+            Search transcript text, dates, senders, recipients, and locations. Match previews show transcript text first; filters narrow the results.
           </p>
         </div>
         <div className="search-status-block">

@@ -245,6 +245,7 @@ export interface ArchiveSearchPreview {
   matchCount: number;
   highlightRanges: ArchiveSearchHighlightRange[];
   matchedFieldLabel: string;
+  /** Legacy API field; never rendered as query evidence. */
   hookHighlightRanges?: ArchiveSearchHighlightRange[];
 }
 

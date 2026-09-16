@@ -86,7 +86,7 @@ describe("LetterCard", () => {
     expect(button).not.toHaveAttribute("title");
     expect(screen.queryByText("3 matches")).not.toBeInTheDocument();
     expect(screen.queryByText("Transcript match")).not.toBeInTheDocument();
-    expect(container.querySelector(".letter-hook .letter-card-search-match-highlight")?.textContent).toBe("reply");
+    expect(container.querySelector(".letter-hook .letter-card-search-match-highlight")).toBeNull();
     expect(button).not.toHaveClass("letter-card--search-preview-visible");
 
     const shell = button.closest(".letter-card-shell") as HTMLElement;
@@ -160,7 +160,7 @@ describe("LetterCard", () => {
     const shell = button.closest(".letter-card-shell") as HTMLElement;
     expect(screen.queryByRole("button", { name: "Show search match preview" })).not.toBeInTheDocument();
     expect(shell).not.toHaveClass("letter-card-shell--has-search-match");
-    expect(document.querySelector(".letter-hook .letter-card-search-match-highlight")?.textContent).toBe("future");
+    expect(document.querySelector(".letter-hook .letter-card-search-match-highlight")).toBeNull();
 
     fireEvent.mouseEnter(shell);
     expect(button).not.toHaveClass("letter-card--search-preview-visible");

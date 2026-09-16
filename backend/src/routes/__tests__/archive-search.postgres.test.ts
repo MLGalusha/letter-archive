@@ -202,4 +202,32 @@ describe.skipIf(!enabled)('public archive search against PostgreSQL', () => {
     }
   });
 
+  it('preserves original-term fuzzy eligibility through database case expansion', async () => {
+    const [sender] = await client`INSERT INTO letters ${client({ collection_id: collection, date_raw: '19510101', sender: 'stanbul' })} RETURNING id`;
+    try {
+      for (const query of ['İstanbul', 'İstanbul İstanbul', 'İstanbul İSTANBUL']) {
+        const response = await search({ search: query });
+        const match = response.letters.find((item) => item.id === sender!.id);
+        if (icu) {
+          expect(match?.searchPreview).toMatchObject({ matchedFieldLabel: 'Sender', excerpt: 'stanbul', highlightRanges: [{ start: 0, end: 7 }] });
+        } else {
+          expect(match).toBeUndefined();
+        }
+      }
+      for (const query of ['i\u0307stanbul', 'İst', 'İstan-bul', 'İstanbul i\u0307stanbul']) {
+        expect((await search({ search: query })).letters.some((item) => item.id === sender!.id)).toBe(false);
+      }
+      if (icu) {
+        await client`UPDATE letters SET recipient = 'İstanbul' WHERE id = ${sender!.id}`;
+        const response = await search({ search: 'İstanbul i\u0307stanbul' });
+        expect(response.letters.find((item) => item.id === sender!.id)?.searchPreview)
+          .toMatchObject({ matchedFieldLabel: 'Recipient', excerpt: 'İstanbul', highlightRanges: [{ start: 0, end: 8 }] });
+      }
+      const [normalized] = await client`SELECT lower('İstanbul') AS query, similarity('stanbul', lower('İstanbul')) AS score`;
+      expect(archiveWordSimilarity('stanbul', normalized!.query)).toBeCloseTo(normalized!.score, 6);
+    } finally {
+      await client`DELETE FROM letters WHERE id = ${sender!.id}`;
+    }
+  });
+
 });

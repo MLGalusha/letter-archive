@@ -15,19 +15,23 @@ export function canFuzzyMatchArchiveTerm(term: string): boolean {
   return [...term].length >= 4 && /^\p{L}+$/u.test(term);
 }
 
-/** pg_trgm similarity for a single alphanumeric word: distinct padded trigram sets. */
+/** pg_trgm ignores separators and unions the padded trigrams of each word. */
 export function archiveWordSimilarity(left: string, right: string): number {
-  const trigrams = (word: string) => {
-    const chars = [...`  ${word.toLowerCase()} `];
-    return new Set(chars.slice(0, -2).map((_, i) => chars.slice(i, i + 3).join('')));
+  const trigrams = (text: string) => {
+    const result = new Set<string>();
+    for (const word of text.toLowerCase().match(/[\p{L}\p{N}]+/gu) || []) {
+      const chars = [...`  ${word} `];
+      for (let i = 0; i < chars.length - 2; i++) result.add(chars.slice(i, i + 3).join(''));
+    }
+    return result;
   };
   const a = trigrams(left);
   const b = trigrams(right);
   const shared = [...a].filter((value) => b.has(value)).length;
-  return shared / (a.size + b.size - shared);
+  return a.size + b.size ? shared / (a.size + b.size - shared) : 0;
 }
 
-export function archiveTermRanges(value: string, term: string, allowFuzzy: boolean, databaseFolded?: string) {
+export function archiveTermRanges(value: string, term: string, allowFuzzy: boolean, databaseFolded?: string, originalTerm = term) {
   if (!term) return [];
   const lowered = databaseFolded ?? value.toLowerCase();
   // Unicode lowercase can add/remove combining marks on a base character (ICU
@@ -51,7 +55,7 @@ export function archiveTermRanges(value: string, term: string, allowFuzzy: boole
     ranges.push({ start: offsets[start]!.start, end: offsets[start + term.length - 1]!.end });
   }
   // A literal occurrence always explains the term before approximate names/places.
-  if (ranges.length || !allowFuzzy || !canFuzzyMatchArchiveTerm(term)) return ranges;
+  if (ranges.length || !allowFuzzy || !canFuzzyMatchArchiveTerm(originalTerm)) return ranges;
   for (const token of lowered.matchAll(/[\p{L}\p{N}]+/gu)) {
     if (archiveWordSimilarity(token[0], term) >= ARCHIVE_TYPO_SIMILARITY) {
       ranges.push({ start: offsets[token.index]!.start, end: offsets[token.index + token[0].length - 1]!.end });

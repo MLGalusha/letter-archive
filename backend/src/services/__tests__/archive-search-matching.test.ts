@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { archiveTermRanges } from '../archive-search-matching.js';
+import { archiveTermRanges, archiveWordSimilarity } from '../archive-search-matching.js';
 
 describe('archive highlight coordinates', () => {
+  it('uses original eligibility and per-word trigrams for a database-expanded query', () => {
+    expect(archiveWordSimilarity('stanbul', 'i\u0307stanbul')).toBeCloseTo(0.8);
+    expect(archiveWordSimilarity('---', '...')).toBe(0);
+    expect(archiveTermRanges('stanbul', 'i\u0307stanbul', true, 'stanbul', 'İstanbul'))
+      .toEqual([{ start: 0, end: 7 }]);
+    expect(archiveTermRanges('stanbul', 'i\u0307stanbul', true, 'stanbul', 'i\u0307stanbul')).toEqual([]);
+    expect(archiveTermRanges('stanbul', 'i\u0307stanbul', false, 'stanbul', 'İstanbul')).toEqual([]);
+  });
   it.each([
     ['İ𐐀 📨 red', 'i\u0307𐐨 📨 red', 'i\u0307', 'İ'],
     ['İ𐐀 📨 red', 'i\u0307𐐨 📨 red', 'red', 'red'],

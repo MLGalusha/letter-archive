@@ -1568,7 +1568,9 @@ function buildArchiveSearchPreview(
   const search = query.search?.trim();
   if (!search) return undefined;
 
-  const searchTerms = getArchiveSearchTerms(row.normalizedSearch ?? search.toLowerCase());
+  // Keep original/folded term positions aligned, including case variants and
+  // repeats; deduplicating either side alone can change fuzzy eligibility.
+  const searchTerms = (row.normalizedSearch ?? search.toLowerCase()).trim().split(/\s+/u);
   for (const field of getArchiveTypedSearchFields()) {
     const candidates = [...new Set(field.values(row, formattedDate))]
       .map((original) => {
@@ -1669,7 +1671,8 @@ function scoreArchivePreviewValue(
   allowFuzzy: boolean,
   foldedValue: string,
 ): ArchivePreviewCandidate | null {
-  const termRanges = searchTerms.map((term) => archiveTermRanges(value, term, allowFuzzy, foldedValue));
+  const originalTerms = rawSearch.trim().split(/\s+/u);
+  const termRanges = searchTerms.map((term, index) => archiveTermRanges(value, term, allowFuzzy, foldedValue, originalTerms[index]));
   if (termRanges.some((ranges) => ranges.length === 0)) return null;
   const ranges = mergeArchiveHighlightRanges(termRanges.flat());
   if (!ranges.length) return null;

@@ -913,8 +913,7 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
           FROM unnest(COALESCE(sg.senders, ARRAY[]::text[]) || COALESCE(sg.recipients, ARRAY[]::text[])
             || COALESCE(sg.places, ARRAY[]::text[])
             || ARRAY[${sql.join(fuzzyTerms.map((term) => sql`${term}`), sql`, `)}]::text[]) AS value
-        ) ELSE NULL END AS "searchWordMap",
-        COUNT(*) OVER()::int AS "totalCount"
+        ) ELSE NULL END AS "searchWordMap"
       FROM scoped_groups sg
       LEFT JOIN primary_page_counts ppc
         ON ppc."collectionId" = sg."collectionId"
@@ -931,6 +930,9 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
     // Combined facets query — evaluates the CTE once for all 8 facets
     db.execute(sql`
       ${ctes}
+      SELECT 'total' AS facet, NULL::text AS value, NULL::text AS label, COUNT(*)::int AS count
+      FROM scoped_groups
+      UNION ALL
       SELECT 'formats' AS facet, value, label, count FROM (
         SELECT format AS value, NULL AS label, COUNT(*)::int AS count
         FROM (
@@ -1004,12 +1006,13 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
     `),
   ]);
 
-  const rows = getRows<ArchiveSearchRow & { totalCount?: number }>(rowsResult);
-  const total = Number(rows[0]?.totalCount || 0);
+  const rows = getRows<ArchiveSearchRow>(rowsResult);
 
   // Split combined facets result by facet type
   type FacetRow = { facet: string; value: string | number | null; label: string | null; count: number | string | bigint };
   const allFacets = getRows<FacetRow>(facetsResult);
+  // The aggregate exists even when LIMIT/OFFSET returns no result rows.
+  const total = Number(allFacets.find((row) => row.facet === 'total')?.count ?? 0);
   const facetsByType = new Map<string, FacetRow[]>();
   for (const row of allFacets) {
     const list = facetsByType.get(row.facet) || [];
@@ -1507,31 +1510,34 @@ function buildArchiveSearchOrderBy(query: ArchiveSearchQuery) {
     );
   }
 
+  // Keep tied results stable across pages without changing the selected sort.
+  const groupTieBreak = sql`sg."collectionId" ASC, sg."dateRaw" ASC, sg."typeSequence" ASC`;
+
   if (resolvedSort === 'createdAt') {
     return query.sortOrder === 'asc'
-      ? sql`sg."createdAt" ASC, REPLACE(sg."dateRaw", 'X', '0') ASC`
-      : sql`sg."createdAt" DESC, REPLACE(sg."dateRaw", 'X', '0') DESC`;
+      ? sql`sg."createdAt" ASC, REPLACE(sg."dateRaw", 'X', '0') ASC, ${groupTieBreak}`
+      : sql`sg."createdAt" DESC, REPLACE(sg."dateRaw", 'X', '0') DESC, ${groupTieBreak}`;
   }
 
   if (resolvedSort === 'sender') {
     return query.sortOrder === 'asc'
-      ? sql`LOWER(NULLIF(sg.sender, '')) ASC NULLS LAST, REPLACE(sg."dateRaw", 'X', '0') ASC, sg."createdAt" DESC`
-      : sql`LOWER(NULLIF(sg.sender, '')) DESC NULLS LAST, REPLACE(sg."dateRaw", 'X', '0') DESC, sg."createdAt" DESC`;
+      ? sql`LOWER(NULLIF(sg.sender, '')) ASC NULLS LAST, REPLACE(sg."dateRaw", 'X', '0') ASC, sg."createdAt" DESC, ${groupTieBreak}`
+      : sql`LOWER(NULLIF(sg.sender, '')) DESC NULLS LAST, REPLACE(sg."dateRaw", 'X', '0') DESC, sg."createdAt" DESC, ${groupTieBreak}`;
   }
 
   if (resolvedSort === 'recipient') {
     return query.sortOrder === 'asc'
-      ? sql`LOWER(NULLIF(sg.recipient, '')) ASC NULLS LAST, REPLACE(sg."dateRaw", 'X', '0') ASC, sg."createdAt" DESC`
-      : sql`LOWER(NULLIF(sg.recipient, '')) DESC NULLS LAST, REPLACE(sg."dateRaw", 'X', '0') DESC, sg."createdAt" DESC`;
+      ? sql`LOWER(NULLIF(sg.recipient, '')) ASC NULLS LAST, REPLACE(sg."dateRaw", 'X', '0') ASC, sg."createdAt" DESC, ${groupTieBreak}`
+      : sql`LOWER(NULLIF(sg.recipient, '')) DESC NULLS LAST, REPLACE(sg."dateRaw", 'X', '0') DESC, sg."createdAt" DESC, ${groupTieBreak}`;
   }
 
   if (resolvedSort === 'collection') {
     return query.sortOrder === 'asc'
-      ? sql`LOWER(NULLIF(sg."collectionCode", '')) ASC NULLS LAST, REPLACE(sg."dateRaw", 'X', '0') ASC, sg."createdAt" DESC`
-      : sql`LOWER(NULLIF(sg."collectionCode", '')) DESC NULLS LAST, REPLACE(sg."dateRaw", 'X', '0') DESC, sg."createdAt" DESC`;
+      ? sql`LOWER(NULLIF(sg."collectionCode", '')) ASC NULLS LAST, REPLACE(sg."dateRaw", 'X', '0') ASC, sg."createdAt" DESC, ${groupTieBreak}`
+      : sql`LOWER(NULLIF(sg."collectionCode", '')) DESC NULLS LAST, REPLACE(sg."dateRaw", 'X', '0') DESC, sg."createdAt" DESC, ${groupTieBreak}`;
   }
 
-  return sql`sg."searchRank" DESC, REPLACE(sg."dateRaw", 'X', '0') DESC, sg."createdAt" DESC`;
+  return sql`sg."searchRank" DESC, REPLACE(sg."dateRaw", 'X', '0') DESC, sg."createdAt" DESC, ${groupTieBreak}`;
 }
 
 function transformArchiveSearchRow(row: ArchiveSearchRow, query: ArchiveSearchQuery) {

@@ -268,4 +268,43 @@ describe.skipIf(!enabled)('public archive search against PostgreSQL', () => {
     }
   });
 
+  it('keeps totals on empty pages and gives every tied sort a stable group order', async () => {
+    const tiedIds: Record<number, string> = {};
+    for (const sequence of [5, 1, 7, 2, 6, 3, 4]) {
+      const rows = await client`INSERT INTO letters
+        (collection_id, date_raw, type_sequence, transcription_text, created_at)
+        VALUES (${collection}, '19300101', ${sequence}, 'paginationneedle', '2020-01-01T00:00:00Z')
+        RETURNING id`;
+      tiedIds[sequence] = rows[0]!.id;
+    }
+    try {
+      for (const sort of ['relevance', 'letterDate', 'createdAt', 'sender', 'recipient', 'collection']) {
+        for (const sortOrder of ['asc', 'desc']) {
+          const query = { search: 'paginationneedle', sort, sortOrder, limit: '3' };
+          const seen: string[] = [];
+          for (let page = 1; page <= 4; page++) {
+            const result = await search({ ...query, page: String(page) });
+            expect(result.total).toBe(7);
+            seen.push(...result.letters.map((item) => item.id));
+            if (page === 4) expect(result.letters).toEqual([]);
+          }
+          const sequences = [1, 2, 3, 4, 5, 6, 7];
+          // Preserve chronology's existing direction for its complete group key.
+          if (sort === 'letterDate' && sortOrder === 'desc') sequences.reverse();
+          expect(seen, `${sort} ${sortOrder}`).toEqual(sequences.map((sequence) => tiedIds[sequence]));
+          expect(new Set(seen).size).toBe(7);
+        }
+      }
+      const empty = await search({ search: 'unfindablezzzz', page: '99' });
+      expect(empty).toMatchObject({ letters: [], total: 0 });
+      // Later requests see publication changes, not a cached historical total.
+      // Offset pagination intentionally does not promise a cross-request snapshot.
+      await client`UPDATE letters SET visibility = 'HIDDEN' WHERE id = ${tiedIds[1]!}`;
+      const changed = await search({ search: 'paginationneedle', limit: '3', page: '3' });
+      expect(changed).toMatchObject({ letters: [], total: 6 });
+    } finally {
+      await client`DELETE FROM letters WHERE transcription_text = 'paginationneedle'`;
+    }
+  });
+
 });

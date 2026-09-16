@@ -956,6 +956,7 @@ describe('letters route integration', () => {
       },
     ])
       .mockResolvedValueOnce([
+        { facet: 'total', value: null, label: null, count: 1 },
         { facet: 'formats', value: 'letter', label: null, count: 1 },
         { facet: 'collections', value: '009', label: 'Collection Nine', count: 1 },
         { facet: 'correspondents', value: 'Jimmie', label: null, count: 1 },
@@ -1209,6 +1210,7 @@ describe('letters route integration', () => {
         },
       ])
       .mockResolvedValueOnce([
+        { facet: 'total', value: null, label: null, count: 1 },
         { facet: 'formats', value: 'letter', label: null, count: 1 },
         { facet: 'collections', value: '009', label: 'Collection Nine', count: 1 },
       ]);
@@ -1265,6 +1267,7 @@ describe('letters route integration', () => {
         },
       ])
       .mockResolvedValueOnce([
+        { facet: 'total', value: null, label: null, count: 1 },
         { facet: 'formats', value: 'letter', label: null, count: 1 },
         { facet: 'collections', value: '009', label: 'Collection Nine', count: 1 },
         { facet: 'correspondents', value: 'Jimmie', label: null, count: 1 },
@@ -1338,6 +1341,17 @@ describe('letters route integration', () => {
     expect(preview?.matchedFieldLabel).toBe(label);
     expect(preview?.matchCount).toBe(count);
     expect(preview?.hookHighlightRanges).toBeUndefined();
+  });
+
+  it('retains aggregate totals when an offset page has no rows', async () => {
+    executeMock.mockResolvedValueOnce([]).mockResolvedValueOnce([
+      { facet: 'total', value: null, label: null, count: 94 },
+    ]);
+    const response = await invokeRouter(lettersRouter, {
+      method: 'GET', url: '/letters/search', query: { page: '5', limit: '24' },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toMatchObject({ letters: [], total: 94, page: 5, limit: 24 });
   });
 
 });

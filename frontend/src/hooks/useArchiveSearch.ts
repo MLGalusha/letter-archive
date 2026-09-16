@@ -237,10 +237,22 @@ export default function useArchiveSearch(config: UseArchiveSearchConfig): UseArc
     [filters, searchQuery, defaultSort, defaultSortOrder],
   );
 
+  const invalidYearRange = requestParams.yearFrom !== undefined && requestParams.yearTo !== undefined
+    && requestParams.yearFrom > requestParams.yearTo;
+
   // ── Execute search (180ms debounce with request versioning) ──
   useEffect(() => {
     let cancelled = false;
     const requestVersion = ++requestVersionRef.current;
+    // Keep invalid URL/history bounds visible for correction, but never send
+    // them to the API or let an older response replace this validation state.
+    if (invalidYearRange) {
+      setArchiveLoading(false);
+      setArchiveLoadingMore(false);
+      setArchiveError('From year must be before or equal to To year. Correct the range or clear filters.');
+      setArchiveLoadMoreError(null);
+      return;
+    }
     const timer = window.setTimeout(() => {
       setArchiveLoading(true);
       setArchiveLoadingMore(false);
@@ -266,11 +278,11 @@ export default function useArchiveSearch(config: UseArchiveSearchConfig): UseArc
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [requestParams]);
+  }, [requestParams, invalidYearRange]);
 
   // ── Load more handler ──
   const handleArchiveLoadMore = useCallback(async () => {
-    if (archiveLoading || archiveLoadingMore) return;
+    if (invalidYearRange || archiveLoading || archiveLoadingMore) return;
     if (archiveResults.letters.length >= archiveResults.total) return;
 
     const requestVersion = requestVersionRef.current;
@@ -297,7 +309,7 @@ export default function useArchiveSearch(config: UseArchiveSearchConfig): UseArc
         setArchiveLoadingMore(false);
       }
     }
-  }, [archiveLoading, archiveLoadingMore, archiveResults, requestParams]);
+  }, [archiveLoading, archiveLoadingMore, archiveResults, requestParams, invalidYearRange]);
 
   // ── Derived sort values ──
   const resolvedSort = getResolvedArchiveSort(filters, defaultSort);

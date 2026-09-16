@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseFilename } from "../../../../utils/filename-parser";
 import type { UploadedImage } from "../types";
 import {
@@ -24,6 +24,9 @@ function makeImage(filename: string, overrides?: Partial<UploadedImage>): Upload
 }
 
 describe("upload utils", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   it("groups and sorts images by collection and letter", () => {
     const grouped = groupImagesByCollection([
       makeImage("002-18860315-L01-02.jpg"),
@@ -63,8 +66,16 @@ describe("upload utils", () => {
     expect(filename).toBe("007-XXXXXXXX-L02-05.png");
   });
 
-  it("creates stable random-like IDs", () => {
+  it.each([
+    [0, "000000000"],
+    [0.5, "i00000000"],
+    [1 - Number.EPSILON / 2, "zzzzzzzzz"],
+  ])("creates a nine-character upload ID for random value %s", (random, expected) => {
+    vi.spyOn(Math, "random").mockReturnValue(random);
+
     const id = generateId();
+
+    expect(id).toBe(expected);
     expect(id).toHaveLength(9);
     expect(id).toMatch(/^[a-z0-9]+$/);
   });

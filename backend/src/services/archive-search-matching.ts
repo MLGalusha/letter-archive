@@ -4,6 +4,12 @@ export function archiveSearchTerms(value: string): string[] {
 }
 
 export const ARCHIVE_TYPO_SIMILARITY = 0.6;
+// Lowercase length changes add/remove combining marks on a base character.
+// Match those groups in one pass; unrelated code points retain their own spans.
+const caseGroups = (text: string) => Array.from(
+  text.matchAll(/\P{M}\p{M}*|\p{M}+/gu),
+  (match) => ({ index: match.index, length: match[0].length }),
+);
 
 export function canFuzzyMatchArchiveTerm(term: string): boolean {
   return [...term].length >= 4 && /^\p{L}+$/u.test(term);
@@ -24,18 +30,21 @@ export function archiveWordSimilarity(left: string, right: string): number {
 export function archiveTermRanges(value: string, term: string, allowFuzzy: boolean, databaseFolded?: string) {
   if (!term) return [];
   const lowered = databaseFolded ?? value.toLowerCase();
-  // Lowercasing can expand a character (İ -> i + combining dot). Keep ranges
-  // in the original UTF-16 coordinates consumed by the UI.
+  // Unicode lowercase can add/remove combining marks on a base character (ICU
+  // English İ, Lithuanian accents, Turkish dotted I). Align base/mark groups instead
+  // of individual code points, preserving original base/mark spans and UTF-16 offsets.
+  // Both strings are scanned once; no prefix lowercasing or edit-distance grid.
+  const original = caseGroups(value);
+  const folded = caseGroups(lowered);
+  // Lowercase preserves these groups. If a future provider applies
+  // another transformation, omit highlights rather than invent offsets or throw.
+  if (original.length !== folded.length) return [];
   const offsets: Array<{ start: number; end: number }> = [];
-  let offset = 0;
-  const foldedCharacters = databaseFolded === undefined ? null : [...databaseFolded];
-  let characterIndex = 0;
-  for (const character of value) {
-    const foldedLength = foldedCharacters?.[characterIndex++]?.length ?? character.toLowerCase().length;
-    for (let i = 0; i < foldedLength; i++) {
-      offsets.push({ start: offset, end: offset + character.length });
+  for (let index = 0; index < original.length; index++) {
+    const source = original[index]!;
+    for (let i = 0; i < folded[index]!.length; i++) {
+      offsets.push({ start: source.index, end: source.index + source.length });
     }
-    offset += character.length;
   }
   const ranges: Array<{ start: number; end: number }> = [];
   for (let start = lowered.indexOf(term); start !== -1; start = lowered.indexOf(term, start + term.length)) {

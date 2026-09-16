@@ -2,13 +2,14 @@ import { execFileSync } from 'node:child_process';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Router } from 'express';
 import type { Sql } from 'postgres';
-import { archiveWordSimilarity } from '../../services/archive-search-matching.js';
+import { archiveTermRanges, archiveWordSimilarity } from '../../services/archive-search-matching.js';
 import { invokeRouter } from '../../test/express-test-utils.js';
 
 // Opt-in real SQL coverage. Owns a disposable Docker database; never connects to
 // DATABASE_URL from the developer's shell or the application environment.
 // ARCHIVE_SEARCH_POSTGRES_TEST=1 npm test -- archive-search.postgres.test.ts
 const enabled = process.env.ARCHIVE_SEARCH_POSTGRES_TEST === '1';
+const icu = process.env.ARCHIVE_SEARCH_POSTGRES_ICU === '1';
 describe.skipIf(!enabled)('public archive search against PostgreSQL', () => {
   let container: string;
   let client: Sql;
@@ -18,7 +19,7 @@ describe.skipIf(!enabled)('public archive search against PostgreSQL', () => {
   const ids: Record<string, string> = {};
 
   beforeAll(async () => {
-    container = execFileSync('docker', ['run', '--rm', '-d', '-e', 'POSTGRES_PASSWORD=fixture', '-e', 'POSTGRES_DB=archive_fixture', '-p', '127.0.0.1::5432', 'postgres:16-alpine'], { encoding: 'utf8' }).trim();
+    container = execFileSync('docker', ['run', '--rm', '-d', '-e', 'POSTGRES_PASSWORD=fixture', '-e', 'POSTGRES_DB=archive_fixture', ...(icu ? ['-e', 'POSTGRES_INITDB_ARGS=--locale-provider=icu --icu-locale=en --encoding=UTF8'] : []), '-p', '127.0.0.1::5432', 'postgres:16-alpine'], { encoding: 'utf8' }).trim();
     const binding = execFileSync('docker', ['port', container, '5432'], { encoding: 'utf8' }).trim();
     const url = `postgresql://postgres:fixture@${binding}/archive_fixture`;
     vi.stubEnv('DATABASE_URL', url);
@@ -80,6 +81,7 @@ describe.skipIf(!enabled)('public archive search against PostgreSQL', () => {
       { key: 'hyphen', sender: 'Anne-Marie', date_raw: '19500113' },
       { key: 'quote', transcription_text: 'She said "lantern".', date_raw: '19500114' },
       { key: 'turkish', transcription_text: 'İstanbul', date_raw: '19500120' },
+      { key: 'foldedOffsets', transcription_text: 'İ𐐀 📨 nebula', date_raw: '19500123' },
       { key: 'sigma', transcription_text: 'ΟΣ', date_raw: '19500121' },
       { key: 'nbspMarker', transcription_text: 'amber--- Page\u00a01 ---lamp', date_raw: '19500122' },
       { key: 'accent', sender: 'Éléonore', date_raw: '19500115' },
@@ -143,7 +145,7 @@ describe.skipIf(!enabled)('public archive search against PostgreSQL', () => {
     ['red lantern', ['phrase', 'separated']], ['lantern red red', ['phrase', 'separated']],
     ['Mollly', ['typoName']], ['fox OR goose', ['operators']], ['fox -goose', ['operators']],
     ['Anne-Marie', ['hyphen']], ['"lantern"', ['quote']], ['ÉLÉONORE', ['accent']],
-    ['İstanbul', ['turkish']], ['istanbul', ['turkish']], ['οσ', ['sigma']], ['ος', []], ['Page', ['nbspMarker']],
+    ['İstanbul', ['turkish']], ['istanbul', icu ? [] : ['turkish']], ['οσ', icu ? [] : ['sigma']], ['ος', icu ? ['sigma'] : []], ['Page', ['nbspMarker']],
     ['77', []], ['quartz%', []], ['\"quartz\"', []],
   ] as Array<[string, string[]]>)('agrees on literal input and previews for %s', async (query, keys) => {
     const response = await search({ search: query, limit: '100' });
@@ -161,6 +163,35 @@ describe.skipIf(!enabled)('public archive search against PostgreSQL', () => {
         expect(range.start).toBeGreaterThanOrEqual(0);
         expect(range.end).toBeLessThanOrEqual(item.searchPreview!.excerpt.length);
       }
+    }
+  });
+
+  it('maps database lowercase expansions back to original transcript coordinates', async () => {
+    const [database] = await client`SELECT lower('İ') AS folded`;
+    expect(database!.folded).toBe(icu ? 'i\u0307' : 'i');
+    for (const [query, highlighted] of [['İ𐐀', 'İ𐐀'], ['nebula', 'nebula']]) {
+      const response = await search({ search: query! });
+      const preview = response.letters.find((item) => item.id === ids.foldedOffsets)?.searchPreview;
+      expect(preview?.highlightRanges.map((range) => preview.excerpt.slice(range.start, range.end))).toContain(highlighted);
+    }
+  });
+
+  it('maps contextual Lithuanian and Turkish ICU folds without changing casing policy', async () => {
+    const lithuanian = 'I\u0301 📨 nebula';
+    const turkish = 'I\u0307 📨 nebula';
+    const [folded] = await client`SELECT
+      lower(${lithuanian} COLLATE "lt-x-icu") AS lithuanian,
+      lower(${turkish} COLLATE "tr-x-icu") AS turkish`;
+    expect(folded!.lithuanian).toBe('i\u0307\u0301 📨 nebula');
+    expect(folded!.turkish).toBe('i 📨 nebula');
+    for (const [original, normalized, firstTerm] of [
+      [lithuanian, folded!.lithuanian, 'i\u0307'],
+      [turkish, folded!.turkish, 'i'],
+    ]) {
+      expect(archiveTermRanges(original, firstTerm, false, normalized)
+        .map((range) => original.slice(range.start, range.end))).toEqual([original.slice(0, 2)]);
+      expect(archiveTermRanges(original, 'nebula', false, normalized)
+        .map((range) => original.slice(range.start, range.end))).toEqual(['nebula']);
     }
   });
 

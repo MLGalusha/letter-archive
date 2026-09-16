@@ -44,3 +44,17 @@ Trigram padding and word boundaries follow [PostgreSQL's pg_trgm documentation](
 Review follow-up: PostgreSQL now owns case normalization of both queries and source texts. The existing rows query returns an internal original-to-normalized text map, used only while building previews and never sent in the public API payload. This avoids JavaScript/PostgreSQL differences for Turkish dotted I and Greek sigma without special-casing particular letters or narrowing all non-ASCII matching. It adds internal database response bytes proportional to the selected page's allowed source texts, with no extra round trip. Database locale defines case equivalence; identity input remains searchable. Real PostgreSQL fixtures cover `İstanbul`, `istanbul`, `οσ`, and `ος` explicitly.
 
 Generated page separators recognize the same explicit ASCII whitespace set (space, tab, CR, LF, form feed, vertical tab) in SQL and JavaScript. A lookalike separator containing NBSP remains literal source content in both, so it can still be matched and explained. This avoids locale-dependent regular-expression whitespace disagreement.
+
+ICU review follow-up: preview offset mapping groups each Unicode base code point with its following combining marks, preserving leading mark runs separately. Unicode lowercase expansions/contractions change marks within these groups (English dotted I, Lithuanian accents, Turkish dot removal); contextual Greek sigma changes values without changing group count. SQL still owns the folded text. Matching ranges map back to the complete original base/mark span, including astral UTF-16 coordinates. This is a lowercase-specific mapping, not general case folding or a full grapheme algorithm. An unexpected group-count mismatch safely omits highlights instead of returning incorrect coordinates or throwing.
+
+Both strings are scanned once with Unicode regular expressions, retaining only group indices/lengths and output offsets. A 35k-character repeated-expansion transcript is a regression fixture. An initial `Intl.Segmenter` prototype was rejected after a Node20 cost check exposed copied-input allocations and an out-of-memory failure at 30k characters; it is not used in the implementation.
+
+To exercise the actual route with ICU English as the database default, run:
+
+```sh
+ARCHIVE_SEARCH_POSTGRES_TEST=1 ARCHIVE_SEARCH_POSTGRES_ICU=1 npm test -- archive-search.postgres.test.ts archive-search-matching.test.ts
+```
+
+The fixture asserts the actual database mapping before testing highlights at and after the expansion. Both database modes also check explicit Lithuanian and Turkish ICU collations, including expansion/contraction and trailing matches. Casing equivalence intentionally follows the active database locale, so English ICU `İstanbul` matches itself but does not match unaccented `istanbul`.
+
+A bounded local Node20.20.1 probe of the final mapping with 1k/10k/30k/100k repeated dotted-I characters took approximately 3/7/14/54ms and returned correct trailing offsets. These are single-run implementation-cost checks, not production latency measurements.

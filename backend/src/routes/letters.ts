@@ -1,3 +1,4 @@
+import { archiveSearchTerms, archiveTermRanges, canFuzzyMatchArchiveTerm, ARCHIVE_TYPO_SIMILARITY } from '../services/archive-search-matching.js';
 import { getPublicCataloguePage } from '../services/public-catalogue-page.js';
 import { Router } from 'express';
 import { eq, and, or, inArray, ilike, asc, desc, sql, type SQLWrapper } from 'drizzle-orm';
@@ -102,6 +103,9 @@ type ArchiveLabeledFacetRow = {
 };
 
 type ArchiveSearchRow = {
+  searchCaseMap?: Record<string, string> | null;
+  searchWordMap?: Record<string, string[]> | null;
+  normalizedSearch?: string | null;
   id: string;
   collectionId: string;
   collectionCode: string;
@@ -823,6 +827,7 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
   const ctes = buildArchiveSearchCtes(query, collectionIds);
   const orderBy = buildArchiveSearchOrderBy(query);
   const offset = (query.page - 1) * query.limit;
+  const fuzzyTerms = archiveSearchTerms(query.search || '').filter(canFuzzyMatchArchiveTerm);
 
   // Run main rows query and combined facets query in parallel (2 queries instead of 9)
   // This evaluates the expensive CTE only twice instead of 9 times
@@ -895,6 +900,20 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
         sg."photoDescriptions",
         sg."extraContentTranscripts",
         sg."transcriptionTexts",
+        lower(${query.search || ''}) AS "normalizedSearch",
+        CASE WHEN ${Boolean(query.search)} THEN (
+          SELECT jsonb_object_agg(value, lower(value))
+          FROM unnest(COALESCE(sg."transcriptionTexts", ARRAY[]::text[])
+            || COALESCE(sg."extraContentTranscripts", ARRAY[]::text[])
+            || COALESCE(sg.senders, ARRAY[]::text[]) || COALESCE(sg.recipients, ARRAY[]::text[])
+            || COALESCE(sg.places, ARRAY[]::text[]) || ARRAY[sg."dateRaw"]) AS value
+        ) ELSE NULL END AS "searchCaseMap",
+        CASE WHEN ${fuzzyTerms.length > 0} THEN (
+          SELECT jsonb_object_agg(value, regexp_split_to_array(lower(${archiveSearchSourceSql(sql`value`)}), '[^[:alnum:]]+'))
+          FROM unnest(COALESCE(sg.senders, ARRAY[]::text[]) || COALESCE(sg.recipients, ARRAY[]::text[])
+            || COALESCE(sg.places, ARRAY[]::text[])
+            || ARRAY[${sql.join(fuzzyTerms.map((term) => sql`${term}`), sql`, `)}]::text[]) AS value
+        ) ELSE NULL END AS "searchWordMap",
         COUNT(*) OVER()::int AS "totalCount"
       FROM scoped_groups sg
       LEFT JOIN primary_page_counts ppc
@@ -1081,6 +1100,11 @@ function buildArchivePhotoOnlySql(value: SQLWrapper) {
   )`, value);
 }
 
+// Bound SQL values still need LIKE wildcard escaping to mean literal user text.
+function archiveLiteralPattern(value: string) {
+  return `%${value.replace(/[\\%_]/g, '\\$&')}%`;
+}
+
 function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string[]) {
   const rowFilters = [
     sql`l.visibility = 'PUBLISHED'`,
@@ -1102,19 +1126,8 @@ function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string
   }
 
   const trimmedSearch = query.search?.trim();
-  const fieldSimilarity = trimmedSearch
-    ? buildArchiveFieldSimilaritySql(trimmedSearch)
-    : sql`0::real`;
   if (trimmedSearch) {
-    const likeNeedle = `%${trimmedSearch}%`;
-    rowFilters.push(
-      sql`(
-        ${buildArchiveSearchVectorSql()} @@ websearch_to_tsquery('simple', ${trimmedSearch})
-        OR ${buildArchiveSearchTextSql()} ILIKE ${likeNeedle}
-        OR similarity(lower(${buildArchiveFuzzyTextSql()}), lower(${trimmedSearch})) > 0.22
-        OR ${fieldSimilarity} > 0.46
-      )`,
-    );
+    rowFilters.push(buildArchiveTypedMatchSql(trimmedSearch));
   }
 
   const baseScopedFilters = [sql`TRUE`];
@@ -1229,12 +1242,9 @@ function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string
 
   const searchRank = trimmedSearch
     ? sql`(
-        CASE WHEN lower(${buildArchiveSearchTextSql()}) LIKE lower(${`%${trimmedSearch}%`}) THEN 30::real ELSE 0::real END
+        CASE WHEN ${buildArchiveSearchTextSql()} ILIKE ${archiveLiteralPattern(trimmedSearch)} THEN 30::real ELSE 0::real END
         + ${buildArchiveContiguousPhraseBoostSql(trimmedSearch)}
         + ${buildArchiveAllTermsMatchBoostSql(trimmedSearch)}
-        + ts_rank_cd(${buildArchiveSearchVectorSql()}, websearch_to_tsquery('simple', ${trimmedSearch}))
-        + (similarity(lower(${buildArchiveFuzzyTextSql()}), lower(${trimmedSearch})) * 0.18)
-        + (${fieldSimilarity} * 0.22)
       )`
     : sql`0::real`;
 
@@ -1420,11 +1430,26 @@ function getArchiveTypedSearchFields() {
   ];
 }
 
-function buildArchiveSearchVectorSql() {
-  return sql`(${sql.join(getArchiveTypedSearchFields().map((field) => sql`
-    setweight(to_tsvector('simple', CONCAT_WS(' ', ${sql.join(field.expressions, sql`, `)})),
-      ${field.label === 'Transcript' ? sql`'A'` : sql`'B'`})
-  `), sql` || `)})`;
+function archiveSearchSourceSql(expression: SQLWrapper) {
+  return sql`regexp_replace(COALESCE(${expression}, ''), '---[ \t\r\n\f\v]*Page[ \t\r\n\f\v]+[0-9]+[ \t\r\n\f\v]*---', ' ', 'gi')`;
+}
+
+function buildArchiveTypedMatchSql(search: string) {
+  const terms = archiveSearchTerms(search);
+  const sources = getArchiveTypedSearchFields().flatMap((field) => field.expressions.map((expression) => {
+    // Preview text removes generated page separators; they must not admit results either.
+    const source = archiveSearchSourceSql(expression);
+    const matches = terms.map((term) => {
+      const literal = sql`lower(${source}) LIKE lower(${archiveLiteralPattern(term)})`;
+      if (!field.fuzzy || !canFuzzyMatchArchiveTerm(term)) return literal;
+      return sql`(${literal} OR EXISTS (
+        SELECT 1 FROM regexp_split_to_table(lower(${source}), '[^[:alnum:]]+') AS word
+        WHERE similarity(word, lower(${term})) >= ${ARCHIVE_TYPO_SIMILARITY}
+      ))`;
+    });
+    return sql`(${sql.join(matches, sql` AND `)})`;
+  }));
+  return sql`(${sql.join(sources, sql` OR `)})`;
 }
 
 function buildArchiveSearchTextSql() {
@@ -1433,27 +1458,12 @@ function buildArchiveSearchTextSql() {
   )}))`;
 }
 
-function buildArchiveFuzzyTextSql() {
-  // Preserve typo tolerance for names/places without making nearby dates match.
-  return sql`TRIM(CONCAT_WS(' ', ${sql.join(
-    getArchiveTypedSearchFields().filter((field) => field.fuzzy).flatMap((field) => field.expressions), sql`, `,
-  )}))`;
-}
-
-function buildArchiveFieldSimilaritySql(searchTerm: string) {
-  return sql`GREATEST(${sql.join(
-    getArchiveTypedSearchFields().filter((field) => field.fuzzy).flatMap((field) => field.expressions).map(
-      (expression) => sql`word_similarity(lower(COALESCE(${expression}, '')), lower(${searchTerm}))`,
-    ), sql`, `,
-  )})`;
-}
-
 function buildArchiveAllTermsMatchBoostSql(searchTerm: string) {
   const searchTerms = getArchiveSearchTerms(searchTerm);
   if (searchTerms.length < 2) return sql`0::real`;
 
   const searchTextSql = buildArchiveSearchTextSql();
-  const conditions = searchTerms.map((term) => sql`lower(${searchTextSql}) LIKE lower(${`%${term}%`})`);
+  const conditions = searchTerms.map((term) => sql`lower(${searchTextSql}) LIKE lower(${archiveLiteralPattern(term)})`);
 
   return sql`CASE WHEN ${sql.join(conditions, sql` AND `)} THEN 3::real ELSE 0::real END`;
 }
@@ -1466,7 +1476,7 @@ function buildArchiveContiguousPhraseBoostSql(searchTerm: string) {
   const boosts = phrases.map((phrase) => {
     const termCount = phrase.split(' ').length;
     const boost = termCount * 5;
-    return sql`CASE WHEN lower(${searchTextSql}) LIKE lower(${`%${phrase}%`}) THEN ${boost}::real ELSE 0::real END`;
+    return sql`CASE WHEN lower(${searchTextSql}) LIKE lower(${archiveLiteralPattern(phrase)}) THEN ${boost}::real ELSE 0::real END`;
   });
 
   return sql`(${sql.join(boosts, sql` + `)})`;
@@ -1570,10 +1580,19 @@ function buildArchiveSearchPreview(
   const search = query.search?.trim();
   if (!search) return undefined;
 
-  const searchTerms = getArchiveSearchTerms(search);
+  // Keep original/folded term positions aligned, including case variants and
+  // repeats; deduplicating either side alone can change fuzzy eligibility.
+  const searchTerms = (row.normalizedSearch ?? search.toLowerCase()).trim().split(/\s+/u);
   for (const field of getArchiveTypedSearchFields()) {
-    const candidates = dedupeArchivePreviewValues(field.values(row, formattedDate))
-      .map((value) => scoreArchivePreviewValue(value, search, searchTerms, field.fuzzy))
+    const candidates = [...new Set(field.values(row, formattedDate))]
+      .map((original) => {
+        const folded = row.searchCaseMap && Object.hasOwn(row.searchCaseMap, original)
+          ? row.searchCaseMap[original] : original.toLowerCase();
+        return scoreArchivePreviewValue(prepareArchivePreviewText(original), search, searchTerms, field.fuzzy,
+          prepareArchivePreviewText(folded),
+          field.fuzzy && row.searchWordMap && Object.hasOwn(row.searchWordMap, original) ? row.searchWordMap[original] : undefined,
+          row.searchWordMap);
+      })
       .filter((candidate): candidate is ArchivePreviewCandidate => candidate !== null)
       .sort((left, right) => right.score - left.score || right.totalMatches - left.totalMatches
         || left.excerpt.localeCompare(right.excerpt));
@@ -1598,16 +1617,6 @@ type ArchivePreviewCandidate = {
   totalMatches: number;
 };
 
-function dedupeArchivePreviewValues(values: string[]) {
-  return Array.from(
-    new Set(
-      values
-        .map((value) => prepareArchivePreviewText(value))
-        .filter((value): value is string => value.length > 0),
-    ),
-  );
-}
-
 function toIsoDateString(value: Date | string) {
   if (value instanceof Date) {
     return value.toISOString();
@@ -1616,13 +1625,7 @@ function toIsoDateString(value: Date | string) {
 }
 
 function getArchiveSearchTerms(search: string) {
-  const normalized = normalizeArchiveSearchText(search);
-  const terms = normalized
-    .split(' ')
-    .map((term) => term.trim())
-    .filter((term) => term.length >= 2);
-
-  return Array.from(new Set(terms));
+  return archiveSearchTerms(search);
 }
 
 // Each phrase returned here becomes its own `LIKE` clause in the archive
@@ -1670,18 +1673,9 @@ function collapseArchiveWhitespace(value: string) {
 function prepareArchivePreviewText(value: string) {
   return collapseArchiveWhitespace(
     value
-      .replace(/---\s*Page\s+\d+\s*---/gi, ' ')
+      .replace(/---[ \t\r\n\f\v]*Page[ \t\r\n\f\v]+[0-9]+[ \t\r\n\f\v]*---/gi, ' ')
       .replace(/\r\n/g, '\n'),
   );
-}
-
-function splitArchivePreviewSegments(value: string) {
-  const segments = value
-    .split(/\n+|(?<=[.!?])\s+(?=[A-Z0-9"'(])/g)
-    .map((segment) => collapseArchiveWhitespace(segment))
-    .filter((segment) => segment.length > 0);
-
-  return segments.length > 0 ? segments : [value];
 }
 
 function scoreArchivePreviewValue(
@@ -1689,103 +1683,29 @@ function scoreArchivePreviewValue(
   rawSearch: string,
   searchTerms: string[],
   allowFuzzy: boolean,
+  foldedValue: string,
+  sourceWords?: string[],
+  wordMap?: Record<string, string[]> | null,
 ): ArchivePreviewCandidate | null {
-  const segments = splitArchivePreviewSegments(value);
-  let bestCandidate: ArchivePreviewCandidate | null = null;
-  let totalMatches = 0;
-  const contiguousPhrases = getArchiveContiguousSearchPhrases(rawSearch);
-
-  for (const segment of segments) {
-    const exactRanges = collectArchiveExactMatchRanges(segment, rawSearch, searchTerms);
-
-    if (exactRanges.length > 0) {
-      totalMatches += exactRanges.length;
-      const excerptResult = buildArchiveExcerptWithHighlights(segment, exactRanges);
-      const fullPhraseBonus = segment.toLowerCase().includes(rawSearch.trim().toLowerCase()) ? 100 : 0;
-      const bestContiguousPhraseLength = getArchiveBestContiguousPhraseLength(segment, contiguousPhrases);
-      const score =
-        fullPhraseBonus +
-        bestContiguousPhraseLength * 20 +
-        getArchivePhraseMatchBonus(segment, rawSearch) * 3 +
-        countArchiveMatchedTerms(segment, searchTerms) * 2 +
-        exactRanges.length;
-
-      if (
-        !bestCandidate ||
-        score > bestCandidate.score ||
-        (score === bestCandidate.score && exactRanges.length > bestCandidate.totalMatches)
-      ) {
-        bestCandidate = {
-          excerpt: excerptResult.excerpt,
-          highlightRanges: excerptResult.highlightRanges,
-          score,
-          totalMatches: exactRanges.length,
-        };
-      }
-
-      continue;
-    }
-
-    if (bestCandidate || !allowFuzzy) {
-      continue;
-    }
-
-    const fuzzyCandidate = buildArchiveFuzzyPreviewCandidate(segment, searchTerms, rawSearch);
-    if (fuzzyCandidate) {
-      bestCandidate = fuzzyCandidate;
-    }
-  }
-
-  if (!bestCandidate) {
-    return null;
-  }
-
+  const originalTerms = rawSearch.trim().split(/\s+/u);
+  // Deduplicate only after pairing: differently typed terms can fold identically
+  // while one remains literal-only. Repeats should not rescan long transcripts.
+  const terms = new Map<string, { term: string; originalTerm: string }>();
+  searchTerms.forEach((term, index) => {
+    const originalTerm = originalTerms[index]!;
+    terms.set(JSON.stringify([term, canFuzzyMatchArchiveTerm(originalTerm)]), { term, originalTerm });
+  });
+  const termRanges = [...terms.values()].map(({ term, originalTerm }) => archiveTermRanges(value, term, allowFuzzy, foldedValue, originalTerm,
+    sourceWords && wordMap && Object.hasOwn(wordMap, originalTerm) ? { source: sourceWords, term: wordMap[originalTerm]! } : undefined));
+  if (termRanges.some((ranges) => ranges.length === 0)) return null;
+  const ranges = mergeArchiveHighlightRanges(termRanges.flat());
+  if (!ranges.length) return null;
+  const excerpt = buildArchiveExcerptWithHighlights(value, ranges);
   return {
-    ...bestCandidate,
-    totalMatches: totalMatches > 0 ? totalMatches : 1,
+    ...excerpt,
+    totalMatches: ranges.length,
+    score: (value.toLowerCase().includes(rawSearch.trim().toLowerCase()) ? 100 : 0) + ranges.length,
   };
-}
-
-function getArchiveBestContiguousPhraseLength(value: string, phrases: string[]) {
-  const loweredValue = value.toLowerCase();
-
-  for (const phrase of phrases) {
-    if (loweredValue.includes(phrase.toLowerCase())) {
-      return phrase.split(' ').length;
-    }
-  }
-
-  return 0;
-}
-
-function collectArchiveExactMatchRanges(
-  value: string,
-  rawSearch: string,
-  searchTerms: string[],
-) {
-  const loweredValue = value.toLowerCase();
-  const rawNeedle = rawSearch.trim().toLowerCase();
-  const needles = Array.from(
-    new Set([rawNeedle, ...searchTerms.map((term) => term.toLowerCase())].filter((needle) => needle.length > 1)),
-  );
-  const ranges: ArchiveSearchHighlightRange[] = [];
-
-  for (const needle of needles) {
-    let fromIndex = 0;
-
-    while (fromIndex < loweredValue.length) {
-      const foundIndex = loweredValue.indexOf(needle, fromIndex);
-      if (foundIndex === -1) break;
-
-      ranges.push({
-        start: foundIndex,
-        end: foundIndex + needle.length,
-      });
-      fromIndex = foundIndex + Math.max(needle.length, 1);
-    }
-  }
-
-  return mergeArchiveHighlightRanges(ranges);
 }
 
 function mergeArchiveHighlightRanges(ranges: ArchiveSearchHighlightRange[]) {
@@ -1894,115 +1814,6 @@ function chooseArchiveExcerptWindow(
   }
 
   return bestWindow;
-}
-
-function buildArchiveFuzzyPreviewCandidate(
-  value: string,
-  searchTerms: string[],
-  rawSearch: string,
-): ArchivePreviewCandidate | null {
-  const tokens = Array.from(value.matchAll(/[A-Za-z0-9']+/g));
-  const normalizedTerms = searchTerms.length > 0 ? searchTerms : [normalizeArchiveSearchText(rawSearch)];
-  let bestTokenMatch:
-    | {
-        range: ArchiveSearchHighlightRange;
-        score: number;
-      }
-    | null = null;
-
-  for (const token of tokens) {
-    const tokenText = token[0];
-    const tokenStart = token.index ?? 0;
-    const normalizedToken = normalizeArchiveSearchText(tokenText);
-    if (normalizedToken.length < 3) continue;
-
-    for (const searchTerm of normalizedTerms) {
-      if (searchTerm.length < 3) continue;
-      const score = getArchiveTokenSimilarity(normalizedToken, searchTerm);
-
-      if (score < 0.76) continue;
-
-      if (!bestTokenMatch || score > bestTokenMatch.score) {
-        bestTokenMatch = {
-          score,
-          range: {
-            start: tokenStart,
-            end: tokenStart + tokenText.length,
-          },
-        };
-      }
-    }
-  }
-
-  if (!bestTokenMatch) {
-    return null;
-  }
-
-  const excerptResult = buildArchiveExcerptWithHighlights(value, [bestTokenMatch.range]);
-  return {
-    excerpt: excerptResult.excerpt,
-    highlightRanges: excerptResult.highlightRanges,
-    score: 4 + bestTokenMatch.score,
-    totalMatches: 1,
-  };
-}
-
-function getArchivePhraseMatchBonus(value: string, rawSearch: string) {
-  const phrase = rawSearch.trim().toLowerCase();
-  if (phrase.length < 2) return 0;
-  return value.toLowerCase().includes(phrase) ? 6 : 0;
-}
-
-function countArchiveMatchedTerms(value: string, searchTerms: string[]) {
-  const loweredValue = value.toLowerCase();
-  return searchTerms.filter((term) => loweredValue.includes(term.toLowerCase())).length;
-}
-
-function getArchiveTokenSimilarity(left: string, right: string) {
-  if (left === right) return 1;
-
-  let sharedPrefix = 0;
-  while (
-    sharedPrefix < left.length &&
-    sharedPrefix < right.length &&
-    left[sharedPrefix] === right[sharedPrefix]
-  ) {
-    sharedPrefix += 1;
-  }
-
-  if (sharedPrefix >= 4 && Math.abs(left.length - right.length) <= 2) {
-    return 0.84;
-  }
-
-  const distance = getLevenshteinDistance(left, right);
-  return 1 - distance / Math.max(left.length, right.length, 1);
-}
-
-function getLevenshteinDistance(left: string, right: string) {
-  const matrix = Array.from({ length: left.length + 1 }, () =>
-    new Array<number>(right.length + 1).fill(0),
-  );
-
-  for (let leftIndex = 0; leftIndex <= left.length; leftIndex += 1) {
-    matrix[leftIndex][0] = leftIndex;
-  }
-
-  for (let rightIndex = 0; rightIndex <= right.length; rightIndex += 1) {
-    matrix[0][rightIndex] = rightIndex;
-  }
-
-  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
-    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
-      const substitutionCost = left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1;
-      matrix[leftIndex][rightIndex] = Math.min(
-        matrix[leftIndex - 1][rightIndex] + 1,
-        matrix[leftIndex][rightIndex - 1] + 1,
-        matrix[leftIndex - 1][rightIndex - 1] + substitutionCost,
-      );
-    }
-  }
-
-  return matrix[left.length][right.length];
 }
 
 function mapArchiveFormatFacets(rows: ArchiveFacetRow[]): ArchiveFormatFacet[] {

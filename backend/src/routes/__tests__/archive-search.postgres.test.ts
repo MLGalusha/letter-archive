@@ -2,12 +2,14 @@ import { execFileSync } from 'node:child_process';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Router } from 'express';
 import type { Sql } from 'postgres';
+import { archiveTermRanges, archiveWordSimilarity } from '../../services/archive-search-matching.js';
 import { invokeRouter } from '../../test/express-test-utils.js';
 
 // Opt-in real SQL coverage. Owns a disposable Docker database; never connects to
 // DATABASE_URL from the developer's shell or the application environment.
 // ARCHIVE_SEARCH_POSTGRES_TEST=1 npm test -- archive-search.postgres.test.ts
 const enabled = process.env.ARCHIVE_SEARCH_POSTGRES_TEST === '1';
+const icu = process.env.ARCHIVE_SEARCH_POSTGRES_ICU === '1';
 describe.skipIf(!enabled)('public archive search against PostgreSQL', () => {
   let container: string;
   let client: Sql;
@@ -17,7 +19,7 @@ describe.skipIf(!enabled)('public archive search against PostgreSQL', () => {
   const ids: Record<string, string> = {};
 
   beforeAll(async () => {
-    container = execFileSync('docker', ['run', '--rm', '-d', '-e', 'POSTGRES_PASSWORD=fixture', '-e', 'POSTGRES_DB=archive_fixture', '-p', '127.0.0.1::5432', 'postgres:16-alpine'], { encoding: 'utf8' }).trim();
+    container = execFileSync('docker', ['run', '--rm', '-d', '-e', 'POSTGRES_PASSWORD=fixture', '-e', 'POSTGRES_DB=archive_fixture', ...(icu ? ['-e', 'POSTGRES_INITDB_ARGS=--locale-provider=icu --icu-locale=en --encoding=UTF8'] : []), '-p', '127.0.0.1::5432', 'postgres:16-alpine'], { encoding: 'utf8' }).trim();
     const binding = execFileSync('docker', ['port', container, '5432'], { encoding: 'utf8' }).trim();
     const url = `postgresql://postgres:fixture@${binding}/archive_fixture`;
     vi.stubEnv('DATABASE_URL', url);
@@ -64,6 +66,26 @@ describe.skipIf(!enabled)('public archive search against PostgreSQL', () => {
       { key: 'orphanAttachment', type: 'C', transcription_text: 'quartz', date_raw: '19470821' },
       { key: 'formatOnly', type: 'E', date_raw: '19470822' },
       { key: 'formatRoot', date_raw: '19470822' },
+      { key: 'percent', transcription_text: 'A 5% discount.', date_raw: '19500101' },
+      { key: 'underscore', transcription_text: 'Code oak_leaf.', date_raw: '19500102' },
+      { key: 'backslash', transcription_text: String.raw`Path C:\letters.`, date_raw: '19500103' },
+      { key: 'apostrophe', transcription_text: "O'Neil wrote.", date_raw: '19500104' },
+      { key: 'greek', transcription_text: 'ζήτα', date_raw: '19500105' },
+      { key: 'phrase', transcription_text: 'red lantern', date_raw: '19500106' },
+      { key: 'separated', transcription_text: 'lantern glowing red', date_raw: '19500107' },
+      { key: 'crossField', transcription_text: 'red', sender: 'lantern', date_raw: '19500108' },
+      { key: 'typoName', sender: 'Molly', date_raw: '19500109' },
+      { key: 'typoTranscript', transcription_text: 'Molly', date_raw: '19500110' },
+      { key: 'operators', transcription_text: 'fox OR goose and fox -goose', date_raw: '19500111' },
+      { key: 'noOperators', transcription_text: 'fox goose', date_raw: '19500112' },
+      { key: 'hyphen', sender: 'Anne-Marie', date_raw: '19500113' },
+      { key: 'quote', transcription_text: 'She said "lantern".', date_raw: '19500114' },
+      { key: 'turkish', transcription_text: 'İstanbul', date_raw: '19500120' },
+      { key: 'foldedOffsets', transcription_text: 'İ𐐀 📨 nebula', date_raw: '19500123' },
+      { key: 'sigma', transcription_text: 'ΟΣ', date_raw: '19500121' },
+      { key: 'nbspMarker', transcription_text: 'amber--- Page\u00a01 ---lamp', date_raw: '19500122' },
+      { key: 'accent', sender: 'Éléonore', date_raw: '19500115' },
+      { key: 'pageSeparator', transcription_text: '--- Page 77 ---\nDocument', date_raw: '19500116' },
     ];
     for (const { key, ...fixture } of fixtures) {
       const rows = await client`INSERT INTO letters ${client({ collection_id: collection, ...fixture })} RETURNING id`;
@@ -83,7 +105,7 @@ describe.skipIf(!enabled)('public archive search against PostgreSQL', () => {
   async function search(query: Record<string, string>) {
     const response = await invokeRouter(router, { method: 'GET', url: '/letters/search', query, timeoutMs: 15_000 });
     expect(response.statusCode).toBe(200);
-    return response.body as { total: number; letters: Array<{ id: string; searchPreview?: { matchedFieldLabel: string; matchCount: number; excerpt: string } }> };
+    return response.body as { total: number; letters: Array<{ id: string; searchPreview?: { matchedFieldLabel: string; matchCount: number; excerpt: string; highlightRanges: Array<{ start: number; end: number }> } }> };
   }
 
   it('restricts SQL eligibility to published permitted fields and grouped public roots', async () => {
@@ -117,4 +139,133 @@ describe.skipIf(!enabled)('public archive search against PostgreSQL', () => {
     const response = await search({ search: '19470810' });
     expect(response.letters.find((item) => item.id === ids.transcript)?.searchPreview).toMatchObject({ matchedFieldLabel: 'Date', excerpt: '19470810', matchCount: 1 });
   });
+  it.each([
+    ['%', ['percent']], ['_', ['underscore']], [String.fromCharCode(92), ['backslash']],
+    ["O'Neil", ['apostrophe']], ['ζ', ['greek']], ['ζή', ['greek']],
+    ['red lantern', ['phrase', 'separated']], ['lantern red red', ['phrase', 'separated']],
+    ['Mollly', ['typoName']], ['fox OR goose', ['operators']], ['fox -goose', ['operators']],
+    ['Anne-Marie', ['hyphen']], ['"lantern"', ['quote']], ['ÉLÉONORE', ['accent']],
+    ['İstanbul', ['turkish']], ['istanbul', icu ? [] : ['turkish']], ['οσ', icu ? [] : ['sigma']], ['ος', icu ? ['sigma'] : []], ['Page', ['nbspMarker']],
+    ['77', []], ['quartz%', []], ['\"quartz\"', []],
+  ] as Array<[string, string[]]>)('agrees on literal input and previews for %s', async (query, keys) => {
+    const response = await search({ search: query, limit: '100' });
+    expect(response.letters.map((item) => item.id).sort()).toEqual(keys.map((key) => ids[key]).sort());
+    for (const item of response.letters) {
+      expect(item.searchPreview?.highlightRanges.length).toBeGreaterThan(0);
+      if (['%', '_', String.fromCharCode(92), "O'Neil", 'ζ', 'ζή', 'Anne-Marie', '"lantern"'].includes(query)) {
+        const preview = item.searchPreview!;
+        expect(preview.highlightRanges.map((range) => preview.excerpt.slice(range.start, range.end)))
+          .toContain(query);
+      }
+      if (query === 'Mollly') expect(item.searchPreview).toMatchObject({ matchedFieldLabel: 'Sender', excerpt: 'Molly', highlightRanges: [{ start: 0, end: 5 }] });
+      for (const range of item.searchPreview!.highlightRanges) {
+        expect(range.end).toBeGreaterThan(range.start);
+        expect(range.start).toBeGreaterThanOrEqual(0);
+        expect(range.end).toBeLessThanOrEqual(item.searchPreview!.excerpt.length);
+      }
+    }
+  });
+
+  it('maps database lowercase expansions back to original transcript coordinates', async () => {
+    const [database] = await client`SELECT lower('İ') AS folded`;
+    expect(database!.folded).toBe(icu ? 'i\u0307' : 'i');
+    for (const [query, highlighted] of [['İ𐐀', 'İ𐐀'], ['nebula', 'nebula']]) {
+      const response = await search({ search: query! });
+      const preview = response.letters.find((item) => item.id === ids.foldedOffsets)?.searchPreview;
+      expect(preview?.highlightRanges.map((range) => preview.excerpt.slice(range.start, range.end))).toContain(highlighted);
+    }
+  });
+
+  it('maps contextual Lithuanian and Turkish ICU folds without changing casing policy', async () => {
+    const lithuanian = 'I\u0301 📨 nebula';
+    const turkish = 'I\u0307 📨 nebula';
+    const [folded] = await client`SELECT
+      lower(${lithuanian} COLLATE "lt-x-icu") AS lithuanian,
+      lower(${turkish} COLLATE "tr-x-icu") AS turkish`;
+    expect(folded!.lithuanian).toBe('i\u0307\u0301 📨 nebula');
+    expect(folded!.turkish).toBe('i 📨 nebula');
+    for (const [original, normalized, firstTerm] of [
+      [lithuanian, folded!.lithuanian, 'i\u0307'],
+      [turkish, folded!.turkish, 'i'],
+    ]) {
+      expect(archiveTermRanges(original, firstTerm, false, normalized)
+        .map((range) => original.slice(range.start, range.end))).toEqual([original.slice(0, 2)]);
+      expect(archiveTermRanges(original, 'nebula', false, normalized)
+        .map((range) => original.slice(range.start, range.end))).toEqual(['nebula']);
+    }
+  });
+
+  it('uses the same whole-word trigram similarity as PostgreSQL', async () => {
+    for (const [left, right] of [['Molly', 'Mollly'], ['word', 'words'], ['Éléonore', 'Éléonorre'], ['aaaa', 'aaaab'], ['東京大学', '東京大學']]) {
+      const [row] = await client`SELECT similarity(lower(${left}), lower(${right})) AS score`;
+      expect(archiveWordSimilarity(left!, right!)).toBeCloseTo(row!.score, 6);
+    }
+  });
+
+  it('preserves original-term fuzzy eligibility through database case expansion', async () => {
+    const [sender] = await client`INSERT INTO letters ${client({ collection_id: collection, date_raw: '19510101', sender: 'stanbul' })} RETURNING id`;
+    try {
+      for (const query of ['İstanbul', 'İstanbul İstanbul', 'İstanbul İSTANBUL']) {
+        const response = await search({ search: query });
+        const match = response.letters.find((item) => item.id === sender!.id);
+        if (icu) {
+          expect(match?.searchPreview).toMatchObject({ matchedFieldLabel: 'Sender', excerpt: 'stanbul', highlightRanges: [{ start: 0, end: 7 }] });
+        } else {
+          expect(match).toBeUndefined();
+        }
+      }
+      for (const query of ['i\u0307stanbul', 'İst', 'İstan-bul', 'İstanbul i\u0307stanbul']) {
+        expect((await search({ search: query })).letters.some((item) => item.id === sender!.id)).toBe(false);
+      }
+      if (icu) {
+        await client`UPDATE letters SET recipient = 'İstanbul' WHERE id = ${sender!.id}`;
+        const response = await search({ search: 'İstanbul i\u0307stanbul' });
+        expect(response.letters.find((item) => item.id === sender!.id)?.searchPreview)
+          .toMatchObject({ matchedFieldLabel: 'Recipient', excerpt: 'İstanbul', highlightRanges: [{ start: 0, end: 8 }] });
+      }
+      const [normalized] = await client`SELECT lower('İstanbul') AS query, similarity('stanbul', lower('İstanbul')) AS score`;
+      expect(archiveWordSimilarity('stanbul', normalized!.query)).toBeCloseTo(normalized!.score, 6);
+    } finally {
+      await client`DELETE FROM letters WHERE id = ${sender!.id}`;
+    }
+  });
+
+  it('uses PostgreSQL word boundaries for a superscript number beside a name', async () => {
+    const [sender] = await client`INSERT INTO letters ${client({ collection_id: collection, date_raw: '19510102', sender: 'Molly²' })} RETURNING id`;
+    try {
+      const response = await search({ search: 'Mollly' });
+      const match = response.letters.find((item) => item.id === sender!.id);
+      expect(match).toBeDefined();
+      expect(match?.searchPreview)
+        .toMatchObject({ matchedFieldLabel: 'Sender', excerpt: 'Molly²', highlightRanges: [{ start: 0, end: 5 }] });
+      const [comparison] = await client`SELECT similarity(lower('Molly²'), lower('Mollly')) AS score`;
+      expect(archiveWordSimilarity('Molly²', 'Mollly')).toBeCloseTo(comparison!.score, 6);
+    } finally {
+      await client`DELETE FROM letters WHERE id = ${sender!.id}`;
+    }
+  });
+
+  it('uses provider-owned words for Roman numerals and sanitized metadata', async () => {
+    const [roman] = await client`INSERT INTO letters ${client({ collection_id: collection, date_raw: '19510103', sender: 'MollyⅣ', recipient: 'Mollly' })} RETURNING id`;
+    const [marker] = await client`INSERT INTO letters ${client({ collection_id: collection, date_raw: '19510104', sender: 'Molly--- Page 77 ---' })} RETURNING id`;
+    try {
+      const response = await search({ search: 'Mollly' });
+      const romanMatch = response.letters.find((item) => item.id === roman!.id);
+      expect(romanMatch?.searchPreview).toMatchObject(icu
+        ? { matchedFieldLabel: 'Sender', excerpt: 'MollyⅣ', highlightRanges: [{ start: 0, end: 5 }] }
+        : { matchedFieldLabel: 'Recipient', excerpt: 'Mollly', highlightRanges: [{ start: 0, end: 6 }] });
+      expect(romanMatch).not.toHaveProperty('searchWordMap');
+      expect(response.letters.find((item) => item.id === marker!.id)?.searchPreview)
+        .toMatchObject({ matchedFieldLabel: 'Sender', excerpt: 'Molly', highlightRanges: [{ start: 0, end: 5 }] });
+      const words = await client`SELECT word, similarity(word, lower('Mollly')) AS score
+        FROM regexp_split_to_table(lower('MollyⅣ'), '[^[:alnum:]]+') AS word`;
+      for (const token of words) {
+        expect(archiveWordSimilarity('unused', 'unused', { source: [token.word], term: ['mollly'] }))
+          .toBeCloseTo(token.score, 6);
+      }
+    } finally {
+      await client`DELETE FROM letters WHERE id IN (${roman!.id}, ${marker!.id})`;
+    }
+  });
+
 });

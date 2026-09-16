@@ -184,6 +184,7 @@ export async function getArchiveShelfItems(
 
 export async function searchArchiveShelf(
   params: ArchiveSearchParams = {},
+  signal?: AbortSignal,
 ): Promise<ArchiveSearchResponse> {
   return apiGet<ArchiveSearchResponse>('/letters/search', {
     page: params.page,
@@ -208,7 +209,7 @@ export async function searchArchiveShelf(
       : params.verified ? 'true' : 'false',
     sort: params.sort,
     sortOrder: params.sortOrder,
-  });
+  }, signal);
 }
 
 /**

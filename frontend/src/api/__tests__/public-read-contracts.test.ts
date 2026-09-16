@@ -12,7 +12,7 @@ vi.mock('../client', () => ({
 }));
 
 import { listCollections } from '../collections';
-import { getLetters } from '../letters';
+import { getLetters, searchArchiveShelf } from '../letters';
 
 describe('public read API contracts', () => {
   beforeEach(() => {
@@ -37,6 +37,15 @@ describe('public read API contracts', () => {
       sort: 'sender',
       sortOrder: 'asc',
     });
+  });
+
+  it('forwards search cancellation without changing query serialization', async () => {
+    const controller = new AbortController();
+    apiGetMock.mockResolvedValue({ letters: [] });
+    await searchArchiveShelf({ search: 'home', page: 2, format: ['letter'], verified: false }, controller.signal);
+    expect(apiGetMock).toHaveBeenCalledWith('/letters/search', expect.objectContaining({
+      search: 'home', page: 2, format: ['letter'], verified: 'false',
+    }), controller.signal);
   });
 
   it('keeps internal letter filters and sorts out of the public query type', () => {

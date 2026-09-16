@@ -172,6 +172,47 @@ describe('api client', () => {
     expect(err.message.length).toBeGreaterThan(0);
   });
 
+  it.each(['before', 'during'])('preserves caller cancellation %s fetch without logging a failure', async (when) => {
+    const controller = new AbortController();
+    if (when === 'before') controller.abort();
+    fetchMock.mockImplementationOnce((_input: string, init?: RequestInit) => new Promise((_resolve, reject) => {
+      const signal = init!.signal!;
+      if (signal.aborted) reject(signal.reason);
+      else signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+    }));
+    const promise = apiGet('/letters/search', undefined, controller.signal);
+    if (when === 'during') controller.abort();
+    await expect(promise).rejects.toBe(controller.signal.reason);
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
+  });
+
+  it('still logs a timeout when it wins before a later caller cancellation', async () => {
+    const timeout = new AbortController();
+    const caller = new AbortController();
+    const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(timeout.signal);
+    fetchMock.mockImplementationOnce((_input: string, init?: RequestInit) => new Promise((_resolve, reject) => {
+      init!.signal!.addEventListener('abort', () => reject(init!.signal!.reason), { once: true });
+    }));
+    try {
+      const promise = apiGet('/letters/search', undefined, caller.signal);
+      timeout.abort(new DOMException('Request timed out', 'TimeoutError'));
+      caller.abort();
+      await expect(promise).rejects.toBeInstanceOf(ApiError);
+      expect(consoleErrorSpy).toHaveBeenCalledWith('[API] Request failed before response', expect.any(Object));
+    } finally {
+      timeoutSpy.mockRestore();
+    }
+  });
+
+  it('still logs a genuine network failure if the caller later cancels', async () => {
+    const caller = new AbortController();
+    fetchMock.mockRejectedValueOnce(new TypeError('Network unavailable'));
+    const promise = apiGet('/letters/search', undefined, caller.signal);
+    caller.abort();
+    await expect(promise).rejects.toBeInstanceOf(ApiError);
+    expect(consoleErrorSpy).toHaveBeenCalledWith('[API] Request failed before response', expect.any(Object));
+  });
+
   it('combines caller signal with default timeout signal', async () => {
     // AbortSignal.timeout and AbortSignal.any may not be available in jsdom.
     // Test the fallback: a caller-provided signal that aborts mid-request.

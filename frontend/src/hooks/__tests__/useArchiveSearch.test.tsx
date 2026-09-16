@@ -13,6 +13,7 @@ import {
   it,
   vi,
 } from 'vitest';
+import type { ArchiveSearchResponse } from '../../api/letters';
 import useArchiveSearch, {
   type UseArchiveSearchConfig,
 } from '../useArchiveSearch';
@@ -27,7 +28,7 @@ const {
   searchArchiveShelfMock: vi.fn(),
 }));
 
-const emptyArchiveResponse = () => ({
+const emptyArchiveResponse = (): ArchiveSearchResponse => ({
   letters: [],
   page: 1,
   limit: 24,
@@ -674,6 +675,143 @@ describe('useArchiveSearch defaults and fixed configuration', () => {
   });
 });
 
+function deferredResponse() {
+  let resolve!: (value: ReturnType<typeof emptyArchiveResponse>) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<ReturnType<typeof emptyArchiveResponse>>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+function pageResponse(page: number, id: string): ArchiveSearchResponse {
+  return { ...emptyArchiveResponse(), page, total: 48,
+    letters: [{ id, imageType: 'letter', verified: true }] };
+}
+
+describe('useArchiveSearch scheduling and request ownership', () => {
+  it('dispatches initial, filter, sort, and clear immediately but coalesces rapid typing', async () => {
+    const harness = renderArchiveHarness();
+    expect(searchArchiveShelfMock).toHaveBeenCalledTimes(1);
+    act(() => harness.result.current.archive.setSearchQuery('h'));
+    await advance(100);
+    act(() => harness.result.current.archive.setSearchQuery('ho'));
+    await advance(100);
+    act(() => harness.result.current.archive.setSearchQuery('home'));
+    await advance(179);
+    expect(searchArchiveShelfMock).toHaveBeenCalledTimes(1);
+    await advance(1);
+    expect(lastArchiveRequest()?.search).toBe('home');
+    act(() => harness.result.current.archive.setFilters({ sort: 'letterDate', sortOrder: 'asc' }));
+    expect(lastArchiveRequest()?.sort).toBe('letterDate');
+    act(() => harness.result.current.archive.setSearchQuery(''));
+    expect(lastArchiveRequest()?.search).toBeUndefined();
+  });
+
+  it('blocks load-more during a changed-query debounce instead of mixing pages', async () => {
+    searchArchiveShelfMock.mockResolvedValue(pageResponse(1, 'old-page-1'));
+    const harness = renderArchiveHarness();
+    await advance(180);
+    searchArchiveShelfMock.mockClear();
+    act(() => harness.result.current.archive.setSearchQuery('new'));
+    await act(async () => harness.result.current.archive.handleArchiveLoadMore());
+    expect(searchArchiveShelfMock).not.toHaveBeenCalled();
+    expect(harness.result.current.archive.archiveLoading).toBe(true);
+    expect(harness.result.current.archive.archiveResults.letters[0].id).toBe('old-page-1');
+    await advance(180);
+    expect(lastArchiveRequest()).toMatchObject({ search: 'new', page: 1 });
+  });
+
+  it('aborts superseded searches and ignores out-of-order responses even when transport ignores abort', async () => {
+    const first = deferredResponse();
+    const second = deferredResponse();
+    searchArchiveShelfMock.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const harness = renderArchiveHarness();
+    const firstSignal = searchArchiveShelfMock.mock.calls[0]?.[1] as AbortSignal;
+    act(() => harness.result.current.archive.setSearchQuery('new'));
+    expect(firstSignal.aborted).toBe(true);
+    await advance(180);
+    await act(async () => second.resolve(pageResponse(1, 'new')));
+    await act(async () => first.resolve(pageResponse(1, 'obsolete')));
+    expect(harness.result.current.archive.archiveResults.letters[0].id).toBe('new');
+    expect(harness.result.current.archive.archiveLoading).toBe(false);
+    expect(harness.result.current.archive.archiveError).toBeNull();
+  });
+
+  it('cancels an old next-page request and prevents double load-more dispatch', async () => {
+    searchArchiveShelfMock.mockResolvedValueOnce(pageResponse(1, 'old'));
+    const harness = renderArchiveHarness();
+    await advance(180);
+    const more = deferredResponse();
+    searchArchiveShelfMock.mockReturnValueOnce(more.promise);
+    let pending!: Promise<void>;
+    act(() => {
+      pending = harness.result.current.archive.handleArchiveLoadMore();
+      void harness.result.current.archive.handleArchiveLoadMore();
+    });
+    expect(searchArchiveShelfMock).toHaveBeenCalledTimes(2);
+    const moreSignal = searchArchiveShelfMock.mock.calls[1][1] as AbortSignal;
+    searchArchiveShelfMock.mockResolvedValueOnce(pageResponse(1, 'filtered'));
+    act(() => harness.result.current.archive.setFilters({ sender: 'Alice' }));
+    expect(moreSignal.aborted).toBe(true);
+    await advance(0);
+    await act(async () => { more.resolve(pageResponse(2, 'obsolete-page')); await pending; });
+    expect(harness.result.current.archive.archiveResults.letters.map((letter) => letter.id)).toEqual(['filtered']);
+    expect(harness.result.current.archive.archiveLoadingMore).toBe(false);
+  });
+
+  it('cancels requests on unmount without exposing an abort error', async () => {
+    const pending = deferredResponse();
+    searchArchiveShelfMock.mockReturnValueOnce(pending.promise);
+    const harness = renderArchiveHarness();
+    const signal = searchArchiveShelfMock.mock.calls[0]?.[1] as AbortSignal;
+    harness.unmount();
+    expect(signal.aborted).toBe(true);
+    await act(async () => pending.reject(new DOMException('Aborted', 'AbortError')));
+  });
+
+  it('dispatches Back immediately and never lets a pending typed query win', async () => {
+    const harness = renderArchiveHarness({ initialEntries: ['/?q=first', '/?q=second'] });
+    act(() => harness.result.current.archive.setSearchQuery('unfinished'));
+    await navigate(harness, -1);
+    expect(lastArchiveRequest()?.search).toBe('first');
+    await advance(180);
+    expect(lastArchiveRequest()?.search).toBe('first');
+    expect(searchArchiveShelfMock.mock.calls.some(([params]) => params.search === 'unfinished')).toBe(false);
+  });
+});
+
+
+describe('useArchiveSearch failures and retries', () => {
+  it('settles a failed refresh and recovers on the next search', async () => {
+    searchArchiveShelfMock.mockRejectedValueOnce(new Error('Server unavailable'));
+    const harness = renderArchiveHarness();
+    await advance(0);
+    expect(harness.result.current.archive.archiveError).toBe('Server unavailable');
+    expect(harness.result.current.archive.archiveLoading).toBe(false);
+    searchArchiveShelfMock.mockResolvedValueOnce(pageResponse(1, 'recovered'));
+    act(() => harness.result.current.archive.setFilters({ sender: 'Alice' }));
+    await advance(0);
+    expect(harness.result.current.archive.archiveError).toBeNull();
+    expect(harness.result.current.archive.archiveResults.letters[0].id).toBe('recovered');
+  });
+
+  it('releases the next-page lock after failure so manual retry succeeds', async () => {
+    searchArchiveShelfMock.mockResolvedValueOnce(pageResponse(1, 'first'));
+    const harness = renderArchiveHarness();
+    await advance(0);
+    searchArchiveShelfMock.mockRejectedValueOnce(new Error('Temporary failure'));
+    await act(async () => harness.result.current.archive.handleArchiveLoadMore());
+    expect(harness.result.current.archive.archiveLoadMoreError).toBe('Temporary failure');
+    expect(harness.result.current.archive.archiveLoadingMore).toBe(false);
+    searchArchiveShelfMock.mockResolvedValueOnce(pageResponse(2, 'second'));
+    await act(async () => harness.result.current.archive.handleArchiveLoadMore());
+    expect(harness.result.current.archive.archiveLoadMoreError).toBeNull();
+    expect(harness.result.current.archive.archiveResults.letters.map((letter) => letter.id)).toEqual(['first', 'second']);
+  });
+});
+
 describe('useArchiveSearch invalid URL year ranges', () => {
   it('preserves reversed bounds without requesting results until corrected', async () => {
     const harness = renderArchiveHarness({ initialEntries: ['/?yearFrom=1900&yearTo=1863'] });
@@ -706,13 +844,33 @@ describe('useArchiveSearch invalid URL year ranges', () => {
     expect(harness.result.current.archive.archiveLoadingMore).toBe(false);
   });
 
+  it('aborts an in-flight next page when history selects an invalid range', async () => {
+    searchArchiveShelfMock.mockResolvedValueOnce(pageResponse(1, 'retained'));
+    const harness = renderArchiveHarness();
+    await advance(0);
+    const more = deferredResponse();
+    searchArchiveShelfMock.mockReturnValueOnce(more.promise);
+    let pending!: Promise<void>;
+    act(() => { pending = harness.result.current.archive.handleArchiveLoadMore(); });
+    const signal = searchArchiveShelfMock.mock.calls[1][1] as AbortSignal;
+    await navigate(harness, '/?yearFrom=1900&yearTo=1863');
+    expect(signal.aborted).toBe(true);
+    expect(harness.result.current.archive.archiveLoadingMore).toBe(false);
+    await act(async () => { more.resolve(pageResponse(2, 'obsolete')); await pending; });
+    expect(searchArchiveShelfMock).toHaveBeenCalledTimes(2);
+    expect(harness.result.current.archive.archiveResults.letters.map((letter) => letter.id)).toEqual(['retained']);
+    expect(harness.result.current.archive.archiveError).toMatch(/From year.*To year/);
+  });
+
   it('ignores an older response after Back selects an invalid range and resumes after clearing', async () => {
     let resolve!: (response: ReturnType<typeof emptyArchiveResponse>) => void;
     searchArchiveShelfMock.mockReturnValueOnce(new Promise((done) => { resolve = done; }));
     const harness = renderArchiveHarness({ initialEntries: ['/?yearFrom=1900&yearTo=1863', '/?yearTo=1863'] });
     await advance(180);
     expect(searchArchiveShelfMock).toHaveBeenCalledTimes(1);
+    const signal = searchArchiveShelfMock.mock.calls[0][1] as AbortSignal;
     await navigate(harness, -1);
+    expect(signal.aborted).toBe(true);
     await advance(500);
     expect(searchArchiveShelfMock).toHaveBeenCalledTimes(1);
     await act(async () => resolve({ ...emptyArchiveResponse(), total: 99 }));

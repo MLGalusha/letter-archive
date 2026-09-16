@@ -240,6 +240,10 @@ async function performRequest<T>(
 
     return handleResponse<T>(response, method, path, startTime);
   } catch (error) {
+    // Preserve deliberate cancellation, but keep timeout/network failures observable.
+    if (signal?.aborted && combinedSignal.reason === signal.reason && error === signal.reason) {
+      throw error;
+    }
     const duration = Date.now() - startTime;
 
     if (error instanceof ApiError) {

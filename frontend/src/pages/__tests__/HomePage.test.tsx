@@ -129,6 +129,7 @@ describe("HomePage archive browsing", () => {
     expect(searchArchiveShelfMock).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ page: 2, limit: 24 }),
+      expect.any(AbortSignal),
     );
   });
 

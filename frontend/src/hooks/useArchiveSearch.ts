@@ -95,8 +95,40 @@ export default function useArchiveSearch(config: UseArchiveSearchConfig): UseArc
   const locationChanged = previousLocationSearchRef.current !== locationSearch;
   const scopeChanged = previousScopeKeyRef.current !== scopeKey;
 
-  const commitLocalState = useCallback((candidate: ArchiveSearchState) => {
+  // ── Archive results state ──
+  const [archiveResults, setArchiveResults] = useState<ArchiveSearchResponse>({
+    letters: [],
+    page: 1,
+    limit: ARCHIVE_PAGE_SIZE,
+    total: 0,
+    facets: EMPTY_FACETS,
+  });
+  const [archiveLoading, setArchiveLoading] = useState(true);
+  const [archiveLoadingMore, setArchiveLoadingMore] = useState(false);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+  const [archiveLoadMoreError, setArchiveLoadMoreError] = useState<string | null>(null);
+
+  const requestVersionRef = useRef(0);
+  const searchControllerRef = useRef<AbortController | null>(null);
+  const moreControllerRef = useRef<AbortController | null>(null);
+  const resultsKeyRef = useRef<string | null>(null);
+  const debounceQueryRef = useRef(false);
+  const invalidateRequests = useCallback(() => {
+    ++requestVersionRef.current;
+    searchControllerRef.current?.abort();
+    moreControllerRef.current?.abort();
+    moreControllerRef.current = null;
+    setArchiveLoading(true);
+    setArchiveLoadingMore(false);
+    setArchiveError(null);
+    setArchiveLoadMoreError(null);
+  }, []);
+
+  const commitLocalState = useCallback((candidate: ArchiveSearchState, debounce = false) => {
     const next = normalizeArchiveSearchState(candidate, codecOptions);
+    if (JSON.stringify(next) === JSON.stringify(archiveStateRef.current)) return;
+    debounceQueryRef.current = debounce;
+    invalidateRequests();
 
     // A canonical clean URL cannot distinguish an explicit local clear from a
     // first visit that should hydrate persistence. Commit that one boundary
@@ -109,7 +141,7 @@ export default function useArchiveSearch(config: UseArchiveSearchConfig): UseArc
 
     archiveStateRef.current = next;
     setArchiveState(next);
-  }, [codecOptions, storageKey]);
+  }, [codecOptions, storageKey, invalidateRequests]);
 
   // An external URL transition is authoritative, including a POP to an empty
   // URL. A clean URL may hydrate persistence only when the archive scope itself
@@ -135,10 +167,13 @@ export default function useArchiveSearch(config: UseArchiveSearchConfig): UseArc
       saveSearchState(storageKey, '', next.filters);
     }
 
+    debounceQueryRef.current = false;
+    invalidateRequests();
     archiveStateRef.current = next;
     setArchiveState(next);
   }, [
     codecOptions,
+    invalidateRequests,
     locationChanged,
     locationSearch,
     scopeChanged,
@@ -147,25 +182,11 @@ export default function useArchiveSearch(config: UseArchiveSearchConfig): UseArc
     storageKey,
   ]);
 
-  // ── Archive results state ──
-  const [archiveResults, setArchiveResults] = useState<ArchiveSearchResponse>({
-    letters: [],
-    page: 1,
-    limit: ARCHIVE_PAGE_SIZE,
-    total: 0,
-    facets: EMPTY_FACETS,
-  });
-  const [archiveLoading, setArchiveLoading] = useState(true);
-  const [archiveLoadingMore, setArchiveLoadingMore] = useState(false);
-  const [archiveError, setArchiveError] = useState<string | null>(null);
-  const [archiveLoadMoreError, setArchiveLoadMoreError] = useState<string | null>(null);
-  const requestVersionRef = useRef(0);
-
   const setSearchQuery = useCallback((query: string) => {
     commitLocalState({
       ...archiveStateRef.current,
       query,
-    });
+    }, Boolean(query.trim()));
   }, [commitLocalState]);
 
   const setFilters = useCallback((filters: SearchFilters) => {
@@ -239,71 +260,92 @@ export default function useArchiveSearch(config: UseArchiveSearchConfig): UseArc
 
   const invalidYearRange = requestParams.yearFrom !== undefined && requestParams.yearTo !== undefined
     && requestParams.yearFrom > requestParams.yearTo;
+  const requestKey = JSON.stringify([scopeKey, requestParams]);
 
-  // ── Execute search (180ms debounce with request versioning) ──
+  // Only text entry waits for a pause. Keep the existing 180ms interval: a
+  // 100ms-per-keystroke burst makes one request 180ms after its final character.
   useEffect(() => {
+    // URL/scope hydration above has already superseded this render's state.
+    if (archiveStateRef.current !== archiveState) return;
     let cancelled = false;
     const requestVersion = ++requestVersionRef.current;
-    // Keep invalid URL/history bounds visible for correction, but never send
-    // them to the API or let an older response replace this validation state.
-    if (invalidYearRange) return;
-    const timer = window.setTimeout(() => {
-      setArchiveLoading(true);
-      setArchiveLoadingMore(false);
-      setArchiveError(null);
-      setArchiveLoadMoreError(null);
-      searchArchiveShelf({ ...requestParams, page: 1 })
+    const controller = new AbortController();
+    searchControllerRef.current = controller;
+    moreControllerRef.current?.abort();
+    moreControllerRef.current = null;
+    setArchiveLoading(!invalidYearRange);
+    setArchiveLoadingMore(false);
+    setArchiveError(null);
+    setArchiveLoadMoreError(null);
+
+    // Invalidate pending work before deriving the invalid-range UI state below.
+    // Neither search nor pagination may send these parameters.
+    if (invalidYearRange) {
+      controller.abort();
+      return;
+    }
+
+    const execute = () => {
+      searchArchiveShelf({ ...requestParams, page: 1 }, controller.signal)
         .then((response) => {
-          if (cancelled || requestVersion !== requestVersionRef.current) return;
+          if (cancelled || controller.signal.aborted || requestVersion !== requestVersionRef.current) return;
+          resultsKeyRef.current = requestKey;
           setArchiveResults(response);
           setArchiveLoadMoreError(null);
         })
         .catch((err) => {
-          if (cancelled || requestVersion !== requestVersionRef.current) return;
+          if (cancelled || controller.signal.aborted || requestVersion !== requestVersionRef.current) return;
           setArchiveError(err instanceof Error ? err.message : 'Failed to load archive results');
         })
         .finally(() => {
-          if (cancelled || requestVersion !== requestVersionRef.current) return;
+          if (cancelled || controller.signal.aborted || requestVersion !== requestVersionRef.current) return;
           setArchiveLoading(false);
         });
-    }, 180);
+    };
+    const timer = debounceQueryRef.current ? window.setTimeout(execute, 180) : undefined;
+    if (timer === undefined) execute();
 
     return () => {
       cancelled = true;
+      controller.abort();
+      moreControllerRef.current?.abort();
+      moreControllerRef.current = null;
       window.clearTimeout(timer);
     };
-  }, [requestParams, invalidYearRange]);
+  }, [archiveState, requestParams, requestKey, invalidYearRange]);
 
   // ── Load more handler ──
   const handleArchiveLoadMore = useCallback(async () => {
-    if (invalidYearRange || archiveLoading || archiveLoadingMore) return;
+    if (invalidYearRange || archiveLoading || archiveLoadingMore || moreControllerRef.current) return;
+    if (archiveStateRef.current !== archiveState || resultsKeyRef.current !== requestKey) return;
     if (archiveResults.letters.length >= archiveResults.total) return;
 
     const requestVersion = requestVersionRef.current;
     const nextPage = archiveResults.page + 1;
-
+    const controller = new AbortController();
+    moreControllerRef.current = controller;
     setArchiveLoadingMore(true);
     setArchiveLoadMoreError(null);
 
     try {
-      const response = await searchArchiveShelf({ ...requestParams, page: nextPage });
-      if (requestVersion !== requestVersionRef.current) return;
-
+      const response = await searchArchiveShelf({ ...requestParams, page: nextPage }, controller.signal);
+      if (controller.signal.aborted || requestVersion !== requestVersionRef.current) return;
       setArchiveResults((current) => ({
         ...response,
         letters: mergeArchiveItems(current.letters, response.letters),
       }));
     } catch (err) {
-      if (requestVersion !== requestVersionRef.current) return;
+      if (controller.signal.aborted || requestVersion !== requestVersionRef.current) return;
       setArchiveLoadMoreError(
         err instanceof Error ? err.message : 'Failed to load more archive results',
       );
     } finally {
-      if (requestVersion === requestVersionRef.current) {
+      if (moreControllerRef.current === controller) moreControllerRef.current = null;
+      if (!controller.signal.aborted && requestVersion === requestVersionRef.current) {
         setArchiveLoadingMore(false);
       }
     }
-  }, [archiveLoading, archiveLoadingMore, archiveResults, requestParams, invalidYearRange]);
+  }, [archiveLoading, archiveLoadingMore, archiveResults, archiveState, requestParams, requestKey, invalidYearRange]);
 
   // ── Derived sort values ──
   const resolvedSort = getResolvedArchiveSort(filters, defaultSort);

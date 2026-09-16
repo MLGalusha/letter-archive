@@ -11,6 +11,7 @@ export type ArchiveSearchSort =
 export type ArchiveSearchSortOrder = 'asc' | 'desc';
 
 export interface SearchFilters {
+  exact?: boolean;
   format?: LetterImageType[] | null;
   collection?: string | null;
   sender?: string | null;
@@ -47,6 +48,7 @@ export interface ArchiveSearchCodecOptions {
 
 export const ARCHIVE_SEARCH_URL_KEYS = [
   'q',
+  'exact',
   'collection',
   'sender',
   'recipient',
@@ -90,6 +92,7 @@ const ARCHIVE_SORTS = new Set<ArchiveSearchSort>([
 const ARCHIVE_SORT_ORDERS = new Set<ArchiveSearchSortOrder>(['asc', 'desc']);
 
 const FILTER_URL_KEYS: Record<keyof SearchFilters, readonly ArchiveSearchUrlKey[]> = {
+  exact: ['exact'],
   format: ['format'],
   collection: ['collection'],
   sender: ['sender'],
@@ -205,6 +208,7 @@ function normalizeOptionalFilters(value: unknown): Partial<SearchFilters> {
 
   const normalized: Partial<SearchFilters> = {};
 
+  if (Object.hasOwn(value, 'exact')) normalized.exact = value.exact === true;
   if (Object.hasOwn(value, 'format')) normalized.format = normalizeFormats(value.format);
   if (Object.hasOwn(value, 'collection')) normalized.collection = normalizeText(value.collection);
   if (Object.hasOwn(value, 'sender')) normalized.sender = normalizeText(value.sender);
@@ -291,6 +295,7 @@ export function normalizeArchiveSearchState(
   return {
     query: normalizeQuery(state.query),
     filters: {
+      ...(overlaidFilters.exact ? { exact: true } : {}),
       format: overlaidFilters.format ?? null,
       collection: overlaidFilters.collection ?? null,
       sender: overlaidFilters.sender ?? null,
@@ -327,6 +332,7 @@ export function decodeArchiveSearchParams(
   return normalizeArchiveSearchState({
     query: normalizeUrlQuery(searchParams.get('q')),
     filters: {
+      exact: parseUrlBoolean(searchParams.get('exact')),
       format: formats,
       collection: searchParams.get('collection'),
       sender: searchParams.get('sender'),
@@ -370,6 +376,7 @@ export function encodeArchiveSearchParams(
   const { query, filters } = normalized;
   const canonicalQuery = query.trim();
   if (canonicalQuery) searchParams.set('q', canonicalQuery);
+  if (!fixedUrlKeys.has('exact') && filters.exact) searchParams.set('exact', 'true');
 
   if (!fixedUrlKeys.has('format')) {
     filters.format?.forEach((format) => searchParams.append('format', format));

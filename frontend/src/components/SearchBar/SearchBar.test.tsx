@@ -81,6 +81,43 @@ describe("SearchBar", () => {
     expect(onFiltersChange).toHaveBeenCalledExactlyOnceWith({});
   });
 
+  it("lets keyboard users toggle exact phrase without losing other filters", async () => {
+    const user = userEvent.setup();
+    function Harness() {
+      const [filters, setFilters] = useState<SearchFilters>({ sender: "Molly" });
+      return <SearchBar query="red lantern" filters={filters} facets={baseFacets} total={1}
+        loading={false} onQueryChange={vi.fn()} onFiltersChange={setFilters} />;
+    }
+    render(<Harness />);
+    const toggle = screen.getByRole("checkbox", { name: "Exact phrase" });
+    expect(toggle).not.toBeChecked();
+    toggle.focus();
+    await user.keyboard(" ");
+    expect(toggle).toBeChecked();
+    expect(screen.getByRole("textbox", { name: "Sender" })).toHaveValue("Molly");
+    await user.keyboard(" ");
+    expect(toggle).not.toBeChecked();
+  });
+
+  it("clears exact phrase when it is the only active refinement", async () => {
+    const user = userEvent.setup();
+    function Harness() {
+      const [filters, setFilters] = useState<SearchFilters>({ exact: true });
+      return <SearchBar query="" filters={filters} facets={baseFacets} total={12}
+        loading={false} onQueryChange={vi.fn()} onFiltersChange={setFilters} />;
+    }
+    render(<Harness />);
+    await user.click(screen.getByRole("button", { name: /Open archive refine controls, 1 active/i }));
+
+    const clearAll = screen.getByRole("button", { name: "Clear All" });
+    expect(clearAll).toBeEnabled();
+    await user.click(clearAll);
+
+    expect(screen.getByRole("checkbox", { name: "Exact phrase" })).not.toBeChecked();
+    expect(screen.getByRole("button", { name: /Close archive refine controls$/i })).toBeInTheDocument();
+    expect(clearAll).toBeDisabled();
+  });
+
   it("renders archive facets and notifies callers when a facet is selected", async () => {
     const user = userEvent.setup();
     const handleQueryChange = vi.fn();

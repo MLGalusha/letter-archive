@@ -32,6 +32,7 @@ export interface ArchiveSearchResponse extends ArchiveShelfResponse {
 }
 
 export interface ArchiveSearchParams {
+  exact?: boolean;
   page?: number;
   limit?: number;
   collection?: string;
@@ -191,6 +192,7 @@ export async function searchArchiveShelf(
     limit: params.limit,
     collection: params.collection,
     search: params.search,
+    exact: params.exact ? 'true' : undefined,
     format: params.format?.length ? params.format : undefined,
     sender: params.sender || undefined,
     recipient: params.recipient || undefined,

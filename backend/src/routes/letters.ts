@@ -827,7 +827,7 @@ async function searchArchiveSummaries(query: ArchiveSearchQuery) {
   const ctes = buildArchiveSearchCtes(query, collectionIds);
   const orderBy = buildArchiveSearchOrderBy(query);
   const offset = (query.page - 1) * query.limit;
-  const fuzzyTerms = archiveSearchTerms(query.search || '').filter(canFuzzyMatchArchiveTerm);
+  const fuzzyTerms = query.exact ? [] : archiveSearchTerms(query.search || '').filter(canFuzzyMatchArchiveTerm);
 
   // Run main rows query and combined facets query in parallel (2 queries instead of 9)
   // This evaluates the expensive CTE only twice instead of 9 times
@@ -1180,7 +1180,7 @@ function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string
 
   const trimmedSearch = query.search?.trim();
   if (trimmedSearch) {
-    rowFilters.push(buildArchiveTypedMatchSql(trimmedSearch));
+    rowFilters.push(buildArchiveTypedMatchSql(trimmedSearch, query.exact));
   }
 
   const baseScopedFilters = [sql`TRUE`];
@@ -1507,14 +1507,14 @@ function archiveSearchSourceSql(expression: SQLWrapper) {
   return sql`regexp_replace(COALESCE(${expression}, ''), '---[ \t\r\n\f\v]*Page[ \t\r\n\f\v]+[0-9]+[ \t\r\n\f\v]*---', ' ', 'gi')`;
 }
 
-function buildArchiveTypedMatchSql(search: string) {
-  const terms = archiveSearchTerms(search);
+function buildArchiveTypedMatchSql(search: string, exact = false) {
+  const terms = exact ? [search.trim()] : archiveSearchTerms(search);
   const sources = getArchiveTypedSearchFields().flatMap((field) => field.expressions.map((expression) => {
     // Preview text removes generated page separators; they must not admit results either.
     const source = archiveSearchSourceSql(expression);
     const matches = terms.map((term) => {
       const literal = sql`lower(${source}) LIKE lower(${archiveLiteralPattern(term)})`;
-      if (!field.fuzzy || !canFuzzyMatchArchiveTerm(term)) return literal;
+      if (exact || !field.fuzzy || !canFuzzyMatchArchiveTerm(term)) return literal;
       return sql`(${literal} OR EXISTS (
         SELECT 1 FROM regexp_split_to_table(lower(${source}), '[^[:alnum:]]+') AS word
         WHERE similarity(word, lower(${term})) >= ${ARCHIVE_TYPO_SIMILARITY}
@@ -1656,16 +1656,17 @@ function buildArchiveSearchPreview(
   const search = query.search?.trim();
   if (!search) return undefined;
 
+  const normalizedSearch = row.normalizedSearch ?? search.toLowerCase();
   // Keep original/folded term positions aligned, including case variants and
   // repeats; deduplicating either side alone can change fuzzy eligibility.
-  const searchTerms = (row.normalizedSearch ?? search.toLowerCase()).trim().split(/\s+/u);
+  const searchTerms = query.exact ? [normalizedSearch] : normalizedSearch.trim().split(/\s+/u);
   for (const field of getArchiveTypedSearchFields()) {
     const candidates = [...new Set(field.values(row, formattedDate))]
       .map((original) => {
         const folded = row.searchCaseMap && Object.hasOwn(row.searchCaseMap, original)
           ? row.searchCaseMap[original] : original.toLowerCase();
-        return scoreArchivePreviewValue(prepareArchivePreviewText(original), search, searchTerms, field.fuzzy,
-          prepareArchivePreviewText(folded),
+        return scoreArchivePreviewValue(prepareArchivePreviewText(original, query.exact), search, searchTerms, field.fuzzy && !query.exact,
+          prepareArchivePreviewText(folded, query.exact),
           field.fuzzy && row.searchWordMap && Object.hasOwn(row.searchWordMap, original) ? row.searchWordMap[original] : undefined,
           row.searchWordMap);
       })
@@ -1746,12 +1747,9 @@ function collapseArchiveWhitespace(value: string) {
   return value.replace(/\s+/g, ' ').trim();
 }
 
-function prepareArchivePreviewText(value: string) {
-  return collapseArchiveWhitespace(
-    value
-      .replace(/---[ \t\r\n\f\v]*Page[ \t\r\n\f\v]+[0-9]+[ \t\r\n\f\v]*---/gi, ' ')
-      .replace(/\r\n/g, '\n'),
-  );
+function prepareArchivePreviewText(value: string, preserveWhitespace = false) {
+  const withoutPageMarkers = value.replace(/---[ \t\r\n\f\v]*Page[ \t\r\n\f\v]+[0-9]+[ \t\r\n\f\v]*---/gi, ' ');
+  return preserveWhitespace ? withoutPageMarkers.trim() : collapseArchiveWhitespace(withoutPageMarkers);
 }
 
 function scoreArchivePreviewValue(

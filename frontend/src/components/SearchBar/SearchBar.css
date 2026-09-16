@@ -976,3 +976,7 @@
   }
 
 }
+
+.search-exact-toggle { display: flex; align-items: center; gap: .5rem; cursor: pointer; min-height: 44px; }
+.search-exact-toggle input { width: 1.1rem; height: 1.1rem; accent-color: var(--accent); }
+.search-exact-help { margin: 0; font-size: .8rem; line-height: 1.4; color: var(--text-muted); }

@@ -4,6 +4,8 @@ import { getImageUrl } from "../../api/client";
 import { useProgressiveImage } from "../../hooks/useProgressiveImage";
 import { Icon } from "../common";
 import "./LetterViewer.css";
+import { scanNeedsOriginal, scanVariantWidth } from "./scanResolution";
+import { useScanDisplayWidth } from "./useScanDisplayWidth";
 
 // ============================================================================
 // CONSTANTS
@@ -162,17 +164,21 @@ const LetterViewer = memo(function LetterViewer({
   }, [currentImageIndex]);
 
   const currentImage = displayImages[currentImageIndex];
+  const [loadedAspect, setLoadedAspect] = useState<{ url: string; ratio: number } | null>(null);
 
-  // Progressive image loading (blur-up)
-  // Lightbox: 800px mid (matches carousel cache → instant), full-res always loads in background
-  // Panel: 1200px initial, full-res only on zoom
-  const initialWidth = variant === "lightbox" ? 800 : 1200;
-  const thumbSrc = getImageUrl(currentImage.imageUrl, { width: 32 });
-  const midSrc = getImageUrl(currentImage.imageUrl, { width: initialWidth });
-  const fullSrc = (variant === "lightbox" || scale > 1)
-    ? getImageUrl(currentImage.imageUrl)
-    : midSrc;
+  // Choose detail from the fitted display size rather than the original file size.
+  // Opening the lightbox is not itself a request for the original scan.
+  const aspectRatio = currentImage?.width && currentImage?.height
+    ? currentImage.width / currentImage.height
+    : loadedAspect?.url === currentImage?.imageUrl ? loadedAspect.ratio : 3 / 4;
+  const physicalWidth = useScanDisplayWidth(imageContainerRef, aspectRatio, true);
+  const thumbSrc = getImageUrl(currentImage?.imageUrl ?? "", { width: 32 });
+  const midSrc = getImageUrl(currentImage?.imageUrl ?? "", { width: 800 });
+  const fullSrc = scanNeedsOriginal(physicalWidth, scale)
+    ? getImageUrl(currentImage?.imageUrl ?? "")
+    : getImageUrl(currentImage?.imageUrl ?? "", { width: scanVariantWidth(physicalWidth * scale) });
   const { fullLoaded, midLoaded } = useProgressiveImage({
+    enabled: Boolean(currentImage),
     thumbSrc,
     midSrc,
     fullSrc,
@@ -186,15 +192,15 @@ const LetterViewer = memo(function LetterViewer({
     if (displayImages.length <= 1) return;
     const nextIdx = (currentImageIndex + 1) % displayImages.length;
     const prevIdx = (currentImageIndex - 1 + displayImages.length) % displayImages.length;
-    const toPreload = [displayImages[nextIdx], displayImages[prevIdx]].filter(Boolean);
+    const toPreload = [...new Set([displayImages[nextIdx], displayImages[prevIdx]])].filter(Boolean);
     const imgs: HTMLImageElement[] = [];
     for (const img of toPreload) {
       const el = new Image();
-      el.src = getImageUrl(img.imageUrl, { width: initialWidth });
+      el.src = getImageUrl(img.imageUrl, { width: 800 });
       imgs.push(el);
     }
     return () => { for (const el of imgs) el.onload = null; };
-  }, [currentImageIndex, displayImages, initialWidth]);
+  }, [currentImageIndex, displayImages]);
 
   // ============================================================================
   // PERSISTENCE: Save state to localStorage
@@ -406,12 +412,18 @@ const LetterViewer = memo(function LetterViewer({
   const nextImage = useCallback(() => {
     // Save current state before switching
     saveCurrentImageState();
+    // Reset before rendering the next page so the previous zoom cannot fetch its original.
+    setScale(1);
+    setPosition({ x: 0, y: 0 });
     setCurrentImageIndex((prev) => (prev + 1) % displayImages.length);
   }, [displayImages.length, saveCurrentImageState]);
 
   const prevImage = useCallback(() => {
     // Save current state before switching
     saveCurrentImageState();
+    // Reset before rendering the next page so the previous zoom cannot fetch its original.
+    setScale(1);
+    setPosition({ x: 0, y: 0 });
     setCurrentImageIndex(
       (prev) => (prev - 1 + displayImages.length) % displayImages.length
     );
@@ -865,6 +877,14 @@ const LetterViewer = memo(function LetterViewer({
         )}
         <img
           ref={imageRef}
+          onLoad={(event) => {
+            const image = event.currentTarget;
+            if (image.naturalWidth && image.naturalHeight) {
+              const ratio = image.naturalWidth / image.naturalHeight;
+              setLoadedAspect((previous) => previous?.url === currentImage.imageUrl && previous.ratio === ratio
+                ? previous : { url: currentImage.imageUrl, ratio });
+            }
+          }}
           src={fullLoaded ? fullSrc : midSrc}
           alt={
             getImageAlt

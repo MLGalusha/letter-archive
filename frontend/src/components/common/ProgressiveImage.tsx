@@ -1,9 +1,10 @@
-import { forwardRef, useState, useEffect, useRef, type CSSProperties } from 'react';
+import { forwardRef, useState, useEffect, useRef, type CSSProperties, type RefObject } from 'react';
 import { useProgressiveImage } from '../../hooks/useProgressiveImage';
 import './ProgressiveImage.css';
 import { getAppScrollRootForIO } from '../../utils/appScroll';
 
 export interface ProgressiveImageProps {
+  containerRef?: RefObject<HTMLDivElement | null>;
   src: string;
   thumbSrc: string;
   midSrc?: string;
@@ -31,6 +32,7 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
   function ProgressiveImage(
     {
       src,
+      containerRef: externalContainerRef,
       thumbSrc,
       midSrc,
       alt,
@@ -52,7 +54,8 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
     },
     ref,
   ) {
-    const containerRef = useRef<HTMLDivElement>(null);
+    const internalContainerRef = useRef<HTMLDivElement>(null);
+    const containerRef = externalContainerRef ?? internalContainerRef;
     const [hasBeenVisible, setHasBeenVisible] = useState(() => typeof IntersectionObserver === 'undefined');
     const needsVisibility = loading === 'lazy' || deferFullUntilVisible;
     const enabled = !needsVisibility || hasBeenVisible;
@@ -67,7 +70,7 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
       }, { root: containerRef.current?.closest('[data-image-scroll-root]') ?? getAppScrollRootForIO(), rootMargin: '200px' });
       if (containerRef.current) observer.observe(containerRef.current);
       return () => observer.disconnect();
-    }, [enabled]);
+    }, [enabled, containerRef]);
 
     const { thumbLoaded, midLoaded, fullLoaded, currentSrc, naturalWidth, naturalHeight } = useProgressiveImage({
       thumbSrc,

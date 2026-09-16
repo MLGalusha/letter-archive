@@ -99,7 +99,7 @@ describe.skipIf(!enabled)('public archive search against PostgreSQL', () => {
     expect((await search({ format: 'ephemera' })).letters.map((item) => item.id)).toEqual([ids.formatRoot]);
     expect((await search({ search: 'quartz', format: 'cover' })).letters.map((item) => item.id)).toEqual([ids.groupRoot]);
     const expected = (await search({ search: 'quartz' })).letters.map((item) => item.id).sort();
-    expect((await search({ search: 'quartz', sort: 'letterDate', sortDirection: 'asc' })).letters.map((item) => item.id).sort()).toEqual(expected);
+    expect((await search({ search: 'quartz', sort: 'letterDate', sortOrder: 'asc' })).letters.map((item) => item.id).sort()).toEqual(expected);
   });
 
   it('explains compact date matches using the matching date text', async () => {

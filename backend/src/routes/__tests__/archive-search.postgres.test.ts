@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Router } from 'express';
 import type { Sql } from 'postgres';
+import { archiveWordSimilarity } from '../../services/archive-search-matching.js';
 import { invokeRouter } from '../../test/express-test-utils.js';
 
 // Opt-in real SQL coverage. Owns a disposable Docker database; never connects to
@@ -64,6 +65,22 @@ describe.skipIf(!enabled)('public archive search against PostgreSQL', () => {
       { key: 'orphanAttachment', type: 'C', transcription_text: 'quartz', date_raw: '19470821' },
       { key: 'formatOnly', type: 'E', date_raw: '19470822' },
       { key: 'formatRoot', date_raw: '19470822' },
+      { key: 'percent', transcription_text: 'A 5% discount.', date_raw: '19500101' },
+      { key: 'underscore', transcription_text: 'Code oak_leaf.', date_raw: '19500102' },
+      { key: 'backslash', transcription_text: String.raw`Path C:\letters.`, date_raw: '19500103' },
+      { key: 'apostrophe', transcription_text: "O'Neil wrote.", date_raw: '19500104' },
+      { key: 'greek', transcription_text: 'ζήτα', date_raw: '19500105' },
+      { key: 'phrase', transcription_text: 'red lantern', date_raw: '19500106' },
+      { key: 'separated', transcription_text: 'lantern glowing red', date_raw: '19500107' },
+      { key: 'crossField', transcription_text: 'red', sender: 'lantern', date_raw: '19500108' },
+      { key: 'typoName', sender: 'Molly', date_raw: '19500109' },
+      { key: 'typoTranscript', transcription_text: 'Molly', date_raw: '19500110' },
+      { key: 'operators', transcription_text: 'fox OR goose and fox -goose', date_raw: '19500111' },
+      { key: 'noOperators', transcription_text: 'fox goose', date_raw: '19500112' },
+      { key: 'hyphen', sender: 'Anne-Marie', date_raw: '19500113' },
+      { key: 'quote', transcription_text: 'She said "lantern".', date_raw: '19500114' },
+      { key: 'accent', sender: 'Éléonore', date_raw: '19500115' },
+      { key: 'pageSeparator', transcription_text: '--- Page 77 ---\nDocument', date_raw: '19500116' },
     ];
     for (const { key, ...fixture } of fixtures) {
       const rows = await client`INSERT INTO letters ${client({ collection_id: collection, ...fixture })} RETURNING id`;
@@ -83,7 +100,7 @@ describe.skipIf(!enabled)('public archive search against PostgreSQL', () => {
   async function search(query: Record<string, string>) {
     const response = await invokeRouter(router, { method: 'GET', url: '/letters/search', query, timeoutMs: 15_000 });
     expect(response.statusCode).toBe(200);
-    return response.body as { total: number; letters: Array<{ id: string; searchPreview?: { matchedFieldLabel: string; matchCount: number; excerpt: string } }> };
+    return response.body as { total: number; letters: Array<{ id: string; searchPreview?: { matchedFieldLabel: string; matchCount: number; excerpt: string; highlightRanges: Array<{ start: number; end: number }> } }> };
   }
 
   it('restricts SQL eligibility to published permitted fields and grouped public roots', async () => {
@@ -117,4 +134,37 @@ describe.skipIf(!enabled)('public archive search against PostgreSQL', () => {
     const response = await search({ search: '19470810' });
     expect(response.letters.find((item) => item.id === ids.transcript)?.searchPreview).toMatchObject({ matchedFieldLabel: 'Date', excerpt: '19470810', matchCount: 1 });
   });
+  it.each([
+    ['%', ['percent']], ['_', ['underscore']], [String.fromCharCode(92), ['backslash']],
+    ["O'Neil", ['apostrophe']], ['ζ', ['greek']], ['ζή', ['greek']],
+    ['red lantern', ['phrase', 'separated']], ['lantern red red', ['phrase', 'separated']],
+    ['Mollly', ['typoName']], ['fox OR goose', ['operators']], ['fox -goose', ['operators']],
+    ['Anne-Marie', ['hyphen']], ['"lantern"', ['quote']], ['ÉLÉONORE', ['accent']],
+    ['77', []], ['quartz%', []], ['\"quartz\"', []],
+  ] as Array<[string, string[]]>)('agrees on literal input and previews for %s', async (query, keys) => {
+    const response = await search({ search: query, limit: '100' });
+    expect(response.letters.map((item) => item.id).sort()).toEqual(keys.map((key) => ids[key]).sort());
+    for (const item of response.letters) {
+      expect(item.searchPreview?.highlightRanges.length).toBeGreaterThan(0);
+      if (['%', '_', String.fromCharCode(92), "O'Neil", 'ζ', 'ζή', 'Anne-Marie', '"lantern"'].includes(query)) {
+        const preview = item.searchPreview!;
+        expect(preview.highlightRanges.map((range) => preview.excerpt.slice(range.start, range.end)))
+          .toContain(query);
+      }
+      if (query === 'Mollly') expect(item.searchPreview).toMatchObject({ matchedFieldLabel: 'Sender', excerpt: 'Molly', highlightRanges: [{ start: 0, end: 5 }] });
+      for (const range of item.searchPreview!.highlightRanges) {
+        expect(range.end).toBeGreaterThan(range.start);
+        expect(range.start).toBeGreaterThanOrEqual(0);
+        expect(range.end).toBeLessThanOrEqual(item.searchPreview!.excerpt.length);
+      }
+    }
+  });
+
+  it('uses the same whole-word trigram similarity as PostgreSQL', async () => {
+    for (const [left, right] of [['Molly', 'Mollly'], ['word', 'words'], ['Éléonore', 'Éléonorre'], ['aaaa', 'aaaab'], ['東京大学', '東京大學']]) {
+      const [row] = await client`SELECT similarity(lower(${left}), lower(${right})) AS score`;
+      expect(archiveWordSimilarity(left!, right!)).toBeCloseTo(row!.score, 6);
+    }
+  });
+
 });

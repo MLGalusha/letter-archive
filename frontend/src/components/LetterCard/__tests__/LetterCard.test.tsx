@@ -22,6 +22,13 @@ function mockMatchMedia(matches: boolean) {
   });
 }
 
+const previewCard = {
+  id: 'letter-1', imageType: 'letter' as const, imageUrl: '/images/page-1.jpg',
+  sender: 'Jimmie', recipient: 'Molly', hook: 'Please write soon, Molly.',
+  searchPreview: { excerpt: 'Please write soon, Molly.', matchCount: 1, matchedFieldLabel: 'Transcript',
+    highlightRanges: [{ start: 19, end: 24 }], hookHighlightRanges: [{ start: 19, end: 24 }] },
+};
+
 afterEach(() => {
   vi.useRealTimers();
   window.localStorage.clear();
@@ -38,143 +45,56 @@ describe("LetterCard", () => {
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 
-  it("only cools down a card after the auto-preview fully finishes", async () => {
+  it("keeps explanations available until dismissal and never highlights the hook", async () => {
     vi.useFakeTimers();
     const onClick = vi.fn();
-
-    const { container } = render(
-      <LetterCard
-        card={{
-          id: "letter-1",
-          imageType: "letter",
-          imageUrl: "/images/page-1.jpg",
-          primaryChip: "2 pages",
-          sender: "Jimmie",
-          recipient: "Molly",
-          date: "August 10th, 1947",
-          hook: "Jimmie pleads for a reply.",
-          searchPreview: {
-            excerpt: "Please write soon, Molly.",
-            matchCount: 3,
-            matchedFieldLabel: "Transcript",
-            highlightRanges: [
-              {
-                start: 19,
-                end: 24,
-              },
-            ],
-            hookHighlightRanges: [
-              {
-                start: 20,
-                end: 25,
-              },
-            ],
-          },
-        }}
-        onClick={onClick}
-      />,
-    );
-
-    const button = screen.getByRole("link", {
-      name: /Jimmie → Molly/i,
-    });
-    const previewToggle = screen.getByRole("button", {
-      name: "Show search match preview",
-    });
-
-    expect(button).toHaveAttribute("href", "/letter/letter-1");
-    expect(button).not.toHaveAttribute("title");
-    expect(screen.queryByText("3 matches")).not.toBeInTheDocument();
-    expect(screen.queryByText("Transcript match")).not.toBeInTheDocument();
-    expect(container.querySelector(".letter-hook .letter-card-search-match-highlight")).toBeNull();
-    expect(button).not.toHaveClass("letter-card--search-preview-visible");
-
-    const shell = button.closest(".letter-card-shell") as HTMLElement;
-
-    fireEvent.mouseEnter(shell);
-    expect(button).toHaveClass("letter-card--search-preview-visible");
-    expect(screen.getByText("3 matches")).toBeInTheDocument();
-    expect(screen.getByText("Transcript match")).toBeInTheDocument();
-    expect(screen.getAllByText("Molly").length).toBeGreaterThan(0);
-    expect(window.localStorage.getItem("letter-card-search-preview-cooldowns")).toBeNull();
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1600);
-    });
-    expect(button).not.toHaveClass("letter-card--search-preview-visible");
-    expect(window.localStorage.getItem("letter-card-search-preview-cooldowns")).toContain("letter-1");
-
-    fireEvent.mouseLeave(shell);
-    fireEvent.mouseEnter(shell);
-    expect(button).not.toHaveClass("letter-card--search-preview-visible");
-
-    fireEvent.mouseEnter(previewToggle);
-    expect(button).toHaveClass("letter-card--search-preview-visible");
-
-    fireEvent.mouseLeave(previewToggle);
-    expect(button).not.toHaveClass("letter-card--search-preview-visible");
-
-    fireEvent.click(previewToggle);
-    expect(button).toHaveClass("letter-card--search-preview-visible");
+    const { container } = render(<LetterCard card={previewCard} onClick={onClick} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Search match preview' }));
+    expect(screen.getByRole('region', { name: 'Search match preview' })).toHaveTextContent('Transcript match');
+    expect(container.querySelector('.letter-hook mark')).toBeNull();
+    await act(async () => { await vi.advanceTimersByTimeAsync(10 * 60 * 1000); });
+    expect(screen.getByRole('region')).toBeVisible();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('region')).not.toBeInTheDocument();
     expect(onClick).not.toHaveBeenCalled();
-
-    fireEvent.click(button);
-
-    expect(onClick).toHaveBeenCalledWith("letter-1");
   });
 
-  it("does not cool down a card if the hover ends before the preview finishes", async () => {
-    vi.useFakeTimers();
+  it("exposes a persistent preview and restores focus when Escape dismisses its text", () => {
+    render(<LetterCard card={previewCard} onClick={vi.fn()} />);
+    const toggle = screen.getByRole('button', { name: 'Search match preview' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(toggle);
+    const preview = screen.getByRole('region', { name: 'Search match preview' });
+    expect(toggle).toHaveAttribute('aria-controls', preview.id);
+    expect(toggle).toHaveAttribute('aria-describedby', preview.id);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    preview.focus();
+    fireEvent.keyDown(preview, { key: 'Escape' });
+    expect(toggle).toHaveFocus();
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  });
 
-    render(
-      <LetterCard
-        card={{
-          id: "letter-2",
-          imageType: "letter",
-          imageUrl: "/images/page-2.jpg",
-          primaryChip: "2 pages",
-          sender: "Jimmie",
-          recipient: "Molly",
-          date: "August 11th, 1947",
-          hook: "Jimmie imagines their future together.",
-          searchPreview: {
-            excerpt: "",
-            matchCount: 0,
-            matchedFieldLabel: "Hook",
-            highlightRanges: [],
-            hookHighlightRanges: [
-              {
-                start: 22,
-                end: 28,
-              },
-            ],
-          },
-        }}
-        onClick={() => {}}
-      />,
-    );
+  it("keeps a hovered preview open after its text receives keyboard focus", () => {
+    render(<LetterCard card={previewCard} onClick={vi.fn()} />);
+    const shell = screen.getByRole('link').closest('.letter-card-shell')!;
+    const over = new Event('pointerover', { bubbles: true });
+    Object.defineProperty(over, 'pointerType', { value: 'mouse' });
+    fireEvent(shell, over);
+    const preview = screen.getByRole('region');
+    act(() => preview.focus());
+    fireEvent.pointerLeave(shell);
+    expect(preview).toHaveFocus();
+    expect(preview).toBeVisible();
+    fireEvent.keyDown(preview, { key: 'Escape' });
+    expect(screen.getByRole('button', { name: 'Search match preview' })).toHaveFocus();
+  });
 
-    const button = screen.getByRole("link", {
-      name: /August 11th, 1947/i,
-    });
-    const shell = button.closest(".letter-card-shell") as HTMLElement;
-    expect(screen.queryByRole("button", { name: "Show search match preview" })).not.toBeInTheDocument();
-    expect(shell).not.toHaveClass("letter-card-shell--has-search-match");
-    expect(document.querySelector(".letter-hook .letter-card-search-match-highlight")).toBeNull();
-
-    fireEvent.mouseEnter(shell);
-    expect(button).not.toHaveClass("letter-card--search-preview-visible");
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(700);
-    });
-
-    fireEvent.mouseLeave(shell);
-    expect(button).not.toHaveClass("letter-card--search-preview-visible");
-    expect(window.localStorage.getItem("letter-card-search-preview-cooldowns")).toBeNull();
-
-    fireEvent.mouseEnter(shell);
-    expect(button).not.toHaveClass("letter-card--search-preview-visible");
+  it("clears stale preview state when the search evidence changes", () => {
+    const { rerender } = render(<LetterCard card={previewCard} onClick={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Search match preview' }));
+    rerender(<LetterCard card={{ ...previewCard, searchPreview: undefined }} onClick={vi.fn()} />);
+    expect(screen.queryByRole('region')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
   it("renders a subtle sort cue when the archive is sorted by a hidden field", () => {
@@ -202,87 +122,17 @@ describe("LetterCard", () => {
     expect(screen.getByText("009")).toBeInTheDocument();
   });
 
-  it("keeps the preview visible while a touch stays inside the card, delays hide on release, and suppresses navigation after a hold", async () => {
+  it("provides touch users the same explicit preview control without intercepting letter navigation", () => {
     mockMatchMedia(true);
-    vi.useFakeTimers();
     const onClick = vi.fn();
-
-    render(
-      <LetterCard
-        card={{
-          id: "letter-4",
-          imageType: "letter",
-          imageUrl: "/images/page-4.jpg",
-          primaryChip: "1 page",
-          sender: "Jimmie",
-          recipient: "Molly",
-          date: "August 13th, 1947",
-          hook: "Jimmie begs Molly to answer.",
-          searchPreview: {
-            excerpt: "Please answer soon, Molly.",
-            matchCount: 1,
-            matchedFieldLabel: "Transcript",
-            highlightRanges: [
-              {
-                start: 20,
-                end: 25,
-              },
-            ],
-          },
-        }}
-        onClick={onClick}
-      />,
-    );
-
-    const button = screen.getByRole("link", {
-      name: /August 13th, 1947/i,
-    });
-    const shell = button.closest(".letter-card-shell") as HTMLElement;
-
-    expect(screen.queryByRole("button", { name: "Show search match preview" })).not.toBeInTheDocument();
-
-    Object.defineProperty(document, "elementFromPoint", {
-      configurable: true,
-      value: vi.fn(() => shell),
-    });
-
-    fireEvent.touchStart(button, {
-      touches: [{ clientX: 20, clientY: 20 }],
-    });
-    expect(button).toHaveClass("letter-card--search-preview-visible");
-
-    fireEvent.touchMove(button, {
-      touches: [{ clientX: 24, clientY: 60 }],
-    });
-    expect(button).toHaveClass("letter-card--search-preview-visible");
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(220);
-    });
-
-    fireEvent.touchEnd(button);
-    expect(button).toHaveClass("letter-card--search-preview-visible");
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(300);
-    });
-    expect(button).toHaveClass("letter-card--search-preview-visible");
-
-    fireEvent.touchStart(button, {
-      touches: [{ clientX: 20, clientY: 20 }],
-    });
-    expect(button).toHaveClass("letter-card--search-preview-visible");
-
-    fireEvent.touchEnd(button);
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(420);
-    });
-    expect(button).not.toHaveClass("letter-card--search-preview-visible");
-
-    fireEvent.click(button);
+    render(<LetterCard card={previewCard} onClick={onClick} />);
+    const toggle = screen.getByRole('button', { name: 'Search match preview' });
+    fireEvent.click(toggle);
+    expect(screen.getByRole('region')).toBeVisible();
     expect(onClick).not.toHaveBeenCalled();
-
-    fireEvent.click(button);
-    expect(onClick).toHaveBeenCalledWith("letter-4");
+    fireEvent.click(toggle);
+    expect(screen.queryByRole('region')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('link'));
+    expect(onClick).toHaveBeenCalledWith('letter-1');
   });
 });

@@ -147,7 +147,6 @@ type ArchiveSearchPreview = {
   matchCount: number;
   highlightRanges: ArchiveSearchHighlightRange[];
   matchedFieldLabel: string;
-  hookHighlightRanges?: ArchiveSearchHighlightRange[];
 };
 
 const ARCHIVE_FORMAT_LABELS = {
@@ -1378,111 +1377,75 @@ function buildArchiveSearchCtes(query: ArchiveSearchQuery, collectionIds: string
   `;
 }
 
+// One allowlist supplies SQL eligibility/ranking and public match explanations.
+// Order is the per-result fallback policy, not a global metadata fallback.
+function getArchiveTypedSearchFields() {
+  return [
+    {
+      label: 'Transcript',
+      fuzzy: false,
+      expressions: [
+        buildArchivePublicTranscriptSql(sql`l.transcription_text`),
+        buildArchivePublicExtraContentSql(sql`l.extra_content_transcript`),
+      ],
+      values: (row: ArchiveSearchRow, _date: string) => [
+        ...(row.transcriptionTexts || []), ...(row.extraContentTranscripts || []),
+      ],
+    },
+    {
+      label: 'Date',
+      fuzzy: false,
+      expressions: [sql`l.date_raw`],
+      // Retain raw dates so a query such as 19470817 can explain its match.
+      values: (row: ArchiveSearchRow, date: string) => [date, row.dateRaw],
+    },
+    {
+      label: 'Sender',
+      fuzzy: true,
+      expressions: [buildArchivePublicMetadataSql(sql`l.sender`)],
+      values: (row: ArchiveSearchRow, _date: string) => row.senders || [],
+    },
+    {
+      label: 'Recipient',
+      fuzzy: true,
+      expressions: [buildArchivePublicMetadataSql(sql`l.recipient`)],
+      values: (row: ArchiveSearchRow, _date: string) => row.recipients || [],
+    },
+    {
+      label: 'Location',
+      fuzzy: true,
+      expressions: [buildArchivePublicMetadataSql(sql`l.location_written`)],
+      values: (row: ArchiveSearchRow, _date: string) => row.places || [],
+    },
+  ];
+}
+
 function buildArchiveSearchVectorSql() {
-  return sql`(
-    setweight(
-      to_tsvector(
-        'simple',
-        TRIM(CONCAT_WS(
-          ' ',
-          COALESCE(${buildArchivePublicMetadataSql(sql`l.sender`)}, ''),
-          COALESCE(${buildArchivePublicMetadataSql(sql`l.recipient`)}, ''),
-          c.collection_code,
-          COALESCE(c.title, '')
-        ))
-      ),
-      'A'
-    )
-    ||
-    setweight(
-      to_tsvector(
-        'simple',
-        TRIM(CONCAT_WS(
-          ' ',
-          l.date_raw,
-          ${buildArchiveMediaTypeSql()},
-          COALESCE(${buildArchivePublicMetadataSql(sql`l.location_written`)}, ''),
-          COALESCE(${buildArchivePublicMetadataSql(sql`l.hook`)}, ''),
-          COALESCE(${buildArchivePublicMetadataSql(sql`l.summary`)}, ''),
-          ARRAY_TO_STRING(COALESCE(${buildArchivePublicMetadataSql(sql`l.tags`)}, ARRAY[]::text[]), ' '),
-          ARRAY_TO_STRING(COALESCE(${buildArchivePublicMetadataSql(sql`l.primary_topics`)}, ARRAY[]::text[]), ' '),
-          COALESCE(${buildArchivePublicMetadataSql(sql`l.emotional_tone::text`)}, ''),
-          COALESCE(${buildArchivePublicMetadataSql(sql`l.sender_recipient_relationship::text`)}, '')
-        ))
-      ),
-      'B'
-    )
-    ||
-    setweight(
-      to_tsvector(
-        'simple',
-        TRIM(CONCAT_WS(
-          ' ',
-          COALESCE(${buildArchivePhotoOnlySql(sql`l.photo_description`)}, ''),
-          COALESCE(${buildArchivePublicExtraContentSql(sql`l.extra_content_transcript`)}, '')
-        ))
-      ),
-      'C'
-    )
-    ||
-    setweight(
-      to_tsvector('simple', TRIM(COALESCE(${buildArchivePublicTranscriptSql(sql`l.transcription_text`)}, ''))),
-      'D'
-    )
-  )`;
+  return sql`(${sql.join(getArchiveTypedSearchFields().map((field) => sql`
+    setweight(to_tsvector('simple', CONCAT_WS(' ', ${sql.join(field.expressions, sql`, `)})),
+      ${field.label === 'Transcript' ? sql`'A'` : sql`'B'`})
+  `), sql` || `)})`;
 }
 
 function buildArchiveSearchTextSql() {
-  return sql`TRIM(CONCAT_WS(
-    ' ',
-    c.collection_code,
-    COALESCE(c.title, ''),
-    l.date_raw,
-    ${buildArchiveMediaTypeSql()},
-    COALESCE(${buildArchivePublicMetadataSql(sql`l.sender`)}, ''),
-    COALESCE(${buildArchivePublicMetadataSql(sql`l.recipient`)}, ''),
-    COALESCE(${buildArchivePublicMetadataSql(sql`l.location_written`)}, ''),
-    COALESCE(${buildArchivePublicMetadataSql(sql`l.hook`)}, ''),
-    COALESCE(${buildArchivePublicMetadataSql(sql`l.summary`)}, ''),
-    ARRAY_TO_STRING(COALESCE(${buildArchivePublicMetadataSql(sql`l.tags`)}, ARRAY[]::text[]), ' '),
-    ARRAY_TO_STRING(COALESCE(${buildArchivePublicMetadataSql(sql`l.primary_topics`)}, ARRAY[]::text[]), ' '),
-    COALESCE(${buildArchivePublicMetadataSql(sql`l.emotional_tone::text`)}, ''),
-    COALESCE(${buildArchivePublicMetadataSql(sql`l.sender_recipient_relationship::text`)}, ''),
-    COALESCE(${buildArchivePhotoOnlySql(sql`l.photo_description`)}, ''),
-    COALESCE(${buildArchivePublicExtraContentSql(sql`l.extra_content_transcript`)}, ''),
-    COALESCE(${buildArchivePublicTranscriptSql(sql`l.transcription_text`)}, '')
-  ))`;
+  return sql`TRIM(CONCAT_WS(' ', ${sql.join(
+    getArchiveTypedSearchFields().flatMap((field) => field.expressions), sql`, `,
+  )}))`;
 }
 
 function buildArchiveFuzzyTextSql() {
-  return sql`TRIM(CONCAT_WS(
-    ' ',
-    c.collection_code,
-    COALESCE(c.title, ''),
-    ${buildArchiveMediaTypeSql()},
-    COALESCE(${buildArchivePublicMetadataSql(sql`l.sender`)}, ''),
-    COALESCE(${buildArchivePublicMetadataSql(sql`l.recipient`)}, ''),
-    COALESCE(${buildArchivePublicMetadataSql(sql`l.location_written`)}, ''),
-    COALESCE(${buildArchivePublicMetadataSql(sql`l.hook`)}, ''),
-    COALESCE(${buildArchivePublicMetadataSql(sql`l.summary`)}, ''),
-    COALESCE(${buildArchivePublicMetadataSql(sql`l.emotional_tone::text`)}, ''),
-    COALESCE(${buildArchivePublicMetadataSql(sql`l.sender_recipient_relationship::text`)}, '')
-  ))`;
+  // Preserve typo tolerance for names/places without making nearby dates match.
+  return sql`TRIM(CONCAT_WS(' ', ${sql.join(
+    getArchiveTypedSearchFields().filter((field) => field.fuzzy).flatMap((field) => field.expressions), sql`, `,
+  )}))`;
 }
 
 function buildArchiveFieldSimilaritySql(searchTerm: string) {
-  return sql`GREATEST(
-    word_similarity(lower(COALESCE(${buildArchivePublicMetadataSql(sql`l.sender`)}, '')), lower(${searchTerm})),
-    word_similarity(lower(COALESCE(${buildArchivePublicMetadataSql(sql`l.recipient`)}, '')), lower(${searchTerm})),
-    word_similarity(lower(COALESCE(${buildArchivePublicMetadataSql(sql`l.location_written`)}, '')), lower(${searchTerm})),
-    word_similarity(lower(c.collection_code), lower(${searchTerm})),
-    word_similarity(lower(COALESCE(c.title, '')), lower(${searchTerm})),
-    word_similarity(lower(COALESCE(${buildArchiveMediaTypeSql()}, '')), lower(${searchTerm})),
-    word_similarity(lower(ARRAY_TO_STRING(COALESCE(${buildArchivePublicMetadataSql(sql`l.tags`)}, ARRAY[]::text[]), ' ')), lower(${searchTerm})),
-    word_similarity(lower(ARRAY_TO_STRING(COALESCE(${buildArchivePublicMetadataSql(sql`l.primary_topics`)}, ARRAY[]::text[]), ' ')), lower(${searchTerm})),
-    word_similarity(lower(COALESCE(${buildArchivePublicMetadataSql(sql`l.emotional_tone::text`)}, '')), lower(${searchTerm})),
-    word_similarity(lower(COALESCE(${buildArchivePublicMetadataSql(sql`l.sender_recipient_relationship::text`)}, '')), lower(${searchTerm}))
-  )`;
+  return sql`GREATEST(${sql.join(
+    getArchiveTypedSearchFields().filter((field) => field.fuzzy).flatMap((field) => field.expressions).map(
+      (expression) => sql`word_similarity(lower(COALESCE(${expression}, '')), lower(${searchTerm}))`,
+    ), sql`, `,
+  )})`;
 }
 
 function buildArchiveAllTermsMatchBoostSql(searchTerm: string) {
@@ -1595,7 +1558,7 @@ function transformArchiveSearchRow(row: ArchiveSearchRow, query: ArchiveSearchQu
     hook: row.hook || row.photoDescriptions?.[0] || undefined,
     location: row.location || undefined,
     verified: row.metadataVerified,
-    searchPreview: buildArchiveSearchPreview(row, query, formattedDate, row.hook || undefined),
+    searchPreview: buildArchiveSearchPreview(row, query, formattedDate),
   };
 }
 
@@ -1603,184 +1566,29 @@ function buildArchiveSearchPreview(
   row: ArchiveSearchRow,
   query: ArchiveSearchQuery,
   formattedDate: string,
-  hookText?: string,
 ): ArchiveSearchPreview | undefined {
   const search = query.search?.trim();
   if (!search) return undefined;
 
   const searchTerms = getArchiveSearchTerms(search);
-  const hookHighlightRanges = hookText
-    ? buildArchiveInlineHighlightRanges(hookText, search, searchTerms)
-    : [];
-
-  const previewPriorityGroups = [
-    {
-      sources: [
-        {
-          label: 'Transcript',
-          values: dedupeArchivePreviewValues([
-            ...(row.transcriptionTexts || []),
-            ...(row.extraContentTranscripts || []),
-          ]),
-        },
-      ],
-    },
-    {
-      sources: [
-        {
-          label: 'Photo description',
-          values: dedupeArchivePreviewValues([
-            ...(row.photoDescriptions || []),
-          ]),
-        },
-      ],
-    },
-    {
-      sources: [
-        {
-          label: 'Sender',
-          values: dedupeArchivePreviewValues([
-            ...(row.senders || []),
-          ]),
-        },
-        {
-          label: 'Recipient',
-          values: dedupeArchivePreviewValues([
-            ...(row.recipients || []),
-          ]),
-        },
-      ],
-    },
-    {
-      sources: [
-        {
-          label: 'Collection',
-          values: dedupeArchivePreviewValues([
-            row.collectionTitle || '',
-            row.collectionCode,
-          ]),
-        },
-      ],
-    },
-    {
-      sources: [
-        {
-          label: 'Date',
-          values: dedupeArchivePreviewValues([formattedDate]),
-        },
-      ],
-    },
-    {
-      sources: [
-        {
-          label: 'Place',
-          values: dedupeArchivePreviewValues([
-            ...(row.places || []),
-          ]),
-        },
-      ],
-    },
-    {
-      sources: [
-        {
-          label: 'Topic',
-          values: dedupeArchivePreviewValues([
-            ...(row.topics || []),
-          ]),
-        },
-        {
-          label: 'Tone',
-          values: dedupeArchivePreviewValues([
-            ...(row.tones || []),
-          ]),
-        },
-        {
-          label: 'Relationship',
-          values: dedupeArchivePreviewValues([
-            ...(row.relationships || []),
-          ]),
-        },
-        {
-          label: 'Tag',
-          values: dedupeArchivePreviewValues([
-            ...(row.tags || []),
-          ]),
-        },
-        {
-          label: 'Format',
-          values: dedupeArchivePreviewValues([
-            ...(row.formats || []).map((format) => getArchiveFormatDisplayLabel(format)),
-          ]),
-        },
-      ],
-    },
-    {
-      sources: [
-        {
-          label: 'Summary',
-          values: dedupeArchivePreviewValues([
-            ...(row.summaries || []),
-          ]),
-        },
-      ],
-    },
-  ];
-
-  const rankedCandidates = previewPriorityGroups.flatMap((group, groupIndex) =>
-    group.sources.flatMap((source) =>
-      source.values
-        .map((value) => scoreArchivePreviewValue(value, search, searchTerms))
-        .filter((candidate): candidate is ArchivePreviewCandidate => candidate !== null)
-        .map((candidate) => ({ label: source.label, candidate, groupIndex })),
-    ),
-  );
-
-  if (rankedCandidates.length > 0) {
-    rankedCandidates.sort(
-      (left, right) =>
-        right.candidate.score - left.candidate.score ||
-        right.candidate.totalMatches - left.candidate.totalMatches ||
-        left.groupIndex - right.groupIndex,
-    );
-    const bestInGroup = rankedCandidates[0];
-    return {
-      excerpt: bestInGroup.candidate.excerpt,
-      highlightRanges: bestInGroup.candidate.highlightRanges,
-      matchCount: Math.max(
-        rankedCandidates.reduce((sum, item) => sum + item.candidate.totalMatches, 0),
-        bestInGroup.candidate.highlightRanges.length,
-        1,
-      ),
-      matchedFieldLabel: bestInGroup.label,
-      hookHighlightRanges: hookHighlightRanges.length > 0 ? hookHighlightRanges : undefined,
-    };
+  for (const field of getArchiveTypedSearchFields()) {
+    const candidates = dedupeArchivePreviewValues(field.values(row, formattedDate))
+      .map((value) => scoreArchivePreviewValue(value, search, searchTerms, field.fuzzy))
+      .filter((candidate): candidate is ArchivePreviewCandidate => candidate !== null)
+      .sort((left, right) => right.score - left.score || right.totalMatches - left.totalMatches
+        || left.excerpt.localeCompare(right.excerpt));
+    const best = candidates[0];
+    if (best) {
+      return {
+        excerpt: best.excerpt,
+        highlightRanges: best.highlightRanges,
+        // Count the selected source text, not other fields or alternate date forms.
+        matchCount: Math.max(best.totalMatches, best.highlightRanges.length, 1),
+        matchedFieldLabel: field.label,
+      };
+    }
   }
-
-  if (hookHighlightRanges.length > 0) {
-    return {
-      excerpt: '',
-      highlightRanges: [],
-      matchCount: 0,
-      matchedFieldLabel: 'Hook',
-      hookHighlightRanges,
-    };
-  }
-
   return undefined;
-}
-
-function buildArchiveInlineHighlightRanges(
-  value: string,
-  rawSearch: string,
-  searchTerms: string[],
-) {
-  const exactRanges = collectArchiveExactMatchRanges(value, rawSearch, searchTerms);
-  if (exactRanges.length > 0) return exactRanges;
-
-  const fuzzyCandidate = buildArchiveFuzzyPreviewCandidate(value, searchTerms, rawSearch);
-  if (!fuzzyCandidate) return [];
-
-  return fuzzyCandidate.highlightRanges;
 }
 
 type ArchivePreviewCandidate = {
@@ -1880,6 +1688,7 @@ function scoreArchivePreviewValue(
   value: string,
   rawSearch: string,
   searchTerms: string[],
+  allowFuzzy: boolean,
 ): ArchivePreviewCandidate | null {
   const segments = splitArchivePreviewSegments(value);
   let bestCandidate: ArchivePreviewCandidate | null = null;
@@ -1917,7 +1726,7 @@ function scoreArchivePreviewValue(
       continue;
     }
 
-    if (bestCandidate) {
+    if (bestCandidate || !allowFuzzy) {
       continue;
     }
 
@@ -2194,15 +2003,6 @@ function getLevenshteinDistance(left: string, right: string) {
   }
 
   return matrix[left.length][right.length];
-}
-
-function getArchiveFormatDisplayLabel(format: string) {
-  const normalizedFormat = format.toLowerCase();
-  if (normalizedFormat in ARCHIVE_FORMAT_LABELS) {
-    return ARCHIVE_FORMAT_LABELS[normalizedFormat as keyof typeof ARCHIVE_FORMAT_LABELS];
-  }
-
-  return format;
 }
 
 function mapArchiveFormatFacets(rows: ArchiveFacetRow[]): ArchiveFormatFacet[] {

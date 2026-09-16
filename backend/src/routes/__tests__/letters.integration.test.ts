@@ -1005,12 +1005,6 @@ describe('letters route integration', () => {
                 end: 5,
               },
             ],
-            hookHighlightRanges: [
-              {
-                start: 19,
-                end: 24,
-              },
-            ],
           },
         },
       ],
@@ -1308,7 +1302,7 @@ describe('letters route integration', () => {
     expect(searchPreview).toBeDefined();
     expect(searchPreview.excerpt).toBe('Molly');
     expect(searchPreview.matchedFieldLabel).toBe('Recipient');
-    expect(searchPreview.hookHighlightRanges).toEqual([{ start: 19, end: 24 }]);
+    expect(searchPreview.hookHighlightRanges).toBeUndefined();
     expect(searchPreview.excerpt.indexOf('Molly')).toBeGreaterThanOrEqual(0);
     expect(
       searchPreview.excerpt.slice(
@@ -1316,6 +1310,34 @@ describe('letters route integration', () => {
         searchPreview.highlightRanges[0]!.end,
       ),
     ).toBe('Molly');
+  });
+
+  it.each([
+    { search: 'Molly', fields: { transcriptionTexts: ['Dear Molly, please write soon.'], recipients: ['Molly Molly Molly'] }, label: 'Transcript', count: 1 },
+    { search: 'Molly', fields: { transcriptionTexts: ['Milly wrote yesterday.'], recipients: ['Molly'] }, label: 'Recipient', count: 1 },
+    { search: 'telegram', fields: { extraContentTranscripts: ['A telegram arrived.'] }, label: 'Transcript', count: 1 },
+    { search: '19470810', fields: {}, label: 'Date', count: 1 },
+    { search: '1947', fields: { senders: ['1947'] }, label: 'Date', count: 1 },
+    { search: 'Molly', fields: { senders: ['Molly'], recipients: ['Molly Molly'] }, label: 'Sender', count: 1 },
+    { search: 'Molly', fields: { recipients: ['Molly'] }, label: 'Recipient', count: 1 },
+    { search: 'Kansas', fields: { places: ['Kansas'] }, label: 'Location', count: 1 },
+    { search: 'he', fields: { formats: ['ephemera'], summaries: ['She said hello'], hooks: ['She smiled'], hook: 'She smiled' }, label: undefined, count: undefined },
+    { search: 'secret', fields: { collectionTitle: 'secret', collectionCode: 'secret', tags: ['secret'], topics: ['secret'], tones: ['secret'], relationships: ['secret'], photoDescriptions: ['secret'] }, label: undefined, count: undefined },
+  ])('uses only the first permitted matching source: $label / $search', async ({ search, fields, label, count }) => {
+    executeMock.mockResolvedValueOnce([{
+      id: 'letter-primary', collectionId: 'collection-9', collectionCode: '009',
+      dateRaw: '19470810', createdAt: '2026-03-09T12:00:00.000Z', primaryType: 'L',
+      primaryPageCount: 1, formats: ['letter'], metadataVerified: true, totalCount: 1,
+      ...fields,
+    }]).mockResolvedValueOnce([]);
+    const response = await invokeRouter(lettersRouter, {
+      method: 'GET', url: '/letters/search', query: { search },
+    });
+    expect(response.statusCode).toBe(200);
+    const preview = (response.body as { letters: Array<{ searchPreview?: { matchedFieldLabel: string; matchCount: number; hookHighlightRanges?: unknown } }> }).letters[0]?.searchPreview;
+    expect(preview?.matchedFieldLabel).toBe(label);
+    expect(preview?.matchCount).toBe(count);
+    expect(preview?.hookHighlightRanges).toBeUndefined();
   });
 
 });

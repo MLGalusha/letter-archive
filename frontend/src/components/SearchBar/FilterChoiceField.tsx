@@ -1,7 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { FilterChoiceOption } from "./searchBarUtils";
 import { filterChoiceOptions, formatFacetLabel } from "./searchBarUtils";
-import useTimerDropdown from "./useTimerDropdown";
 
 export default memo(function FilterChoiceField({
   id,
@@ -62,8 +61,15 @@ export default memo(function FilterChoiceField({
   const optionsRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (open && searchable) {
-      window.requestAnimationFrame(() => searchInputRef.current?.focus());
+    if (open && searchable && options.length > 6) {
+      searchInputRef.current?.focus();
+    }
+    if (open && !(searchable && options.length > 6)) {
+      {
+        const target = optionsRef.current?.querySelector<HTMLButtonElement>("button.active:not(:disabled)")
+          ?? optionsRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)");
+        target?.focus();
+      }
     }
     if (open && hasValue && optionsRef.current) {
       // Scroll to center the selected item
@@ -105,17 +111,6 @@ export default memo(function FilterChoiceField({
 
   const hasSearch = searchable && options.length > 6;
 
-  const { clearTimer, scheduleClose } = useTimerDropdown({
-    delay: 400,
-    pinned: false,
-    onClose: () => onOpenChange(false),
-  });
-
-  // Clear any pending close timer when this dropdown closes (prevents stale timers from closing other dropdowns)
-  useEffect(() => {
-    if (!open) clearTimer();
-  }, [open]);
-
   const handleOptionClick = (optionValue: string) => {
     if (multiple) {
       const isSelected = selectedValues.includes(optionValue);
@@ -128,14 +123,26 @@ export default memo(function FilterChoiceField({
     } else {
       onChange(optionValue);
       if (closeOnSelect) {
-        clearTimer();
         onOpenChange(false);
+        triggerRef.current?.focus();
       }
     }
   };
 
   return (
-    <div className={`filter-choice${open ? " is-open" : ""}`}>
+    <div className={`filter-choice${open ? " is-open" : ""}`}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && open) {
+          event.preventDefault();
+          event.stopPropagation();
+          onOpenChange(false);
+          triggerRef.current?.focus();
+        }
+      }}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onOpenChange(false);
+      }}
+    >
       <button
         ref={triggerRef}
         id={id}
@@ -143,9 +150,8 @@ export default memo(function FilterChoiceField({
         className={`filter-choice-trigger${hasValue ? " has-value" : ""}`}
         aria-label={label}
         aria-expanded={open}
-        onClick={() => { clearTimer(); onOpenChange(!open); }}
-        onMouseEnter={clearTimer}
-        onMouseLeave={scheduleClose}
+        aria-controls={`${id}-choices`}
+        onClick={() => onOpenChange(!open)}
       >
         <span className="filter-choice-value">{triggerLabel}</span>
       </button>
@@ -154,24 +160,24 @@ export default memo(function FilterChoiceField({
         <div
           ref={panelRef}
           className={`filter-choice-panel${panelDirection === "up" ? " filter-choice-panel-up" : ""}`}
-          onMouseEnter={clearTimer}
-          onMouseLeave={scheduleClose}
         >
           {hasSearch && (
             <input
               ref={searchInputRef}
               type="search"
+              aria-label={`Find ${label.toLowerCase()}`}
               className="filter-input filter-choice-search"
               placeholder={`Find ${label.toLowerCase()}`}
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
             />
           )}
-          <div ref={optionsRef} className={`filter-choice-options${compact ? " filter-choice-options--compact" : ""}`} role="listbox" aria-label={label}>
+          <div ref={optionsRef} className={`filter-choice-options${compact ? " filter-choice-options--compact" : ""}`} id={`${id}-choices`} role="group" aria-label={label}>
             {allowClear && (
               <button
                 type="button"
                 className={`filter-choice-option${compact ? " filter-choice-option--compact" : ""}${!hasValue ? " active" : ""}`}
+                aria-pressed={!hasValue}
                 onClick={() => onChange("")}
               >
                 <span>{clearLabel}</span>
@@ -188,10 +194,11 @@ export default memo(function FilterChoiceField({
                     key={option.value}
                     type="button"
                     className={`filter-choice-option${compact ? " filter-choice-option--compact" : ""}${isActive ? " active" : ""}${isDisabled ? " disabled" : ""}`}
+                    aria-pressed={isActive}
                     disabled={isDisabled}
                     onClick={() => handleOptionClick(option.value)}
                   >
-                    {multiple && <span className="filter-choice-check">{isActive ? "✓" : ""}</span>}
+                    {multiple && <span className="filter-choice-check" aria-hidden="true">{isActive ? "✓" : ""}</span>}
                     <span>{option.label}</span>
                     {typeof option.count === "number" && (
                       <span className="filter-choice-count">{option.count}</span>

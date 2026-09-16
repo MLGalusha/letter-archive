@@ -1,11 +1,10 @@
-import { memo, useEffect, useRef, useState, type MouseEvent, type ReactNode, type TouchEvent } from "react";
+import { memo, useEffect, useId, useRef, useState, type ReactNode, type MouseEvent } from "react";
 import "../ArchiveList/ArchiveList.css";
 import type { ArchiveSearchHighlightRange, LetterCardData } from "../../types/Letter";
 import { getImageUrl } from "../../api/client";
 import { PreviewImage } from "../common/PreviewImage";
 import { getMediaLabel } from "../../utils/letterPreview";
 import { imagePreloadService } from "../../services/imagePreloadService";
-import useIsTouchDevice from "../../hooks/useIsTouchDevice";
 
 interface LetterCardProps {
   card: LetterCardData;
@@ -15,80 +14,6 @@ interface LetterCardProps {
     label: string;
     value: string;
   } | null;
-}
-
-const SEARCH_PREVIEW_AUTO_HIDE_MS = 1600;
-const SEARCH_PREVIEW_COOLDOWN_MS = 8 * 60 * 1000;
-const SEARCH_PREVIEW_COOLDOWN_KEY = "letter-card-search-preview-cooldowns";
-const TOUCH_HOLD_CLICK_SUPPRESS_MS = 180;
-const TOUCH_PREVIEW_RELEASE_HIDE_MS = 400;
-
-type SearchPreviewCooldowns = Record<string, number>;
-
-let cooldownCache: SearchPreviewCooldowns | null = null;
-
-function writeSearchPreviewCooldowns(cooldowns: SearchPreviewCooldowns) {
-  cooldownCache = cooldowns;
-  if (typeof window === "undefined") return;
-
-  try {
-    window.localStorage.setItem(SEARCH_PREVIEW_COOLDOWN_KEY, JSON.stringify(cooldowns));
-  } catch {
-    // Ignore storage failures; the preview can still work without persistence.
-  }
-}
-
-function readSearchPreviewCooldowns(): SearchPreviewCooldowns {
-  if (cooldownCache !== null) return cooldownCache;
-
-  if (typeof window === "undefined") return {};
-
-  try {
-    const rawValue = window.localStorage.getItem(SEARCH_PREVIEW_COOLDOWN_KEY);
-    if (!rawValue) {
-      cooldownCache = {};
-      return {};
-    }
-
-    const parsedValue = JSON.parse(rawValue);
-    if (!parsedValue || typeof parsedValue !== "object" || Array.isArray(parsedValue)) {
-      cooldownCache = {};
-      return {};
-    }
-
-    const now = Date.now();
-    const activeCooldowns = Object.fromEntries(
-      Object.entries(parsedValue).filter((entry): entry is [string, number] => {
-        const [, expiresAt] = entry;
-        return typeof expiresAt === "number" && expiresAt > now;
-      }),
-    );
-
-    if (Object.keys(activeCooldowns).length !== Object.keys(parsedValue).length) {
-      writeSearchPreviewCooldowns(activeCooldowns);
-    } else {
-      cooldownCache = activeCooldowns;
-    }
-
-    return activeCooldowns;
-  } catch {
-    cooldownCache = {};
-    return {};
-  }
-}
-
-function isSearchPreviewCoolingDown(cardId: string): boolean {
-  const expiresAt = readSearchPreviewCooldowns()[cardId];
-  if (!expiresAt) return false;
-  return Date.now() < expiresAt;
-}
-
-function rememberSearchPreviewCooldown(cardId: string) {
-  if (typeof window === "undefined") return;
-
-  const cooldowns = { ...readSearchPreviewCooldowns() };
-  cooldowns[cardId] = Date.now() + SEARCH_PREVIEW_COOLDOWN_MS;
-  writeSearchPreviewCooldowns(cooldowns);
 }
 
 function getCorrespondentLine(card: LetterCardData): string | undefined {
@@ -141,18 +66,34 @@ function LetterCard({
   selection = false,
   sortCue = null,
 }: LetterCardProps) {
-  const shellRef = useRef<HTMLDivElement | null>(null);
   const searchPreview = card.searchPreview;
   const hasSearchPreview = Boolean(searchPreview?.excerpt && searchPreview.matchCount > 0);
-  const [previewVisible, setPreviewVisible] = useState(false);
-  const previewTimerRef = useRef<number | null>(null);
-  const touchReleaseTimerRef = useRef<number | null>(null);
-  const hoverActiveRef = useRef(false);
-  const isTouchDevice = useIsTouchDevice();
-  const touchPreviewStartedAtRef = useRef<number | null>(null);
-  const swallowNextClickRef = useRef(false);
-  const touchPreviewActiveRef = useRef(false);
-  const touchPreviewRetouchRef = useRef(false);
+  const previewId = useId();
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+  const [pinned, setPinned] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  const previewKey = JSON.stringify([card.id, searchPreview]);
+  const [previousPreview, setPreviousPreview] = useState(previewKey);
+  if (previousPreview !== previewKey) {
+    setPreviousPreview(previewKey);
+    setPinned(false);
+    setHovered(false);
+    setDismissed(false);
+  }
+  const previewVisible = hasSearchPreview && (pinned || hovered) && !dismissed;
+  useEffect(() => {
+    if (!previewVisible) return;
+    const dismiss = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setPinned(false);
+      setDismissed(true);
+      if (previewRef.current?.contains(document.activeElement)) toggleRef.current?.focus();
+    };
+    document.addEventListener('keydown', dismiss);
+    return () => document.removeEventListener('keydown', dismiss);
+  }, [previewVisible]);
   const mediaLabel = getMediaLabel(card.imageType);
   const primaryChip = card.primaryChip;
   const date = card.date || card.dateRaw;
@@ -168,42 +109,10 @@ function LetterCard({
     hook,
   ].filter((value): value is string => Boolean(value)).join(", ");
 
-  const clearPreviewTimer = () => {
-    if (previewTimerRef.current !== null) {
-      window.clearTimeout(previewTimerRef.current);
-      previewTimerRef.current = null;
-    }
-  };
-
-  const clearTouchReleaseTimer = () => {
-    if (touchReleaseTimerRef.current !== null) {
-      window.clearTimeout(touchReleaseTimerRef.current);
-      touchReleaseTimerRef.current = null;
-    }
-  };
-
-  const showPreviewForABeat = (options?: { persistOnComplete?: boolean }) => {
-    if (!hasSearchPreview) return;
-
-    clearPreviewTimer();
-    setPreviewVisible(true);
-    previewTimerRef.current = window.setTimeout(() => {
-      if (options?.persistOnComplete && hoverActiveRef.current) {
-        rememberSearchPreviewCooldown(card.id);
-      }
-      setPreviewVisible(false);
-      previewTimerRef.current = null;
-    }, SEARCH_PREVIEW_AUTO_HIDE_MS);
-  };
-
-  useEffect(() => () => {
-    clearPreviewTimer();
-    clearTouchReleaseTimer();
-  }, []);
-
   const handleCardMouseEnter = () => {
-    hoverActiveRef.current = true;
-    // Preload this letter's first image at carousel width so it's ready on click
+    setHovered(true);
+    setDismissed(false);
+    // Preload this letter's first image at carousel width so it's ready on click.
     if (card.imageUrl) {
       const url = getImageUrl(card.imageUrl, { width: 800 });
       if (!imagePreloadService.isPreloaded(url)) {
@@ -211,116 +120,31 @@ function LetterCard({
         img.src = url;
       }
     }
-    if (isSearchPreviewCoolingDown(card.id)) return;
-    showPreviewForABeat({ persistOnComplete: true });
   };
 
-  const handleCardMouseLeave = () => {
-    hoverActiveRef.current = false;
-    clearPreviewTimer();
-    setPreviewVisible(false);
-  };
-
-  const handleSearchPreviewToggleEnter = () => {
-    if (!hasSearchPreview) return;
-    clearPreviewTimer();
-    setPreviewVisible(true);
-  };
-
-  const handleSearchPreviewToggleLeave = () => {
-    clearPreviewTimer();
-    setPreviewVisible(false);
-  };
-
-  const handleSearchPreviewToggleClick = (event: MouseEvent<HTMLButtonElement>) => {
+  const handleCardClick = (event: MouseEvent<HTMLAnchorElement | HTMLButtonElement>) => {
+    if (!selection && (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)) return;
     event.preventDefault();
-    event.stopPropagation();
-    if (previewVisible) {
-      handleSearchPreviewToggleLeave();
-      return;
-    }
-    showPreviewForABeat();
+    // Selecting excerpt text should not open the letter when the pointer is released.
+    const selectedText = window.getSelection();
+    if (event.detail > 0 && selectedText && !selectedText.isCollapsed &&
+      (event.currentTarget.contains(selectedText.anchorNode) || event.currentTarget.contains(selectedText.focusNode))) return;
+    onClick(card.id);
   };
-
-  const handleCardTouchStart = (_event: TouchEvent<HTMLAnchorElement | HTMLButtonElement>) => {
-    if (!hasSearchPreview) return;
-    if (!isTouchDevice) return;
-    touchPreviewRetouchRef.current = previewVisible;
-    touchPreviewStartedAtRef.current = Date.now();
-    swallowNextClickRef.current = false;
-    touchPreviewActiveRef.current = true;
-    clearTouchReleaseTimer();
-    clearPreviewTimer();
-    setPreviewVisible(true);
-  };
-
-  const handleCardTouchMove = (event: TouchEvent<HTMLAnchorElement | HTMLButtonElement>) => {
-    if (!isTouchDevice || !touchPreviewActiveRef.current) return;
-
-    const touch = event.touches[0];
-    const shell = shellRef.current;
-    if (!touch || !shell || typeof document.elementFromPoint !== "function") return;
-
-    const target = document.elementFromPoint(touch.clientX, touch.clientY);
-    const insideCard = Boolean(target && shell.contains(target));
-
-    clearTouchReleaseTimer();
-    clearPreviewTimer();
-    setPreviewVisible(insideCard);
-
-    if (!insideCard) {
-      touchPreviewActiveRef.current = false;
-    }
-  };
-
-  const handleCardTouchEnd = (_event: TouchEvent<HTMLAnchorElement | HTMLButtonElement>) => {
-    if (!isTouchDevice) return;
-    const startedAt = touchPreviewStartedAtRef.current;
-    if (
-      touchPreviewRetouchRef.current
-      || (startedAt !== null && Date.now() - startedAt >= TOUCH_HOLD_CLICK_SUPPRESS_MS)
-    ) {
-      swallowNextClickRef.current = true;
-    }
-    touchPreviewStartedAtRef.current = null;
-    touchPreviewActiveRef.current = false;
-    touchPreviewRetouchRef.current = false;
-    clearPreviewTimer();
-    clearTouchReleaseTimer();
-    touchReleaseTimerRef.current = window.setTimeout(() => {
-      setPreviewVisible(false);
-      touchReleaseTimerRef.current = null;
-    }, TOUCH_PREVIEW_RELEASE_HIDE_MS);
-  };
-
   const CardControl = selection ? 'button' : 'a';
   const visibleSearchPreview = previewVisible && hasSearchPreview && searchPreview;
 
   return (
     <div
-      ref={shellRef}
       className={`letter-card-shell${hasSearchPreview ? " letter-card-shell--has-search-match" : ""}`}
-      onMouseEnter={handleCardMouseEnter}
-      onMouseLeave={handleCardMouseLeave}
+      onPointerEnter={(event) => { if (event.pointerType === 'mouse') handleCardMouseEnter(); }}
+      onPointerLeave={() => setHovered(false)}
     >
       <CardControl
         type={selection ? "button" : undefined}
         href={selection ? undefined : `/letter/${card.id}`}
         className={`letter-card letter-card--${card.imageType}${hasSearchPreview ? " letter-card--has-search-match" : ""}${previewVisible ? " letter-card--search-preview-visible" : ""}`}
-        onTouchStart={handleCardTouchStart}
-        onTouchMove={handleCardTouchMove}
-        onTouchEnd={handleCardTouchEnd}
-        onTouchCancel={handleCardTouchEnd}
-        onClick={(event) => {
-          if (swallowNextClickRef.current) {
-            swallowNextClickRef.current = false;
-            event.preventDefault();
-            return;
-          }
-          if (!selection && (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)) return;
-          event.preventDefault();
-          onClick(card.id);
-        }}
+        onClick={handleCardClick}
         aria-label={ariaLabel || `${mediaLabel}: ${card.title || "Unknown item"}`}
       >
         {hasImage ? (
@@ -345,19 +169,6 @@ function LetterCard({
           </div>
         )}
         {primaryChip && <div className="letter-card-page-count">{primaryChip}</div>}
-        {visibleSearchPreview && (
-          <div className="letter-card-search-match" aria-hidden="true">
-            <div className="letter-card-search-match-count">
-              {visibleSearchPreview.matchCount} {visibleSearchPreview.matchCount === 1 ? "match" : "matches"}
-            </div>
-            <div className="letter-card-search-match-source">
-              {visibleSearchPreview.matchedFieldLabel} match
-            </div>
-            <div className="letter-card-search-match-excerpt">
-              {renderHighlightedExcerpt(visibleSearchPreview.excerpt, visibleSearchPreview.highlightRanges)}
-            </div>
-          </div>
-        )}
         <div className="letter-card-content">
           {peopleLine && <div className="letter-card-meta">{peopleLine}</div>}
           {date && <div className="letter-card-date">{date}</div>}
@@ -368,16 +179,43 @@ function LetterCard({
           )}
         </div>
       </CardControl>
-      {hasSearchPreview && !isTouchDevice && (
+        {visibleSearchPreview && (
+          <div ref={previewRef} id={previewId} className="letter-card-search-match" role="region" aria-label="Search match preview" tabIndex={0} onFocus={() => setPinned(true)}>
+            <CardControl
+              type={selection ? "button" : undefined}
+              href={selection ? undefined : `/letter/${card.id}`}
+              className="letter-card-search-match-link"
+              onClick={handleCardClick}
+              aria-label={`${selection ? 'Select' : 'Open'} letter: ${ariaLabel || card.title || 'Unknown item'}`}
+            >
+            <div className="letter-card-search-match-count">
+              {visibleSearchPreview.matchCount} {visibleSearchPreview.matchCount === 1 ? "match" : "matches"}
+            </div>
+            <div className="letter-card-search-match-source">
+              {visibleSearchPreview.matchedFieldLabel} match
+            </div>
+            <div className="letter-card-search-match-excerpt">
+              {renderHighlightedExcerpt(visibleSearchPreview.excerpt, visibleSearchPreview.highlightRanges)}
+            </div>
+            </CardControl>
+          </div>
+        )}
+      {hasSearchPreview && (
         <button
+          ref={toggleRef}
           type="button"
           className={`letter-card-search-toggle${previewVisible ? " is-active" : ""}`}
-          aria-label="Show search match preview"
-          onClick={handleSearchPreviewToggleClick}
-          onMouseEnter={handleSearchPreviewToggleEnter}
-          onMouseLeave={handleSearchPreviewToggleLeave}
-          onFocus={handleSearchPreviewToggleEnter}
-          onBlur={handleSearchPreviewToggleLeave}
+          aria-label="Search match preview"
+          aria-expanded={previewVisible}
+          aria-controls={previewId}
+          aria-describedby={previewVisible ? previewId : undefined}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            // First click pins a hover preview; a second click dismisses it.
+            setPinned(!pinned);
+            setDismissed(pinned);
+          }}
         >
           <svg
             className="letter-card-search-toggle-icon"

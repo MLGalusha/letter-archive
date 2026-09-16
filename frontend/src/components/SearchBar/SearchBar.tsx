@@ -392,6 +392,17 @@ export default function SearchBar({
     <div
       className="search-sort-dropdown"
       ref={sortDropdownRef}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && sortDropdownOpen) {
+          event.preventDefault();
+          event.stopPropagation();
+          setSortDropdownOpen(false);
+          sortDropdownRef.current?.querySelector<HTMLButtonElement>('.search-sort-trigger')?.focus();
+        }
+      }}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setSortDropdownOpen(false);
+      }}
     >
       <button
         type="button"
@@ -407,15 +418,17 @@ export default function SearchBar({
       </button>
       <ul
           className={`search-sort-menu${sortDropdownOpen ? "" : " search-sort-menu--hidden"}`}
-          role="listbox"
+          role="group"
+          aria-label="Sort options"
         >
           {visibleSortOptions.map((opt) => {
             const isActive = opt.sort === resolvedSort.sort;
             return (
-              <li
-                key={opt.sort}
-                role="option"
-                aria-selected={isActive}
+              <li key={opt.sort} role="presentation">
+              <button
+                type="button"
+                aria-pressed={isActive}
+                aria-description={isActive && opt.canToggle ? `Sorted ${resolvedSort.sortOrder === "asc" ? "ascending" : "descending"}; activate again to reverse order.` : undefined}
                 className={`search-sort-option${isActive ? " search-sort-option--active" : ""}`}
                 onClick={() => {
                   if (isActive && opt.canToggle) {
@@ -427,8 +440,9 @@ export default function SearchBar({
               >
                 <span>{opt.label}</span>
                 {isActive && opt.canToggle && (
-                  <span className="search-sort-arrow">{sortArrow}</span>
+                  <span className="search-sort-arrow" aria-hidden="true">{sortArrow}</span>
                 )}
+              </button>
               </li>
             );
           })}

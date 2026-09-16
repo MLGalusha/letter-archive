@@ -8,7 +8,7 @@ import LetterViewer from "../components/LetterViewer/LetterViewer";
 import { getAdjacentLetters, getLetterById, type AdjacentLettersResponse } from "../api/letters";
 import type { LetterImage, LetterImageType, PublicLetter } from "../types/Letter";
 import { getImageUrl } from "../api/client";
-import { ProgressiveImage } from "../components/common";
+import { ReaderScanImage } from "../components/LetterViewer/ReaderScanImage";
 import { imagePreloadService } from "../services/imagePreloadService";
 import { buildLetterSeo } from "../utils/seo";
 import {
@@ -497,10 +497,8 @@ export default function LetterDetailPage() {
                         : `View ${typeLabel} full size`
                     }
                   >
-                    <ProgressiveImage
-                      src={getImageUrl(img.imageUrl)}
-                      thumbSrc={getImageUrl(img.imageUrl, { width: 32 })}
-                      midSrc={getImageUrl(img.imageUrl, { width: 800 })}
+                    <ReaderScanImage
+                      imageUrl={img.imageUrl}
                       alt={
                         isLetter
                           ? `Page ${img.pageNumber ?? idx + 1} of letter`
@@ -647,10 +645,8 @@ export default function LetterDetailPage() {
                               onClick={() => openViewer(Math.max(0, allImages.indexOf(pageImage)))}
                               aria-label={`View page ${page.pageNumber} full size`}
                             >
-                              <ProgressiveImage
-                                src={getImageUrl(pageImage.imageUrl)}
-                                thumbSrc={getImageUrl(pageImage.imageUrl, { width: 32 })}
-                                midSrc={getImageUrl(pageImage.imageUrl, { width: 600 })}
+                              <ReaderScanImage
+                                imageUrl={pageImage.imageUrl}
                                 alt={`Page ${page.pageNumber}`}
                                 className="original-split-img-wrap"
                                 imgClassName="original-split-img"

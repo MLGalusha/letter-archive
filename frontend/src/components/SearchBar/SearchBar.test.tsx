@@ -605,7 +605,7 @@ describe("SearchBar", () => {
     const trigger = screen.getByRole('button', { name: 'Sort archive results' });
     trigger.focus();
     await user.keyboard('{Enter}');
-    const date = within(screen.getByRole('group', { name: 'Sort options' })).getByRole('button', { name: 'Date', exact: true });
+    const date = within(screen.getByRole('group', { name: 'Sort options' })).getByRole('button', { name: 'Date' });
     date.focus();
     await user.keyboard(' ');
     expect(date).toHaveAttribute('aria-pressed', 'true');

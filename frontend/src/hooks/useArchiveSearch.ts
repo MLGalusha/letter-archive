@@ -273,16 +273,17 @@ export default function useArchiveSearch(config: UseArchiveSearchConfig): UseArc
     searchControllerRef.current = controller;
     moreControllerRef.current?.abort();
     moreControllerRef.current = null;
+    setArchiveLoading(!invalidYearRange);
+    setArchiveLoadingMore(false);
+    setArchiveError(null);
+    setArchiveLoadMoreError(null);
+
     // Invalidate pending work before deriving the invalid-range UI state below.
     // Neither search nor pagination may send these parameters.
     if (invalidYearRange) {
       controller.abort();
       return;
     }
-    setArchiveLoading(true);
-    setArchiveLoadingMore(false);
-    setArchiveError(null);
-    setArchiveLoadMoreError(null);
 
     const execute = () => {
       searchArchiveShelf({ ...requestParams, page: 1 }, controller.signal)

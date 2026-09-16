@@ -246,13 +246,7 @@ export default function useArchiveSearch(config: UseArchiveSearchConfig): UseArc
     const requestVersion = ++requestVersionRef.current;
     // Keep invalid URL/history bounds visible for correction, but never send
     // them to the API or let an older response replace this validation state.
-    if (invalidYearRange) {
-      setArchiveLoading(false);
-      setArchiveLoadingMore(false);
-      setArchiveError('From year must be before or equal to To year. Correct the range or clear filters.');
-      setArchiveLoadMoreError(null);
-      return;
-    }
+    if (invalidYearRange) return;
     const timer = window.setTimeout(() => {
       setArchiveLoading(true);
       setArchiveLoadingMore(false);
@@ -322,10 +316,12 @@ export default function useArchiveSearch(config: UseArchiveSearchConfig): UseArc
     filters,
     setFilters,
     archiveResults,
-    archiveLoading,
-    archiveLoadingMore,
-    archiveError,
-    archiveLoadMoreError,
+    archiveLoading: invalidYearRange ? false : archiveLoading,
+    archiveLoadingMore: invalidYearRange ? false : archiveLoadingMore,
+    archiveError: invalidYearRange
+      ? 'From year must be before or equal to To year. Correct the range or clear filters.'
+      : archiveError,
+    archiveLoadMoreError: invalidYearRange ? null : archiveLoadMoreError,
     handleArchiveLoadMore,
     resolvedSort,
     sortCueField,

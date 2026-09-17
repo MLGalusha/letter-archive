@@ -1,6 +1,6 @@
 # Public reader startup investigation — issue #130
 
-Status: investigation evidence; **no application or cloud configuration change**. Keep #130 open for an independently validated improvement. Baseline source and live revision: `5b39df608921d398ff2ee56d3cf4d5bf8b000e94` / `letter-archive-backend-r-5b39df6089-039c6744`. Production metadata and historical logs were read on 2026-09-17. No forced cold starts, shared database writes, production load tests, or minimum-instance changes.
+Status: investigation evidence plus startup diagnostics; **no cloud configuration or latency optimization change**. Keep #130 open for an independently validated improvement. Baseline source and live revision: `5b39df608921d398ff2ee56d3cf4d5bf8b000e94` / `letter-archive-backend-r-5b39df6089-039c6744`. Production metadata and historical logs were read on 2026-09-17. No forced cold starts, shared database writes, production load tests, or minimum-instance changes.
 
 ## What the measured pause was
 
@@ -69,7 +69,7 @@ A bounded experiment bundled only project JavaScript with esbuild (`--bundle --p
 ## Recommended order and tradeoffs
 
 1. Finish #131's immediate pending feedback and independent letter rendering. This improves perceived response even during startup but does not remove the server wait. Finish #129/#127/#128 to reduce avoidable image work and repeat resizing. Reduced scale pressure is plausible, not yet measured.
-2. Add narrowly scoped startup phase timing before considering an import refactor: process-entry → imports evaluated → listening → first readiness query/result. A tiny bootstrap with a dynamic import of the unchanged server can establish the missing entry timestamp without lazy-loading individual routers. Preserve failure propagation and existing fatal-error reporting; measure logging overhead. This is the most bounded implementation follow-up.
+2. This PR adds narrowly scoped startup phase timing before considering an import refactor: process-entry → imports evaluated → listening → first readiness query/result. A tiny bootstrap with a dynamic import of the unchanged server can establish the missing entry timestamp without lazy-loading individual routers. Preserve failure propagation and existing fatal-error reporting; measure logging overhead. This is the most bounded implementation follow-up.
 3. Collect naturally occurring starts after those changes and compare the same image/revision/configuration. Record failures as well as success. Correlate instance count, CPU/concurrency metrics, and image transform activity around scale-out; do not infer a cause from a single shared timestamp.
 4. Only if probe delay is material, test period 1s with a correspondingly adjusted failure threshold in an isolated environment, preserving roughly the current startup tolerance and the DB readiness check. This creates more readiness queries, and the observed 0.24–0.40s listen-to-success gap is only an upper bound on what cadence might save in these two starts. No blanket “three seconds faster” claim.
 5. Intent-based reader prefetch or a small client reuse cache may hide waits for repeated navigation. They also spend requests on abandoned intent and need explicit freshness/unpublish behavior, bounded entries, request deduplication, and abort handling. Do not add catalogue-wide detail prefetch or a cache that bypasses access checks.
@@ -80,10 +80,21 @@ Do not tune database queries to solve this particular three-second gap: those me
 ## Validation needed before closing #130
 
 - [ ] #131 pending feedback verified during a controlled delayed response.
-- [ ] Missing process-entry/import timing captured without removing readiness checks or startup failure handling.
+- [x] Add pre-import bootstrap and first-readiness timing without removing readiness checks or startup failure handling.
+- [ ] Capture those fields during naturally occurring production starts after deployment.
 - [ ] Comparable naturally occurring cold/scale-out and warm samples after a selected change; report sample count, revision, config, and cache state.
 - [ ] Verify no unexpected request failure or hidden increase in idle/capacity spend; keep minimum instances zero.
 
 Local raw investigation artifacts are in the `letter-archive-reader-startup` worktree under `output/startup/`: `instance-timeline.json`, `prior-active-requests.json`, `import-profile.json`, `bundle-experiment.json`. Original browser/platform traces are in the `letter-archive-performance-audit` worktree under `output/playwright/`. The tables and request identifiers above preserve the handoff evidence without committing raw operational logs.
 
 References checked 2026-09-17: [Cloud Run health checks](https://docs.cloud.google.com/run/docs/configuring/healthchecks) explain startup gating and probe configuration; [autoscaling](https://docs.cloud.google.com/run/docs/about-instance-autoscaling) describes CPU/concurrency scaling; [startup CPU boost](https://docs.cloud.google.com/run/docs/configuring/services/cpu#set_startup_cpu_boost) documents extra CPU allocation and billing.
+
+## Diagnostic implementation and measurement scope
+
+The API Docker command, `npm start`, and `npm run dev` now enter `bootstrap.ts`/`bootstrap.js`. It imports only the monotonic timing helper, marks the bootstrap time, then awaits the unchanged server module graph. It does not catch failures: missing imports, synchronous evaluation errors and rejected top-level evaluation still terminate nonzero. Existing application logger/fatal handlers remain in the server graph. Worker, migration and CLI entry points remain separate and are not included in these API measurements. Direct manual `node dist/index.js` remains possible but reports `startup: null`, rather than falsely claiming to measure its imports.
+
+`Startup dependencies ready` and `Server started` include `startup.bootstrapElapsedMs`; the latter also includes `listeningElapsedMs`. `Startup readiness measured` includes elapsed bootstrap/listening time, readiness attempt number, outcome, and query duration. It logs the first completed first attempt and the first successful attempt (one record when those coincide), not every later health request. No query, access check, response shape or status changes. Concurrent attempts retain their start order, so the first success can have attempt number greater than one.
+
+Bootstrap elapsed time excludes Node process initialization before the helper runs, including the tiny helper import itself. It must be compared with platform instance-start and mount timestamps, not presented as total container startup time. The new timing uses monotonic clocks; Cloud Logging timestamps are useful for alignment but remain a separate clock. Three startup records are emitted during normal successful startup (the existing server-start record gains timing fields), with one extra readiness timing record only if first success follows a failed/overlapping first attempt. Existing per-request logging remains.
+
+Focused validation covers uninstrumented entries, phase/query timing, failures followed by successful readiness, overlapping attempts, successful entry evaluation, and nonzero exit for missing modules, thrown errors, and rejected top-level evaluation. Existing health integration tests verify unchanged 200/503 response semantics. This instrumentation is diagnostic progress on #130, not a fix for its observed latency.

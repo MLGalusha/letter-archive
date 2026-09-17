@@ -143,7 +143,9 @@ export default function ArchiveList({
         if (!entries.some((entry) => entry.isIntersecting)) return;
         loadMoreHandlerRef.current?.();
       },
-      { root: getAppScrollRootForIO(), rootMargin: "2400px 0px" },
+      // Keep page lookahead ahead of the 1200px image buffer without eagerly
+      // appending a second page on the measured desktop archive (see #86 audit).
+      { root: getAppScrollRootForIO(), rootMargin: "1800px 0px" },
     );
 
     observer.observe(node);

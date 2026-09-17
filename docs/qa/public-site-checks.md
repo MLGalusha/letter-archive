@@ -86,6 +86,17 @@ Observation: ___
 
 Observation: ___
 
+### Image follow-up: repeat visits
+
+**Status: implemented for review; production verification pending.** [Issue 121](https://github.com/MLGalusha/letter-archive/issues/121).
+
+- Open [Home](https://voicesthatremain.com/) or [Collection 003](https://voicesthatremain.com/collections/003), allow images to finish, then revisit in the same browser. Try Safari and Chrome with normal browser caching enabled.
+- Expected after release: the same images display correctly. Where the browser asks whether its cached preview is still current, the server can answer without resizing it again. This does not eliminate the first download or guarantee an instant first visit.
+- A forced reload or DevTools Disable cache can deliberately bypass this shortcut. Server-side verification records a matching conditional response with no resize work; visual appearance alone cannot prove that.
+- Saved previews (#122) and measured loading-priority improvements (#123) are the next separate steps.
+
+Observation: ___
+
 ## 7. Collection first visit and intermittent visual reports
 
 **Status: investigation / physical reproduction pending.** [19](https://github.com/MLGalusha/letter-archive/issues/19), [46](https://github.com/MLGalusha/letter-archive/issues/46), [48](https://github.com/MLGalusha/letter-archive/issues/48), [24](https://github.com/MLGalusha/letter-archive/issues/24).

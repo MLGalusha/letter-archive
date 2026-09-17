@@ -105,12 +105,12 @@ export function getNotificationCounts(): Promise<NotificationCountsResponse> {
   return apiGet('/admin/notifications/counts');
 }
 
-export function getUnreadCount(): Promise<UnreadCountResponse> {
-  return apiGet('/admin/notifications/unread-count');
+export function getUnreadCount(signal?: AbortSignal): Promise<UnreadCountResponse> {
+  return apiGet('/admin/notifications/unread-count', undefined, signal);
 }
 
-export function getRecentNotifications(): Promise<RecentNotificationsResponse> {
-  return apiGet('/admin/notifications/recent');
+export function getRecentNotifications(signal?: AbortSignal): Promise<RecentNotificationsResponse> {
+  return apiGet('/admin/notifications/recent', undefined, signal);
 }
 
 // ============================================================================

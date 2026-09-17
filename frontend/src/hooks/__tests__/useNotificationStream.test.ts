@@ -146,4 +146,25 @@ describe('useNotificationStream', () => {
     unmount();
     expect(instances[0].closed).toBe(true);
   });
+
+  it('reports connection loss/recovery and ignores callbacks from a closed connection', async () => {
+    vi.useFakeTimers();
+    const onConnectionChange = vi.fn(); const onNotification = vi.fn();
+    const { unmount } = renderHook(() => useNotificationStream({ onNotification, onConnectionChange }));
+    await vi.waitFor(() => expect(instances).toHaveLength(1));
+    act(() => instances[0].emit('connected', {}));
+    expect(onConnectionChange).toHaveBeenLastCalledWith(true);
+    act(() => instances[0].triggerError());
+    expect(onConnectionChange).toHaveBeenLastCalledWith(false);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    act(() => { instances[0].emit('connected', {}); instances[0].emit('notification', { id: 'obsolete' }); });
+    expect(onConnectionChange).toHaveBeenLastCalledWith(false);
+    expect(onNotification).not.toHaveBeenCalled();
+    act(() => instances[1].emit('connected', {}));
+    expect(onConnectionChange).toHaveBeenLastCalledWith(true);
+    unmount();
+    act(() => instances[1].emit('notification', { id: 'unmounted' }));
+    expect(onNotification).not.toHaveBeenCalled();
+  });
+
 });

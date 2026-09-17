@@ -310,3 +310,30 @@ limit, and unchanged downstream transcript position after success or exhausted f
 retries. Phone/desktop Chromium and WebKit cases also cover landscape images whose
 raw metadata axes differ from decoded preview orientation. These are local layout
 checks, not a production loading-time or physical-device guarantee.
+
+### Admin background polling (#134)
+
+After deployment, open [Processing](https://voicesthatremain.com/admin/processing)
+in your normal authenticated session. Reading this page is sufficient; do not
+start or cancel work just to test this change. An empty queue checks every
+30 seconds; a queue with active or queued work checks every 5 seconds after the
+previous read completes. The Refresh button still responds immediately.
+
+Switch to another tab for a minute, then return. Automatic queue and unread-count
+polling should stop while hidden and refresh promptly on return. Notifications
+continue arriving through the existing stream; this change does not pause backend
+processing, autosave, or transcript review. The unread-count safety check runs
+every 5 minutes with a connected stream, or every 30 seconds while connecting or
+using fallback. The visible badge may therefore take up to 5 minutes to reflect
+read-status changes made in another already-visible session; returning focus
+refreshes it immediately.
+
+Developer evidence uses local read-only browser fixtures in Chromium and WebKit,
+with a controlled Page Visibility state and virtual clock. Over a settled idle
+minute there were 2 queue reads and no additional healthy-stream safety reads;
+a hidden 5-minute window added zero automatic reads while the stream remained
+open and delivered a notification. One explicit hidden refresh still worked,
+returning visibility plus focus produced one refresh per endpoint, and active
+work resumed the 5-second cadence. Unit tests verify no overlapping slow reads,
+abort/cleanup, stale-result protection and reconnection. This does not measure
+production traffic, CPU energy, physical-phone sleep, or battery savings.

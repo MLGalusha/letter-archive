@@ -1,6 +1,6 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
 const { getUnreadCountMock, getRecentNotificationsMock } = vi.hoisted(() => ({
@@ -13,9 +13,12 @@ vi.mock("../../../api/admin/notifications", () => ({
   getRecentNotifications: getRecentNotificationsMock,
 }));
 
+const stream = vi.hoisted(() => ({ options: null as import('../../../hooks/useNotificationStream').UseNotificationStreamOptions | null }));
+vi.mock('../../../hooks/useNotificationStream', () => ({ useNotificationStream: (options: typeof stream.options) => { stream.options = options; } }));
 import AdminSidebar from "../AdminSidebar";
 
 describe("AdminSidebar", () => {
+  afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
   beforeEach(() => {
     vi.clearAllMocks();
     getUnreadCountMock.mockResolvedValue({
@@ -137,4 +140,58 @@ describe("AdminSidebar", () => {
     // Popover does not render when count is 0
     expect(container.querySelector(".bell-popover")).toBeNull();
   });
+
+  it('uses a slow healthy-stream safety read, falls back to 30 seconds, and pauses hidden polling', async () => {
+    vi.useFakeTimers();
+    let visibility: DocumentVisibilityState = 'visible';
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibility);
+    const { unmount } = render(<MemoryRouter><AdminSidebar /></MemoryRouter>);
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { stream.options?.onConnectionChange?.(true); await Promise.resolve(); });
+    const connectedReads = getUnreadCountMock.mock.calls.length;
+    await act(async () => { await vi.advanceTimersByTimeAsync(299_999); });
+    expect(getUnreadCountMock).toHaveBeenCalledTimes(connectedReads);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(getUnreadCountMock).toHaveBeenCalledTimes(connectedReads + 1);
+    visibility = 'hidden'; act(() => document.dispatchEvent(new Event('visibilitychange')));
+    await act(async () => { await vi.advanceTimersByTimeAsync(600_000); });
+    expect(getUnreadCountMock).toHaveBeenCalledTimes(connectedReads + 1);
+    visibility = 'visible';
+    act(() => { document.dispatchEvent(new Event('visibilitychange')); window.dispatchEvent(new Event('focus')); });
+    await act(async () => { await Promise.resolve(); });
+    expect(getUnreadCountMock).toHaveBeenCalledTimes(connectedReads + 2);
+    await act(async () => { stream.options?.onFallback?.(); await Promise.resolve(); });
+    const fallbackReads = getUnreadCountMock.mock.calls.length;
+    await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+    expect(getUnreadCountMock).toHaveBeenCalledTimes(fallbackReads + 1);
+    unmount(); expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('does not overlap slow unread reads and aborts them on unmount', async () => {
+    vi.useFakeTimers();
+    getUnreadCountMock.mockReturnValueOnce(new Promise(() => {}));
+    const { unmount } = render(<MemoryRouter><AdminSidebar /></MemoryRouter>);
+    await act(async () => { await vi.advanceTimersByTimeAsync(120_000); });
+    act(() => { window.dispatchEvent(new Event('focus')); stream.options?.onFallback?.(); });
+    expect(getUnreadCountMock).toHaveBeenCalledTimes(1);
+    const signal = getUnreadCountMock.mock.calls[0][0] as AbortSignal;
+    unmount(); expect(signal.aborted).toBe(true);
+  });
+
+  it('keeps incoming notifications when an older unread snapshot finishes late', async () => {
+    vi.useFakeTimers();
+    let resolve!: (value: unknown) => void;
+    getUnreadCountMock.mockReturnValueOnce(new Promise(done => { resolve = done; }));
+    const { container, unmount } = render(<MemoryRouter><AdminSidebar /></MemoryRouter>);
+    act(() => stream.options?.onNotification({ id: 'new', read: false, severity: 'error' } as import('../../../api/admin/notifications').AdminNotification));
+    expect(container.querySelector('.bell-badge')).toHaveTextContent('1');
+    await act(async () => { resolve({ count: 0, maxSeverity: null }); await Promise.resolve(); });
+    expect(container.querySelector('.bell-badge')).toHaveTextContent('1');
+    getUnreadCountMock.mockResolvedValue({ count: 1, maxSeverity: 'error' });
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(getUnreadCountMock).toHaveBeenCalledTimes(2);
+    expect(container.querySelector('.bell-badge')).toHaveTextContent('1');
+    unmount();
+  });
+
 });

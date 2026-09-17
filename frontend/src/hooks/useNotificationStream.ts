@@ -21,6 +21,7 @@ export interface UseNotificationStreamOptions {
   enabled?: boolean;
   onNotification: (notif: AdminNotification) => void;
   onFallback?: () => void;
+  onConnectionChange?: (connected: boolean) => void;
   maxReconnectAttempts?: number;
 }
 
@@ -29,12 +30,15 @@ export function useNotificationStream(options: UseNotificationStreamOptions): vo
     enabled = true,
     onNotification,
     onFallback,
+    onConnectionChange,
     maxReconnectAttempts = 3,
   } = options;
 
   // Keep callbacks in refs so the effect doesn't tear down on every render
   const onNotificationRef = useRef(onNotification);
   const onFallbackRef = useRef(onFallback);
+  const onConnectionChangeRef = useRef(onConnectionChange);
+  useEffect(() => { onConnectionChangeRef.current = onConnectionChange; }, [onConnectionChange]);
   useEffect(() => {
     onNotificationRef.current = onNotification;
   }, [onNotification]);
@@ -71,8 +75,10 @@ export function useNotificationStream(options: UseNotificationStreamOptions): vo
         const url = new URL('/admin/notifications/stream', API_BASE_URL);
         url.searchParams.set('token', token);
         eventSource = new EventSource(url.toString());
+        const source = eventSource;
 
         eventSource.addEventListener('notification', (evt) => {
+          if (cancelled || eventSource !== source) return;
           try {
             const data = JSON.parse((evt as MessageEvent).data) as AdminNotification;
             onNotificationRef.current(data);
@@ -82,15 +88,18 @@ export function useNotificationStream(options: UseNotificationStreamOptions): vo
         });
 
         eventSource.addEventListener('connected', () => {
+          if (cancelled || eventSource !== source) return;
           // Reset backoff on successful connection
           attempts = 0;
+          onConnectionChangeRef.current?.(true);
         });
 
         eventSource.onerror = () => {
           // EventSource auto-reconnects by default, but browsers can be flaky.
           // We manage reconnects ourselves for predictable backoff.
-          if (cancelled) return;
+          if (cancelled || eventSource !== source) return;
           cleanup();
+          onConnectionChangeRef.current?.(false);
           attempts += 1;
           if (attempts > maxReconnectAttempts) {
             if (!fallbackFired) {

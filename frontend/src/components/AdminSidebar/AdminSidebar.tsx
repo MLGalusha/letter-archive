@@ -43,6 +43,7 @@ const NAV_SECTIONS: NavSection[] = [
 ];
 
 const POLL_INTERVAL = 30_000;
+const CONNECTED_POLL_INTERVAL = 5 * 60_000;
 
 interface AdminSidebarProps {
   collapsed?: boolean;
@@ -71,37 +72,79 @@ export default function AdminSidebar({ collapsed = false, onToggle, onNavigate }
   const [popoverOpen, setPopoverOpen] = useState(false);
   const popoverHoverRef = useRef<number | null>(null);
 
-  const fetchUnread = useCallback(async () => {
-    try {
-      const data = await getUnreadCount();
-      setUnreadCount(data.count);
-      setMaxSeverity(data.maxSeverity);
-    } catch {
-      // silently ignore — sidebar should not break on notification errors
-    }
-  }, []);
+  const streamConnected = useRef(false);
+  const notificationRevision = useRef(0);
+  const refreshUnread = useRef<(() => void) | null>(null);
+  const recentRequest = useRef<AbortController | null>(null);
 
   const fetchRecent = useCallback(async () => {
+    recentRequest.current?.abort();
+    const controller = new AbortController();
+    recentRequest.current = controller;
     try {
-      const data = await getRecentNotifications();
-      setRecent(data.notifications);
+      const data = await getRecentNotifications(controller.signal);
+      if (!controller.signal.aborted) setRecent(data.notifications);
     } catch {
       // non-fatal
     }
   }, []);
 
-  const [streamFallback, setStreamFallback] = useState(false);
-
   useEffect(() => {
-    fetchUnread();
-    // Polling runs as a safety net even when SSE is connected (cheap + fast),
-    // but backs off to the full interval. If SSE falls back, we keep polling.
-    const interval = setInterval(fetchUnread, POLL_INTERVAL);
-    return () => clearInterval(interval);
-  }, [fetchUnread, streamFallback]);
+    let stopped = false;
+    let wasHidden = document.visibilityState !== 'visible';
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let controller: AbortController | null = null;
+    const clearTimer = () => { clearTimeout(timer); timer = undefined; };
+    const poll = async () => {
+      clearTimer();
+      if (stopped || controller || document.visibilityState !== 'visible') return;
+      const request = new AbortController();
+      controller = request;
+      const revision = notificationRevision.current;
+      try {
+        const data = await getUnreadCount(request.signal);
+        // An SSE event arriving during a read is newer than that snapshot.
+        if (!stopped && !request.signal.aborted && revision === notificationRevision.current) {
+          setUnreadCount(data.count);
+          setMaxSeverity(data.maxSeverity);
+        }
+      } catch {
+        // The existing badge remains usable while the safety read retries later.
+      } finally {
+        controller = null;
+        if (!stopped && document.visibilityState === 'visible') {
+          const delay = revision !== notificationRevision.current ? 0
+            : streamConnected.current ? CONNECTED_POLL_INTERVAL : POLL_INTERVAL;
+          timer = setTimeout(() => { void poll(); }, delay);
+        }
+      }
+    };
+    const wake = () => {
+      const hidden = document.visibilityState !== 'visible';
+      if (!hidden && wasHidden) notificationRevision.current += 1;
+      wasHidden = hidden;
+      clearTimer();
+      void poll();
+    };
+    refreshUnread.current = wake;
+    document.addEventListener('visibilitychange', wake);
+    window.addEventListener('focus', wake);
+    wake();
+    return () => {
+      stopped = true;
+      refreshUnread.current = null;
+      controller?.abort();
+      recentRequest.current?.abort();
+      clearTimer();
+      if (popoverHoverRef.current !== null) window.clearTimeout(popoverHoverRef.current);
+      document.removeEventListener('visibilitychange', wake);
+      window.removeEventListener('focus', wake);
+    };
+  }, []);
 
   useNotificationStream({
     onNotification: (notif) => {
+      notificationRevision.current += 1;
       if (!notif.read) {
         setUnreadCount((c) => c + 1);
         setMaxSeverity((prev) => {
@@ -110,11 +153,18 @@ export default function AdminSidebar({ collapsed = false, onToggle, onNavigate }
         });
       }
       // If the popover is open, refresh the recent list so the new item shows up.
-      if (popoverOpen) {
+      if (popoverOpen && document.visibilityState === 'visible') {
         void fetchRecent();
       }
     },
-    onFallback: () => setStreamFallback(true),
+    onFallback: () => {
+      streamConnected.current = false;
+      refreshUnread.current?.();
+    },
+    onConnectionChange: (connected) => {
+      streamConnected.current = connected;
+      refreshUnread.current?.();
+    },
   });
 
   const isActive = (path: string) => {

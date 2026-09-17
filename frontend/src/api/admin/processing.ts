@@ -103,8 +103,8 @@ function processingActionBody(
   };
 }
 
-export async function getProcessingQueueStatus(): Promise<ProcessingQueueStatus> {
-  return apiGet<ProcessingQueueStatus>("/admin/processing/queue");
+export async function getProcessingQueueStatus(signal?: AbortSignal): Promise<ProcessingQueueStatus> {
+  return apiGet<ProcessingQueueStatus>("/admin/processing/queue", undefined, signal);
 }
 
 export async function wakeProcessingWorker(): Promise<ProcessingWorkerWakeResult> {

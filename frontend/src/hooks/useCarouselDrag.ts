@@ -1,7 +1,10 @@
-import { useCallback, useEffect, useRef, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 
 export interface UseCarouselDragReturn {
   carouselRef: RefObject<HTMLDivElement | null>;
+  /** Attach when the carousel appears after loading or changes letters. */
+  attachCarousel: (node: HTMLDivElement | null) => void;
+  activeIndex: number;
   /** True when a drag gesture occurred (suppresses click handler) */
   carouselDraggedRef: RefObject<boolean>;
   /** Smoothly scroll to a slide by index */
@@ -11,36 +14,41 @@ export interface UseCarouselDragReturn {
 /**
  * Lightweight carousel hook using CSS scroll-snap.
  * Touch/trackpad scrolling is native. Mouse drag-to-scroll for desktop.
- * Tracks closest slide and updates `.scan-dot` active state.
+ * Reports the slide closest to the viewport center for React-rendered dots.
  */
 export default function useCarouselDrag(): UseCarouselDragReturn {
   const carouselRef = useRef<HTMLDivElement>(null);
   const carouselDraggedRef = useRef(false);
+  const [carousel, setCarousel] = useState<HTMLDivElement | null>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const attachCarousel = useCallback((node: HTMLDivElement | null) => {
+    carouselRef.current = node;
+    carouselDraggedRef.current = false;
+    setCarousel(node);
+    setActiveIndex(0);
+  }, []);
 
-  // Active dot tracking via scroll position
+  // Observe the mounted node, including when initial loading renders no carousel.
   useEffect(() => {
-    const carousel = carouselRef.current;
     if (!carousel) return;
 
-    const getDots = () =>
-      Array.from(carousel.parentElement?.querySelectorAll<HTMLElement>('.scan-dot') ?? []);
-
     let rafId: number | null = null;
-    let currentActive = 0;
-
     const updateActiveDot = () => {
       rafId = null;
       const slides = carousel.children;
-      const dots = getDots();
-      if (slides.length === 0 || dots.length === 0) return;
+      if (slides.length === 0) return;
 
-      const center = carousel.scrollLeft + carousel.clientWidth / 2;
+      // Both centers use viewport coordinates; offsetLeft can use a different
+      // offset parent from the scrolling element (especially inside a figure).
+      const bounds = carousel.getBoundingClientRect();
+      const center = bounds.left + carousel.clientLeft + carousel.clientWidth / 2;
       let closestIdx = 0;
       let closestDist = Infinity;
 
       for (let i = 0; i < slides.length; i++) {
         const slide = slides[i] as HTMLElement;
-        const slideCenter = slide.offsetLeft + slide.offsetWidth / 2;
+        const slideBounds = slide.getBoundingClientRect();
+        const slideCenter = slideBounds.left + slideBounds.width / 2;
         const dist = Math.abs(center - slideCenter);
         if (dist < closestDist) {
           closestDist = dist;
@@ -48,11 +56,7 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
         }
       }
 
-      if (closestIdx !== currentActive) {
-        dots[currentActive]?.classList.remove('active');
-        dots[closestIdx]?.classList.add('active');
-        currentActive = closestIdx;
-      }
+      setActiveIndex(closestIdx);
     };
 
     const onScroll = () => {
@@ -60,17 +64,22 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
     };
 
     carousel.addEventListener('scroll', onScroll, { passive: true });
-    requestAnimationFrame(updateActiveDot);
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(onScroll);
+    observer?.observe(carousel);
+    Array.from(carousel.children).forEach((slide) => observer?.observe(slide));
+    window.addEventListener('resize', onScroll);
+    onScroll();
 
     return () => {
       carousel.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+      observer?.disconnect();
       if (rafId != null) cancelAnimationFrame(rafId);
     };
-  }, []);
+  }, [carousel]);
 
   // Mouse drag-to-scroll (desktop only — touch uses native scroll)
   useEffect(() => {
-    const carousel = carouselRef.current;
     if (!carousel) return;
 
     let isDragging = false;
@@ -111,8 +120,9 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
       carousel.removeEventListener('mousedown', onMouseDown);
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
+      onMouseUp();
     };
-  }, []);
+  }, [carousel]);
 
   const scrollToSlide = useCallback((index: number) => {
     const carousel = carouselRef.current;
@@ -122,5 +132,5 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
     slide.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
   }, []);
 
-  return { carouselRef, carouselDraggedRef, scrollToSlide };
+  return { carouselRef, attachCarousel, activeIndex, carouselDraggedRef, scrollToSlide };
 }

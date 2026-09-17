@@ -116,7 +116,7 @@ export default function LetterDetailPage() {
   const [viewerStartPage, setViewerStartPage] = useState(0);
 
   // Scan carousel (extracted hook)
-  const { carouselRef, carouselDraggedRef, scrollToSlide } = useCarouselDrag();
+  const { carouselRef, attachCarousel, activeIndex, carouselDraggedRef, scrollToSlide } = useCarouselDrag();
 
   // Transcript view mode: "reading" (reflowed) or "original" (1:1 line match)
   const [transcriptMode, setTranscriptMode] = useState<"reading" | "original">("reading");
@@ -476,7 +476,7 @@ export default function LetterDetailPage() {
         {/* ── 3. Scan Image Carousel ──────────────────────── */}
         {carouselImages.length > 0 && (
           <figure id="letter-scans" className="letter-scan-figure" tabIndex={-1}>
-            <div className="scan-carousel" ref={carouselRef} data-swipe-ignore data-image-scroll-root>
+            <div key={letter.id} className="scan-carousel" ref={attachCarousel} data-swipe-ignore data-image-scroll-root>
               {carouselImages.map((img, idx) => {
                 const isLetter = img.type === "letter";
                 const typeLabel = isLetter
@@ -528,9 +528,10 @@ export default function LetterDetailPage() {
                   <button
                     key={i}
                     type="button"
-                    className={`scan-dot${i === 0 ? " active" : ""}`}
+                    className={`scan-dot${i === activeIndex ? " active" : ""}`}
                     onClick={() => scrollToSlide(i)}
                     aria-label={`Go to page ${i + 1}`}
+                    aria-current={i === activeIndex ? "true" : undefined}
                   />
                 ))}
               </div>

@@ -17,8 +17,11 @@ export function useImageRetry(src: string) {
   }, [src]);
   const onError = () => {
     if (timer.current !== null || current.failed) return;
+    // Cover the current broken request immediately, including during backoff.
+    // The attempt count, rather than visibility, bounds subsequent retries.
+    setState({ ...current, failed: true });
     const delay = IMAGE_RETRY_DELAYS_MS[current.attempt];
-    if (delay === undefined) { setState({ ...current, failed: true }); return; }
+    if (delay === undefined) return;
     timer.current = setTimeout(() => {
       timer.current = null;
       setState({ src, attempt: current.attempt + 1, failed: false });

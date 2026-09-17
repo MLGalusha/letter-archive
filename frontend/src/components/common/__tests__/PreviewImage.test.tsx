@@ -65,13 +65,18 @@ describe('PreviewImage', () => {
     const { container } = render(<PreviewImage src="/images/page?w=480" alt="Scan" />);
     const first = screen.getByAltText('Scan');
     fireEvent.error(first);
+    expect(first).not.toBeVisible();
+    expect(screen.getByText('Image unavailable')).toBeVisible();
     act(() => vi.advanceTimersByTime(999));
     expect(screen.getByAltText('Scan')).toBe(first);
     act(() => vi.advanceTimersByTime(1));
     const second = screen.getByAltText('Scan');
     expect(second).not.toBe(first);
     expect(second).toHaveAttribute('src', '/images/page?w=480');
+    expect(second).toBeVisible();
     fireEvent.error(second);
+    expect(second).not.toBeVisible();
+    expect(screen.getByText('Image unavailable')).toBeVisible();
     act(() => vi.advanceTimersByTime(2000));
     const third = screen.getByAltText('Scan');
     fireEvent.error(third);

@@ -75,12 +75,12 @@ Observation: ___
 
 ## 6. First load and deeper scrolling
 
-**Status: earlier payload/image/pagination improvements live; remaining image contention and phone validation pending.** [Issue 96](https://github.com/MLGalusha/letter-archive/issues/96), [issue 50](https://github.com/MLGalusha/letter-archive/issues/50).
+**Status: earlier payload/image/pagination improvements live; image contention fix merged in PR 113; deployment and phone validation pending.** [Issue 96](https://github.com/MLGalusha/letter-archive/issues/96), [issue 50](https://github.com/MLGalusha/letter-archive/issues/50).
 
 - Visit [Home](https://voicesthatremain.com/) after not using it for a while. Notice when controls appear, when cards appear, and when their images appear. Repeat immediately to compare a warm visit.
 - Scroll steadily through results, then try a faster scroll. Change search or sort while images are arriving. Repeat on [Collection 003](https://voicesthatremain.com/collections/003).
 - Expected: visible images fill in, controls remain responsive, new pages do not repeat cards, and the list eventually reports completion. Record persistent blank images, a freeze, or unusually long waits and approximately how far down you were.
-- The pending image-queue change limits simultaneous resizing so image work does not monopolize the server. In its controlled local test, search waited less but the complete 24-image batch took longer. Judge both responsiveness and image completion; this is not a promise that every image or Cloud Run cold start becomes faster.
+- The image-queue change in [PR 113](https://github.com/MLGalusha/letter-archive/pull/113) limits simultaneous resizing so image work does not monopolize the server. In its controlled local test, search waited less but the complete 24-image batch took longer. Judge both responsiveness and image completion; this is not a promise that every image or Cloud Run cold start becomes faster.
 - Earlier work reduced some downloads and unnecessary initial result fetching. It does not prove all cold starts, image waits, or deep-scroll problems are solved. The new image scheduler must be evaluated for image completion as well as search responsiveness.
 
 Observation: ___

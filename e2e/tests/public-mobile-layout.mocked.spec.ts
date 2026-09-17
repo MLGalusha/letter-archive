@@ -151,7 +151,10 @@ test.describe('@mocked Public mobile layout', () => {
     // Seed an archive history entry at zero without Playwright scrolling its
     // offscreen link into view before dispatching the route transition.
     await page.locator('.letter-card').first().evaluate(el => (el as HTMLElement).click());
-    await expect(page.locator('.letter-article')).toBeVisible();
+    // The article shell appears before its async letter data. Wait until the
+    // scan exists before establishing the reading position for this test.
+    await expect(page.locator('.scan-slide').first()).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
     await scroll(page, 300);
     await page.locator('.scan-slide').first().click();
     await expect(page.getByRole('button', { name: 'Close viewer' })).toBeVisible();

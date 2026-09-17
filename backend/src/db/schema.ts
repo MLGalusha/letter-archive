@@ -886,6 +886,7 @@ export const updatePosts = pgTable(
     authorRole: text('author_role'),
     heroImageUrl: text('hero_image_url'),
     heroImageAlt: text('hero_image_alt'),
+    imageDimensions: jsonb('image_dimensions').$type<Record<string, { width: number; height: number }>>().default({}),
     seoTitle: text('seo_title'),
     seoDescription: text('seo_description'),
     ctaLabel: text('cta_label'),

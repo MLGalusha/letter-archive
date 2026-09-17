@@ -58,6 +58,8 @@ import JournalImageDialog from '../../components/JournalImageDialog';
 import ImageLayoutToolbar from '../../components/ImageLayoutToolbar';
 import '../UpdateDetailPage.css';
 import './UpdateEditorPage.css';
+import { dimensionsForPost, readBrowserImageDimensions, validImageDimensions, type JournalImageDimensions, type ImageDimensions } from '../../utils/journalImageDimensions';
+import { journalImageSourcesInPost } from '../../utils/journalImageSourcesInPost';
 
 /* ------------------------------------------------------------------ */
 /*  Utilities                                                         */
@@ -157,6 +159,9 @@ export default function JournalEditorPage() {
   const { showToast } = useToast();
   const editorRef = useRef<MDXEditorMethods | null>(null);
   const latestFingerprintRef = useRef('');
+  const saveQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const persistedPostId = useRef<string | null>(id ?? null);
+  const adoptedDraftId = useRef<string | null>(null);
 
   /* ---- field state ---- */
   const [createdDraftId, setCreatedDraftId] = useState<string | null>(null);
@@ -170,6 +175,24 @@ export default function JournalEditorPage() {
   const [heroImageUrl, setHeroImageUrl] = useState('');
   const [heroImageAlt, setHeroImageAlt] = useState('');
   const [bodyMarkdown, setBodyMarkdown] = useState('');
+  const [imageDimensions, setImageDimensions] = useState<JournalImageDimensions>({});
+  const imageOwner = useRef(0);
+  const imageSources = useMemo(() => journalImageSourcesInPost(bodyMarkdown, heroImageUrl), [bodyMarkdown, heroImageUrl]);
+  const activeDimensions = useMemo(() => dimensionsForPost(imageSources, imageDimensions), [imageSources, imageDimensions]);
+  const rememberImageDimensions = useCallback((source: string, value?: ImageDimensions) => {
+    if (!validImageDimensions(value)) return;
+    setImageDimensions(previous => {
+      if (previous[source]?.width === value!.width && previous[source]?.height === value!.height) return previous;
+      return { ...previous, [source]: value! };
+    });
+  }, []);
+  const previewImage = useCallback(async (source: string) => {
+    const owner = imageOwner.current;
+    const url = resolveAdminImageSrc(source);
+    const dimensions = await readBrowserImageDimensions(url);
+    if (owner === imageOwner.current) rememberImageDimensions(source, dimensions);
+    return url;
+  }, [rememberImageDimensions]);
   const [seoTitle, setSeoTitle] = useState('');
   const [seoDescription, setSeoDescription] = useState('');
   const [ctaLabel, setCtaLabel] = useState('');
@@ -209,6 +232,7 @@ export default function JournalEditorPage() {
       slug: slugManuallyEdited ? slugify(slug.trim() || 'untitled-draft') : slugify(resolvedSlugSource),
       excerpt: excerpt.trim() || null,
       bodyMarkdown,
+      imageDimensions: activeDimensions,
       category: category.trim() || null,
       authorDisplayName: authorDisplayName.trim() || null,
       authorRole: authorRole.trim() || null,
@@ -221,7 +245,7 @@ export default function JournalEditorPage() {
       publishedAt: fromLocalDateTimeInput(publishedAtInput),
     };
   }, [
-    authorDisplayName, authorRole, bodyMarkdown, category, ctaLabel, ctaUrl,
+    activeDimensions, authorDisplayName, authorRole, bodyMarkdown, category, ctaLabel, ctaUrl,
     excerpt, heroImageAlt, heroImageUrl, publishedAtInput, seoDescription,
     seoTitle, slug, slugManuallyEdited, title,
   ]);
@@ -229,7 +253,7 @@ export default function JournalEditorPage() {
   const currentFingerprint = useMemo(
     () => JSON.stringify({
       title: title.trim(), slug: slug.trim(), excerpt: excerpt.trim(),
-      bodyMarkdown, category: category.trim(),
+      bodyMarkdown, imageDimensions: activeDimensions, category: category.trim(),
       authorDisplayName: authorDisplayName.trim(), authorRole: authorRole.trim(),
       heroImageUrl: heroImageUrl.trim(), heroImageAlt: heroImageAlt.trim(),
       seoTitle: seoTitle.trim(), seoDescription: seoDescription.trim(),
@@ -237,19 +261,18 @@ export default function JournalEditorPage() {
       publishedAt: fromLocalDateTimeInput(publishedAtInput),
     }),
     [
-      authorDisplayName, authorRole, bodyMarkdown, category, ctaLabel, ctaUrl,
+      activeDimensions, authorDisplayName, authorRole, bodyMarkdown, category, ctaLabel, ctaUrl,
       excerpt, heroImageAlt, heroImageUrl, publishedAtInput, seoDescription,
       seoTitle, slug, title,
     ],
   );
 
-  useEffect(() => {
-    latestFingerprintRef.current = currentFingerprint;
-  }, [currentFingerprint]);
-
   /* ---- hydrate / reset ---- */
 
   const hydrateFromPost = useCallback((post: BlogPost) => {
+    imageOwner.current++;
+    persistedPostId.current = post.id;
+    setImageDimensions(post.imageDimensions ?? {});
     setTitle(post.title);
     setSlug(post.slug);
     setSlugManuallyEdited(post.slug !== slugify(post.title));
@@ -272,7 +295,7 @@ export default function JournalEditorPage() {
 
     latestFingerprintRef.current = JSON.stringify({
       title: post.title, slug: post.slug, excerpt: post.excerpt || '',
-      bodyMarkdown: post.bodyMarkdown, category: post.category || '',
+      bodyMarkdown: post.bodyMarkdown, imageDimensions: dimensionsForPost(journalImageSourcesInPost(post.bodyMarkdown, post.heroImageUrl ?? ''), post.imageDimensions ?? {}), category: post.category || '',
       authorDisplayName: post.authorDisplayName || '',
       authorRole: post.authorRole || '',
       heroImageUrl: post.heroImageUrl || '',
@@ -286,6 +309,10 @@ export default function JournalEditorPage() {
   }, []);
 
   const resetForNewPost = useCallback(() => {
+    imageOwner.current++;
+    persistedPostId.current = null;
+    setCreatedDraftId(null);
+    setImageDimensions({});
     setTitle(''); setSlug(''); setSlugManuallyEdited(false);
     setExcerpt(''); setCategory(''); setAuthorDisplayName('');
     setAuthorRole(''); setHeroImageUrl(''); setHeroImageAlt('');
@@ -294,7 +321,7 @@ export default function JournalEditorPage() {
     setStatus('draft'); setLastSavedAt(null); setSaveState('idle');
     setError(null); setEditorKey('new');
     latestFingerprintRef.current = JSON.stringify({
-      title: '', slug: '', excerpt: '', bodyMarkdown: '', category: '',
+      title: '', slug: '', excerpt: '', bodyMarkdown: '', imageDimensions: {}, category: '',
       authorDisplayName: '', authorRole: '', heroImageUrl: '', heroImageAlt: '',
       seoTitle: '', seoDescription: '', ctaLabel: '', ctaUrl: '', publishedAt: null,
     });
@@ -304,6 +331,13 @@ export default function JournalEditorPage() {
 
   const loadBlogPost = useCallback(async () => {
     if (!id) { setLoading(false); resetForNewPost(); return; }
+    // This editor already owns the draft just created. Refetching it would
+    // replace edits made while creation was pending and invalidate queued saves.
+    if (adoptedDraftId.current === id) {
+      adoptedDraftId.current = null;
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true); setError(null);
       const post = await adminGetBlogPost(id);
@@ -322,7 +356,7 @@ export default function JournalEditorPage() {
   const persistDraft = useCallback(async ({
     reason, allowUntitled, successMessage, showErrorToast = true,
   }: PersistOptions): Promise<BlogPost | null> => {
-    const payload = buildFormData(allowUntitled);
+    const payload = { ...buildFormData(allowUntitled), ...(reason === 'manual' ? { resolveImageSources: imageSources } : {}) };
     if (!allowUntitled && !payload.title?.trim()) {
       showToast('Title is required before publishing.', 'error');
       return null;
@@ -334,26 +368,58 @@ export default function JournalEditorPage() {
     );
     if (!hasAnyContent) return null;
 
-    setSaveState(reason === 'auto' ? 'autosaving' : 'saving');
-    try {
-      const saved = postId
-        ? await adminUpdateBlogPost(postId, payload)
-        : await adminCreateBlogPost(payload);
-      setCreatedDraftId(saved.id);
-      setStatus(saved.status);
-      setLastSavedAt(saved.updatedAt);
-      setSaveState('saved');
-      latestFingerprintRef.current = currentFingerprint;
-      if (!postId) navigate(`/admin/content/blog/${saved.id}`, { replace: true });
-      if (successMessage) showToast(successMessage, 'success');
-      return saved;
-    } catch (err) {
-      setSaveState('error');
-      if (showErrorToast) showToast(getErrorMessage(err, 'Failed to save draft.'), 'error');
-      return null;
-    }
+    const owner = imageOwner.current;
+    const runSave = async (): Promise<BlogPost | null> => {
+      if (owner !== imageOwner.current) return null;
+      setSaveState(reason === 'auto' ? 'autosaving' : 'saving');
+      try {
+        const targetId = persistedPostId.current || postId;
+        const saved = targetId
+          ? await adminUpdateBlogPost(targetId, payload)
+          : await adminCreateBlogPost(payload);
+        if (owner !== imageOwner.current) return null;
+        persistedPostId.current = saved.id;
+        const returnedDimensions = saved.imageDimensions ?? activeDimensions;
+        setImageDimensions(previous => {
+          const next = { ...previous };
+          for (const source of imageSources) {
+            const before = activeDimensions[source];
+            const current = previous[source];
+            // Metadata for an unchanged exact URL remains useful even if text
+            // changed in flight. Never replace newer browser-observed axes.
+            if (before?.width !== current?.width || before?.height !== current?.height) continue;
+            const returned = validImageDimensions(returnedDimensions[source]);
+            if (returned) next[source] = returned;
+            else delete next[source];
+          }
+          return next;
+        });
+        if (reason === 'manual' && saved.unresolvedImageSources?.length) showToast('Saved. Some image dimensions could not be read; those images may still shift while loading.', 'error');
+        setCreatedDraftId(saved.id);
+        setStatus(saved.status);
+        setLastSavedAt(saved.updatedAt);
+        setSaveState('saved');
+        latestFingerprintRef.current = currentFingerprint;
+        if (!targetId) {
+          adoptedDraftId.current = saved.id;
+          navigate(`/admin/content/blog/${saved.id}`, { replace: true });
+        }
+        if (successMessage) showToast(successMessage, 'success');
+        return saved;
+      } catch (err) {
+        if (owner !== imageOwner.current) return null;
+        setSaveState('error');
+        if (showErrorToast) showToast(getErrorMessage(err, 'Failed to save draft.'), 'error');
+        return null;
+      }
+    };
+    // Serialize network writes, not just response handling: a late older write
+    // must never overwrite a newer manual Save or Publish snapshot on the server.
+    const result = saveQueue.current.then(runSave, runSave);
+    saveQueue.current = result;
+    return result;
   }, [
-    bodyMarkdown, buildFormData, category, ctaLabel, currentFingerprint, excerpt,
+    activeDimensions, imageSources, bodyMarkdown, buildFormData, category, ctaLabel, currentFingerprint, excerpt,
     heroImageUrl, navigate, postId, seoDescription, seoTitle, showToast, title,
   ]);
 
@@ -434,7 +500,8 @@ export default function JournalEditorPage() {
     }
   };
 
-  const handleImageInsert = useCallback((url: string, alt?: string) => {
+  const handleImageInsert = useCallback((url: string, alt?: string, dimensions?: ImageDimensions) => {
+    rememberImageDimensions(url, dimensions);
     const imgMd = `![${alt || ''}](${url})`;
     const editor = editorRef.current;
     if (!editor) return;
@@ -443,7 +510,7 @@ export default function JournalEditorPage() {
     editor.focus(() => {
       editor.insertMarkdown(imgMd);
     }, { defaultSelection: 'rootEnd' });
-  }, []);
+  }, [rememberImageDimensions]);
 
   /* ---- render ---- */
 
@@ -548,6 +615,8 @@ export default function JournalEditorPage() {
                         <img
                           className="markdown-inline-image"
                           src={resolveAdminImageSrc(src)}
+                          {...validImageDimensions(imageDimensions[src])}
+                          onLoad={event => rememberImageDimensions(src, { width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })}
                           alt={alt || ''}
                           title={title || undefined}
                           loading="lazy"
@@ -599,7 +668,12 @@ export default function JournalEditorPage() {
               />
             </div>
 
-            <div className="journal-editor-surface">
+            <div className="journal-editor-surface" onLoadCapture={event => {
+              const image = event.target;
+              if (!(image instanceof HTMLImageElement)) return;
+              const source = imageSources.find(value => resolveAdminImageSrc(value) === image.getAttribute('src'));
+              if (source) rememberImageDimensions(source, { width: image.naturalWidth, height: image.naturalHeight });
+            }}>
               <MDXEditor
                 key={editorKey}
                 ref={editorRef}
@@ -742,6 +816,7 @@ export default function JournalEditorPage() {
                       type="text"
                       value={heroImageUrl}
                       onChange={handleField(setHeroImageUrl)}
+                      onBlur={() => { if (heroImageUrl.trim()) void previewImage(heroImageUrl.trim()); }}
                       placeholder="/images/hero.jpg"
                     />
                   </div>

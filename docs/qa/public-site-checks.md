@@ -2,6 +2,8 @@
 
 This is a running checklist for Mason to use whenever convenient. A pending check is not a claim that a bug is fixed. Record observations below each check; no need to complete everything in one sitting. For entries marked **merged**, the expected behavior applies after their production release. Only entries explicitly marked **live** or **deployed** record a completed production check.
 
+See [the verified performance results](2026-09-17-performance-results.md) for release checkpoints, measurements, and the limits of each check.
+
 ## Browser coverage
 
 The public site should work well in **Safari and Google Chrome**, on desktop and mobile. The primary physical phone for acceptance is an **iPhone 13**. Run phone checks in both installed browsers, particularly keyboard, scrolling, gestures, and fullscreen images. Chromium/WebKit automation helps catch regressions but does not establish physical iPhone behavior.
@@ -186,7 +188,9 @@ Observation: browser ___; connection ___; feedback visible ___; correct destinat
 
 ## Saved reader images (issue 128)
 
-**Status: implementation under review; deployment verification pending.**
+**Status: deployed in backend 29c59f5c; durable reuse verified after deployment a5793133. Physical phone acceptance pending.**
+
+One ordinary 1200px AVIF scan returned identical bytes and ETags after a backend deployment, with `cache=saved` and `previewRead=hit`. The sampled client request fell from 5,021ms for first generation to 631ms for the saved read; this is one reuse sample, not a site-wide speed estimate. [Timing evidence](2026-09-17-performance-results.md#saved-reader-images-128-pr-140).
 
 - Open [Collection 003](https://voicesthatremain.com/collections/003), then a letter, in Safari and Chrome on the iPhone 13.
 - Try [this multi-page letter](https://voicesthatremain.com/letter/be6ef848-a8f9-4696-9097-646d4257562a). Move between scans, open fullscreen and deliberately zoom. Expected: every scan still loads, zoom remains sharp, and revisiting scans can reuse previous image work.
@@ -197,7 +201,9 @@ Observation: date ___; browser/device ___; letter/scan ___; first/repeat ___; re
 
 ### Progressive image scheduling (#129)
 
-After the release containing #129, try [collection 003](https://voicesthatremain.com/collections/003)
+**Status: deployed in frontend c30f86b3; live collection images checked. Physical phone acceptance pending.** A bounded live visit loaded 14 displayed images without failures; each observed 640px showcase source had one request. Controlled held-response tests provide the stronger ownership check.
+
+Try [collection 003](https://voicesthatremain.com/collections/003)
 and [its first letter](https://voicesthatremain.com/letter/be6ef848-a8f9-4696-9097-646d4257562a)
 in Chrome and Safari. A smaller preview should appear while a larger scan loads;
 switching letters should not briefly show the previous scan as fully ready. Opening
@@ -223,19 +229,23 @@ correctness evidence, not a measured production speedup or a physical iPhone res
 
 ## Collection content independent of optional profile (issue 132)
 
-**Status: implementation under review; not yet recorded as deployed.**
+**Status: deployed in frontend/backend d16022e6; live held-profile check passed. Physical phone acceptance pending.**
+
+A live Chromium check held the optional profile response: the collection heading, enabled archive search, and 26 letter links appeared before release. This establishes independent rendering, not a production speed percentage.
 
 Open [Collection 003](https://voicesthatremain.com/collections/003) and [Collection 009](https://voicesthatremain.com/collections/009) in iPhone 13 Safari and Chrome. Try searching, sorting, opening a letter, and returning with browser Back. Expected after release: the collection header, published narrative, highlights and archive can appear as soon as overview data arrives, even when the separate profile request is still pending. Profile failure must not turn the collection into a not-found page. Late enrichment must not insert a narrative above the search area or clear your query, sort, or scroll position. Both configured featured letters and the initial fallback selection remain stable after optional profile resolution; profile data enriches popups only.
 
 Switch collections quickly with the header controls, then Back/Forward. Expected: you see the current collection or its loading state, never a late response replacing it with a previous collection. For a developer check, hold only `/collections/003/profile` in a local browser fixture: the overview and search must remain usable while it is held; releasing it must not move the archive due to narrative insertion.
 
-Validation uses controlled browser fixtures, not production speed measurements: Chrome and WebKit with iPhone 13 emulation rendered the overview and narrative while profile was held, and the archive's top position stayed unchanged on release. Focused tests cover query preservation, profile failure, overview failure, route cancellation/late responses, publication masking, hidden featured targets, and companion-to-primary selection. Physical phone checks remain yours to try.
+Additional validation uses controlled browser fixtures, not production speed measurements: Chrome and WebKit with iPhone 13 emulation rendered the overview and narrative while profile was held, and the archive's top position stayed unchanged on release. Focused tests cover query preservation, profile failure, overview failure, route cancellation/late responses, publication masking, hidden featured targets, and companion-to-primary selection. Physical phone checks remain yours to try.
 
 Observation: browser ___; collection ___; query/sort preserved ___; unexpected jump ___; Back/Forward result ___
 
 ### Reader rendition handoff (#127)
 
-After the release containing #127, open [collection 003](https://voicesthatremain.com/collections/003),
+**Status: deployed, including the PR #148 geometry correction in 926f477.** See [the live preview-space verification below](#reader-preview-space-reservation-127-follow-up); physical iPhone acceptance remains pending.
+
+Open [collection 003](https://voicesthatremain.com/collections/003),
 let its cards become clear, then open [the first letter](https://voicesthatremain.com/letter/be6ef848-a8f9-4696-9097-646d4257562a).
 The clear card preview should remain usable while the larger reader scan arrives.
 Try a direct visit in a fresh tab too: it should request the measured reader size,
@@ -265,7 +275,9 @@ and dimensions, not image bytes, and never changes server publication checks.
 
 ## Journal and person request ownership (issue 135)
 
-**Status: implementation under review; production verification pending.**
+**Status: deployed in frontend 6944e10d; browser-local data fixture against the deployed frontend passed. Physical phone acceptance pending.**
+
+The live frontend held the Title request while selecting Author and advancing to page 2. Releasing the old request left `author-12`, Author, and `?page=2` unchanged. Fixture posts existed only inside the browser; no production entries were created.
 
 - Visit [Journal](https://voicesthatremain.com/blog) in Safari and Chrome. Change Title → Author quickly, then switch pages when entries are available. Expected: the list always matches the latest selected sort/page; a slow earlier request cannot replace it or show an outdated error. Keyboard Enter/Space selection still works.
 - The live journal was empty during the audit. Automated checks use browser-local posts to exercise this case without publishing anything.
@@ -276,7 +288,9 @@ Observation: browser/device ___; route or sort sequence ___; displayed result __
 
 ## Collection carousel activity (issue 133)
 
-**Status: implementation under review; deployment verification pending.**
+**Status: deployed in frontend 6944e10d; live ordinary-timer check passed. Physical phone acceptance pending.**
+
+Live Chromium observed Slide 1 → Slide 2 while visible and no movement during separate six-second offscreen and reduced-motion windows. This verifies avoided carousel work, not a battery-life measurement.
 
 - On your iPhone 13, open [Collection 003](https://voicesthatremain.com/collections/003) in Safari and Chrome. While the highlight carousel is visible, it should advance about every five seconds.
 - Scroll below the highlights into the archive and wait. Scroll back: the carousel should resume from its paused position with a fresh five-second interval, without racing through missed slides.
@@ -295,7 +309,9 @@ Observation: browser ___; carousel visible/paused/resumed correctly ___; dot/swi
 
 ### Reader preview space reservation (#127 follow-up)
 
-After this follow-up is deployed, open [collection 003](https://voicesthatremain.com/collections/003),
+**Status: deployed in 926f477; live Chromium geometry verified. Physical iPhone acceptance pending.** A fresh 390×844 DPR3 collection-to-letter visit held the 1200px response: the loaded 480px preview visibly occupied 296.390625×395.1875px, and its rectangle stayed identical after release (0px height change). The earlier zero-height failure is recorded in [the results report](2026-09-17-performance-results.md#reader-page-layout-follow-up-127).
+
+Open [collection 003](https://voicesthatremain.com/collections/003),
 wait for its small card images, then open [this letter](https://voicesthatremain.com/letter/be6ef848-a8f9-4696-9097-646d4257562a).
 In Safari and Chrome on your iPhone 13, the existing preview should occupy visible
 scan space immediately while the sharper image loads. The transcript below should
@@ -348,11 +364,21 @@ production traffic, CPU energy, physical-phone sleep, or battery savings.
 
 ## Journal image sizes (issue 136)
 
-**Status: implementation under review; production and physical phone acceptance pending.**
+**Status: implemented and validated with controlled browser fixtures; final deployment and physical phone acceptance pending.**
 
 - Open [Journal](https://voicesthatremain.com/blog), then a published article, in Safari and Chrome on iPhone 13. Expected after release: card images load as they approach the screen; the article's main image starts immediately; images farther down load near scrolling. Article images retain their natural proportions, and animated images keep moving.
 - At audit time there were no published production posts. A reproducible local fixture is available at [local Journal](http://127.0.0.1:4196/blog) and [local article](http://127.0.0.1:4196/blog/fixture) while the services described in [the measurement notes](../audits/2026-09-17-journal-images.md) are running. It includes an intentionally failing small image that should recover using its original.
-- Expected: no endless broken-image retry, no card shape change, and working original URLs. Natural article image height can still shift while loading; this change reduces bytes/decode work without introducing a fixed frame.
+- Expected: no endless broken-image retry, no card shape change, and working original URLs. Responsive delivery reduces bytes/decode work; the dimension persistence change below also reserves natural article image height when accurate dimensions are known. Unknown dimensions can still shift while loading.
 - Local Chromium/WebKit checks passed; they do not establish real-phone battery savings or production loading times.
 
 Observation: date ___; browser/device ___; article ___; first/repeat ___; image wait ___; unexpected layout shift ___ .
+
+## Journal image space (remaining issue 136 acceptance)
+
+**Status: implemented and independently reviewed; controlled phone/desktop Chromium/WebKit geometry checks passed within 1px. Migration/deployment and physical phone checks pending.**
+
+- After release, open [Journal](https://voicesthatremain.com/blog) and an article with images in iPhone 13 Safari and Chrome. Expected for images whose dimensions have been saved: the text below them stays in place while they load; portrait/landscape images retain natural proportions and float-left/right images retain wrapping. A failed image keeps its reserved space.
+- For your own draft in the admin journal, insert/upload images and explicitly Save before Publish. Reopen the draft: dimensions remain attached to their exact source. Replacing an image URL must not borrow another image's shape. Legacy owned images can gain metadata on explicit Save; this implementation did not edit existing production posts.
+- Unknown external/missing/unsupported media can still shift until accurate dimensions are available. Do not infer that all legacy articles have been backfilled. [Implementation and local layout checks](../audits/2026-09-17-journal-image-dimensions.md).
+
+Observation: article ___; browser/device ___; known/legacy media ___; text moved while loading ___; failed-image space preserved ___ .

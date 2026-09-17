@@ -26,7 +26,10 @@ export const automaticMigrationBaselineTag =
  */
 export const migrationReleasePolicies: Readonly<
   Record<string, MigrationReleaseMode>
-> = Object.freeze({});
+> = Object.freeze({
+  // Nullable additive metadata; previous application revisions can keep serving.
+  '0057_add_journal_image_dimensions': 'automatic',
+});
 
 function assertValidJournal(
   journal: readonly MigrationJournalEntry[],

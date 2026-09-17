@@ -8,13 +8,14 @@ import type { Letter, LetterImage } from '../types/Letter';
 import Modal from './common/Modal';
 import { Button } from './common';
 import './JournalImageDialog.css';
+import { type ImageDimensions } from '../utils/journalImageDimensions';
 
 type Tab = 'url' | 'upload' | 'database';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  onInsert: (url: string, alt?: string) => void;
+  onInsert: (url: string, alt?: string, dimensions?: ImageDimensions) => void;
 }
 
 export default function JournalImageDialog({ isOpen, onClose, onInsert }: Props) {
@@ -23,6 +24,7 @@ export default function JournalImageDialog({ isOpen, onClose, onInsert }: Props)
   // URL tab
   const [urlInput, setUrlInput] = useState('');
   const [altInput, setAltInput] = useState('');
+  const [previewDimensions, setPreviewDimensions] = useState<{ source: string; dimensions: ImageDimensions }>();
 
   // Upload tab
   const [uploading, setUploading] = useState(false);
@@ -95,9 +97,9 @@ export default function JournalImageDialog({ isOpen, onClose, onInsert }: Props)
 
   const handleUrlInsert = useCallback(() => {
     if (!urlInput.trim()) return;
-    onInsert(urlInput.trim(), altInput.trim() || undefined);
+    onInsert(urlInput.trim(), altInput.trim() || undefined, previewDimensions?.source === urlInput.trim() ? previewDimensions.dimensions : undefined);
     onClose();
-  }, [urlInput, altInput, onInsert, onClose]);
+  }, [urlInput, altInput, previewDimensions, onInsert, onClose]);
 
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -106,7 +108,7 @@ export default function JournalImageDialog({ isOpen, onClose, onInsert }: Props)
     setUploadError(null);
     try {
       const result = await uploadBlogImage(file);
-      onInsert(result.url, file.name.replace(/\.[^.]+$/, ''));
+      onInsert(result.url, file.name.replace(/\.[^.]+$/, ''), result.dimensions);
       onClose();
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Upload failed');
@@ -120,6 +122,8 @@ export default function JournalImageDialog({ isOpen, onClose, onInsert }: Props)
   const handleDatabaseImageSelect = useCallback((image: LetterImage) => {
     const url = image.imageUrl;
     const alt = image.originalFilename || `Page ${image.pageNumber || 1}`;
+    // Stored letter axes may predate EXIF normalization. The editor's preview
+    // captures displayed dimensions; explicit Save also verifies the owned file.
     onInsert(url, alt);
     onClose();
   }, [onInsert, onClose]);
@@ -199,10 +203,11 @@ export default function JournalImageDialog({ isOpen, onClose, onInsert }: Props)
             {urlInput.trim() && (
               <div className="jid-preview">
                 <img
+                  key={urlInput.trim()}
                   src={urlInput.trim()}
                   alt={altInput || 'Preview'}
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                  onLoad={(e) => { (e.target as HTMLImageElement).style.display = 'block'; }}
+                  onLoad={(e) => { e.currentTarget.style.display = 'block'; setPreviewDimensions({ source: urlInput.trim(), dimensions: { width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight } }); }}
                 />
               </div>
             )}

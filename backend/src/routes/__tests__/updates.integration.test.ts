@@ -79,6 +79,7 @@ function makePost(overrides: Record<string, unknown> = {}) {
     authorRole: 'editor',
     heroImageUrl: null,
     heroImageAlt: null,
+    imageDimensions: {},
     seoTitle: null,
     seoDescription: null,
     ctaLabel: null,
@@ -147,6 +148,15 @@ describe('updates route integration', () => {
     descMock.mockImplementation((value: unknown) => ({ direction: 'desc', value }));
     ascMock.mockImplementation((value: unknown) => ({ direction: 'asc', value }));
     sqlMock.mockImplementation((strings: unknown, ...values: unknown[]) => ({ strings, values }));
+  });
+
+  it('includes only hero dimensions on listings', async () => {
+    const post = makePost({ heroImageUrl: '/hero.jpg', imageDimensions: { '/hero.jpg': { width: 10, height: 20 }, '/inline.jpg': { width: 30, height: 40 } } });
+    setupDbMocks([post], 1);
+    const result = await invokeRouter(updatesRouter, { method: 'GET', url: '/blog' });
+    expect(result.statusCode).toBe(200);
+    expect(result.body).toMatchObject({ posts: [{ imageDimensions: { '/hero.jpg': { width: 10, height: 20 } } }] });
+    expect((result.body as { posts: { imageDimensions: unknown }[] }).posts[0].imageDimensions).not.toHaveProperty('/inline.jpg');
   });
 
   // =========================================================================

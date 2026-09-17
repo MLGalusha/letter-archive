@@ -419,6 +419,8 @@ export interface BlogPost {
   authorRole: string | null;
   heroImageUrl: string | null;
   heroImageAlt: string | null;
+  imageDimensions?: Record<string, { width: number; height: number }> | null;
+  unresolvedImageSources?: string[];
   seoTitle: string | null;
   seoDescription: string | null;
   ctaLabel: string | null;

@@ -36,3 +36,14 @@ describe('journal media', () => {
     expect(screen.getByAltText('New scan')).toHaveAttribute('srcset');
   });
 });
+
+it('keeps known geometry and wrap titles through both failed rendition and original', () => {
+  render(<JournalImage src="/blog-images/failed.jpg" alt="Failed scan" width={800} height={1600} className="markdown-inline-image" title="float-left" />);
+  const image = screen.getByAltText('Failed scan');
+  fireEvent.error(image); fireEvent.error(image);
+  const fallback = screen.getByAltText('Failed scan');
+  expect(fallback).toHaveAttribute('width', '800');
+  expect(fallback).toHaveAttribute('height', '1600');
+  expect(fallback).toHaveAttribute('title', 'float-left');
+  expect(fallback.getAttribute('src')).toMatch(/^data:image\/svg\+xml/);
+});

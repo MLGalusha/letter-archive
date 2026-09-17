@@ -7,12 +7,13 @@
   },
   "scripts": {
     "test": "playwright test",
-    "test:mocked": "npm run test:benchmark && playwright test --config=playwright.mocked.config.ts",
+    "test:mocked": "npm run test:benchmark && playwright test --config=playwright.mocked.config.ts && npm run test:mobile",
     "test:headed": "playwright test --headed",
     "test:ui": "playwright test --ui",
     "report": "playwright show-report",
     "benchmark:images": "node scripts/image-scroll-benchmark.mjs",
-    "test:benchmark": "node --test scripts/image-benchmark-metadata.node-test.mjs"
+    "test:benchmark": "node --test scripts/image-benchmark-metadata.node-test.mjs",
+    "test:mobile": "playwright test --config=playwright.mobile-layout.config.ts --reporter=line"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.1",

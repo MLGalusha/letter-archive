@@ -165,6 +165,10 @@ test.describe('@mocked Public mobile layout', () => {
   test('floating search responds to one activation and typing preserves position', async ({ page, isMobile }) => {
     await mockPublic(page);
     await home(page);
+    // Cross the search observer's viewport boundary as a real scroll does.
+    // A single jump can skip it entirely when the panel starts below the fold.
+    const searchY = await page.locator('.home-search-panel').evaluate(el => window.scrollY + el.getBoundingClientRect().top);
+    await scroll(page, Math.max(0, Math.round(searchY - 150)));
     await scroll(page, 2300);
     await scroll(page, 2100);
     const search = page.getByRole('button', { name: 'Jump to search' });

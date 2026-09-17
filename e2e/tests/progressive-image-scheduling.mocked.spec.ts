@@ -61,7 +61,8 @@ for (const mode of ['delay', 'idle'] as const) {
       if (mode === 'idle') await page.evaluate(() => (window as any).releaseIdle());
       await expect(page.getByAltText('Fixture scan')).toHaveAttribute('src', `/fixture-images/${id}-full`);
       await expect.poll(() => page.getByAltText('Fixture scan').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth)).toBe(480);
-      expect(await page.evaluate((id) => (window as any).imagePriorities.find((row: any) => row.value === `/fixture-images/${id}-full`).priority, id)).toBe('high');
+      await expect(page.getByAltText('Fixture scan')).toHaveAttribute('fetchpriority', 'high');
+      expect(await page.evaluate((id) => (window as any).imagePriorities.some((row: any) => row.value === `/fixture-images/${id}-full`), id)).toBe(false);
     }
     await render(page, 'abandoned', options);
     await expect(page.locator('.progressive-image__thumb')).toBeVisible();
@@ -97,10 +98,10 @@ test('@mocked progressive retries recover and retain a useful preview on exhaust
   await page.waitForTimeout(300);
   await expect(page.locator('.progressive-image__thumb')).toBeVisible();
   await expect(page.getByText('Image unavailable')).toHaveCount(0);
-  await expect(page.getByAltText('Fixture scan')).not.toHaveAttribute('src');
+  await expect(page.getByAltText('Fixture scan')).toHaveClass(/progressive-image__full--loading/);
   await render(page, 'all-failed');
   await expect(page.getByText('Image unavailable')).toBeVisible({ timeout: 6000 });
-  expect(counts.get('/fixture-images/all-failed-full')).toBe(3);
+  await expect.poll(() => counts.get('/fixture-images/all-failed-full')).toBe(3);
 });
 
 
@@ -118,10 +119,43 @@ test('@mocked releasing one pending image preserves another consumer of the same
   }))));
   await expect(page.locator('.progressive-image__thumb')).toHaveCount(2);
   await expect.poll(() => fullStarted).toBe(true);
+  const removedOwner = await page.getByAltText('first').elementHandle();
   await page.evaluate(() => (window as any).renderImage([{
     alt: 'second', src: '/fixture-images/shared-full', thumbSrc: '/fixture-images/shared-thumb',
   }]));
   await expect(page.getByAltText('first')).toHaveCount(0);
+  expect(await removedOwner!.getAttribute('src')).toBeNull();
   release();
   await expect.poll(() => page.getByAltText('second').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth)).toBe(480);
 });
+
+
+for (const cacheControl of ['private, no-store', 'public, max-age=0, must-revalidate']) {
+  test(`@mocked DOM owns full readiness and one request with ${cacheControl}`, async ({ page }) => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    let fullRequests = 0;
+    await page.route('**/fixture-images/**', async (route) => {
+      if (route.request().url().endsWith('full')) { fullRequests++; await held; }
+      await route.fulfill({ headers: { 'Cache-Control': cacheControl }, contentType: 'image/png', path: join(__dirname, 'fixtures/archive-preview-480x640.png') });
+    });
+    await mountFixture(page);
+    await render(page, 'owned', { fetchPriority: 'high' });
+    await expect.poll(() => fullRequests).toBe(1);
+    const main = page.getByAltText('Fixture scan');
+    await expect(main).toHaveAttribute('src', '/fixture-images/owned-full');
+    await expect(main).toHaveClass(/progressive-image__full--loading/);
+    await expect(page.locator('.progressive-image__thumb')).toBeVisible();
+    const pendingNode = await main.elementHandle();
+    release();
+    await expect(main).not.toHaveClass(/progressive-image__full--loading/);
+    await expect(page.locator('.progressive-image__thumb')).toHaveCount(0);
+    expect(await main.evaluate((img, pending) => img === pending, pendingNode)).toBe(true);
+    await render(page, 'owned', { fetchPriority: 'low' });
+    await expect(main).toHaveAttribute('fetchpriority', 'low');
+    await render(page, 'owned', { fetchPriority: 'low', context: 'updated-context' });
+    await expect(main).not.toHaveClass(/progressive-image__full--loading/);
+    await page.waitForTimeout(300);
+    expect(fullRequests).toBe(1);
+  });
+}

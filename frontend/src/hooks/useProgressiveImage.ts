@@ -14,6 +14,8 @@ export interface ProgressiveImageOptions {
   /** Delay in ms before starting the full-quality load (gives priority images a head start) */
   fullDelay?: number;
   fetchPriority?: 'high' | 'low' | 'auto';
+  /** Let the rendered image own the full request; the hook only admits it. */
+  fullLoadMode?: 'background' | 'dom';
 }
 
 export interface UseProgressiveImageResult {
@@ -21,6 +23,9 @@ export interface UseProgressiveImageResult {
   midLoaded: boolean;
   fullLoaded: boolean;
   fullFailed: boolean;
+  fullAdmitted: boolean;
+  onFullLoad: (image: HTMLImageElement) => void;
+  onFullError: () => void;
   /** Best available src (full > mid > thumb > '') */
   currentSrc: string;
   /** Natural width from the first loaded tier (for aspect ratio) */
@@ -107,6 +112,7 @@ export function useProgressiveImage(
     context = 'unknown',
     fullDelay = 0,
     fetchPriority = 'auto',
+    fullLoadMode = 'background',
   } = opts;
 
   const priority = useRef(fetchPriority);
@@ -120,11 +126,13 @@ export function useProgressiveImage(
 
   // Readiness belongs to these exact URLs, including the render before effects run.
   // Otherwise a previously loaded full tier can start a replacement URL too early.
-  const sourceKey = JSON.stringify([thumbSrc, midSrc, fullSrc]);
+  const sourceKey = JSON.stringify([thumbSrc, midSrc, fullSrc, fullLoadMode]);
+  const fullTiming = useRef<{ sourceKey: string; start: number; reported?: boolean } | null>(null);
   const preloaded = imagePreloadService.isPreloaded(fullSrc);
   const preloadedDims = preloaded ? imagePreloadService.getDimensions(fullSrc) : null;
   const initial = {
-    sourceKey, thumbLoaded: false, midLoaded: false, fullLoaded: preloaded, fullFailed: false,
+    sourceKey, thumbLoaded: false, midLoaded: false, fullLoaded: fullLoadMode === 'background' && preloaded, fullFailed: false,
+    fullAdmitted: fullLoadMode === 'background' && preloaded,
     naturalWidth: preloadedDims?.width ?? null, naturalHeight: preloadedDims?.height ?? null,
   };
   const [state, setState] = useState(initial);
@@ -135,8 +143,9 @@ export function useProgressiveImage(
     if (!enabled) return;
     const alreadyPreloaded = imagePreloadService.isPreloaded(fullSrc);
     const dims = alreadyPreloaded ? imagePreloadService.getDimensions(fullSrc) : null;
-    setState({ sourceKey, thumbLoaded: false, midLoaded: false, fullLoaded: alreadyPreloaded,
-      fullFailed: false, naturalWidth: dims?.width ?? null, naturalHeight: dims?.height ?? null });
+    fullTiming.current = { sourceKey, start: performance.now() };
+    setState({ sourceKey, thumbLoaded: false, midLoaded: false, fullLoaded: fullLoadMode === 'background' && alreadyPreloaded,
+      fullAdmitted: alreadyPreloaded, fullFailed: false, naturalWidth: dims?.width ?? null, naturalHeight: dims?.height ?? null });
     let dimsSet = !!dims;
     let idle: number | null = null;
     let delay: ReturnType<typeof setTimeout> | null = null;
@@ -153,13 +162,13 @@ export function useProgressiveImage(
     };
 
     // 1. Load thumbnail immediately (even for deferred images — it's tiny)
-    loadImage(thumbSrc, 'thumb', context, cancelled, (img) => {
+    if (fullLoadMode !== 'dom' || thumbSrc !== fullSrc) loadImage(thumbSrc, 'thumb', context, cancelled, (img) => {
       setState((value) => ({ ...value, thumbLoaded: true }));
       captureDims(img);
     }, imgs, cleanups, priority);
 
     // 2. Load mid-quality immediately (if provided)
-    if (midSrc) {
+    if (midSrc && (fullLoadMode !== 'dom' || midSrc !== fullSrc)) {
       loadImage(midSrc, 'mid', context, cancelled, (img) => {
         setState((value) => ({ ...value, midLoaded: true }));
         captureDims(img);
@@ -170,6 +179,11 @@ export function useProgressiveImage(
     if (!alreadyPreloaded && !deferFullUntilVisible) {
       const startFull = () => {
         if (cancelled.current) return;
+        fullTiming.current = { sourceKey, start: performance.now() };
+        if (fullLoadMode === 'dom') {
+          setState((value) => ({ ...value, fullAdmitted: true }));
+          return;
+        }
         loadImage(fullSrc, 'full', context, cancelled, (img) => {
           setState((value) => ({ ...value, fullLoaded: true }));
           captureDims(img);
@@ -189,6 +203,7 @@ export function useProgressiveImage(
 
     return () => {
       cancelled.current = true;
+      fullTiming.current = null;
       ownedImages.current = [];
       for (const cleanup of cleanups) cleanup();
       for (const img of imgs) {
@@ -201,10 +216,29 @@ export function useProgressiveImage(
       if (idle !== null) cancelIdle(idle);
       if (delay !== null) clearTimeout(delay);
     };
-  }, [enabled, thumbSrc, midSrc, fullSrc, idleUpgrade, deferFullUntilVisible, context, fullDelay, sourceKey]);
+  }, [enabled, thumbSrc, midSrc, fullSrc, idleUpgrade, deferFullUntilVisible, context, fullDelay, sourceKey, fullLoadMode]);
 
-  const { thumbLoaded, midLoaded, fullLoaded, fullFailed, naturalWidth, naturalHeight } = current;
+  const onFullLoad = (image: HTMLImageElement) => {
+    const timing = fullTiming.current;
+    if (fullLoadMode !== 'dom' || timing?.sourceKey !== sourceKey) return;
+    const durationMs = performance.now() - timing.start;
+    if (!timing.reported) {
+      timing.reported = true;
+      recordImageLoad({ url: fullSrc, tier: 'full', context, durationMs, cached: durationMs < 15 });
+    }
+    setState((value) => value.sourceKey !== sourceKey || value.fullLoaded ? value : ({ ...value,
+      fullLoaded: true, fullFailed: false,
+      naturalWidth: value.naturalWidth ?? image.naturalWidth,
+      naturalHeight: value.naturalHeight ?? image.naturalHeight,
+    }));
+  };
+  const onFullError = () => {
+    if (fullLoadMode !== 'dom' || fullTiming.current?.sourceKey !== sourceKey) return;
+    fullTiming.current.reported = false;
+    setState((value) => value.sourceKey !== sourceKey ? value : ({ ...value, fullLoaded: false }));
+  };
+  const { thumbLoaded, midLoaded, fullLoaded, fullFailed, fullAdmitted, naturalWidth, naturalHeight } = current;
   const currentSrc = fullLoaded ? fullSrc : midLoaded && midSrc ? midSrc : thumbLoaded ? thumbSrc : '';
 
-  return { thumbLoaded, midLoaded, fullLoaded, fullFailed, currentSrc, naturalWidth, naturalHeight };
+  return { thumbLoaded, midLoaded, fullLoaded, fullFailed, fullAdmitted, onFullLoad, onFullError, currentSrc, naturalWidth, naturalHeight };
 }

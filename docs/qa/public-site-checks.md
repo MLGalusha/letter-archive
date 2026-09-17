@@ -204,17 +204,19 @@ switching letters should not briefly show the previous scan as fully ready. Open
 and paging the fullscreen viewer should still work. Try the same image navigation
 in an existing admin review without changing the transcript.
 
-The fix makes the background image loader control when the full image starts;
-a hidden DOM image no longer bypasses the planned delay. It also sends the
-requested priority to that loader and releases its unfinished image objects on
-navigation. That release is best effort: another consumer can still need the same
-URL, and server work already started may continue.
+The scheduler now admits the rendered full image after the planned delay, and
+that DOM image owns its request and completion. The useful preview stays until
+the displayed image has loaded, including with no-store or revalidated responses.
+Priority changes update the active request without restarting it. Navigation
+releases unfinished image objects owned by the component. That release is best
+effort: another consumer can still need the same URL, and server work already started may continue.
 
 Developer check: in a fresh Network recording, collection showcase 32/320px
 previews should be admitted before the deferred 640px tier. Cached responses can
 be immediate, and the browser may run an idle callback quickly; this is not a
 promise of a fixed visible delay or fewer total bytes. Controlled Chromium and
 WebKit tests hold idle callbacks and test a 1.2-second delay, including replacement
-of an already-loaded source. They also cover recovery and keeping a useful
-preview when the larger image fails. This is correctness evidence, not a measured
-production speedup or a physical iPhone result.
+of an already-loaded source. They also cover recovery, keeping a useful
+preview when the larger image fails, and exactly one full request while the actual
+DOM response is held under no-store and max-age=0 cache headers. This is
+correctness evidence, not a measured production speedup or a physical iPhone result.

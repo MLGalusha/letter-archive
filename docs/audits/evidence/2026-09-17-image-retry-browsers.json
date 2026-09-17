@@ -338,5 +338,53 @@
       "first-preview?w=480": 2
     },
     "errorStatus": 0
+  },
+  "chrome-plain-consumers": {
+    "fixture": "40 visible actual RetryingImage nodes; mocked503\u2192200/permanent503; source replacement+unmount",
+    "recovered": {
+      "count": 40,
+      "requests": 80,
+      "max": 2,
+      "visible": true,
+      "directChildren": 40,
+      "allSized": true
+    },
+    "permanent": {
+      "count": 40,
+      "requests": 120,
+      "max": 3,
+      "stable": true,
+      "hidden": true
+    },
+    "canceled": {
+      "count": 80,
+      "max": 1,
+      "stable": true,
+      "remaining": 0
+    }
+  },
+  "webkit-plain-consumers": {
+    "fixture": "40 visible actual RetryingImage nodes; mocked503\u2192200/permanent503; source replacement+unmount",
+    "recovered": {
+      "count": 40,
+      "requests": 80,
+      "max": 2,
+      "visible": true,
+      "directChildren": 40,
+      "allSized": true
+    },
+    "permanent": {
+      "count": 40,
+      "requests": 120,
+      "max": 3,
+      "stable": true,
+      "hidden": true
+    },
+    "canceled": {
+      "count": 80,
+      "max": 1,
+      "stable": true,
+      "remaining": 0
+    }
   }
 }

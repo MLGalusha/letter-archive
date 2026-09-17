@@ -1,3 +1,4 @@
+import { RetryingImage } from "../common/RetryingImage";
 import { memo, useState, useRef, useEffect, useCallback } from "react";
 import type { LetterImage } from "../../types/Letter";
 import { getImageUrl } from "../../api/client";
@@ -862,7 +863,7 @@ const LetterViewer = memo(function LetterViewer({
         onDoubleClick={isLightbox ? handleDoubleClick : undefined}
       >
         {!viewerReady && (
-          <img
+          <RetryingImage
             src={thumbSrc}
             alt=""
             className={`viewer-image-thumb ${isAnimating ? "animating" : ""}`}
@@ -1016,7 +1017,7 @@ const LetterViewer = memo(function LetterViewer({
               onMouseDown={handleMinimapMouseDown}
               onTouchStart={handleMinimapTouchStart}
             >
-              <img
+              <RetryingImage
                 src={getImageUrl(currentImage.imageUrl, { width: 200 })}
                 alt=""
                 className="minimap-thumb"

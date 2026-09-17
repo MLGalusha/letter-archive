@@ -1,4 +1,11 @@
 import { apiGet, apiPost, apiPatch, apiDelete } from '../client';
+import { NOTIFICATIONS_CHANGED_EVENT } from '../../services/notificationEvents';
+
+async function afterNotificationMutation<T>(request: Promise<T>): Promise<T> {
+  const result = await request;
+  window.dispatchEvent(new Event(NOTIFICATIONS_CHANGED_EVENT));
+  return result;
+}
 
 // ============================================================================
 // Types
@@ -118,23 +125,23 @@ export function getRecentNotifications(signal?: AbortSignal): Promise<RecentNoti
 // ============================================================================
 
 export function markAsRead(id: string): Promise<AdminNotification> {
-  return apiPatch<AdminNotification>(`/admin/notifications/${id}/read`, {});
+  return afterNotificationMutation(apiPatch<AdminNotification>(`/admin/notifications/${id}/read`, {}));
 }
 
 export function markAllAsRead(): Promise<{ success: true }> {
-  return apiPost('/admin/notifications/read-all', {});
+  return afterNotificationMutation(apiPost('/admin/notifications/read-all', {}));
 }
 
 export function resolveNotification(id: string): Promise<AdminNotification> {
-  return apiPost<AdminNotification>(`/admin/notifications/${id}/resolve`, {});
+  return afterNotificationMutation(apiPost<AdminNotification>(`/admin/notifications/${id}/resolve`, {}));
 }
 
 export function archiveNotification(id: string): Promise<AdminNotification> {
-  return apiPost<AdminNotification>(`/admin/notifications/${id}/archive`, {});
+  return afterNotificationMutation(apiPost<AdminNotification>(`/admin/notifications/${id}/archive`, {}));
 }
 
 export function deleteNotification(id: string): Promise<void> {
-  return apiDelete(`/admin/notifications/${id}`);
+  return afterNotificationMutation(apiDelete(`/admin/notifications/${id}`));
 }
 
 // ============================================================================
@@ -142,19 +149,19 @@ export function deleteNotification(id: string): Promise<void> {
 // ============================================================================
 
 export function bulkMarkRead(ids: string[]): Promise<{ success: true; count: number }> {
-  return apiPost('/admin/notifications/bulk-read', { ids });
+  return afterNotificationMutation(apiPost('/admin/notifications/bulk-read', { ids }));
 }
 
 export function bulkResolve(ids: string[]): Promise<{ success: true; count: number }> {
-  return apiPost('/admin/notifications/bulk-resolve', { ids });
+  return afterNotificationMutation(apiPost('/admin/notifications/bulk-resolve', { ids }));
 }
 
 export function bulkArchive(ids: string[]): Promise<{ success: true; count: number }> {
-  return apiPost('/admin/notifications/bulk-archive', { ids });
+  return afterNotificationMutation(apiPost('/admin/notifications/bulk-archive', { ids }));
 }
 
 export function bulkDelete(ids: string[]): Promise<{ success: true; count: number }> {
-  return apiPost('/admin/notifications/bulk-delete', { ids });
+  return afterNotificationMutation(apiPost('/admin/notifications/bulk-delete', { ids }));
 }
 
 // ============================================================================
@@ -162,7 +169,7 @@ export function bulkDelete(ids: string[]): Promise<{ success: true; count: numbe
 // ============================================================================
 
 export function cleanupExpiredNotifications(): Promise<{ success: true; deleted: number }> {
-  return apiPost('/admin/notifications/cleanup', {});
+  return afterNotificationMutation(apiPost('/admin/notifications/cleanup', {}));
 }
 
 // ============================================================================

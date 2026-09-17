@@ -326,7 +326,11 @@ processing, autosave, or transcript review. The unread-count safety check runs
 every 5 minutes with a connected stream, or every 30 seconds while connecting or
 using fallback. The visible badge may therefore take up to 5 minutes to reflect
 read-status changes made in another already-visible session; returning focus
-refreshes it immediately.
+refreshes it immediately. Successful read, resolve, archive, delete and cleanup
+actions in this tab refresh the badge and an open preview promptly, including
+when an older count request is still finishing. During normal notification work,
+check that the sidebar count agrees with your action without waiting five minutes;
+do not delete or change production notifications solely for this check.
 
 Developer evidence uses local read-only browser fixtures in Chromium and WebKit,
 with a controlled Page Visibility state and virtual clock. Over a settled idle

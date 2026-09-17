@@ -1,3 +1,4 @@
+import { NOTIFICATIONS_CHANGED_EVENT } from '../../services/notificationEvents';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import Icon from '../common/Icon';
@@ -91,13 +92,15 @@ export default function AdminSidebar({ collapsed = false, onToggle, onNavigate }
 
   useEffect(() => {
     let stopped = false;
+    let mutationPending = false;
     let wasHidden = document.visibilityState !== 'visible';
     let timer: ReturnType<typeof setTimeout> | undefined;
     let controller: AbortController | null = null;
     const clearTimer = () => { clearTimeout(timer); timer = undefined; };
     const poll = async () => {
       clearTimer();
-      if (stopped || controller || document.visibilityState !== 'visible') return;
+      if (stopped || controller || (!mutationPending && document.visibilityState !== 'visible')) return;
+      mutationPending = false;
       const request = new AbortController();
       controller = request;
       const revision = notificationRevision.current;
@@ -112,8 +115,8 @@ export default function AdminSidebar({ collapsed = false, onToggle, onNavigate }
         // The existing badge remains usable while the safety read retries later.
       } finally {
         controller = null;
-        if (!stopped && document.visibilityState === 'visible') {
-          const delay = revision !== notificationRevision.current ? 0
+        if (!stopped && (mutationPending || document.visibilityState === 'visible')) {
+          const delay = mutationPending || revision !== notificationRevision.current ? 0
             : streamConnected.current ? CONNECTED_POLL_INTERVAL : POLL_INTERVAL;
           timer = setTimeout(() => { void poll(); }, delay);
         }
@@ -126,6 +129,12 @@ export default function AdminSidebar({ collapsed = false, onToggle, onNavigate }
       clearTimer();
       void poll();
     };
+    const mutation = () => {
+      notificationRevision.current += 1;
+      mutationPending = true;
+      void poll();
+    };
+    window.addEventListener(NOTIFICATIONS_CHANGED_EVENT, mutation);
     refreshUnread.current = wake;
     document.addEventListener('visibilitychange', wake);
     window.addEventListener('focus', wake);
@@ -139,6 +148,7 @@ export default function AdminSidebar({ collapsed = false, onToggle, onNavigate }
       if (popoverHoverRef.current !== null) window.clearTimeout(popoverHoverRef.current);
       document.removeEventListener('visibilitychange', wake);
       window.removeEventListener('focus', wake);
+      window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, mutation);
     };
   }, []);
 
@@ -172,8 +182,23 @@ export default function AdminSidebar({ collapsed = false, onToggle, onNavigate }
     const restoreRecent = () => {
       if (document.visibilityState === 'visible') void fetchRecent();
     };
+    let queued = false;
+    let stopped = false;
+    const refreshAfterMutation = () => {
+      if (queued) return;
+      queued = true;
+      queueMicrotask(() => {
+        queued = false;
+        if (!stopped) void fetchRecent();
+      });
+    };
     document.addEventListener('visibilitychange', restoreRecent);
-    return () => document.removeEventListener('visibilitychange', restoreRecent);
+    window.addEventListener(NOTIFICATIONS_CHANGED_EVENT, refreshAfterMutation);
+    return () => {
+      stopped = true;
+      document.removeEventListener('visibilitychange', restoreRecent);
+      window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, refreshAfterMutation);
+    };
   }, [popoverOpen, fetchRecent]);
 
   const isActive = (path: string) => {

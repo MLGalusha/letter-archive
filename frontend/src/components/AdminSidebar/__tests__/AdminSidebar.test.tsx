@@ -16,6 +16,7 @@ vi.mock("../../../api/admin/notifications", () => ({
 const stream = vi.hoisted(() => ({ options: null as import('../../../hooks/useNotificationStream').UseNotificationStreamOptions | null }));
 vi.mock('../../../hooks/useNotificationStream', () => ({ useNotificationStream: (options: typeof stream.options) => { stream.options = options; } }));
 import AdminSidebar from "../AdminSidebar";
+import { NOTIFICATIONS_CHANGED_EVENT } from "../../../services/notificationEvents";
 
 describe("AdminSidebar", () => {
   afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
@@ -208,6 +209,50 @@ describe("AdminSidebar", () => {
     expect(getRecentNotificationsMock).toHaveBeenCalledTimes(1);
     visibility = 'visible'; act(() => document.dispatchEvent(new Event('visibilitychange')));
     expect(getRecentNotificationsMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('coalesces local mutations behind a pending count and rejects its stale snapshot', async () => {
+    vi.useFakeTimers();
+    getUnreadCountMock.mockResolvedValue({ count: 7, maxSeverity: 'error' });
+    const { container, unmount } = render(<MemoryRouter><AdminSidebar /></MemoryRouter>);
+    await act(async () => { await Promise.resolve(); });
+    let resolveOld!: (value: unknown) => void;
+    getUnreadCountMock.mockReturnValueOnce(new Promise(done => { resolveOld = done; }));
+    act(() => stream.options?.onConnectionChange?.(true));
+    expect(getUnreadCountMock).toHaveBeenCalledTimes(2);
+    act(() => {
+      window.dispatchEvent(new Event(NOTIFICATIONS_CHANGED_EVENT));
+      window.dispatchEvent(new Event(NOTIFICATIONS_CHANGED_EVENT));
+    });
+    expect(getUnreadCountMock).toHaveBeenCalledTimes(2);
+    await act(async () => { resolveOld({ count: 99, maxSeverity: 'critical' }); });
+    expect(container.querySelector('.bell-badge')).toHaveTextContent('7');
+    getUnreadCountMock.mockResolvedValue({ count: 1, maxSeverity: 'info' });
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(getUnreadCountMock).toHaveBeenCalledTimes(3);
+    expect(container.querySelector('.bell-badge')).toHaveTextContent('1');
+    await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+    expect(getUnreadCountMock).toHaveBeenCalledTimes(3);
+    unmount();
+    act(() => window.dispatchEvent(new Event(NOTIFICATIONS_CHANGED_EVENT)));
+    expect(getUnreadCountMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('refreshes explicit local changes immediately, including an open preview while hidden', async () => {
+    const user = userEvent.setup();
+    getUnreadCountMock.mockResolvedValue({ count: 7, maxSeverity: 'error' });
+    const { container, unmount } = render(<MemoryRouter><AdminSidebar /></MemoryRouter>);
+    await user.hover(container.querySelector('.bell-wrapper')!);
+    const reads = getUnreadCountMock.mock.calls.length;
+    expect(getRecentNotificationsMock).toHaveBeenCalledTimes(1);
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    act(() => document.dispatchEvent(new Event('visibilitychange')));
+    getUnreadCountMock.mockResolvedValue({ count: 2, maxSeverity: 'info' });
+    await act(async () => { window.dispatchEvent(new Event(NOTIFICATIONS_CHANGED_EVENT)); });
+    expect(getUnreadCountMock).toHaveBeenCalledTimes(reads + 1);
+    expect(getRecentNotificationsMock).toHaveBeenCalledTimes(2);
+    expect(container.querySelector('.bell-badge')).toHaveTextContent('2');
+    unmount();
   });
 
 });

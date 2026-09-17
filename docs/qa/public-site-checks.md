@@ -232,6 +232,7 @@ Switch collections quickly with the header controls, then Back/Forward. Expected
 Validation uses controlled browser fixtures, not production speed measurements: Chrome and WebKit with iPhone 13 emulation rendered the overview and narrative while profile was held, and the archive's top position stayed unchanged on release. Focused tests cover query preservation, profile failure, overview failure, route cancellation/late responses, publication masking, hidden featured targets, and companion-to-primary selection. Physical phone checks remain yours to try.
 
 Observation: browser ___; collection ___; query/sort preserved ___; unexpected jump ___; Back/Forward result ___
+
 ### Reader rendition handoff (#127)
 
 After the release containing #127, open [collection 003](https://voicesthatremain.com/collections/003),

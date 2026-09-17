@@ -1,8 +1,9 @@
 import { useSiteSettings } from '../hooks/useSiteSettings';
+import { JournalImage } from '../components/common/JournalImage';
 import { useState, useEffect, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import SEO from '../components/SEO';
-import { listBlogPosts, getImageUrl, type BlogPost } from '../api/client';
+import { listBlogPosts, type BlogPost } from '../api/client';
 import Footer from '../components/Footer/Footer';
 import { buildBlogIndexSeo, stripMarkdown, truncateText } from '../utils/seo';
 import { saveJournalSort, loadJournalSort } from '../utils/searchPersistence';
@@ -191,8 +192,9 @@ export default function BlogPage() {
               >
                 {post.heroImageUrl && (
                   <div className="update-card-image">
-                    <img
-                      src={getImageUrl(post.heroImageUrl)}
+                    <JournalImage
+                      src={post.heroImageUrl}
+                      sizes="(min-width: 1000px) 360px, (min-width: 680px) 50vw, 100vw"
                       alt={post.heroImageAlt || post.title}
                       loading="lazy"
                     />

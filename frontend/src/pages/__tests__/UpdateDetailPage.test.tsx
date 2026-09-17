@@ -5,9 +5,11 @@ import UpdateDetailPage from "../UpdateDetailPage";
 import type { BlogPost } from "../../api/client";
 
 const getBlogPostMock = vi.fn();
-const getImageUrlMock = vi.fn((url: string, _opts?: Record<string, unknown>) => `http://localhost:3002${url}`);
+const getImageUrlMock = vi.fn((url: string, opts?: Record<string, unknown>) =>
+  `http://localhost:3002${url}${opts?.width ? `?w=${opts.width}` : ""}`);
 
 vi.mock("../../api/client", () => ({
+  API_BASE_URL: "http://localhost:3002",
   apiGet: vi.fn().mockResolvedValue({}),
   getBlogPost: (...args: string[]) => getBlogPostMock(...args),
   getImageUrl: (url: string, opts?: Record<string, unknown>) => getImageUrlMock(url, opts),
@@ -137,7 +139,9 @@ describe("UpdateDetailPage", () => {
     expect(getImageUrlMock).toHaveBeenCalledWith("/blog-images/hero.jpg", undefined);
 
     const img = screen.getByAltText("A hero image");
-    expect(img).toHaveAttribute("src", "http://localhost:3002/blog-images/hero.jpg");
+    expect(img).toHaveAttribute("src", "http://localhost:3002/blog-images/hero.jpg?w=800&rendition=1");
+    expect(img).toHaveAttribute("loading", "eager");
+    expect(img).toHaveAttribute("fetchpriority", "high");
   });
 
   it("renders markdown content with bold and heading", async () => {

@@ -1,6 +1,6 @@
 # Public site: things to try
 
-This is a running checklist for Mason to use whenever convenient. A pending check is not a claim that a bug is fixed. Record observations below each check; no need to complete everything in one sitting.
+This is a running checklist for Mason to use whenever convenient. A pending check is not a claim that a bug is fixed. Record observations below each check; no need to complete everything in one sitting. For entries marked **merged**, the expected behavior applies after their production release. Only entries explicitly marked **live** or **deployed** record a completed production check.
 
 ## Browser coverage
 

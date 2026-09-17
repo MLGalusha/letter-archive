@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { expect, test, type Page, type Request } from '@playwright/test';
 import { API_BASE_URL } from './utils/test-helpers';
 
@@ -82,7 +83,7 @@ test.describe('@mocked Public archive history', () => {
     const link = page.locator('a.letter-card');
     await expect(link).toHaveAttribute('href', '/letter/native-link-letter');
     const opened = context.waitForEvent('page');
-    await link.click({ button: 'middle' });
+    await link.click({ modifiers: ['ControlOrMeta'] });
     const tab = await opened;
     await tab.waitForURL('**/letter/native-link-letter');
     await expect(page).toHaveURL(/\/$/);
@@ -137,7 +138,8 @@ test('@mocked archive previews use one size, defer distant cards, and stay loade
   const requests: string[] = [];
   await page.route((url) => url.origin === new URL(API_BASE_URL).origin && url.pathname.startsWith('/images/preview-'), async (route) => {
     requests.push(route.request().url());
-    await route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="640"><rect width="480" height="640" fill="#d9cdbb"/></svg>' });
+    // Raster intrinsic dimensions are consistent across Chromium and WebKit.
+    await route.fulfill({ contentType: 'image/png', path: join(__dirname, 'fixtures/archive-preview-480x640.png') });
   });
   await page.goto('/');
   const cards = page.locator('a.letter-card .preview-image__image');
@@ -146,7 +148,7 @@ test('@mocked archive previews use one size, defer distant cards, and stay loade
   expect(requests.length).toBeLessThan(19);
   await expect(cards.last()).not.toHaveAttribute('src');
   await cards.last().scrollIntoViewIfNeeded();
-  await expect.poll(() => cards.last().evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth === 480)).toBe(true);
+  await expect.poll(() => cards.last().evaluate((img: HTMLImageElement) => ({ complete: img.complete, naturalWidth: img.naturalWidth, src: img.getAttribute('src') !== null }))).toEqual({ complete: true, naturalWidth: 480, src: true });
   expect(new Set(requests.map((url) => new URL(url).searchParams.get('w')))).toEqual(new Set(['480']));
   const lastUrl = await cards.last().getAttribute('src');
   await cards.first().scrollIntoViewIfNeeded();

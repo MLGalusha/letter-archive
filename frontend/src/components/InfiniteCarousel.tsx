@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Children, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import './InfiniteCarousel.css';
 import { decideGestureAxis, type GestureAxis } from '../utils/directionalGesture';
 
@@ -17,7 +17,25 @@ interface InfiniteCarouselProps {
   suppressClickAfterDrag?: boolean;
 }
 
-export default function InfiniteCarousel({
+export default function InfiniteCarousel(props: InfiniteCarouselProps) {
+  const slides = Children.toArray(props.children);
+  const { classPrefix = 'carousel', className } = props;
+  if (slides.length === 0) return null;
+  if (slides.length === 1) {
+    return (
+      <div className={`${classPrefix}-wrap${className ? ` ${className}` : ''}`}>
+        <div className={`${classPrefix}-viewport`}>
+          <div className={`${classPrefix}-slide`}>{slides[0]}</div>
+        </div>
+      </div>
+    );
+  }
+  return <RotatingCarousel {...props} children={slides} />;
+}
+
+// Mount interaction state only when there is another slide to navigate to.
+// Switching between static and rotating content also cleans up its listeners.
+function RotatingCarousel({
   children,
   className,
   classPrefix = 'carousel',
@@ -76,7 +94,11 @@ export default function InfiniteCarousel({
   }, []);
 
   useEffect(() => {
-    if (pauseRef) pauseRef.current = pauseAutoScroll;
+    if (!pauseRef) return;
+    pauseRef.current = pauseAutoScroll;
+    return () => {
+      if (pauseRef.current === pauseAutoScroll) pauseRef.current = () => {};
+    };
   }, [pauseRef, pauseAutoScroll]);
 
   useEffect(() => {

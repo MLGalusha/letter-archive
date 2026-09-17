@@ -38,6 +38,7 @@ for (const mode of ['delay', 'idle'] as const) {
       let sequence = 0;
       window.requestIdleCallback = (callback) => { callbacks.set(++sequence, callback); return sequence; };
       window.cancelIdleCallback = (id) => { callbacks.delete(id); };
+      (window as any).pendingIdle = () => callbacks.size;
       (window as any).releaseIdle = () => { for (const cb of callbacks.values()) cb({ didTimeout: false, timeRemaining: () => 50 }); callbacks.clear(); };
       const NativeImage = window.Image;
       (window as any).imagePriorities = [];
@@ -65,6 +66,10 @@ for (const mode of ['delay', 'idle'] as const) {
     await render(page, 'abandoned', options);
     await expect(page.locator('.progressive-image__thumb')).toBeVisible();
     await page.evaluate(() => (window as any).renderImage(null));
+    await expect(page.getByAltText('Fixture scan')).toHaveCount(0);
+    // React commits render(null) asynchronously; wait for its effect cleanup
+    // before releasing the test-owned idle queue.
+    if (mode === 'idle') await expect.poll(() => page.evaluate(() => (window as any).pendingIdle())).toBe(0);
     if (mode === 'idle') await page.evaluate(() => (window as any).releaseIdle());
     await page.waitForTimeout(1300);
     expect(requested).not.toContain('/fixture-images/abandoned-full');

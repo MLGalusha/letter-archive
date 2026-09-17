@@ -1,0 +1,120 @@
+{
+  "cardInfo": {
+    "url": "http://127.0.0.1:4197/blog-images/scan.jpg?w=1200&rendition=1",
+    "loading": "lazy",
+    "box": {
+      "x": 17,
+      "y": 344.515625,
+      "width": 356,
+      "height": 221.5,
+      "top": 344.515625,
+      "right": 373,
+      "bottom": 566.015625,
+      "left": 17
+    },
+    "size": "auto, 100vw"
+  },
+  "heroInfo": {
+    "url": "http://127.0.0.1:4197/blog-images/scan.jpg?w=1200&rendition=1",
+    "priority": "high",
+    "box": {
+      "x": 16,
+      "y": 95.1875,
+      "width": 358,
+      "height": 477.3125,
+      "top": 95.1875,
+      "right": 374,
+      "bottom": 572.5,
+      "left": 16
+    }
+  },
+  "inlineBefore": {
+    "complete": false,
+    "top": 3655.390625,
+    "loading": "lazy"
+  },
+  "inlineInfo": {
+    "url": "http://127.0.0.1:4197/blog-images/scan.jpg?inline=1&w=1200&rendition=1",
+    "box": {
+      "x": 16,
+      "y": 421.390625,
+      "width": 358,
+      "height": 477.3125,
+      "top": 421.390625,
+      "right": 374,
+      "bottom": 898.703125,
+      "left": 16
+    }
+  },
+  "recoveryInfo": {
+    "url": "http://127.0.0.1:4197/blog-images/fallback.jpg",
+    "srcset": ""
+  },
+  "resources": [
+    {
+      "url": "http://127.0.0.1:4197/blog-images/scan.jpg?w=1200&rendition=1",
+      "durationMs": 4,
+      "bytes": 0
+    },
+    {
+      "url": "http://127.0.0.1:4197/blog-images/scan.jpg?inline=1&w=1200&rendition=1",
+      "durationMs": 0,
+      "bytes": 0
+    },
+    {
+      "url": "http://127.0.0.1:4197/blog-images/animated.gif?w=1200&rendition=1",
+      "durationMs": 0,
+      "bytes": 0
+    },
+    {
+      "url": "http://127.0.0.1:4197/blog-images/fallback.jpg?w=1200&rendition=1",
+      "durationMs": 0,
+      "bytes": 0
+    },
+    {
+      "url": "http://127.0.0.1:4197/blog-images/fallback.jpg?w=1200&rendition=1",
+      "durationMs": 1,
+      "bytes": 0
+    },
+    {
+      "url": "http://127.0.0.1:4197/blog-images/fallback.jpg",
+      "durationMs": 10,
+      "bytes": 0
+    }
+  ],
+  "decode": [
+    {
+      "requestedWidth": null,
+      "bytes": 3078013,
+      "decodeMs": 73,
+      "width": 3000,
+      "height": 4000
+    },
+    {
+      "requestedWidth": 480,
+      "bytes": 10958,
+      "decodeMs": 8,
+      "width": 480,
+      "height": 640
+    },
+    {
+      "requestedWidth": 1200,
+      "bytes": 61550,
+      "decodeMs": 10,
+      "width": 1200,
+      "height": 1600
+    }
+  ],
+  "requests": [
+    "http://127.0.0.1:4197/blog-images/scan.jpg?w=1200&rendition=1",
+    "http://127.0.0.1:4197/blog-images/scan.jpg?w=1200&rendition=1",
+    "http://127.0.0.1:4197/blog-images/scan.jpg?inline=1&w=1200&rendition=1",
+    "http://127.0.0.1:4197/blog-images/animated.gif?w=1200&rendition=1",
+    "http://127.0.0.1:4197/blog-images/fallback.jpg?w=1200&rendition=1",
+    "http://127.0.0.1:4197/blog-images/fallback.jpg?w=1200&rendition=1",
+    "http://127.0.0.1:4197/blog-images/fallback.jpg",
+    "http://127.0.0.1:4197/blog-images/scan.jpg",
+    "http://127.0.0.1:4197/blog-images/scan.jpg?w=480&rendition=1",
+    "http://127.0.0.1:4197/blog-images/scan.jpg?w=1200&rendition=1"
+  ]
+}

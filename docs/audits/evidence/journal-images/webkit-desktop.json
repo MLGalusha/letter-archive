@@ -1,0 +1,40 @@
+[
+  {
+    "count": 1,
+    "images": [
+      {
+        "url": "http://127.0.0.1:4197/blog-images/scan.jpg?w=1200&rendition=1",
+        "width": 1130,
+        "sizes": "auto, 100vw"
+      }
+    ],
+    "requests": [
+      "http://127.0.0.1:4197/blog-images/scan.jpg?w=1200&rendition=1"
+    ]
+  },
+  {
+    "count": 3,
+    "images": [
+      {
+        "url": "http://127.0.0.1:4197/blog-images/scan.jpg?w=480&rendition=1",
+        "width": 364.65625,
+        "sizes": "auto, 100vw"
+      },
+      {
+        "url": "http://127.0.0.1:4197/blog-images/scan.jpg?w=480&rendition=1",
+        "width": 364.671875,
+        "sizes": "auto, 100vw"
+      },
+      {
+        "url": "http://127.0.0.1:4197/blog-images/scan.jpg?w=480&rendition=1",
+        "width": 364.671875,
+        "sizes": "auto, 100vw"
+      }
+    ],
+    "requests": [
+      "http://127.0.0.1:4197/blog-images/scan.jpg?w=480&rendition=1",
+      "http://127.0.0.1:4197/blog-images/scan.jpg?w=480&rendition=1",
+      "http://127.0.0.1:4197/blog-images/scan.jpg?w=480&rendition=1"
+    ]
+  }
+]

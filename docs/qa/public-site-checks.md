@@ -345,3 +345,14 @@ returning visibility plus focus produced one refresh per endpoint, and active
 work resumed the 5-second cadence. Unit tests verify no overlapping slow reads,
 abort/cleanup, stale-result protection and reconnection. This does not measure
 production traffic, CPU energy, physical-phone sleep, or battery savings.
+
+## Journal image sizes (issue 136)
+
+**Status: implementation under review; production and physical phone acceptance pending.**
+
+- Open [Journal](https://voicesthatremain.com/blog), then a published article, in Safari and Chrome on iPhone 13. Expected after release: card images load as they approach the screen; the article's main image starts immediately; images farther down load near scrolling. Article images retain their natural proportions, and animated images keep moving.
+- At audit time there were no published production posts. A reproducible local fixture is available at [local Journal](http://127.0.0.1:4196/blog) and [local article](http://127.0.0.1:4196/blog/fixture) while the services described in [the measurement notes](../audits/2026-09-17-journal-images.md) are running. It includes an intentionally failing small image that should recover using its original.
+- Expected: no endless broken-image retry, no card shape change, and working original URLs. Natural article image height can still shift while loading; this change reduces bytes/decode work without introducing a fixed frame.
+- Local Chromium/WebKit checks passed; they do not establish real-phone battery savings or production loading times.
+
+Observation: date ___; browser/device ___; article ___; first/repeat ___; image wait ___; unexpected layout shift ___ .

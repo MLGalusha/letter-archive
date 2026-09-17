@@ -5,7 +5,8 @@ import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 import SEO from '../components/SEO';
-import { getBlogPost, getImageUrl, type BlogPost } from '../api/client';
+import { getBlogPost, type BlogPost } from '../api/client';
+import { JournalImage } from '../components/common/JournalImage';
 import Footer from '../components/Footer/Footer';
 import { buildBlogPostSeo, stripMarkdown, truncateText } from '../utils/seo';
 import { formatDate } from '../utils/dateFormatting';
@@ -14,13 +15,11 @@ import './UpdateDetailPage.css';
 const MARKDOWN_COMPONENTS: import('react-markdown').Components = {
   img({ alt, src, title }) {
     if (!src) return null;
-    const resolvedSrc = (src.startsWith('/images/') || src.startsWith('/blog-images/'))
-      ? getImageUrl(src)
-      : src;
     return (
-      <img
+      <JournalImage
         className="markdown-inline-image"
-        src={resolvedSrc}
+        src={src}
+        sizes="(max-width: 820px) calc(100vw - 40px), 780px"
         alt={alt || ''}
         title={title || undefined}
         loading="lazy"
@@ -130,8 +129,11 @@ export default function BlogDetailPage() {
       <article className="update-detail">
         {post.heroImageUrl && (
           <div className="update-hero-image">
-            <img
-              src={getImageUrl(post.heroImageUrl)}
+            <JournalImage
+              src={post.heroImageUrl}
+              sizes="(max-width: 820px) calc(100vw - 40px), 780px"
+              loading="eager"
+              fetchPriority="high"
               alt={post.heroImageAlt || post.title}
             />
           </div>

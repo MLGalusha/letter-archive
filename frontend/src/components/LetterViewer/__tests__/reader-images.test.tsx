@@ -57,15 +57,14 @@ describe('reader scan requests', () => {
   it.each(['panel', 'lightbox'] as const)('keeps %s fit view bounded and requests original only beyond variant detail', async (variant) => {
     const { container } = render(<LetterViewer images={images} variant={variant} />);
     // 400 CSS px fitted to the 600px tall container, at DPR2.
-    expect(widths()).toContain('800');
+    expect(container.querySelector('.viewer-image')).toHaveAttribute('src', expect.stringContaining('w=800'));
     expect(originals()).toEqual([]);
     const viewer = container.querySelector('.viewer-container')!;
     fireEvent.wheel(viewer, { ctrlKey: true, deltaY: -10 });
-    await waitFor(() => expect(widths()).toContain('1200'));
+    await waitFor(() => expect(container.querySelector('.viewer-image')).toHaveAttribute('src', expect.stringContaining('w=1200')));
     expect(originals()).toEqual([]);
     fireEvent.wheel(viewer, { ctrlKey: true, deltaY: -100 });
-    // Panel's idle upgrade is scheduled; lightbox loads immediately.
-    await waitFor(() => expect(originals()).toHaveLength(1));
+    await waitFor(() => expect(container.querySelector('.viewer-image')?.getAttribute('src')).not.toContain('w='));
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
     expect(widths('scan-2')).not.toContain(null);
     expect(container.querySelector('.viewer-image')?.getAttribute('src')).toContain('/images/scan-2');
@@ -85,6 +84,8 @@ describe('reader scan requests', () => {
     const second = container.querySelector('.viewer-image')!;
     expect(second).not.toBe(first);
     expect(second.getAttribute('src')).toBe(url);
+    expect(second).not.toBeVisible();
+    fireEvent.load(second);
     expect(second).toBeVisible();
     fireEvent.error(second);
     expect(second).not.toBeVisible();
@@ -108,23 +109,23 @@ describe('reader scan requests', () => {
     expect(widths('scan-5')).toEqual(['800']);
     expect(widths('scan-3')).toEqual([]);
     fireEvent.doubleClick(container.querySelector('.viewer-container')!);
-    expect(originals()).toHaveLength(1);
+    expect(container.querySelector('.viewer-image')?.getAttribute('src')).not.toContain('w=');
     expect(widths('scan-2')).toEqual(['800']);
     expect(widths('scan-5')).toEqual(['800']);
   });
 
   it('keeps fit view bounded after a display-density change', () => {
-    render(<LetterViewer images={images} variant="lightbox" />);
+    const { container } = render(<LetterViewer images={images} variant="lightbox" />);
     vi.stubGlobal('devicePixelRatio', 4);
     fireEvent(window, new Event('resize'));
-    expect(widths()).toContain('1600');
+    expect(container.querySelector('.viewer-image')).toHaveAttribute('src', expect.stringContaining('w=1600'));
     expect(originals()).toEqual([]);
   });
 
   it('uses 1600px for a high-density fit view without treating DPR as zoom', () => {
     vi.stubGlobal('devicePixelRatio', 4);
-    render(<LetterViewer images={images} variant="lightbox" />);
-    expect(widths()).toContain('1600');
+    const { container } = render(<LetterViewer images={images} variant="lightbox" />);
+    expect(container.querySelector('.viewer-image')).toHaveAttribute('src', expect.stringContaining('w=1600'));
     expect(originals()).toEqual([]);
   });
 });

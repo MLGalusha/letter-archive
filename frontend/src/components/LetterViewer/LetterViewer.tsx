@@ -1,6 +1,6 @@
 import { imagePreloadService } from "../../services/imagePreloadService";
 import { RetryingImage } from "../common/RetryingImage";
-import { memo, useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { memo, useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from "react";
 import type { LetterImage } from "../../types/Letter";
 import { getImageUrl } from "../../api/client";
 import { useProgressiveImage } from "../../hooks/useProgressiveImage";
@@ -187,20 +187,33 @@ const LetterViewer = memo(function LetterViewer({
     ? getImageUrl(currentImage?.imageUrl ?? "")
     : getImageUrl(currentImage?.imageUrl ?? "", { width: scanVariantWidth(physicalWidth * scale) });
   const midSrc = imagePreloadService.availablePreview(currentImage?.imageUrl ?? "", scanNeedsOriginal(physicalWidth, scale) ? Infinity : scanVariantWidth(physicalWidth * scale));
-  const { fullLoaded, midLoaded, fullFailed } = useProgressiveImage({
+  const { fullLoaded, midLoaded, fullFailed, fullAdmitted, onFullLoad, onFullError } = useProgressiveImage({
     enabled: Boolean(currentImage) && physicalWidth > 0,
     thumbSrc,
     midSrc,
     fullSrc,
-    idleUpgrade: variant === "panel",
+    fullLoadMode: 'dom',
     context: variant === "lightbox" ? 'viewer-lightbox' : 'viewer-panel',
   });
-  const viewerReady = fullLoaded || midLoaded;
-  const displayedSrc = fullLoaded ? fullSrc : midLoaded ? midSrc : undefined;
-  const displayedRetry = useImageRetry(displayedSrc ?? fullSrc);
-  const [displayState, setDisplayState] = useState({ src: displayedSrc, loaded: false });
-  if (displayState.src !== displayedSrc) setDisplayState({ src: displayedSrc, loaded: false });
-  const activeScanReady = fullLoaded && displayState.src === fullSrc && displayState.loaded && !displayedRetry.failed;
+  const displayedRetry = useImageRetry(fullSrc);
+  const activeScanReady = fullLoaded && !displayedRetry.failed;
+  const handleFullLoad = (image: HTMLImageElement) => {
+    displayedRetry.onLoad();
+    onFullLoad(image);
+    if (image.naturalWidth && image.naturalHeight) {
+      const ratio = image.naturalWidth / image.naturalHeight;
+      setLoadedAspect(previous => previous?.url === currentImage.imageUrl && previous.ratio === ratio
+        ? previous : { url: currentImage.imageUrl, ratio });
+    }
+  };
+  useLayoutEffect(() => {
+    const image = imageRef.current;
+    if (fullAdmitted && !fullLoaded && !displayedRetry.failed && image?.complete && image.naturalWidth > 0) handleFullLoad(image);
+  });
+  useLayoutEffect(() => {
+    const image = imageRef.current;
+    return () => { if (image && !image.complete) image.removeAttribute('src'); };
+  }, [fullSrc, displayedRetry.attempt]);
 
   // Match each neighbor's fitted rendition; no guesses before layout is measured.
   const adjacentWidth = useCallback((image: LetterImage) => {
@@ -861,12 +874,13 @@ const LetterViewer = memo(function LetterViewer({
             <RetryingImage src={getImageUrl(adjacent.imageUrl, { width: adjacentWidth(adjacent) })} alt="" draggable={false} />
           </div>;
         })}
-        {!viewerReady && physicalWidth > 0 && (
+        {!fullLoaded && physicalWidth > 0 && (
           <RetryingImage
-            src={thumbSrc}
+            src={midLoaded && midSrc ? midSrc : thumbSrc}
             alt=""
             className={`viewer-image-thumb ${isAnimating ? "animating" : ""}`}
             style={{
+              filter: midLoaded ? 'none' : undefined,
               transform: `scale(${scale}) translate(${position.x / scale}px, ${
                 position.y / scale
               }px)`,
@@ -876,23 +890,11 @@ const LetterViewer = memo(function LetterViewer({
           />
         )}
         <img
-          key={`${displayedSrc}:${fullLoaded}:${midLoaded}:${displayedRetry.attempt}`}
+          key={`${fullSrc}:${displayedRetry.attempt}`}
           ref={imageRef}
-          onError={() => {
-            setDisplayState({ src: displayedSrc, loaded: false });
-            if (viewerReady) displayedRetry.onError();
-          }}
-          onLoad={(event) => {
-            displayedRetry.onLoad();
-            setDisplayState({ src: displayedSrc, loaded: true });
-            const image = event.currentTarget;
-            if (image.naturalWidth && image.naturalHeight) {
-              const ratio = image.naturalWidth / image.naturalHeight;
-              setLoadedAspect((previous) => previous?.url === currentImage.imageUrl && previous.ratio === ratio
-                ? previous : { url: currentImage.imageUrl, ratio });
-            }
-          }}
-          src={displayedSrc}
+          onError={() => { onFullError(); displayedRetry.onError(); }}
+          onLoad={(event) => handleFullLoad(event.currentTarget)}
+          src={physicalWidth > 0 && fullAdmitted ? fullSrc : undefined}
           alt={
             getImageAlt
               ? getImageAlt(currentImage)
@@ -904,7 +906,7 @@ const LetterViewer = memo(function LetterViewer({
               position.y / scale
             }px)`,
             transition: [
-              !viewerReady ? 'opacity 400ms ease-out' : undefined,
+              !fullLoaded ? 'opacity 400ms ease-out' : undefined,
             ].filter(Boolean).join(', ') || undefined,
             cursor:
               scale > 1
@@ -916,13 +918,13 @@ const LetterViewer = memo(function LetterViewer({
                   : onImageClick
                     ? "pointer"
                     : "default",
-            opacity: viewerReady ? 1 : 0,
+            opacity: fullLoaded ? 1 : 0,
             visibility: displayedRetry.failed ? "hidden" : undefined,
           }}
           draggable={false}
         />
 
-        {(displayedRetry.failed || (fullFailed && !midLoaded)) && (
+        {((displayedRetry.failed || fullFailed) && !midLoaded) && (
           <span className="viewer-image-error" role="status">Image unavailable</span>
         )}
         </div>

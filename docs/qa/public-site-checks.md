@@ -252,7 +252,9 @@ Developer evidence: controlled Chrome and WebKit tests at DPR3 hold the 1200px
 response and verify the already-loaded versioned 480px image is visibly retained.
 Direct entry requests 32px and the measured 1200px, with no guessed 800px or extra 480px
 request. Tests cover resize to 480px, version changes, active-scan priority,
-reduced-data behavior, and matching viewer neighbors. These request/visibility
+reduced-data behavior, and matching viewer neighbors. Fullscreen tests also hold the
+actual displayed response with no-store and max-age=0 cache headers: its preview
+stays visible and there is exactly one full-size request. These request/visibility
 checks establish the intended behavior; production latency and byte savings still
 need comparable live measurements after deployment. A missing or evicted browser
 cache can still require HTTP revalidation; the bounded readiness index stores URLs

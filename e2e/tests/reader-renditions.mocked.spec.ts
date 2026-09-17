@@ -166,3 +166,30 @@ test('@mocked cached readiness metadata does not admit neighbors before the disp
     await expect.poll(() => page.evaluate(() => (window as any).readerReady)).toBe(true);
   } finally { release(); await context.close(); }
 });
+
+for (const cacheControl of ['no-store', 'max-age=0']) {
+  test(`@mocked fullscreen retains its preview and makes one native full request with ${cacheControl}`, async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3 });
+    const page = await context.newPage(); const urls: string[] = [];
+    let release!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    await page.addInitScript(() => Object.defineProperty(navigator, 'connection', { configurable: true, value: { saveData: true } }));
+    await page.route('**/fixture-images/**', async route => {
+      const url = route.request().url(); urls.push(url);
+      if (url.includes('w=1200')) await held;
+      await route.fulfill({ contentType: 'image/png', headers: { 'cache-control': cacheControl }, path: png });
+    });
+    try {
+      await mount(page); await page.evaluate(() => (window as any).renderViewer());
+      await expect.poll(() => urls.filter(url => url.includes('w=1200')).length).toBe(1);
+      await expect(page.locator('.viewer-image-thumb')).toBeVisible();
+      await expect.poll(() => page.locator('.viewer-image-thumb').evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth)).toBe(480);
+      await expect(page.locator('.viewer-image')).toHaveCSS('opacity', '0');
+      release();
+      await expect(page.locator('.viewer-image')).toHaveCSS('opacity', '1');
+      await expect(page.locator('.viewer-image-thumb')).toHaveCount(0);
+      expect(urls.filter(url => url.includes('w=1200'))).toHaveLength(1);
+      expect(urls.every(url => url.includes('/one?'))).toBe(true);
+    } finally { release(); await context.close(); }
+  });
+}

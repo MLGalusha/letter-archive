@@ -226,6 +226,7 @@ export function useProgressiveImage(
   const onFullLoad = (image: HTMLImageElement) => {
     const timing = fullTiming.current;
     if (fullLoadMode !== 'dom' || timing?.sourceKey !== sourceKey) return;
+    imagePreloadService.recordLoaded(fullSrc, image);
     const durationMs = performance.now() - timing.start;
     if (!timing.reported) {
       timing.reported = true;

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import LetterViewer from '../LetterViewer';
 import type { LetterImage } from '../../../types/Letter';
 
-vi.mock('../../../hooks/useProgressiveImage', () => ({ useProgressiveImage: () => ({ fullLoaded: true, midLoaded: true }) }));
+vi.mock('../../../hooks/useProgressiveImage', () => ({ useProgressiveImage: () => ({ fullLoaded: true, midLoaded: true, fullAdmitted: true, onFullLoad: vi.fn(), onFullError: vi.fn() }) }));
 vi.mock('../useScanDisplayWidth', () => ({ useScanDisplayWidth: () => 400 }));
 const images: LetterImage[] = [1, 2, 3].map(pageNumber => ({
   id: `page-${pageNumber}`, type: 'letter', pageNumber, imageUrl: `/images/page-${pageNumber}`, width: 1200, height: 1600,

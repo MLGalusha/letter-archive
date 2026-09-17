@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { recordImageLoad } from '../utils/imagePerformance';
 import { imagePreloadService } from '../services/imagePreloadService';
 import { IMAGE_RETRY_DELAYS_MS } from '../utils/imageRetry';
@@ -13,12 +13,14 @@ export interface ProgressiveImageOptions {
   context?: string;
   /** Delay in ms before starting the full-quality load (gives priority images a head start) */
   fullDelay?: number;
+  fetchPriority?: 'high' | 'low' | 'auto';
 }
 
 export interface UseProgressiveImageResult {
   thumbLoaded: boolean;
   midLoaded: boolean;
   fullLoaded: boolean;
+  fullFailed: boolean;
   /** Best available src (full > mid > thumb > '') */
   currentSrc: string;
   /** Natural width from the first loaded tier (for aspect ratio) */
@@ -45,6 +47,8 @@ function loadImage(
   onLoad: (img: HTMLImageElement) => void,
   imgs: HTMLImageElement[],
   cleanups: Array<() => void>,
+  fetchPriority: 'high' | 'low' | 'auto',
+  onFailure: () => void = () => {},
 ): void {
   const start = performance.now();
   let attempt = 0;
@@ -55,6 +59,7 @@ function loadImage(
     // WebKit can keep an errored Image failed when its identical src is reassigned.
     const img = new Image();
     imgs.push(img);
+    img.fetchPriority = fetchPriority;
     let settled = false;
     img.onload = () => {
       if (cancelled.current || settled) return;
@@ -69,7 +74,7 @@ function loadImage(
       img.onload = null;
       img.onerror = null;
       const delay = IMAGE_RETRY_DELAYS_MS[attempt++];
-      if (delay === undefined) return;
+      if (delay === undefined) { onFailure(); return; }
       retry = setTimeout(request, delay);
     };
     img.src = src;
@@ -101,55 +106,54 @@ export function useProgressiveImage(
     deferFullUntilVisible = false,
     context = 'unknown',
     fullDelay = 0,
+    fetchPriority = 'auto',
   } = opts;
 
-  // If the preload service already has this image, start as loaded with known dimensions
+  // Readiness belongs to these exact URLs, including the render before effects run.
+  // Otherwise a previously loaded full tier can start a replacement URL too early.
+  const sourceKey = JSON.stringify([thumbSrc, midSrc, fullSrc]);
   const preloaded = imagePreloadService.isPreloaded(fullSrc);
   const preloadedDims = preloaded ? imagePreloadService.getDimensions(fullSrc) : null;
-  const [thumbLoaded, setThumbLoaded] = useState(false);
-  const [midLoaded, setMidLoaded] = useState(false);
-  const [fullLoaded, setFullLoaded] = useState(preloaded);
-  const [naturalWidth, setNaturalWidth] = useState<number | null>(preloadedDims?.width ?? null);
-  const [naturalHeight, setNaturalHeight] = useState<number | null>(preloadedDims?.height ?? null);
-  const idleRef = useRef<number | null>(null);
-  const delayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dimsSetRef = useRef(false);
+  const initial = {
+    sourceKey, thumbLoaded: false, midLoaded: false, fullLoaded: preloaded, fullFailed: false,
+    naturalWidth: preloadedDims?.width ?? null, naturalHeight: preloadedDims?.height ?? null,
+  };
+  const [state, setState] = useState(initial);
+  const current = state.sourceKey === sourceKey ? state : initial;
+  if (state.sourceKey !== sourceKey) setState(current);
 
   useEffect(() => {
     if (!enabled) return;
     const alreadyPreloaded = imagePreloadService.isPreloaded(fullSrc);
     const dims = alreadyPreloaded ? imagePreloadService.getDimensions(fullSrc) : null;
-    setThumbLoaded(false);
-    setMidLoaded(false);
-    setFullLoaded(alreadyPreloaded);
-    setNaturalWidth(dims?.width ?? null);
-    setNaturalHeight(dims?.height ?? null);
-    dimsSetRef.current = !!dims;
-
+    setState({ sourceKey, thumbLoaded: false, midLoaded: false, fullLoaded: alreadyPreloaded,
+      fullFailed: false, naturalWidth: dims?.width ?? null, naturalHeight: dims?.height ?? null });
+    let dimsSet = !!dims;
+    let idle: number | null = null;
+    let delay: ReturnType<typeof setTimeout> | null = null;
     const cancelled = { current: false };
     const imgs: HTMLImageElement[] = [];
     const cleanups: Array<() => void> = [];
 
     const captureDims = (img: HTMLImageElement) => {
-      if (!dimsSetRef.current && img.naturalWidth && img.naturalHeight) {
-        dimsSetRef.current = true;
-        setNaturalWidth(img.naturalWidth);
-        setNaturalHeight(img.naturalHeight);
+      if (!dimsSet && img.naturalWidth && img.naturalHeight) {
+        dimsSet = true;
+        setState((value) => ({ ...value, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight }));
       }
     };
 
     // 1. Load thumbnail immediately (even for deferred images — it's tiny)
     loadImage(thumbSrc, 'thumb', context, cancelled, (img) => {
-      setThumbLoaded(true);
+      setState((value) => ({ ...value, thumbLoaded: true }));
       captureDims(img);
-    }, imgs, cleanups);
+    }, imgs, cleanups, fetchPriority);
 
     // 2. Load mid-quality immediately (if provided)
     if (midSrc) {
       loadImage(midSrc, 'mid', context, cancelled, (img) => {
-        setMidLoaded(true);
+        setState((value) => ({ ...value, midLoaded: true }));
         captureDims(img);
-      }, imgs, cleanups);
+      }, imgs, cleanups, fetchPriority);
     }
 
     // 3. Load full — skip if preload service already has it, otherwise load
@@ -157,16 +161,16 @@ export function useProgressiveImage(
       const startFull = () => {
         if (cancelled.current) return;
         loadImage(fullSrc, 'full', context, cancelled, (img) => {
-          setFullLoaded(true);
+          setState((value) => ({ ...value, fullLoaded: true }));
           captureDims(img);
-        }, imgs, cleanups);
+        }, imgs, cleanups, fetchPriority, () => setState((value) => ({ ...value, fullFailed: true })));
       };
 
       if (idleUpgrade && midSrc) {
-        idleRef.current = scheduleIdle(startFull);
+        idle = scheduleIdle(startFull);
       } else if (fullDelay > 0) {
         // Delay full-quality load to give priority images a head start
-        delayRef.current = setTimeout(startFull, fullDelay);
+        delay = setTimeout(startFull, fullDelay);
       } else {
         startFull();
       }
@@ -176,19 +180,20 @@ export function useProgressiveImage(
     return () => {
       cancelled.current = true;
       for (const cleanup of cleanups) cleanup();
-      for (const img of imgs) { img.onload = null; img.onerror = null; }
-      if (idleRef.current !== null) {
-        cancelIdle(idleRef.current);
-        idleRef.current = null;
+      for (const img of imgs) {
+        img.onload = null;
+        img.onerror = null;
+        // Release only this owner's unfinished Image; other DOM/preload consumers
+        // retain their own references. Browser/server cancellation is best effort.
+        if (!img.complete) img.removeAttribute('src');
       }
-      if (delayRef.current !== null) {
-        clearTimeout(delayRef.current);
-        delayRef.current = null;
-      }
+      if (idle !== null) cancelIdle(idle);
+      if (delay !== null) clearTimeout(delay);
     };
-  }, [enabled, thumbSrc, midSrc, fullSrc, idleUpgrade, deferFullUntilVisible, context, fullDelay]);
+  }, [enabled, thumbSrc, midSrc, fullSrc, idleUpgrade, deferFullUntilVisible, context, fullDelay, fetchPriority, sourceKey]);
 
+  const { thumbLoaded, midLoaded, fullLoaded, fullFailed, naturalWidth, naturalHeight } = current;
   const currentSrc = fullLoaded ? fullSrc : midLoaded && midSrc ? midSrc : thumbLoaded ? thumbSrc : '';
 
-  return { thumbLoaded, midLoaded, fullLoaded, currentSrc, naturalWidth, naturalHeight };
+  return { thumbLoaded, midLoaded, fullLoaded, fullFailed, currentSrc, naturalWidth, naturalHeight };
 }

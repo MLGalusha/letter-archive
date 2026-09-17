@@ -73,7 +73,7 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
       return () => observer.disconnect();
     }, [enabled, containerRef]);
 
-    const { thumbLoaded, midLoaded, fullLoaded, currentSrc, naturalWidth, naturalHeight } = useProgressiveImage({
+    const { thumbLoaded, midLoaded, fullLoaded, fullFailed, currentSrc, naturalWidth, naturalHeight } = useProgressiveImage({
       thumbSrc,
       midSrc,
       fullSrc: src,
@@ -81,6 +81,7 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
       enabled,
       context,
       fullDelay,
+      fetchPriority,
     });
 
     const [imgError, setImgError] = useState(false);
@@ -94,7 +95,6 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
     const showPlaceholder = !fullLoaded;
     const placeholderSrc = midLoaded && midSrc ? midSrc : thumbLoaded ? thumbSrc : '';
     const isThumbOnly = !midLoaded || !midSrc;
-    const displayedSrc = currentSrc || src;
     const displayedRetry = useImageRetry(fullLoaded ? src : placeholderSrc || src);
     const mainOwnsDisplay = fullLoaded || !placeholderSrc;
     const handleVisibleError = () => {
@@ -109,7 +109,9 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
       ?? (naturalWidth && naturalHeight ? naturalWidth / naturalHeight : 3 / 4);
 
     // Fire onLoad when best quality is ready
-    if (fullLoaded && onLoad) onLoad();
+    useEffect(() => {
+      if (fullLoaded) onLoad?.();
+    }, [fullLoaded, src, onLoad]);
 
     const containerStyle: CSSProperties = {
       ...style,
@@ -136,10 +138,11 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
             aria-hidden
           />
         )}
+        {/* Only render a full URL after its loader admits and completes it. */}
         <img
           key={`main:${currentSrc}:${displayedRetry.attempt}`}
           ref={ref}
-          src={enabled ? displayedSrc : undefined}
+          src={enabled && fullLoaded ? currentSrc : undefined}
           alt={alt}
           className={`progressive-image__full ${imgClassName ?? ''} ${fullLoaded ? '' : 'progressive-image__full--loading'}`}
           style={{ ...imgStyle, objectFit, ...(imgError ? { visibility: 'hidden' as const } : {}) }}
@@ -151,7 +154,7 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
           onError={() => { if (mainOwnsDisplay) handleVisibleError(); }}
           onLoad={() => { if (mainOwnsDisplay) handleVisibleLoad(); }}
         />
-        {imgError && (
+        {(imgError || (fullFailed && !placeholderSrc)) && (
           <div style={{
             position: 'absolute', inset: 0,
             background: 'linear-gradient(160deg, rgba(250,245,237,0.98), rgba(227,216,201,0.88))',

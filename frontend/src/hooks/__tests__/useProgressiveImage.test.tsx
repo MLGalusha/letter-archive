@@ -15,6 +15,7 @@ describe('progressive image recovery', () => {
       url = ''; complete = false; naturalWidth = 480; naturalHeight = 640;
       onload: (() => void) | null = null; onerror: (() => void) | null = null;
       constructor() { images.push(this); }
+      removeAttribute() { this.url = ''; }
       set src(value: string) { this.url = value; requested.push(value); }
     });
     const { result, rerender, unmount } = renderHook(({ id }) => useProgressiveImage({ thumbSrc: `/${id}?w=32`, fullSrc: `/${id}?w=480` }), { initialProps: { id: 'old' } });
@@ -36,4 +37,24 @@ describe('progressive image recovery', () => {
     expect(images.every((img) => img.onload === null && img.onerror === null)).toBe(true);
     expect(requested.every((url) => url.includes('?w='))).toBe(true);
   });
+  it('releases only its unfinished loads and assigns priority before starting a request', () => {
+    const images: Array<{ complete: boolean; onload: (() => void) | null; removeAttribute: ReturnType<typeof vi.fn>; priorityAtStart: string }> = [];
+    vi.stubGlobal('Image', class {
+      complete = false; naturalWidth = 480; naturalHeight = 640;
+      onload: (() => void) | null = null; onerror: (() => void) | null = null;
+      fetchPriority = 'auto'; priorityAtStart = '';
+      removeAttribute = vi.fn();
+      constructor() { images.push(this); }
+      set src(_value: string) { this.priorityAtStart = this.fetchPriority; }
+    });
+    const { unmount } = renderHook(() => useProgressiveImage({
+      thumbSrc: '/thumb', fullSrc: '/full', fetchPriority: 'high',
+    }));
+    act(() => { images[0].complete = true; images[0].onload?.(); });
+    unmount();
+    expect(images.map((image) => image.priorityAtStart)).toEqual(['high', 'high']);
+    expect(images[0].removeAttribute).not.toHaveBeenCalled();
+    expect(images[1].removeAttribute).toHaveBeenCalledWith('src');
+  });
+
 });

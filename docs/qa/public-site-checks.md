@@ -6,9 +6,11 @@ This is a running checklist for Mason to use whenever convenient. A pending chec
 
 The public site should work well in **Safari and Google Chrome**, on desktop and mobile. The primary physical phone for acceptance is an **iPhone 13**. Run phone checks in both installed browsers, particularly keyboard, scrolling, gestures, and fullscreen images. Chromium/WebKit automation helps catch regressions but does not establish physical iPhone behavior.
 
+CI runs the existing public archive history/image checks in both Chromium and WebKit. This is a continuing regression check for search, native navigation, and deferred images; the phone checks below still matter for keyboard and touch behavior.
+
 Session: date ___; device ___; browser/version ___; iOS/macOS/OS version ___; Wi-Fi/cellular ___; Reduce Motion on/off ___.
 
-Current already-live baseline: frontend/backend release `5a54cce0`, verified before this checklist was created. Counts below describe that catalogue snapshot and may change as letters are published. New work below remains pending until its own release is recorded.
+Latest verified shared frontend/backend release: `5c7a9654` (September 17, 2026 UTC). It includes the long-exact-preview fix, carousel gesture handling, and dead-sort cleanup. Later changes below have their own status. Counts below describe that catalogue snapshot and may change as letters are published. New work below remains pending until its own release is recorded.
 
 ## 1. Back to search / back to top
 
@@ -18,12 +20,13 @@ Current already-live baseline: frontend/backend release `5a54cce0`, verified bef
 - Tap the floating search button. Repeat with back-to-top where available.
 - Expected: arrive at the right place without hiding the target behind the header. With Reduce Motion off, movement should animate smoothly. With Reduce Motion on, an immediate jump is intentional.
 - Compare Safari and Chrome on the iPhone 13. Note whether it jumps, freezes briefly, stops at the wrong place, or only fails after opening the keyboard.
+- Placement ticket [13](https://github.com/MLGalusha/letter-archive/issues/13) was already implemented: both controls sit 12px plus the device safe-area inset above the mobile viewport bottom, compared with the 24px desktop base. Check that this feels comfortable in both phone browsers; this does not establish that the separate animation issue is fixed.
 
 Observation: ___
 
 ## 2. Typing, keyboard, and mobile filters
 
-**Status: keyboard/filter-layout follow-ups pending.** [Issue 42](https://github.com/MLGalusha/letter-archive/issues/42), [issue 12](https://github.com/MLGalusha/letter-archive/issues/12). Earlier input-responsiveness changes are already live ([PR 105](https://github.com/MLGalusha/letter-archive/pull/105)).
+**Status: filter layout merged in [PR 112](https://github.com/MLGalusha/letter-archive/pull/112); release check pending. Keyboard issue remains open.** [Issue 42](https://github.com/MLGalusha/letter-archive/issues/42), [issue 12](https://github.com/MLGalusha/letter-archive/issues/12). Earlier input-responsiveness changes are already live ([PR 105](https://github.com/MLGalusha/letter-archive/pull/105)).
 
 Issue 12 candidate: on phones, including touch-screen landscape layouts, tapping search closes open panels while retaining selected filters and valid year drafts. Filter choices use page scrolling and larger targets. Chromium/WebKit checks and independent review passed; production deployment and your physical-phone check are still pending. Try expanding Topic and reaching Clear All in both orientations, including a search with no results. Issue 42's keyboard/header shift remains separate.
 
@@ -35,13 +38,13 @@ Observation: ___
 
 ## 3. Search matches and preview placement
 
-**Status: transcript-first search and accessible preview controls already live.** [PR 98](https://github.com/MLGalusha/letter-archive/pull/98), [PR 102](https://github.com/MLGalusha/letter-archive/pull/102). Ordinary previews stayed inside their panels and cards did not move in Chromium/WebKit checks. [Issue 44](https://github.com/MLGalusha/letter-archive/issues/44) remains open for long exact-phrase truncation; [45](https://github.com/MLGalusha/letter-archive/issues/45)'s old hold interaction was replaced by the explicit preview button. Physical-phone checks remain useful.
+**Status: transcript-first search and accessible preview controls already live.** [PR 98](https://github.com/MLGalusha/letter-archive/pull/98), [PR 102](https://github.com/MLGalusha/letter-archive/pull/102). Ordinary previews stayed inside their panels and cards did not move in Chromium/WebKit checks. [Issue 44](https://github.com/MLGalusha/letter-archive/issues/44) is fixed by [PR 110](https://github.com/MLGalusha/letter-archive/pull/110), with the complete long phrase confirmed in a live preview; [45](https://github.com/MLGalusha/letter-archive/issues/45)'s old hold interaction was replaced by the explicit preview button. Physical-phone checks remain useful.
 
 - Open [search for “he”](https://voicesthatremain.com/?q=he). Open the magnifying-glass preview on a result; on desktop also try keyboard focus and Escape.
 - Expected: transcript matches take priority. If a particular result has no transcript match, its explanation may match date, sender, recipient, or location. Format, summary, and hook alone must not produce a typed-search match.
 - Expected: the highlighted excerpt stays inside the preview, neighboring cards keep their size/position, and dismissing the preview restores normal interaction. On mobile, use the preview button rather than requiring a long press.
 - The baseline snapshot has three results for “he”; searching “ephemera” has none, while selecting that format as a filter can still find its item. This illustrates the difference between text search and filters.
-- Known pending case: [this long exact phrase](https://voicesthatremain.com/?q=I+did+receive+your+letter+saying+that+you+were+married+and%0A++honestly%2C+I%27ve+tried+so+many+times+to+write+you%2C+but+somehow%2C+the+words%0A++didn%27t+seem+to+come--at&exact=true) returns a match but currently cuts the highlighted phrase at “so many times…”. Expected after issue 44: the complete matched phrase is supplied and readable, scrolling inside the preview if necessary. Open the link directly; it contains transcript line breaks.
+- Fixed case: [this long exact phrase](https://voicesthatremain.com/?q=I+did+receive+your+letter+saying+that+you+were+married+and%0A++honestly%2C+I%27ve+tried+so+many+times+to+write+you%2C+but+somehow%2C+the+words%0A++didn%27t+seem+to+come--at&exact=true) previously cut the highlighted phrase at “so many times…”. Expected now: the complete matched phrase is supplied and readable, scrolling inside the preview if necessary. Open the link directly; it contains transcript line breaks.
 
 Observation: ___
 
@@ -58,9 +61,9 @@ Observation: ___
 
 ## 5. Scrolling across carousels and reading images
 
-**Status: gesture/carousel fixes pending.** [Issue 10](https://github.com/MLGalusha/letter-archive/issues/10), [11](https://github.com/MLGalusha/letter-archive/issues/11), [20](https://github.com/MLGalusha/letter-archive/issues/20), [21](https://github.com/MLGalusha/letter-archive/issues/21), [23](https://github.com/MLGalusha/letter-archive/issues/23). Smaller initial reader images already live ([PR 95](https://github.com/MLGalusha/letter-archive/pull/95)).
+**Status: issue 10 deployed; remaining carousel/reader fixes below are pending.** [Issue 10](https://github.com/MLGalusha/letter-archive/issues/10), [11](https://github.com/MLGalusha/letter-archive/issues/11), [20](https://github.com/MLGalusha/letter-archive/issues/20), [21](https://github.com/MLGalusha/letter-archive/issues/21), [23](https://github.com/MLGalusha/letter-archive/issues/23). Smaller initial reader images already live ([PR 95](https://github.com/MLGalusha/letter-archive/pull/95)).
 
-Issue 10 candidate: carousels now wait for a clearly horizontal gesture before taking control; canceled drags and adding a second finger do not change slides. Reviewed code and automated checks are ready; production release and physical Safari/Chrome checks are still pending. Fullscreen behavior and the other tickets above are separate.
+Issue 10 is deployed in frontend release `5c7a9654`: carousels now wait for a clearly horizontal gesture before taking control; canceled drags and adding a second finger do not change slides. Reviewed code and automated checks passed; physical Safari/Chrome checks are still pending. Fullscreen behavior and the other tickets above are separate.
 
 - On [Home](https://voicesthatremain.com/) and [Collection 003](https://voicesthatremain.com/collections/003), begin a mostly vertical swipe over a carousel. Then deliberately swipe horizontally.
 - Expected: vertical movement scrolls the page; horizontal movement changes the carousel image. A carousel containing one highlight should behave as a static item. Dots should follow the visible image without clipping.
@@ -77,6 +80,17 @@ Observation: ___
 - Scroll steadily through results, then try a faster scroll. Change search or sort while images are arriving. Repeat on [Collection 003](https://voicesthatremain.com/collections/003).
 - Expected: visible images fill in, controls remain responsive, new pages do not repeat cards, and the list eventually reports completion. Record persistent blank images, a freeze, or unusually long waits and approximately how far down you were.
 - Earlier work reduced some downloads and unnecessary initial result fetching. It does not prove all cold starts, image waits, or deep-scroll problems are solved. The new image scheduler must be evaluated for image completion as well as search responsiveness.
+
+Observation: ___
+
+## 7. Collection first visit and intermittent visual reports
+
+**Status: investigation / physical reproduction pending.** [19](https://github.com/MLGalusha/letter-archive/issues/19), [46](https://github.com/MLGalusha/letter-archive/issues/46), [48](https://github.com/MLGalusha/letter-archive/issues/48).
+
+- Open [Collections](https://voicesthatremain.com/collections), scroll down, and enter a collection you have not visited in that tab. Expected: title fully below the header without manually correcting the scroll. Distinguish clicking a new collection from browser Back, which should restore your prior position.
+- On [Collection 003](https://voicesthatremain.com/collections/003), swipe the highlights and watch the dots during the transition. Expected: complete, unclipped dots throughout.
+- Check the format breakdown under the title on first load and after rotating your phone. Expected: consistently smaller supporting text. Record which browser/orientation shows an oversized line.
+- Current delayed-data/browser checks did not reproduce the first-visit overlap; a measured desktop-engine dot transition also did not show clipping. These checks do not close the intermittent iPhone reports.
 
 Observation: ___
 

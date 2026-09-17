@@ -194,4 +194,20 @@ describe("AdminSidebar", () => {
     unmount();
   });
 
+
+  it('refreshes an open notification popover after returning from a hidden tab', async () => {
+    let visibility: DocumentVisibilityState = 'visible';
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibility);
+    getUnreadCountMock.mockResolvedValue({ count: 1, maxSeverity: 'info' });
+    const user = userEvent.setup();
+    const { container } = render(<MemoryRouter><AdminSidebar /></MemoryRouter>);
+    await user.hover(container.querySelector('.bell-wrapper')!);
+    expect(getRecentNotificationsMock).toHaveBeenCalledTimes(1);
+    visibility = 'hidden'; act(() => document.dispatchEvent(new Event('visibilitychange')));
+    act(() => stream.options?.onNotification({ read: false, severity: 'info' } as import('../../../api/admin/notifications').AdminNotification));
+    expect(getRecentNotificationsMock).toHaveBeenCalledTimes(1);
+    visibility = 'visible'; act(() => document.dispatchEvent(new Event('visibilitychange')));
+    expect(getRecentNotificationsMock).toHaveBeenCalledTimes(2);
+  });
+
 });

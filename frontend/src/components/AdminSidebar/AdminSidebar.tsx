@@ -167,6 +167,15 @@ export default function AdminSidebar({ collapsed = false, onToggle, onNavigate }
     },
   });
 
+  useEffect(() => {
+    if (!popoverOpen) return;
+    const restoreRecent = () => {
+      if (document.visibilityState === 'visible') void fetchRecent();
+    };
+    document.addEventListener('visibilitychange', restoreRecent);
+    return () => document.removeEventListener('visibilitychange', restoreRecent);
+  }, [popoverOpen, fetchRecent]);
+
   const isActive = (path: string) => {
     if (path === '/admin') {
       return location.pathname === '/admin';

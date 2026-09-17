@@ -12,6 +12,8 @@ Added `padding-inline: 1rem` to the actual navigation section through the existi
 
 Final review corrected the gutter to `calc(1rem + env(safe-area-inset-left/right, 0px))` on each physical side. The detail page bypasses the shared body-layout inset, and `viewport-fit=cover` can otherwise place landscape iPhone links under the cutout. Zero-inset browser geometry remains unchanged; physical iPhone landscape acceptance must confirm the device-provided insets.
 
+Safe-area padding also applies above 900px, where wider landscape phones can still have cutouts. Only the extra 1rem gap is limited to the mobile breakpoint; on zero-inset desktop screens, the base padding remains zero. With the same Chromium 47/21px override, 926px and 956px widths measured card clearances of 54/28px and 69/43px, respectively, beyond each unsafe edge and without overflow.
+
 A focused fixture using the actual detail-page stylesheet and footer markup measured 16/16px at 844px in Chromium and WebKit. Chromium's native safe-area override of 47px left/21px right produced 63/37px card gutters, with no horizontal overflow; at 1440px the existing 264/264px positions stayed unchanged. This verifies CSS environment-variable handling under emulation, not physical-device or full-page acceptance. Script and results: `output/playwright/check-footer-safe-area.cjs` and `footer-safe-area.json`.
 
 ## Verification

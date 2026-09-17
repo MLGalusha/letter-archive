@@ -868,6 +868,8 @@
   grid-column: wide;
   margin-top: 2.8rem;
   padding-top: 2rem;
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
   border-top: 1px solid rgba(217, 207, 191, 0.5);
 }
 

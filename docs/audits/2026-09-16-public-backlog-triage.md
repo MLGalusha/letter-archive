@@ -4,7 +4,7 @@ Baseline: main `5a54cce0`. This separates obsolete descriptions from unresolved 
 
 ## Sorting cleanup (#32)
 
-`ARCHIVE_SORT_OPTIONS`, `ArchiveSortOption`, `getDefaultDirectionForSort`, and `getSortDirectionLabel` occurred only in their definitions in `SearchBar/searchBarUtils.ts`. The actual caller uses `COMBINED_SORT_OPTIONS`, which remains unchanged. Removed only those unused definitions (23 lines). TypeScript build and all 1,196 frontend tests passed. No visual behavior change is intended.
+`SORT_FIELD_OPTIONS`, `SortFieldOption`, `getSortValue`, and `parseSortValue` occurred only in their definitions in `SearchBar/searchBarUtils.ts`. The actual caller uses `COMBINED_SORT_OPTIONS`, which remains unchanged. Removed only those unused definitions (23 lines). TypeScript build and all 1,196 frontend tests passed. No visual behavior change is intended.
 
 ## Back-to-search duplicates (#8 / #38)
 

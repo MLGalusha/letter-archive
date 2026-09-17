@@ -1053,6 +1053,12 @@
   .letter-headline-hook p {
     font-size: clamp(1.3rem, 5vw, 1.8rem);
   }
+
+  /* The wide track can reach both screen edges on smaller screens. Original
+     formatting already owns symmetric padding; the reader needs it too. */
+  .letter-transcript-section:not(.transcript-original-mode) {
+    padding-inline: 1.25rem;
+  }
 }
 
 @media (max-width: 768px) {

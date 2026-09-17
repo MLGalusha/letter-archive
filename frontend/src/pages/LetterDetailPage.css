@@ -315,13 +315,14 @@
   margin-top: 2.2rem;
   overflow: visible;
   border-left: 1px solid transparent;
-  padding-left: 1rem;
+  padding-left: calc(1rem + env(safe-area-inset-left, 0px));
+  padding-right: env(safe-area-inset-right, 0px);
 }
 
 .letter-transcript-section.transcript-original-mode {
   grid-column: full;
-  padding-left: 2rem;
-  padding-right: 2rem;
+  padding-left: calc(2rem + env(safe-area-inset-left, 0px));
+  padding-right: calc(2rem + env(safe-area-inset-right, 0px));
   border-left: none;
 }
 
@@ -1057,7 +1058,8 @@
   /* The wide track can reach both screen edges on smaller screens. Original
      formatting already owns symmetric padding; the reader needs it too. */
   .letter-transcript-section:not(.transcript-original-mode) {
-    padding-inline: 1.25rem;
+    padding-left: calc(1.25rem + env(safe-area-inset-left, 0px));
+    padding-right: calc(1.25rem + env(safe-area-inset-right, 0px));
   }
 }
 

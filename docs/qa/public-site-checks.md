@@ -183,3 +183,14 @@ Open [this letter](https://voicesthatremain.com/letter/be6ef848-a8f9-4696-9097-6
 Automated coverage uses separately held detail/adjacency responses, stale responses during rapid navigation, failed adjacency, and browser Back/Forward. This removes a frontend dependency; it does not claim to fix server startup or scan-generation time.
 
 Observation: browser ___; connection ___; feedback visible ___; correct destination ___; unexpected behavior ___
+
+## Saved reader images (issue 128)
+
+**Status: implementation under review; deployment verification pending.**
+
+- Open [Collection 003](https://voicesthatremain.com/collections/003), then a letter, in Safari and Chrome on the iPhone 13.
+- Try [this multi-page letter](https://voicesthatremain.com/letter/be6ef848-a8f9-4696-9097-646d4257562a). Move between scans, open fullscreen and deliberately zoom. Expected: every scan still loads, zoom remains sharp, and revisiting scans can reuse previous image work.
+- Revisit normally later. Expected: repeat requests can reuse saved reader sizes even on another server instance. A browser visit alone cannot establish which cache served it; server timings are the engineering check. First generation and backend startup can still take time.
+- Record the page/scan, browser, first/repeat visit and approximate time until readable. There is no promised fixed loading time; these observations will catch regressions that a local benchmark cannot.
+
+Observation: date ___; browser/device ___; letter/scan ___; first/repeat ___; readable after ___ .

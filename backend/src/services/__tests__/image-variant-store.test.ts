@@ -15,7 +15,7 @@ const location = (id = key) => join(root, 'image-previews-v1', id.slice(0, 2), `
 beforeEach(async () => { root = await mkdtemp(join(tmpdir(), 'archive-preview-')); });
 afterEach(async () => { await rm(root, { recursive: true, force: true }); });
 
-describe('durable card preview store', () => {
+describe('durable image preview store', () => {
   it('reuses complete bytes in an independent store and does not mix identities', async () => {
     const bytes = Buffer.from('encoded image bytes');
     expect(await new ImageVariantStore(root).write(key, 480, 'avif', bytes)).toBe('saved');
@@ -23,12 +23,13 @@ describe('durable card preview store', () => {
     expect(await new ImageVariantStore(root).read(identity('changed source'), 480, 'avif')).toEqual({ status: 'miss' });
   });
 
-  it('reads a saved variant after starting a new Node process', async () => {
-    const bytes = Buffer.from('survives process restart');
-    expect(await new ImageVariantStore(root).write(key, 480, 'avif', bytes)).toBe('saved');
+  it.each([480, 800, 1200, 1600])('reads a saved %dpx variant after starting a new Node process', async (width) => {
+    const bytes = Buffer.from(`survives process restart at ${width}px`);
+    const key = identity(`source:${width}:avif`);
+    expect(await new ImageVariantStore(root).write(key, width, 'avif', bytes)).toBe('saved');
     const moduleUrl = new URL('../image-variant-store.ts', import.meta.url).href;
     const code = `import {ImageVariantStore} from ${JSON.stringify(moduleUrl)};
-      const result=await new ImageVariantStore(${JSON.stringify(root)}).read(${JSON.stringify(key)},480,'avif');
+      const result=await new ImageVariantStore(${JSON.stringify(root)}).read(${JSON.stringify(key)},${width},'avif');
       console.log(JSON.stringify({status:result.status,body:result.buffer?.toString()}));`;
     const { stdout } = await promisify(execFile)(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', code], {
       cwd: new URL('../../../', import.meta.url), maxBuffer: 4096,
@@ -44,14 +45,31 @@ describe('durable card preview store', () => {
     expect(results.every((result) => result.status === 'hit')).toBe(true);
   });
 
-  it.each(['avif', 'webp', 'jpeg'] as const)('supports480px %s only and rejects arbitrary paths/widths/formats', async (format) => {
+  it.each(['avif', 'webp', 'jpeg'] as const)('supports bounded %s variants and rejects arbitrary paths/widths/formats', async (format) => {
     const store = new ImageVariantStore(root);
     expect(await store.write(key, 480, format, Buffer.from('bytes'))).toBe('saved');
     expect((await store.read(key, 480, format)).status).toBe('hit');
     expect(await store.write(key, 479, format, Buffer.from('bytes'))).toBe('unsupported');
-    expect(await store.read(key, 800, format)).toEqual({ status: 'unsupported' });
+    expect(await store.read(key, 801, format)).toEqual({ status: 'unsupported' });
     expect(await store.write('../escape', 480, format, Buffer.from('bytes'))).toBe('unsupported');
     expect(await store.read(key, 480, 'png' as typeof format)).toEqual({ status: 'unsupported' });
+  });
+
+  it('keeps widths and formats separate across fresh stores', async () => {
+    const writer = new ImageVariantStore(root);
+    const variants = [480, 800, 1200, 1600].flatMap((width) =>
+      (['avif', 'webp', 'jpeg'] as const).map((format) => ({ width, format })));
+    for (const { width, format } of variants) {
+      expect(await writer.write(identity(`source:${width}:${format}`), width, format,
+        Buffer.from(`${width}:${format}`))).toBe('saved');
+    }
+    const reader = new ImageVariantStore(root);
+    for (const { width, format } of variants) {
+      expect(await reader.read(identity(`source:${width}:${format}`), width, format))
+        .toEqual({ status: 'hit', buffer: Buffer.from(`${width}:${format}`) });
+      expect(await reader.read(identity(`new-source:${width}:${format}`), width, format))
+        .toEqual({ status: 'miss' });
+    }
   });
 
   it('rejects incomplete, altered, wrong-identity and oversized envelopes', async () => {

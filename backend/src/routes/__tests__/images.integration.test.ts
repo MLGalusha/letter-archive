@@ -1,4 +1,6 @@
 import { EventEmitter } from 'node:events';
+import http from 'node:http';
+import express from 'express';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { invokeRouter } from '../../test/express-test-utils.js';
 
@@ -93,7 +95,9 @@ vi.mock('node:fs', async (importOriginal) => {
   };
 });
 
-import imagesRouter from '../images.js';
+import imagesRouter, { createImagesRouter } from '../images.js';
+import { ImageTransformScheduler } from '../../services/image-transform-scheduler.js';
+import { requestLogger } from '../../middleware/request-logger.js';
 
 function createMockStream(body = 'image-bytes') {
   const stream = new EventEmitter() as EventEmitter & {
@@ -275,27 +279,18 @@ describe('images route integration', () => {
   });
 
   it('invalidates resized cache entries when a forced replacement keeps the page id', async () => {
-    findFirstMock
-      .mockResolvedValueOnce({
-        id: 'page-replaced-cache',
-        checksumSha256: 'checksum-original',
-        storagePath: 'collections/009/original/page.jpg',
-        originalFilename: 'page.jpg',
-        letter: catalogueLetter(),
-      })
-      .mockResolvedValueOnce({
-        id: 'page-replaced-cache',
-        checksumSha256: 'checksum-replacement',
-        storagePath: 'collections/009/replacement/page.jpg',
-        originalFilename: 'page.jpg',
-        letter: catalogueLetter(),
-      });
+    const originalPage = {
+      id: 'page-replaced-cache', checksumSha256: 'checksum-original',
+      storagePath: 'collections/009/original/page.jpg', originalFilename: 'page.jpg', letter: catalogueLetter(),
+    };
+    const replacementPage = {
+      ...originalPage, checksumSha256: 'checksum-replacement', storagePath: 'collections/009/replacement/page.jpg',
+    };
+    findFirstMock.mockResolvedValue(originalPage);
     getAbsoluteStoragePathMock
       .mockReturnValueOnce('/abs/storage/original/page.jpg')
       .mockReturnValueOnce('/abs/storage/replacement/page.jpg');
-    statMock
-      .mockResolvedValueOnce({ size: 4096, mtimeMs: 100 })
-      .mockResolvedValueOnce({ size: 5120, mtimeMs: 200 });
+    statMock.mockResolvedValue({ size: 4096, mtimeMs: 100 });
 
     const original = await invokeRouter(imagesRouter, {
       method: 'GET',
@@ -304,6 +299,8 @@ describe('images route integration', () => {
       query: { w: '640' },
       headers: { accept: 'image/webp' },
     });
+    findFirstMock.mockResolvedValue(replacementPage);
+    statMock.mockResolvedValue({ size: 5120, mtimeMs: 200 });
     const replacement = await invokeRouter(imagesRouter, {
       method: 'GET',
       url: '/images/page-replaced-cache?w=640',
@@ -491,6 +488,175 @@ describe('images route integration', () => {
     await invokeRouter(imagesRouter, request);
 
     expect(sharpMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('coalesces public misses but rechecks each caller after publication changes', async () => {
+    const page = {
+      id: 'page-shared-revocation', checksumSha256: 'same', storagePath: 'shared-revocation.jpg',
+      originalFilename: 'shared-revocation.jpg', letter: catalogueLetter(),
+    };
+    findFirstMock.mockResolvedValue(page);
+    getAbsoluteStoragePathMock.mockReturnValue('/abs/storage/shared-revocation.jpg');
+    statMock.mockResolvedValue({ size: 4096, mtimeMs: 100 });
+    let complete!: (buffer: Buffer) => void;
+    const pending = new Promise<Buffer>((resolve) => { complete = resolve; });
+    const implementation = sharpMock.getMockImplementation()!;
+    sharpMock.mockImplementation((path: string) => {
+      const pipeline = implementation(path);
+      pipeline.toBuffer.mockReturnValue(pending);
+      return pipeline;
+    });
+    verifyImageSessionTokenMock.mockReturnValue({ userId: 'admin-1', purpose: 'image-session' });
+    const scheduler = new ImageTransformScheduler({ concurrency: 1, maxQueued: 1, maxWaiters: 4 });
+    const router = createImagesRouter(scheduler);
+    const request = { method: 'GET', url: '/images/page-shared-revocation', query: { w: '480' } };
+    const anonymous = invokeRouter(router, request);
+    const admin = invokeRouter(router, { ...request, headers: { cookie: 'letter_archive_image_session=valid-image-session' } });
+    await vi.waitFor(() => expect(scheduler.state.waiters).toBe(2));
+    findFirstMock.mockResolvedValue({ ...page, letter: catalogueLetter({ visibility: 'HIDDEN' }) });
+    complete(Buffer.from('shared bytes'));
+    const [anonymousResult, adminResult] = await Promise.all([anonymous, admin]);
+    expect(anonymousResult.statusCode).toBe(404);
+    expect(adminResult.statusCode).toBe(200);
+    expect(adminResult.body).toEqual(Buffer.from('shared bytes'));
+    expect([anonymousResult, adminResult].map((response) => response.headers['cache-control']))
+      .toEqual(['private, no-store', 'private, no-store']);
+    expect(sharpMock).toHaveBeenCalledOnce();
+    expect(findFirstMock).toHaveBeenCalledTimes(4);
+    // The newly hidden output must not enter the public cache.
+    findFirstMock.mockResolvedValue(page);
+    await invokeRouter(router, request);
+    expect(sharpMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects excess work without caching overload and recovers when capacity frees', async () => {
+    findFirstMock.mockImplementation(({ where }) => ({
+      id: where.right, storagePath: `${where.right}.jpg`, originalFilename: 'image.jpg', letter: catalogueLetter(),
+    }));
+    getAbsoluteStoragePathMock.mockImplementation((path) => `/abs/storage/${path}`);
+    statMock.mockResolvedValue({ size: 4096, mtimeMs: 100 });
+    let complete!: (buffer: Buffer) => void;
+    const pending = new Promise<Buffer>((resolve) => { complete = resolve; });
+    const implementation = sharpMock.getMockImplementation()!;
+    sharpMock.mockImplementation((path: string) => {
+      const pipeline = implementation(path);
+      if (path.includes('saturation-first')) pipeline.toBuffer.mockReturnValue(pending);
+      return pipeline;
+    });
+    const scheduler = new ImageTransformScheduler({ concurrency: 1, maxQueued: 1, maxWaiters: 3 });
+    const router = createImagesRouter(scheduler);
+    const request = (id: string) => invokeRouter(router, { method: 'GET', url: `/images/${id}`, query: { w: '480' } });
+    const first = request('saturation-first');
+    const second = request('saturation-second');
+    await vi.waitFor(() => expect(scheduler.state).toEqual({ active: 1, queued: 1, waiters: 2 }));
+    const rejected = await request('saturation-third');
+    expect(rejected.statusCode).toBe(503);
+    expect(rejected.headers['retry-after']).toBe('1');
+    expect(rejected.headers['cache-control']).toBe('private, no-store');
+    expect(sharpMock).toHaveBeenCalledOnce();
+    complete(Buffer.from('first'));
+    expect((await Promise.all([first, second])).map((response) => response.statusCode)).toEqual([200, 200]);
+    expect((await request('saturation-third')).statusCode).toBe(200);
+    expect(scheduler.state).toEqual({ active: 0, queued: 0, waiters: 0 });
+  });
+
+  it('checks current publication before reusing a completed public cache entry', async () => {
+    const page = { id: 'cached-then-hidden', storagePath: 'cached-then-hidden.jpg', originalFilename: 'image.jpg', letter: catalogueLetter() };
+    findFirstMock.mockResolvedValue(page);
+    getAbsoluteStoragePathMock.mockReturnValue('/abs/storage/cached-then-hidden.jpg');
+    statMock.mockResolvedValue({ size: 4096 });
+    const request = { method: 'GET', url: '/images/cached-then-hidden', query: { w: '480' } };
+    expect((await invokeRouter(imagesRouter, request)).statusCode).toBe(200);
+    findFirstMock.mockResolvedValue({ ...page, letter: catalogueLetter({ visibility: 'HIDDEN' }) });
+    expect((await invokeRouter(imagesRouter, request)).statusCode).toBe(404);
+    expect(sharpMock).toHaveBeenCalledOnce();
+  });
+
+  it('rechecks admin membership before returning a generated hidden variant', async () => {
+    findFirstMock.mockResolvedValue({ id: 'admin-revoked-during-transform', storagePath: 'admin-revoked.jpg',
+      originalFilename: 'image.jpg', letter: catalogueLetter({ visibility: 'HIDDEN' }) });
+    verifyImageSessionTokenMock.mockReturnValue({ userId: 'admin-1', purpose: 'image-session' });
+    adminUsersFindFirstMock.mockResolvedValueOnce({ id: 'admin-1' }).mockResolvedValueOnce(null);
+    getAbsoluteStoragePathMock.mockReturnValue('/abs/storage/admin-revoked.jpg');
+    statMock.mockResolvedValue({ size: 4096 });
+    const response = await invokeRouter(imagesRouter, { method: 'GET', url: '/images/admin-revoked-during-transform',
+      query: { w: '480' }, headers: { cookie: 'letter_archive_image_session=valid-image-session' } });
+    expect(response.statusCode).toBe(404);
+    expect(response.headers['cache-control']).toBe('private, no-store');
+    expect(adminUsersFindFirstMock).toHaveBeenCalledTimes(2);
+    expect(sharpMock).toHaveBeenCalledOnce();
+  });
+
+  it('does not deliver or cache a source replaced during queued/generated work', async () => {
+    const page = { id: 'source-changed-during-transform', checksumSha256: 'old', storagePath: 'source-changed.jpg',
+      originalFilename: 'image.jpg', letter: catalogueLetter() };
+    findFirstMock.mockResolvedValueOnce(page).mockResolvedValue({ ...page, checksumSha256: 'new' });
+    getAbsoluteStoragePathMock.mockReturnValue('/abs/storage/source-changed.jpg');
+    statMock.mockResolvedValue({ size: 4096 });
+    const request = { method: 'GET', url: '/images/source-changed-during-transform', query: { w: '480' } };
+    const changed = await invokeRouter(imagesRouter, request);
+    expect(changed.statusCode).toBe(503);
+    expect(changed.headers['cache-control']).toBe('private, no-store');
+    expect(changed.headers['retry-after']).toBe('1');
+    expect((await invokeRouter(imagesRouter, request)).statusCode).toBe(200);
+    expect(sharpMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects bytes when the file changes without a database version change', async () => {
+    findFirstMock.mockResolvedValue({ id: 'file-changed-during-transform', checksumSha256: 'same', storagePath: 'file-changed.jpg',
+      originalFilename: 'image.jpg', letter: catalogueLetter() });
+    getAbsoluteStoragePathMock.mockReturnValue('/abs/storage/file-changed.jpg');
+    statMock.mockResolvedValueOnce({ size: 4096, mtimeMs: 100 }).mockResolvedValue({ size: 8192, mtimeMs: 200 });
+    const request = { method: 'GET', url: '/images/file-changed-during-transform', query: { w: '480' } };
+    const changed = await invokeRouter(imagesRouter, request);
+    expect(changed.statusCode).toBe(503);
+    expect(changed.headers['cache-control']).toBe('private, no-store');
+    expect((await invokeRouter(imagesRouter, request)).statusCode).toBe(200);
+    expect(sharpMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('removes a disconnected queued HTTP caller before starting its transform', async () => {
+    findFirstMock.mockImplementation(({ where }) => ({
+      id: where.right, storagePath: `${where.right}.jpg`, originalFilename: 'image.jpg', letter: catalogueLetter(),
+    }));
+    getAbsoluteStoragePathMock.mockImplementation((path) => `/abs/storage/${path}`);
+    statMock.mockResolvedValue({ size: 4096 });
+    let complete!: (buffer: Buffer) => void;
+    const pending = new Promise<Buffer>((resolve) => { complete = resolve; });
+    const implementation = sharpMock.getMockImplementation()!;
+    sharpMock.mockImplementation((path: string) => {
+      const pipeline = implementation(path);
+      pipeline.toBuffer.mockReturnValue(pending);
+      return pipeline;
+    });
+    const scheduler = new ImageTransformScheduler({ concurrency: 1, maxQueued: 1, maxWaiters: 2 });
+    const app = express(); app.use(requestLogger); app.use(createImagesRouter(scheduler));
+    const server = app.listen(0, '127.0.0.1');
+    await new Promise<void>((resolve) => server.once('listening', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Missing local address');
+    const request = (id: string) => http.get(`http://127.0.0.1:${address.port}/images/${id}?w=480`);
+    const active = request('disconnect-active');
+    const activeDone = new Promise<number>((resolve, reject) => {
+      active.on('error', reject);
+      active.on('response', (response) => { response.resume(); response.on('end', () => resolve(response.statusCode!)); });
+    });
+    let queued: http.ClientRequest | undefined;
+    try {
+      await vi.waitFor(() => expect(scheduler.state.active).toBe(1));
+      queued = request('disconnect-queued');
+      queued.on('error', () => {}); // Expected socket abort, not a server failure.
+      await vi.waitFor(() => expect(scheduler.state.queued).toBe(1));
+      queued.destroy();
+      await vi.waitFor(() => expect(scheduler.state).toEqual({ active: 1, queued: 0, waiters: 1 }));
+      complete(Buffer.from('active result'));
+      expect(await activeDone).toBe(200);
+      expect(sharpMock).toHaveBeenCalledOnce();
+      expect(scheduler.state).toEqual({ active: 0, queued: 0, waiters: 0 });
+    } finally {
+      queued?.destroy(); complete(Buffer.from('cleanup')); active.destroy();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 
   it('does not accept case-varied query credentials for a hidden image', async () => {

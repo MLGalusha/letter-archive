@@ -2,6 +2,7 @@ import { memo, useState, useRef, useEffect, useCallback } from "react";
 import type { LetterImage } from "../../types/Letter";
 import { getImageUrl } from "../../api/client";
 import { useProgressiveImage } from "../../hooks/useProgressiveImage";
+import { useImageRetry } from "../../hooks/useImageRetry";
 import { Icon } from "../common";
 import "./LetterViewer.css";
 import { scanNeedsOriginal, scanVariantWidth } from "./scanResolution";
@@ -186,6 +187,8 @@ const LetterViewer = memo(function LetterViewer({
     context: variant === "lightbox" ? 'viewer-lightbox' : 'viewer-panel',
   });
   const viewerReady = fullLoaded || midLoaded;
+  const displayedSrc = fullLoaded ? fullSrc : midSrc;
+  const displayedRetry = useImageRetry(displayedSrc);
 
   // Preload adjacent images so page navigation feels instant
   useEffect(() => {
@@ -876,8 +879,11 @@ const LetterViewer = memo(function LetterViewer({
           />
         )}
         <img
+          key={`${displayedSrc}:${fullLoaded}:${midLoaded}:${displayedRetry.attempt}`}
           ref={imageRef}
+          onError={() => { if (viewerReady) displayedRetry.onError(); }}
           onLoad={(event) => {
+            displayedRetry.onLoad();
             const image = event.currentTarget;
             if (image.naturalWidth && image.naturalHeight) {
               const ratio = image.naturalWidth / image.naturalHeight;
@@ -885,7 +891,7 @@ const LetterViewer = memo(function LetterViewer({
                 ? previous : { url: currentImage.imageUrl, ratio });
             }
           }}
-          src={fullLoaded ? fullSrc : midSrc}
+          src={displayedSrc}
           alt={
             getImageAlt
               ? getImageAlt(currentImage)

@@ -1,5 +1,6 @@
 import { forwardRef, useState, useEffect, useRef, type CSSProperties, type RefObject } from 'react';
 import { useProgressiveImage } from '../../hooks/useProgressiveImage';
+import { useImageRetry } from '../../hooks/useImageRetry';
 import './ProgressiveImage.css';
 import { getAppScrollRootForIO } from '../../utils/appScroll';
 
@@ -83,10 +84,11 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
     });
 
     const [imgError, setImgError] = useState(false);
+    const displayedRetry = useImageRetry(src);
 
     useEffect(() => {
       setImgError(false);
-    }, [src]);
+    }, [src, currentSrc, fullLoaded]);
 
     // Best non-full source for the placeholder layer
     const showPlaceholder = !fullLoaded;
@@ -123,6 +125,7 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
           />
         )}
         <img
+          key={`${currentSrc}:${displayedRetry.attempt}`}
           ref={ref}
           src={enabled ? currentSrc || src : undefined}
           alt={alt}
@@ -132,7 +135,13 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
           decoding={decoding}
           draggable={draggable}
           fetchPriority={fetchPriority}
-          onError={() => setImgError(true)}
+          onError={() => {
+            setImgError(true);
+            // A preloaded/revalidated image can fail without a background loader.
+            // Before fullLoaded, that loader alone owns the bounded retries.
+            if (fullLoaded) displayedRetry.onError();
+          }}
+          onLoad={() => { setImgError(false); displayedRetry.onLoad(); }}
         />
         {imgError && (
           <div style={{

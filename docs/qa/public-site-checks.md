@@ -61,12 +61,13 @@ Observation: ___
 
 ## 5. Scrolling across carousels and reading images
 
-**Status: issues 10, 11, and 20 deployed; letter navigation and fullscreen changes below are pending.** [Issue 10](https://github.com/MLGalusha/letter-archive/issues/10), [11](https://github.com/MLGalusha/letter-archive/issues/11), [20](https://github.com/MLGalusha/letter-archive/issues/20), [21](https://github.com/MLGalusha/letter-archive/issues/21), [23](https://github.com/MLGalusha/letter-archive/issues/23). Smaller initial reader images already live ([PR 95](https://github.com/MLGalusha/letter-archive/pull/95)).
+**Status: issues 10, 11, and 20 deployed; letter navigation is merged awaiting release, and fullscreen changes remain pending.** [Issue 10](https://github.com/MLGalusha/letter-archive/issues/10), [11](https://github.com/MLGalusha/letter-archive/issues/11), [20](https://github.com/MLGalusha/letter-archive/issues/20), [21](https://github.com/MLGalusha/letter-archive/issues/21), [23](https://github.com/MLGalusha/letter-archive/issues/23). Smaller initial reader images already live ([PR 95](https://github.com/MLGalusha/letter-archive/pull/95)).
 
 Issue 10 is deployed in frontend release `5c7a9654`: carousels now wait for a clearly horizontal gesture before taking control; canceled drags and adding a second finger do not change slides. Reviewed code and automated checks passed; physical Safari/Chrome checks are still pending. Scan dots now follow the visible page and respond to taps (issue 11), confirmed on the live two-page letter in both engines. Single highlights no longer render an interactive outer carousel (issue 20), checked with a local singleton fixture. Fullscreen behavior and the other tickets above are separate.
 
 - On [Home](https://voicesthatremain.com/) and [Collection 003](https://voicesthatremain.com/collections/003), begin a mostly vertical swipe over a carousel. Then deliberately swipe horizontally.
 - Expected: vertical movement scrolls the page; horizontal movement changes the carousel image. A carousel containing one highlight should behave as a static item. Dots should follow the visible image without clipping.
+- The ordinary letter-page swipe-to-next-letter interaction was removed in [PR 116](https://github.com/MLGalusha/letter-archive/pull/116). After release, a horizontal gesture over reading text should stay on the same letter. The explicit previous/next links, header scrubber, and desktop arrow navigation remain available. Check bottom-link spacing in portrait and landscape, including the side with the cutout.
 - Open [a two-page letter](https://voicesthatremain.com/letter/0b5e626d-01bb-4026-a4fa-a6ebdf180c7d), enter fullscreen, swipe pages, zoom/pinch, and pan.
 - Expected: the initial image looks clear at its displayed size. Zoom can request higher detail. Fit-to-screen page swipes and zoomed-image panning should not fight each other; ordinary page swiping should not unexpectedly open another letter.
 

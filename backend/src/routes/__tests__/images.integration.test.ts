@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import http from 'node:http';
 import express from 'express';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { invokeRouter } from '../../test/express-test-utils.js';
 
 const {
@@ -792,4 +792,185 @@ describe('images route integration', () => {
     expect(response.statusCode).toBe(200);
     expect(response.headers['content-type']).toBe('application/octet-stream');
   });
+
+  describe('conditional resized images over real HTTP', () => {
+    let server: http.Server;
+    let page: { id: string; checksumSha256: string; storagePath: string; originalFilename: string; letter: ReturnType<typeof catalogueLetter> };
+    let sourceStats: { size: number; mtimeMs: number };
+    let sequence = 0;
+    const scheduler = new ImageTransformScheduler({ concurrency: 2, maxQueued: 32, maxWaiters: 64 });
+
+    beforeEach(async () => {
+      page = { id: `conditional-${sequence++}`, checksumSha256: 'source-version-1',
+        storagePath: 'collections/009/conditional.jpg', originalFilename: 'conditional.jpg', letter: catalogueLetter() };
+      sourceStats = { size: 4096, mtimeMs: 100 };
+      findFirstMock.mockImplementation(async () => page);
+      statMock.mockImplementation(async () => sourceStats);
+      getAbsoluteStoragePathMock.mockReturnValue('/abs/storage/conditional.jpg');
+      const app = express();
+      app.use(requestLogger, createImagesRouter(scheduler));
+      server = await new Promise<http.Server>(resolve => {
+        const listening = app.listen(0, '127.0.0.1', () => resolve(listening));
+      });
+    });
+
+    afterEach(async () => {
+      server.closeAllConnections();
+      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    });
+
+    function request(headers: http.OutgoingHttpHeaders = {}, query = 'w=480', method = 'GET') {
+      const address = server.address();
+      if (!address || typeof address === 'string') throw new Error('Test server is not listening');
+      return new Promise<{ status: number; headers: http.IncomingHttpHeaders; body: string }>((resolve, reject) => {
+        const req = http.request({ hostname: '127.0.0.1', port: address.port,
+          path: `/images/${page.id}?${query}`, method, headers: { accept: 'image/webp', ...headers } }, res => {
+          const chunks: Buffer[] = [];
+          res.on('data', chunk => chunks.push(chunk));
+          res.on('end', () => resolve({ status: res.statusCode!, headers: res.headers, body: Buffer.concat(chunks).toString() }));
+          res.on('error', reject);
+        });
+        req.on('error', reject);
+        req.end();
+      });
+    }
+
+    it('returns 304 without scheduling work in a fresh module with no resized cache', async () => {
+      const initial = await request();
+      expect(initial.status).toBe(200);
+      expect(initial.headers.etag).toMatch(/^W\/"preview-[a-f0-9]{64}"$/);
+      vi.resetModules();
+      const { createImagesRouter: freshRouter } = await import('../images.js');
+      const freshScheduler = new ImageTransformScheduler({ concurrency: 2, maxQueued: 32, maxWaiters: 64 });
+      const schedule = vi.spyOn(freshScheduler, 'schedule');
+      const app = express();
+      app.use(requestLogger, freshRouter(freshScheduler));
+      server.removeAllListeners('request');
+      server.on('request', app);
+      sharpMock.mockClear();
+      const result = await request({ 'if-none-match': initial.headers.etag });
+      expect(result.status).toBe(304);
+      expect(result.body).toBe('');
+      expect(result.headers.etag).toBe(initial.headers.etag);
+      expect(result.headers.vary).toBe('Accept');
+      expect(result.headers['cache-control']).toBe('public, max-age=0, must-revalidate');
+      expect(schedule).not.toHaveBeenCalled();
+      expect(sharpMock).not.toHaveBeenCalled();
+      const mixed = await request({
+        'if-none-match': initial.headers.etag,
+        'if-modified-since': 'Wed, 01 Jan 2020 00:00:00 GMT',
+      });
+      expect(mixed.status).toBe(304);
+      expect(schedule).not.toHaveBeenCalled();
+      expect(sharpMock).not.toHaveBeenCalled();
+    });
+
+    it('handles weak, strong, list, wildcard and HEAD validators', async () => {
+      const { headers } = await request();
+      const tag = headers.etag!;
+      const schedule = vi.spyOn(scheduler, 'schedule');
+      schedule.mockClear();
+      for (const validator of [tag, tag.slice(2), `"stale", ${tag}`, '*']) {
+        const result = await request({ 'if-none-match': validator });
+        expect(result.status).toBe(304);
+        expect(result.body).toBe('');
+      }
+      expect((await request({ 'if-none-match': tag }, 'w=480', 'HEAD')).status).toBe(304);
+      expect(schedule).not.toHaveBeenCalled();
+    });
+
+    it('sends the representation for stale tags and explicit no-cache requests', async () => {
+      const initial = await request();
+      expect((await request({ 'if-none-match': '"stale"' })).status).toBe(200);
+      const result = await request({ 'if-none-match': initial.headers.etag, 'cache-control': 'no-cache' });
+      expect(result.status).toBe(200);
+      expect(result.body).toBe('original-bytes');
+    });
+
+    it('invalidates the validator for source identity and file stat changes', async () => {
+      let previous = (await request()).headers.etag!;
+      for (const change of [
+        () => { page.checksumSha256 = 'source-version-2'; },
+        () => { page.storagePath = 'collections/009/replacement.jpg'; },
+        () => { sourceStats = { ...sourceStats, size: 8192 }; },
+        () => { sourceStats = { ...sourceStats, mtimeMs: 200 }; },
+      ]) {
+        change();
+        const result = await request({ 'if-none-match': previous });
+        expect(result.status).toBe(200);
+        expect(result.headers.etag).not.toBe(previous);
+        previous = result.headers.etag!;
+      }
+    });
+
+    it('distinguishes sizes and negotiated formats but ignores caller version hints', async () => {
+      const initial = await request({}, 'w=480&v=old');
+      expect((await request({ 'if-none-match': initial.headers.etag }, 'w=480&v=new')).status).toBe(304);
+      const wider = await request({ 'if-none-match': initial.headers.etag }, 'w=800');
+      const avif = await request({ 'if-none-match': initial.headers.etag, accept: 'image/avif,image/webp' });
+      const jpeg = await request({ 'if-none-match': initial.headers.etag, accept: 'image/jpeg' });
+      expect([wider.status, avif.status, jpeg.status]).toEqual([200, 200, 200]);
+      expect(new Set([initial.headers.etag, wider.headers.etag, avif.headers.etag, jpeg.headers.etag]).size).toBe(4);
+      expect(avif.headers['content-type']).toBe('image/avif');
+      expect(jpeg.headers['content-type']).toBe('image/jpeg');
+    });
+
+    it('never returns 304 for missing, unpublished or deleted sources', async () => {
+      const initial = await request();
+      const conditional = { 'if-none-match': initial.headers.etag };
+      page.letter = catalogueLetter({ visibility: 'HIDDEN' });
+      expect((await request(conditional)).status).toBe(404);
+      page.letter = catalogueLetter();
+      findFirstMock.mockResolvedValueOnce(undefined);
+      expect((await request(conditional)).status).toBe(404);
+      statMock.mockRejectedValueOnce(new Error('ENOENT'));
+      const missingFile = await request(conditional);
+      expect(missingFile.status).toBe(404);
+      expect(missingFile.headers['cache-control']).toBe('private, no-store');
+    });
+
+    it('invalidates an old validator after an encoder library upgrade', async () => {
+      const encoder = sharpMock as typeof sharpMock & { versions?: Record<string, string> };
+      try {
+        encoder.versions = { sharp: 'first-encoder', vips: 'first-vips' };
+        const initial = await request();
+        encoder.versions = { sharp: 'next-encoder', vips: 'next-vips' };
+        const upgraded = await request({ 'if-none-match': initial.headers.etag });
+        expect(upgraded.status).toBe(200);
+        expect(upgraded.headers.etag).not.toBe(initial.headers.etag);
+      } finally {
+        delete encoder.versions;
+      }
+    });
+
+    it('rechecks admin authorization before revalidating a private preview', async () => {
+      page.letter = catalogueLetter({ visibility: 'HIDDEN' });
+      verifyImageSessionTokenMock.mockReturnValue({ userId: 'admin-1', purpose: 'image-session' });
+      const cookie = 'letter_archive_image_session=valid-image-session';
+      const initial = await request({ cookie });
+      const conditional = { cookie, 'if-none-match': initial.headers.etag };
+      expect(initial.status).toBe(200);
+      const unchanged = await request(conditional);
+      expect(unchanged.status).toBe(304);
+      expect(unchanged.headers['cache-control']).toBe('private, no-store');
+      adminUsersFindFirstMock.mockResolvedValue(null);
+      expect((await request(conditional)).status).toBe(404);
+    });
+
+    it('retains private cache policy for credential-bearing conditional requests', async () => {
+      const initial = await request();
+      for (const headers of [
+        { authorization: 'Bearer stale-token' },
+        { cookie: 'letter_archive_image_session=junk' },
+      ]) {
+        const result = await request({ ...headers, 'if-none-match': initial.headers.etag });
+        expect(result.status).toBe(304);
+        expect(result.headers['cache-control']).toBe('private, no-store');
+      }
+      const result = await request({ 'if-none-match': initial.headers.etag }, 'w=480&token=stale-token');
+      expect(result.status).toBe(304);
+      expect(result.headers['cache-control']).toBe('private, no-store');
+    });
+  });
+
 });

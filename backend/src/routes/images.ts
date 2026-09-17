@@ -5,6 +5,7 @@ import { stat } from 'node:fs/promises';
 import { extname } from 'node:path';
 import { and, eq } from 'drizzle-orm';
 import sharp from 'sharp';
+import fresh from 'fresh';
 import { adminUsers, db, letterPages, letters } from '../db/index.js';
 import { readImageSessionCookie } from '../auth/image-session.js';
 import { verifyImageSessionToken } from '../auth/jwt.js';
@@ -16,6 +17,7 @@ import { getAbsoluteStoragePath } from '../services/storage.js';
 import { logIfSlow, TIMING_THRESHOLDS } from '../utils/logger.js';
 import { isSensitiveQueryKey } from '../utils/log-redaction.js';
 import { ImageTransformScheduler, ImageTransformOverloadError, ImageTransformAbortedError } from '../services/image-transform-scheduler.js';
+import { imageVariantIdentity } from '../services/image-variant.js';
 
 // In-memory LRU cache for resized images (avoids re-encoding on repeated requests)
 const IMAGE_CACHE_MAX = 1000;
@@ -133,13 +135,26 @@ export function createImagesRouter(imageTransforms = new ImageTransformScheduler
         const format = acceptHeader.includes('image/avif') ? 'avif'
           : acceptHeader.includes('image/webp') ? 'webp'
           : 'jpeg';
-        const cacheVersion = [
-          page.checksumSha256 ?? 'no-checksum',
-          page.storagePath,
-          fileStats.mtimeMs ?? 'no-mtime',
-          fileStats.size,
-        ].join(':');
-        const cacheKey = `${pageId}:${cacheVersion}:${requestedWidth}:${format}`;
+        const cacheKey = imageVariantIdentity({
+          pageId, checksumSha256: page.checksumSha256, storagePath: page.storagePath,
+          mtimeMs: fileStats.mtimeMs, size: fileStats.size,
+        }, requestedWidth, format);
+        // Weak validator describes this representation without requiring encoded
+        // bytes to exist in this process. Access and source existence were checked
+        // above; conditional requests must never bypass those checks.
+        const etag = `W/"preview-${cacheKey}"`;
+        res.setHeader('ETag', etag);
+        res.setHeader('Vary', 'Accept');
+        // If-None-Match takes precedence over If-Modified-Since. This route has
+        // no Last-Modified validator; do not let Express require both to match.
+        if (fresh({
+          'if-none-match': req.headers['if-none-match'],
+          'cache-control': req.headers['cache-control'],
+        }, { etag })) {
+          metrics.cache = 'not-modified';
+          res.status(304).end();
+          return;
+        }
         // Authorization affects whether a row is public, not the bytes produced
         // for an already-public image. Reuse that transform even when a request
         // carries stale credentials; response cache headers remain private.

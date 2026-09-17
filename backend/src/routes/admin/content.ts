@@ -229,7 +229,8 @@ router.put('/content/blog/:id', validateBody(updateBlogPostSchema), async (req, 
     }
 
     const resolved = await resolveDimensions(req, data.resolveImageSources ?? [], data.imageDimensions !== undefined ? data.imageDimensions ?? {} : existing.imageDimensions ?? {});
-    const updates: Record<string, unknown> = { updatedAt: new Date(), imageDimensions: resolved.dimensions };
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (data.imageDimensions !== undefined || data.resolveImageSources !== undefined) updates.imageDimensions = resolved.dimensions;
     if (data.slug !== undefined) updates.slug = data.slug;
     if (data.title !== undefined) updates.title = data.title;
     if (data.excerpt !== undefined) updates.excerpt = data.excerpt;

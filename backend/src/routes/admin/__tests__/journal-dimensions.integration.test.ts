@@ -1,14 +1,14 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';
 import type { Server } from 'node:http';
-const state = vi.hoisted(() => ({ post: undefined as Record<string, unknown> | undefined }));
+const state = vi.hoisted(() => ({ post: undefined as Record<string, unknown> | undefined, lastUpdate: {} as Record<string, unknown> }));
 vi.mock('../../../services/pick-featured-letter.js', () => ({ pickFeaturedLetter: vi.fn() }));
 vi.mock('../../../services/letters.js', () => ({ resolveRepresentativeLetterId: vi.fn() }));
 vi.mock('../../../services/featured-setting.js', () => ({ resolveFeaturedSetting: vi.fn() }));
 vi.mock('../../../db/index.js', async () => ({ ...(await import('../../../db/schema.js')), db: {
   select: () => ({ from: () => ({ where: () => ({ limit: async () => state.post ? [state.post] : [] }) }) }),
   insert: () => ({ values: (values: Record<string, unknown>) => ({ returning: async () => { state.post = { id: 'post', ...values }; return [state.post]; } }) }),
-  update: () => ({ set: (values: Record<string, unknown>) => ({ where: () => ({ returning: async () => { state.post = { ...state.post, ...values }; return [state.post]; } }) }) }),
+  update: () => ({ set: (values: Record<string, unknown>) => ({ where: () => ({ returning: async () => { state.lastUpdate = values; state.post = { ...state.post, ...values }; return [state.post]; } }) }) }),
 } }));
 import router from '../content.js';
 import publicRouter from '../../updates.js';
@@ -26,6 +26,7 @@ describe('journal dimensions API persistence', () => {
     expect(await (await fetch(base + '/content/blog/post')).json()).toMatchObject({ imageDimensions: dimensions });
     expect((await save('PUT', '/content/blog/post', { title: 'Edited' })).status).toBe(200);
     expect(state.post?.imageDimensions).toEqual(dimensions);
+    expect(state.lastUpdate).not.toHaveProperty('imageDimensions');
     expect(await (await fetch(base + '/blog/article')).json()).toMatchObject({ imageDimensions: dimensions });
     await save('PUT', '/content/blog/post', { heroImageUrl: '/blog-images/b.jpg', imageDimensions: {} });
     expect(state.post?.imageDimensions).toEqual({});

@@ -13,3 +13,11 @@ describe('journal dimension ownership', () => {
     expect(validImageDimensions({ width: 100001, height: 2 })).toBeUndefined();
   });
 });
+
+it('uses the first duplicate reference definition like the renderer', () => {
+  expect(journalImageSourcesInPost('![x][scan]\n\n[scan]: /a.jpg\n[SCAN]: /b.jpg', '')).toEqual(['/a.jpg']);
+});
+
+it('matches the renderer reference identifier case and whitespace normalization', () => {
+  expect(journalImageSourcesInPost('![x][  Scan   Name  ]\n\n[scan name]: /a.jpg', '')).toEqual(['/a.jpg']);
+});

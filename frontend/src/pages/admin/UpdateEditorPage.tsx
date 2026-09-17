@@ -159,9 +159,9 @@ export default function JournalEditorPage() {
   const { showToast } = useToast();
   const editorRef = useRef<MDXEditorMethods | null>(null);
   const latestFingerprintRef = useRef('');
-  const currentFingerprintRef = useRef('');
   const saveQueue = useRef<Promise<unknown>>(Promise.resolve());
   const persistedPostId = useRef<string | null>(id ?? null);
+  const adoptedDraftId = useRef<string | null>(null);
 
   /* ---- field state ---- */
   const [createdDraftId, setCreatedDraftId] = useState<string | null>(null);
@@ -267,10 +267,6 @@ export default function JournalEditorPage() {
     ],
   );
 
-  useEffect(() => {
-    currentFingerprintRef.current = currentFingerprint;
-  }, [currentFingerprint]);
-
   /* ---- hydrate / reset ---- */
 
   const hydrateFromPost = useCallback((post: BlogPost) => {
@@ -315,6 +311,7 @@ export default function JournalEditorPage() {
   const resetForNewPost = useCallback(() => {
     imageOwner.current++;
     persistedPostId.current = null;
+    setCreatedDraftId(null);
     setImageDimensions({});
     setTitle(''); setSlug(''); setSlugManuallyEdited(false);
     setExcerpt(''); setCategory(''); setAuthorDisplayName('');
@@ -334,6 +331,13 @@ export default function JournalEditorPage() {
 
   const loadBlogPost = useCallback(async () => {
     if (!id) { setLoading(false); resetForNewPost(); return; }
+    // This editor already owns the draft just created. Refetching it would
+    // replace edits made while creation was pending and invalidate queued saves.
+    if (adoptedDraftId.current === id) {
+      adoptedDraftId.current = null;
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true); setError(null);
       const post = await adminGetBlogPost(id);
@@ -375,14 +379,31 @@ export default function JournalEditorPage() {
           : await adminCreateBlogPost(payload);
         if (owner !== imageOwner.current) return null;
         persistedPostId.current = saved.id;
-        if (currentFingerprintRef.current === currentFingerprint) setImageDimensions(saved.imageDimensions ?? activeDimensions);
+        const returnedDimensions = saved.imageDimensions ?? activeDimensions;
+        setImageDimensions(previous => {
+          const next = { ...previous };
+          for (const source of imageSources) {
+            const before = activeDimensions[source];
+            const current = previous[source];
+            // Metadata for an unchanged exact URL remains useful even if text
+            // changed in flight. Never replace newer browser-observed axes.
+            if (before?.width !== current?.width || before?.height !== current?.height) continue;
+            const returned = validImageDimensions(returnedDimensions[source]);
+            if (returned) next[source] = returned;
+            else delete next[source];
+          }
+          return next;
+        });
         if (reason === 'manual' && saved.unresolvedImageSources?.length) showToast('Saved. Some image dimensions could not be read; those images may still shift while loading.', 'error');
         setCreatedDraftId(saved.id);
         setStatus(saved.status);
         setLastSavedAt(saved.updatedAt);
         setSaveState('saved');
         latestFingerprintRef.current = currentFingerprint;
-        if (!targetId) navigate(`/admin/content/blog/${saved.id}`, { replace: true });
+        if (!targetId) {
+          adoptedDraftId.current = saved.id;
+          navigate(`/admin/content/blog/${saved.id}`, { replace: true });
+        }
         if (successMessage) showToast(successMessage, 'success');
         return saved;
       } catch (err) {

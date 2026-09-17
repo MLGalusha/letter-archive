@@ -14,7 +14,7 @@ Migration 0057 adds only a nullable JSONB column with a constant empty default a
 
 ## Save correctness
 
-The new autosave regression exposed an existing error: an effect continually replaced the saved fingerprint with the current draft fingerprint, making dirty detection false. Saved and current fingerprints now have distinct ownership. Only a successful persisted snapshot advances the saved fingerprint. Edits made while saving remain dirty; failed saves remain errors. A serial promise queue prevents autosave and explicit Save/Publish snapshots from reaching the server out of order. A newly created draft's returned ID is reused by a queued save. Earlier responses do not replace newer dimension state or Markdown.
+The new autosave regression exposed an existing error: an effect continually replaced the saved fingerprint with the current draft fingerprint, making dirty detection false. Only a successful persisted snapshot advances the saved fingerprint. Returned dimensions merge by exact source only when that local entry has not changed since the request. Edits made while saving remain dirty; failed saves remain errors. A serial promise queue prevents autosave and explicit Save/Publish snapshots from reaching the server out of order. A newly created draft's returned ID is reused by a queued save, without rehydrating its older server snapshot over newer local edits. Earlier responses do not replace newer dimension state or Markdown.
 
 ## Controlled verification
 

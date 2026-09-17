@@ -17,7 +17,7 @@ import JournalEditorPage from '../UpdateEditorPage';
 const source = '/blog-images/a.jpg';
 const dimensions = { [source]: { width: 80, height: 160 } };
 const post = { id: 'one', title: 'Article', slug: 'article', bodyMarkdown: `![scan](${source} "float-left")`, status: 'draft', heroImageUrl: source, heroImageAlt: '', imageDimensions: dimensions, updatedAt: '2026-09-17T12:00:00Z', publishedAt: null };
-function mount() { return render(<MemoryRouter initialEntries={['/admin/content/blog/one']}><Routes><Route path="/admin/content/blog/:id" element={<JournalEditorPage />} /></Routes></MemoryRouter>); }
+function mount(entry = '/admin/content/blog/one') { return render(<MemoryRouter initialEntries={[entry]}><Routes><Route path="/admin/content/blog/new" element={<JournalEditorPage />} /><Route path="/admin/content/blog/:id" element={<JournalEditorPage />} /></Routes></MemoryRouter>); }
 beforeEach(() => { vi.clearAllMocks(); getPost.mockResolvedValue(post); savePost.mockImplementation(async (_id, payload) => ({ ...post, ...payload })); publishPost.mockResolvedValue({ ...post, status: 'published' }); });
 describe('journal editor dimensions', () => {
   it('preserves dimensions through hydration, autosave, explicit save and reload', async () => {
@@ -55,7 +55,7 @@ it('keeps newer edits when an earlier save completes and never marks a failed sa
   await waitFor(() => expect(screen.getByLabelText('Markdown')).toHaveValue(latest));
   await waitFor(() => expect(savePost).toHaveBeenCalledTimes(2), { timeout: 2500 });
   expect(savePost.mock.calls[1][1].bodyMarkdown).toBe(latest);
-  expect(savePost.mock.calls[1][1].imageDimensions).toEqual(dimensions);
+  expect(savePost.mock.calls[1][1].imageDimensions).toEqual({ [source]: { width: 999, height: 999 } });
   savePost.mockRejectedValueOnce(new Error('Offline'));
   fireEvent.click(screen.getByRole('button', { name: 'Save' }));
   await waitFor(() => expect(document.querySelector('.journal-save-state')).toHaveClass('state-error'));
@@ -75,4 +75,40 @@ it('serializes explicit saves behind autosave so server snapshots cannot arrive 
   await waitFor(() => expect(savePost).toHaveBeenCalledTimes(2));
   expect(savePost.mock.calls[1][1].bodyMarkdown).toBe('Newer edit');
   expect(screen.getByLabelText('Markdown')).toHaveValue('Newer edit');
+});
+
+
+it('adopts a newly created ID without replacing newer edits or dropping a queued save', async () => {
+  let resolveCreate!: (value: unknown) => void;
+  savePost.mockImplementationOnce(() => new Promise(resolve => { resolveCreate = resolve; }));
+  mount('/admin/content/blog/new');
+  fireEvent.change(screen.getByPlaceholderText('Give your entry a title...'), { target: { value: 'New article' } });
+  fireEvent.change(screen.getByLabelText('Markdown'), { target: { value: 'First snapshot' } });
+  await waitFor(() => expect(savePost).toHaveBeenCalledOnce(), { timeout: 2500 });
+  expect(savePost.mock.calls[0]).toHaveLength(1);
+  fireEvent.change(screen.getByLabelText('Markdown'), { target: { value: 'Newer snapshot' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  expect(savePost).toHaveBeenCalledOnce();
+  resolveCreate({ ...post, title: 'New article', bodyMarkdown: 'First snapshot' });
+  await waitFor(() => expect(savePost).toHaveBeenCalledTimes(2));
+  expect(savePost.mock.calls[1][0]).toBe('one');
+  expect(savePost.mock.calls[1][1].bodyMarkdown).toBe('Newer snapshot');
+  expect(screen.getByLabelText('Markdown')).toHaveValue('Newer snapshot');
+  expect(getPost).not.toHaveBeenCalled();
+});
+
+
+it('keeps newer browser-observed dimensions when an older save response arrives', async () => {
+  let resolveSave!: (value: unknown) => void;
+  savePost.mockImplementationOnce(() => new Promise(resolve => { resolveSave = resolve; }));
+  mount(); await screen.findByDisplayValue('Article');
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await waitFor(() => expect(savePost).toHaveBeenCalledOnce());
+  fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+  const image = screen.getByAltText('scan');
+  Object.defineProperties(image, { naturalWidth: { value: 400 }, naturalHeight: { value: 800 } });
+  fireEvent.load(image);
+  resolveSave({ ...post, imageDimensions: { [source]: { width: 999, height: 999 } } });
+  await waitFor(() => expect(savePost).toHaveBeenCalledTimes(2), { timeout: 2500 });
+  expect(savePost.mock.calls[1][1].imageDimensions).toEqual({ [source]: { width: 400, height: 800 } });
 });

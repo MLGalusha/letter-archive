@@ -176,11 +176,11 @@ visible-card wait ___; effect on search ___ .
 
 ## Reader navigation feedback and independent data (issue 131)
 
-**Status: implementation under review; not yet recorded as deployed.**
+**Status: deployed in 5e000ed3; live Chromium behavior verified on 2026-09-17. Physical iPhone acceptance pending.**
 
 Open [this letter](https://voicesthatremain.com/letter/be6ef848-a8f9-4696-9097-646d4257562a), tap Next, then use browser Back/Forward. Repeat on iPhone 13 Safari and Chrome. Expected after release: navigation immediately shows “Loading letter...” if new data is pending; the retained old letter is dimmed and cannot be interacted with. New letter content appears as soon as its own data arrives, even if next/previous information is still loading. Optional navigation failure does not prevent reading. Check the loading message remains visible below the header and fullscreen closes when leaving a letter.
 
-Automated coverage uses separately held detail/adjacency responses, stale responses during rapid navigation, failed adjacency, and browser Back/Forward. This removes a frontend dependency; it does not claim to fix server startup or scan-generation time.
+A live check held the adjacency response while the article and three scan controls rendered. A second live check held the next detail response and confirmed immediate loading status with the old article inert. Automated coverage additionally checks stale responses during rapid navigation, failed adjacency, and browser Back/Forward in Chromium and WebKit. This removes a frontend dependency; it does not claim to fix server startup or scan-generation time.
 
 Observation: browser ___; connection ___; feedback visible ___; correct destination ___; unexpected behavior ___
 

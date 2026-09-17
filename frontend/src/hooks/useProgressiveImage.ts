@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { recordImageLoad } from '../utils/imagePerformance';
 import { imagePreloadService } from '../services/imagePreloadService';
+import { IMAGE_RETRY_DELAYS_MS } from '../utils/imageRetry';
 
 export interface ProgressiveImageOptions {
   enabled?: boolean;
@@ -38,42 +39,43 @@ const cancelIdle: (id: number) => void =
 
 function loadImage(
   src: string,
-  tier: string,
+  tier: 'thumb' | 'mid' | 'full',
   context: string,
   cancelled: { current: boolean },
   onLoad: (img: HTMLImageElement) => void,
-): HTMLImageElement {
+  imgs: HTMLImageElement[],
+  cleanups: Array<() => void>,
+): void {
   const start = performance.now();
-  const img = new Image();
-  img.onload = () => {
+  let attempt = 0;
+  let retry: ReturnType<typeof setTimeout> | undefined;
+  cleanups.push(() => clearTimeout(retry));
+  const request = () => {
     if (cancelled.current) return;
-    const durationMs = performance.now() - start;
-    recordImageLoad({
-      url: src,
-      tier: tier as 'thumb' | 'mid' | 'full',
-      context,
-      durationMs,
-      cached: durationMs < 15,
-    });
-    onLoad(img);
-  };
-  img.onerror = () => {
-    // Silently skip this resolution tier so the hook doesn't hang
-  };
-  img.src = src;
-  if (img.complete) {
-    if (!cancelled.current) {
-      recordImageLoad({
-        url: src,
-        tier: tier as 'thumb' | 'mid' | 'full',
-        context,
-        durationMs: 0,
-        cached: true,
-      });
+    // WebKit can keep an errored Image failed when its identical src is reassigned.
+    const img = new Image();
+    imgs.push(img);
+    let settled = false;
+    img.onload = () => {
+      if (cancelled.current || settled) return;
+      settled = true;
+      const durationMs = performance.now() - start;
+      recordImageLoad({ url: src, tier, context, durationMs, cached: attempt === 0 && durationMs < 15 });
       onLoad(img);
-    }
-  }
-  return img;
+    };
+    img.onerror = () => {
+      if (cancelled.current || settled) return;
+      settled = true;
+      img.onload = null;
+      img.onerror = null;
+      const delay = IMAGE_RETRY_DELAYS_MS[attempt++];
+      if (delay === undefined) return;
+      retry = setTimeout(request, delay);
+    };
+    img.src = src;
+    if (img.complete && img.naturalWidth > 0) img.onload(new Event('load'));
+  };
+  request();
 }
 
 // Overload: 2-arg legacy signature
@@ -109,7 +111,6 @@ export function useProgressiveImage(
   const [fullLoaded, setFullLoaded] = useState(preloaded);
   const [naturalWidth, setNaturalWidth] = useState<number | null>(preloadedDims?.width ?? null);
   const [naturalHeight, setNaturalHeight] = useState<number | null>(preloadedDims?.height ?? null);
-  const imgsRef = useRef<HTMLImageElement[]>([]);
   const idleRef = useRef<number | null>(null);
   const delayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dimsSetRef = useRef(false);
@@ -127,6 +128,7 @@ export function useProgressiveImage(
 
     const cancelled = { current: false };
     const imgs: HTMLImageElement[] = [];
+    const cleanups: Array<() => void> = [];
 
     const captureDims = (img: HTMLImageElement) => {
       if (!dimsSetRef.current && img.naturalWidth && img.naturalHeight) {
@@ -137,27 +139,27 @@ export function useProgressiveImage(
     };
 
     // 1. Load thumbnail immediately (even for deferred images — it's tiny)
-    imgs.push(loadImage(thumbSrc, 'thumb', context, cancelled, (img) => {
+    loadImage(thumbSrc, 'thumb', context, cancelled, (img) => {
       setThumbLoaded(true);
       captureDims(img);
-    }));
+    }, imgs, cleanups);
 
     // 2. Load mid-quality immediately (if provided)
     if (midSrc) {
-      imgs.push(loadImage(midSrc, 'mid', context, cancelled, (img) => {
+      loadImage(midSrc, 'mid', context, cancelled, (img) => {
         setMidLoaded(true);
         captureDims(img);
-      }));
+      }, imgs, cleanups);
     }
 
     // 3. Load full — skip if preload service already has it, otherwise load
     if (!alreadyPreloaded && !deferFullUntilVisible) {
       const startFull = () => {
         if (cancelled.current) return;
-        imgs.push(loadImage(fullSrc, 'full', context, cancelled, (img) => {
+        loadImage(fullSrc, 'full', context, cancelled, (img) => {
           setFullLoaded(true);
           captureDims(img);
-        }));
+        }, imgs, cleanups);
       };
 
       if (idleUpgrade && midSrc) {
@@ -170,10 +172,10 @@ export function useProgressiveImage(
       }
     }
 
-    imgsRef.current = imgs;
 
     return () => {
       cancelled.current = true;
+      for (const cleanup of cleanups) cleanup();
       for (const img of imgs) { img.onload = null; img.onerror = null; }
       if (idleRef.current !== null) {
         cancelIdle(idleRef.current);
@@ -183,7 +185,6 @@ export function useProgressiveImage(
         clearTimeout(delayRef.current);
         delayRef.current = null;
       }
-      imgsRef.current = [];
     };
   }, [enabled, thumbSrc, midSrc, fullSrc, idleUpgrade, deferFullUntilVisible, context, fullDelay]);
 

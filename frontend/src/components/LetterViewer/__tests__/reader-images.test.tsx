@@ -37,7 +37,7 @@ beforeEach(() => {
     set src(value: string) { requested.push(value); }
   });
 });
-afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); globalThis.ResizeObserver = OriginalResizeObserver; });
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); globalThis.ResizeObserver = OriginalResizeObserver; });
 
 describe('reader scan requests', () => {
   it('uses bounded, density-aware variants for carousel and original transcript previews', () => {
@@ -68,6 +68,33 @@ describe('reader scan requests', () => {
     expect(container.querySelector('.viewer-image')?.getAttribute('src')).toContain('/images/scan-2');
     fireEvent.click(screen.getByRole('button', { name: 'Previous page' }));
     expect(container.querySelector('.viewer-image')?.getAttribute('src')).toContain('/images/scan-1');
+  });
+
+  it.each(['panel', 'lightbox'] as const)('covers failed %s DOM requests during bounded retry backoff', (variant) => {
+    vi.useFakeTimers();
+    const { container } = render(<LetterViewer images={images} variant={variant} />);
+    const first = container.querySelector('.viewer-image')!;
+    const url = first.getAttribute('src');
+    fireEvent.error(first);
+    expect(first).not.toBeVisible();
+    expect(screen.getByRole('status')).toHaveTextContent('Image unavailable');
+    act(() => vi.advanceTimersByTime(1000));
+    const second = container.querySelector('.viewer-image')!;
+    expect(second).not.toBe(first);
+    expect(second.getAttribute('src')).toBe(url);
+    expect(second).toBeVisible();
+    fireEvent.error(second);
+    expect(second).not.toBeVisible();
+    act(() => vi.advanceTimersByTime(2000));
+    const third = container.querySelector('.viewer-image')!;
+    fireEvent.error(third);
+    act(() => vi.advanceTimersByTime(60000));
+    expect(container.querySelector('.viewer-image')).toBe(third);
+    expect(third).not.toBeVisible();
+    fireEvent.load(third);
+    expect(third).toBeVisible();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(originals()).toEqual([]);
   });
 
   it('prefetches only adjacent pages at bounded resolution, including after zoom', () => {

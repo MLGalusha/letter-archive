@@ -2,12 +2,13 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { getAppScrollRootForIO } from '../../utils/appScroll';
 import './PreviewImage.css';
 import { recordImageLoad } from '../../utils/imagePerformance';
+import { useImageRetry } from '../../hooks/useImageRetry';
 
 /** Small card previews need one display-sized image, not several competing tiers. */
 export function PreviewImage({ src, alt, className }: { src: string; alt: string; className?: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [nearViewport, setNearViewport] = useState(() => typeof IntersectionObserver === 'undefined');
-  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const { attempt, failed, onError, onLoad } = useImageRetry(src);
   const loadStartedAt = useRef(0);
 
   useLayoutEffect(() => {
@@ -28,6 +29,7 @@ export function PreviewImage({ src, alt, className }: { src: string; alt: string
   return (
     <div ref={containerRef} className={`preview-image ${className ?? ''}`}>
       <img
+        key={`${src}:${attempt}`}
         className="preview-image__image"
         src={nearViewport ? src : undefined}
         alt={alt}
@@ -35,6 +37,7 @@ export function PreviewImage({ src, alt, className }: { src: string; alt: string
         decoding="async"
         draggable={false}
         onLoad={() => {
+          onLoad();
           const timing = performance.getEntriesByName(src, 'resource').at(-1) as PerformanceResourceTiming | undefined;
           // Keep measuring after a long session fills the Resource Timing buffer.
           recordImageLoad({
@@ -45,10 +48,10 @@ export function PreviewImage({ src, alt, className }: { src: string; alt: string
             cached: Boolean(timing && timing.transferSize === 0 && timing.decodedBodySize > 0),
           });
         }}
-        onError={() => setFailedSrc(src)}
-        style={failedSrc === src ? { visibility: 'hidden' } : undefined}
+        onError={onError}
+        style={failed ? { visibility: 'hidden' } : undefined}
       />
-      {failedSrc === src && <span className="preview-image__error">Image unavailable</span>}
+      {failed && <span className="preview-image__error">Image unavailable</span>}
     </div>
   );
 }

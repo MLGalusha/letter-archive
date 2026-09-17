@@ -1,3 +1,4 @@
+import { RetryingImage } from "../components/common/RetryingImage";
 import { useSiteSettings } from '../hooks/useSiteSettings';
 import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from "react";
 import { createPortal } from "react-dom";
@@ -548,7 +549,7 @@ export default function LetterDetailPage() {
                           style={idx > 0 ? { top: `${idx * 14}rem` } : undefined}
                         >
                           <span className="page-thumb-inner">
-                            <img
+                            <RetryingImage
                               src={getImageUrl(pageImage.imageUrl, { width: 300 })}
                               alt={`Page ${pageImage.pageNumber ?? idx + 1}`}
                               className="page-thumb-img"
@@ -584,7 +585,7 @@ export default function LetterDetailPage() {
                               aria-label={`View page ${segment.pageNumber}`}
                             >
                               <span className="page-thumb-inner">
-                                <img
+                                <RetryingImage
                                   src={getImageUrl(pageImage.imageUrl, { width: 300 })}
                                   alt={`Page ${segment.pageNumber}`}
                                   className="page-thumb-img"
@@ -659,7 +660,7 @@ export default function LetterDetailPage() {
                             aria-label={`View page ${page.pageNumber}`}
                           >
                             <span className="page-thumb-inner">
-                              <img
+                              <RetryingImage
                                 src={getImageUrl(pageImage.imageUrl, { width: 300 })}
                                 alt={`Page ${page.pageNumber}`}
                                 className="page-thumb-img"
@@ -726,7 +727,7 @@ export default function LetterDetailPage() {
                       aria-label={`View ${item.label.toLowerCase()}`}
                     >
                       <span className="page-thumb-inner">
-                        <img
+                        <RetryingImage
                           src={getImageUrl(itemImage.imageUrl, { width: 300 })}
                           alt={item.label}
                           className="page-thumb-img"
@@ -771,7 +772,7 @@ export default function LetterDetailPage() {
                     aria-label={`View ${fallbackLabel.toLowerCase()}`}
                   >
                     <span className="page-thumb-inner">
-                      <img
+                      <RetryingImage
                         src={getImageUrl(extraImages[0].imageUrl, { width: 300 })}
                         alt={fallbackLabel}
                         className="page-thumb-img"

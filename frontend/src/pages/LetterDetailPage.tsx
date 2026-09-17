@@ -21,8 +21,6 @@ import HeaderScrubber from "../components/HeaderScrubber/HeaderScrubber";
 import useLetterScrubber from "../components/LetterHeaderDock/useLetterScrubber";
 import useCarouselDrag from "../hooks/useCarouselDrag";
 import useThumbParallax from "../hooks/useThumbParallax";
-import useIsTouchDevice from "../hooks/useIsTouchDevice";
-import useSwipeNavigation from "../hooks/useSwipeNavigation";
 import BackToTop from "../components/BackToTop";
 import { appScrollTo, getAppScrollElement, getAppScrollY } from "../utils/appScroll";
 import "./LetterDetailPage.css";
@@ -116,7 +114,7 @@ export default function LetterDetailPage() {
   const [viewerStartPage, setViewerStartPage] = useState(0);
 
   // Scan carousel (extracted hook)
-  const { carouselRef, carouselDraggedRef, scrollToSlide } = useCarouselDrag();
+  const { carouselRef, attachCarousel, activeIndex, carouselDraggedRef, scrollToSlide } = useCarouselDrag();
 
   // Transcript view mode: "reading" (reflowed) or "original" (1:1 line match)
   const [transcriptMode, setTranscriptMode] = useState<"reading" | "original">("reading");
@@ -260,23 +258,6 @@ export default function LetterDetailPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [adjacent, displayedLetterIsCurrent, navigate, viewerOpen]);
 
-  // Touch swipe nav between letters (mobile only, disabled when lightbox open)
-  const isTouchDevice = useIsTouchDevice();
-  const { ref: swipeRef, offset: swipeOffset, isSwiping, isAnimating } = useSwipeNavigation({
-    onSwipeLeft: displayedLetterIsCurrent && adjacent?.next
-      ? () => navigate(`/letter/${adjacent.next!.id}`)
-      : undefined,
-    onSwipeRight: displayedLetterIsCurrent && adjacent?.prev
-      ? () => navigate(`/letter/${adjacent.prev!.id}`)
-      : undefined,
-    enabled: (
-      displayedLetterIsCurrent
-      && isTouchDevice
-      && !viewerOpen
-      && !!adjacent
-    ),
-  });
-
   // Build scrubber props from adjacent data (hook must be at top level)
   const scrubberProps = useLetterScrubber(adjacent, letterId);
 
@@ -406,21 +387,12 @@ export default function LetterDetailPage() {
     transcriptVerifClass, transcriptSectionClass, extraVerifClass, extraSectionClass,
   } = derived;
 
-  const swipeActive = isSwiping || isAnimating;
-  const swipeStyle: React.CSSProperties | undefined = swipeActive
-    ? {
-        transform: `translateX(${swipeOffset}px)`,
-        transition: isSwiping ? 'none' : 'transform 0.28s cubic-bezier(0.25, 0.1, 0.25, 1)',
-        willChange: 'transform',
-      }
-    : undefined;
-
   return (
     <>
       <HeaderDock transparent collectionsLink={collectionsLink}>
         {scrubberProps && <HeaderScrubber {...scrubberProps} />}
       </HeaderDock>
-      <article className="letter-article" ref={swipeRef} style={swipeStyle}>
+      <article className="letter-article">
         {seo && (
           <SEO
             title={seo.title}
@@ -476,7 +448,7 @@ export default function LetterDetailPage() {
         {/* ── 3. Scan Image Carousel ──────────────────────── */}
         {carouselImages.length > 0 && (
           <figure id="letter-scans" className="letter-scan-figure" tabIndex={-1}>
-            <div className="scan-carousel" ref={carouselRef} data-swipe-ignore data-image-scroll-root>
+            <div key={letter.id} className="scan-carousel" ref={attachCarousel} data-swipe-ignore data-image-scroll-root>
               {carouselImages.map((img, idx) => {
                 const isLetter = img.type === "letter";
                 const typeLabel = isLetter
@@ -528,9 +500,10 @@ export default function LetterDetailPage() {
                   <button
                     key={i}
                     type="button"
-                    className={`scan-dot${i === 0 ? " active" : ""}`}
+                    className={`scan-dot${i === activeIndex ? " active" : ""}`}
                     onClick={() => scrollToSlide(i)}
                     aria-label={`Go to page ${i + 1}`}
+                    aria-current={i === activeIndex ? "true" : undefined}
                   />
                 ))}
               </div>

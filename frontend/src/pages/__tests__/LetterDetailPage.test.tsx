@@ -6,15 +6,6 @@ import LetterDetailPage from "../LetterDetailPage";
 import { HeaderDockProvider } from "../../contexts/HeaderDockContext";
 import type { Letter } from "../../types/Letter";
 
-const { latestSwipeOptions } = vi.hoisted(() => ({
-  latestSwipeOptions: {
-    current: null as null | {
-      onSwipeLeft?: () => void;
-      onSwipeRight?: () => void;
-      enabled?: boolean;
-    },
-  },
-}));
 const mockNavigate = vi.fn();
 const getLetterByIdMock = vi.fn();
 const getAdjacentLettersMock = vi.fn();
@@ -30,24 +21,9 @@ vi.mock("../../components/LetterViewer/LetterViewer", () => ({
   default: () => <div>LetterViewer</div>,
 }));
 
+// Keep this regression touch-capable if a page gesture is accidentally restored.
 vi.mock("../../hooks/useIsTouchDevice", () => ({
   default: () => true,
-}));
-
-vi.mock("../../hooks/useSwipeNavigation", () => ({
-  default: (options: {
-    onSwipeLeft?: () => void;
-    onSwipeRight?: () => void;
-    enabled?: boolean;
-  }) => {
-    latestSwipeOptions.current = options;
-    return {
-      ref: { current: null },
-      offset: 0,
-      isSwiping: false,
-      isAnimating: false,
-    };
-  },
 }));
 
 vi.mock("react-router-dom", async () => {
@@ -173,6 +149,28 @@ describe("LetterDetailPage", () => {
     consoleErrorSpy.mockRestore();
   });
 
+  it("updates the rendered current dot after scans load and scroll", async () => {
+    const loaded = deferred<Letter>();
+    getLetterByIdMock.mockReturnValue(loaded.promise);
+    const { container } = renderLetterDetailPage();
+    expect(screen.getByText("Loading letter...")).toBeInTheDocument();
+    await act(async () => loaded.resolve(createLetter({ images: [
+      { id: "scan-1", type: "letter", pageNumber: 1, imageUrl: "/images/one.jpg" },
+      { id: "scan-2", type: "letter", pageNumber: 2, imageUrl: "/images/two.jpg" },
+    ] })));
+    const carousel = container.querySelector<HTMLDivElement>(".scan-carousel")!;
+    Object.defineProperty(carousel, "clientWidth", { value: 200 });
+    carousel.getBoundingClientRect = () => ({ left: 500, width: 200 }) as DOMRect;
+    Array.from(carousel.children).forEach((slide, index) => {
+      slide.getBoundingClientRect = () => ({ left: 510 + index * 220 - carousel.scrollLeft, width: 180 }) as DOMRect;
+    });
+    carousel.scrollLeft = 220;
+    fireEvent.scroll(carousel);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Go to page 2" })).toHaveClass("active"));
+    expect(screen.getByRole("button", { name: "Go to page 2" })).toHaveAttribute("aria-current", "true");
+    expect(screen.getByRole("button", { name: "Go to page 1" })).not.toHaveClass("active");
+  });
+
   it("renders the editorial page with hero, summary, transcript, and nav", async () => {
     renderLetterDetailPage();
 
@@ -288,6 +286,35 @@ describe("LetterDetailPage", () => {
     });
   });
 
+  it("leaves horizontal transcript touches to the browser without changing letters", async () => {
+    renderLetterDetailPage();
+    const transcript = await screen.findByText("My dearest friend...");
+    const article = document.querySelector(".letter-article")!;
+    Object.defineProperty(article, "clientWidth", { value: 390 });
+    mockNavigate.mockClear();
+    vi.useFakeTimers();
+    try {
+      fireEvent.touchStart(transcript, { touches: [{ clientX: 300, clientY: 200 }] });
+      const browserRetainsGesture = fireEvent.touchMove(transcript, {
+        touches: [{ clientX: 80, clientY: 210 }], cancelable: true,
+      });
+      fireEvent.touchEnd(transcript, { touches: [] });
+      act(() => vi.advanceTimersByTime(500));
+      expect(browserRetainsGesture).toBe(true);
+      expect((article as HTMLElement).style.transform).toBe("");
+      expect(mockNavigate).not.toHaveBeenCalled();
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("keeps explicit bottom navigation links active", async () => {
+    const user = userEvent.setup();
+    renderLetterDetailPage();
+    const next = await screen.findByRole("link", { name: /Next.*August 11, 1947/ });
+    expect(next).toHaveAttribute("href", "/letter/letter-2");
+    await user.click(next);
+    await waitFor(() => expect(getLetterByIdMock).toHaveBeenCalledWith("letter-2", expect.any(AbortSignal)));
+  });
+
   it("keeps the previous letter visible but disables stale navigation until the new route owns both responses", async () => {
     const letter2 = deferred<Letter>();
     const adjacent2 = deferred<{
@@ -321,7 +348,6 @@ describe("LetterDetailPage", () => {
     const user = userEvent.setup();
     renderLetterDetailPage();
     expect(await screen.findByText(/A bright dispatch from Vienna/)).toBeInTheDocument();
-    expect(latestSwipeOptions.current?.enabled).toBe(true);
     mockNavigate.mockClear();
 
     await user.click(screen.getByRole("link", { name: "Go to letter 2" }));
@@ -336,11 +362,7 @@ describe("LetterDetailPage", () => {
     expect(document.querySelector(".letter-nav-section")).toBeNull();
     fireEvent.keyDown(window, { key: "ArrowRight" });
     expect(mockNavigate).not.toHaveBeenCalled();
-    expect(latestSwipeOptions.current).toMatchObject({
-      enabled: false,
-      onSwipeLeft: undefined,
-      onSwipeRight: undefined,
-    });
+
 
     await act(async () => {
       letter2.resolve(createLetter({
@@ -366,13 +388,8 @@ describe("LetterDetailPage", () => {
 
     expect(await screen.findByText("A second dispatch")).toBeInTheDocument();
     expect(document.querySelector(".letter-nav-section")).not.toBeNull();
-    expect(latestSwipeOptions.current?.enabled).toBe(true);
-    expect(latestSwipeOptions.current?.onSwipeLeft).toEqual(
-      expect.any(Function),
-    );
-    expect(latestSwipeOptions.current?.onSwipeRight).toEqual(
-      expect.any(Function),
-    );
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(mockNavigate).toHaveBeenCalledWith("/letter/letter-3");
   });
 
 });

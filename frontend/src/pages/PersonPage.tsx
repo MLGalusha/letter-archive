@@ -13,25 +13,35 @@ export default function PersonPage() {
   const navigate = useNavigate();
   const { personId } = useParams<{ personId: string }>();
 
-  const [data, setData] = useState<PublicPersonDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{
+    personId: string | undefined; data: PublicPersonDetail | null; error: string | null;
+  } | null>(null);
+  const [routeOwner, setRouteOwner] = useState(personId);
+  if (routeOwner !== personId) {
+    setRouteOwner(personId);
+    setResult(null);
+  }
+  const current = result?.personId === personId ? result : null;
+  const loading = !!personId && !current;
+  const data = current?.data ?? null;
+  const error = current?.error ?? null;
 
   useEffect(() => {
     if (!personId) return;
+    const controller = new AbortController();
 
     async function fetchPerson() {
       try {
-        const result = await getPersonPublic(personId!);
-        setData(result);
+        const data = await getPersonPublic(personId!, controller.signal);
+        if (!controller.signal.aborted) setResult({ personId, data, error: null });
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Person not found');
-      } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setResult({ personId, data: null,
+          error: err instanceof Error ? err.message : 'Person not found' });
       }
     }
 
     fetchPerson();
+    return () => controller.abort();
   }, [personId]);
 
   const handleBack = () => {

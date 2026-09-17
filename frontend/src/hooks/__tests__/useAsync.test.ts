@@ -3,6 +3,17 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { useAsync } from '../useAsync';
 
 describe('useAsync', () => {
+  it('passes a live signal to work and aborts it on replacement and unmount', async () => {
+    const signals: AbortSignal[] = [];
+    const fn = (signal: AbortSignal) => { signals.push(signal); return new Promise<string>(() => {}); };
+    const { rerender, unmount } = renderHook(({ id }) => useAsync(fn, [id]), { initialProps: { id: 'a' } });
+    expect(signals[0].aborted).toBe(false);
+    rerender({ id: 'b' });
+    expect(signals[0].aborted).toBe(true);
+    expect(signals[1].aborted).toBe(false);
+    unmount();
+    expect(signals[1].aborted).toBe(true);
+  });
   it('starts with loading=true and data=null', () => {
     const fn = vi.fn(() => new Promise<string>(() => {})); // never resolves
     const { result } = renderHook(() => useAsync(fn, []));

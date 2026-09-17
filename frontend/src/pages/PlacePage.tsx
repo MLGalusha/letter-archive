@@ -13,12 +13,12 @@ export default function PlacePage() {
   const navigate = useNavigate();
   const { placeId } = useParams<{ placeId: string }>();
 
-  const { data, loading, error } = useAsync<PublicPlaceDetail>(async () => {
+  const { data, loading, error } = useAsync<PublicPlaceDetail>(async (signal) => {
     if (!placeId) {
       throw new Error('Place not found');
     }
 
-    return getPlacePublic(placeId);
+    return getPlacePublic(placeId, signal);
   }, [placeId]);
 
   const handleBack = () => {

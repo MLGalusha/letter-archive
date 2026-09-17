@@ -26,6 +26,13 @@ describe('health route integration', () => {
     expect(response.body).toEqual({ ok: false, db: 'disconnected', requestId: expect.any(String) });
   });
 
+  it('keeps an unexpected database response unavailable', async () => {
+    query.mockResolvedValueOnce([{ ok: 0 }]);
+    const response = await invokeRouter(healthRouter, { method: 'GET', url: '/health/ready' });
+    expect(response.statusCode).toBe(503);
+    expect(response.body).toEqual({ ok: false, db: 'unexpected response', requestId: expect.any(String) });
+  });
+
   it('reports a connected database', async () => {
     query.mockResolvedValueOnce([{ ok: 1 }]);
     const response = await invokeRouter(healthRouter, { method: 'GET', url: '/health/ready' });

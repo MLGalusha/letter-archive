@@ -27,6 +27,10 @@ import { notify } from './services/notifications.js';
 import { startNotificationSweeper, stopNotificationSweeper } from './services/notification-sweeper.js';
 import { initNotificationStreamBroadcaster } from './routes/admin/notifications-stream.js';
 
+import { startupTiming } from './utils/startup-timing.js';
+
+logger.info({ startup: startupTiming.snapshot() }, 'Startup dependencies ready');
+
 const app = express();
 const LEASE_RECOVERY_INTERVAL_MS = 60_000;
 
@@ -103,8 +107,10 @@ app.use(errorHandler);
 
 // Start server
 const server = app.listen(env.PORT, () => {
+  startupTiming.markListening();
   logger.info(
     {
+      startup: startupTiming.snapshot(),
       port: env.PORT,
       openai: hasOpenAI ? 'enabled' : 'stub mode',
       storageDir: env.STORAGE_DIR,

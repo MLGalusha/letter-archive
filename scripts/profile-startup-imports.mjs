@@ -1,0 +1,26 @@
+import { performance } from 'node:perf_hooks';
+import { syncBuiltinESMExports } from 'node:module';
+import net from 'node:net';
+import http from 'node:http';
+import https from 'node:https';
+// Import-only experiment: no sockets, HTTP calls, listener, or listen callback.
+const deny = () => { throw new Error('Network is disabled for startup import profiling'); };
+net.Socket.prototype.connect = deny;
+http.request = deny; http.get = deny; https.request = deny; https.get = deny;
+globalThis.fetch = deny;
+let listenAt;
+http.Server.prototype.listen = function () { listenAt = performance.now(); return this; };
+syncBuiltinESMExports();
+process.env.NODE_ENV = 'production';
+process.env.DOTENV_CONFIG_PATH = '/dev/null';
+process.env.DATABASE_URL = 'postgresql://unused:unused@127.0.0.1:1/unused';
+process.env.JWT_SECRET = 'profiling-only-no-server';
+process.env.LOG_TO_FILES = 'false';
+process.env.STORAGE_DIR = '/tmp/letter-archive-startup-readonly';
+delete process.env.OPENAI_API_KEY;
+const target = process.argv[2] || 'index';
+const cpu = process.cpuUsage(); const start = performance.now();
+await import(new URL(`../backend/dist/${target}.js`, import.meta.url));
+const end = performance.now();
+console.log(JSON.stringify({ target, importMs: end - start, listenMs: listenAt ? listenAt - start : null, cpuMs: Object.values(process.cpuUsage(cpu)).reduce((a,b)=>a+b,0)/1000, node:process.version, platform:process.platform, arch:process.arch }));
+process.exit(0);

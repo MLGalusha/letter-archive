@@ -32,5 +32,10 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
+    {
+      name: 'public-webkit',
+      testMatch: 'public-archive-history.mocked.spec.ts',
+      use: { ...devices['Desktop Safari'] },
+    },
   ],
 });

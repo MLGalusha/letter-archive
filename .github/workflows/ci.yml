@@ -104,12 +104,14 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('e2e/package-lock.json') }}
+          key: playwright-chromium-webkit-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('e2e/package-lock.json') }}
 
       - name: Install Playwright browser
         timeout-minutes: 8
         working-directory: e2e
-        run: npx playwright install --with-deps --only-shell chromium
+        run: |
+          npx playwright install --with-deps --only-shell chromium
+          npx playwright install --with-deps webkit
 
       - name: Run mocked e2e
         working-directory: e2e

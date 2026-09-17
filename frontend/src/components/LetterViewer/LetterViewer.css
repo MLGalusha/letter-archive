@@ -323,7 +323,8 @@
 }
 
 .letter-viewer--lightbox .viewer-image,
-.letter-viewer--lightbox .viewer-image-thumb {
+.letter-viewer--lightbox .viewer-image-thumb,
+.letter-viewer--lightbox .viewer-swipe-neighbor img {
   max-width: calc(100% - 6rem);
   max-height: calc(100% - 3rem);
 }
@@ -449,7 +450,8 @@
 
 @media (max-width: 640px) {
   .letter-viewer--lightbox .viewer-image,
-  .letter-viewer--lightbox .viewer-image-thumb {
+  .letter-viewer--lightbox .viewer-image-thumb,
+  .letter-viewer--lightbox .viewer-swipe-neighbor img {
     max-width: calc(100% - 1rem);
     max-height: calc(100% - 1rem);
   }
@@ -488,4 +490,26 @@
     font-size: 0.65rem;
     padding: 0.22rem 0.6rem;
   }
+}
+
+/* Panel images keep their existing flex layout; only lightbox images move as a carriage. */
+.viewer-carriage { display: contents; }
+.letter-viewer--lightbox .viewer-carriage,
+.viewer-swipe-neighbor {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.letter-viewer--lightbox .viewer-carriage { will-change: transform; }
+.viewer-swipe-neighbor { pointer-events: none; }
+.viewer-swipe-neighbor img {
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  user-select: none;
 }

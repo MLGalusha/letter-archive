@@ -207,10 +207,10 @@ test('@mocked real-time carousel visibility and live reduced-motion check', asyn
   await trackChanges(page);
   await page.waitForTimeout(6000);
   expect(await page.evaluate(() => (window as any).carouselMutations)).toBe(0);
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await waitForSignal(page, 'reducedMotion', true, false);
   await carousel.evaluate(node => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
   await waitForSignal(page, 'intersecting', true, false);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await waitForSignal(page, 'reducedMotion', true, false);
   await page.waitForTimeout(6000);
   expect(await page.evaluate(() => (window as any).carouselMutations)).toBe(0);
   await expect(carousel.getByRole('tab', { name: 'Slide 2' })).toHaveAttribute('aria-selected', 'true');

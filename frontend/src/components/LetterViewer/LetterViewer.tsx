@@ -196,6 +196,8 @@ const LetterViewer = memo(function LetterViewer({
     context: variant === "lightbox" ? 'viewer-lightbox' : 'viewer-panel',
   });
   const displayedRetry = useImageRetry(fullSrc);
+  const placeholderSrc = midLoaded && midSrc ? midSrc : thumbSrc;
+  const placeholderRetry = useImageRetry(placeholderSrc);
   const activeScanReady = fullLoaded && !displayedRetry.failed;
   const handleFullLoad = (image: HTMLImageElement) => {
     displayedRetry.onLoad();
@@ -875,12 +877,16 @@ const LetterViewer = memo(function LetterViewer({
           </div>;
         })}
         {!fullLoaded && physicalWidth > 0 && (
-          <RetryingImage
-            src={midLoaded && midSrc ? midSrc : thumbSrc}
+          <img
+            key={`placeholder:${placeholderSrc}:${placeholderRetry.attempt}`}
+            src={placeholderSrc}
+            onLoad={placeholderRetry.onLoad}
+            onError={placeholderRetry.onError}
             alt=""
             className={`viewer-image-thumb ${isAnimating ? "animating" : ""}`}
             style={{
               filter: midLoaded ? 'none' : undefined,
+              visibility: placeholderRetry.failed ? 'hidden' : undefined,
               transform: `scale(${scale}) translate(${position.x / scale}px, ${
                 position.y / scale
               }px)`,
@@ -890,7 +896,7 @@ const LetterViewer = memo(function LetterViewer({
           />
         )}
         <img
-          key={`${fullSrc}:${displayedRetry.attempt}`}
+          key={`main:${fullSrc}:${displayedRetry.attempt}`}
           ref={imageRef}
           onError={() => { onFullError(); displayedRetry.onError(); }}
           onLoad={(event) => handleFullLoad(event.currentTarget)}
@@ -924,7 +930,7 @@ const LetterViewer = memo(function LetterViewer({
           draggable={false}
         />
 
-        {((displayedRetry.failed || fullFailed) && !midLoaded) && (
+        {((displayedRetry.failed || fullFailed) && (!midLoaded || placeholderRetry.failed)) && (
           <span className="viewer-image-error" role="status">Image unavailable</span>
         )}
         </div>

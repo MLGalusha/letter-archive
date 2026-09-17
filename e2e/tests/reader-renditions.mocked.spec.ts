@@ -19,7 +19,7 @@ async function mount(page: Page) {
       const {default:LetterViewer}=await import('/src/components/LetterViewer/LetterViewer.tsx');
       const {getImageUrl}=await import('/src/api/client.ts');
       const {imagePreloadService}=await import('/src/services/imagePreloadService.ts');
-      window.markCached=(imageUrl)=>imagePreloadService.recordLoaded(getImageUrl(imageUrl,{width:1200}),{naturalWidth:1200,naturalHeight:1600});
+      window.markCached=(imageUrl,width=1200)=>imagePreloadService.recordLoaded(getImageUrl(imageUrl,{width}),{naturalWidth:width,naturalHeight:width*4/3});
       window.readerReady=false;
       const root=createRoot(document.getElementById('fixture'));
       window.renderReader=(props)=>root.render(React.createElement(ReaderScanImage,{imageUrl:'/fixture-images/scan?v=one',alt:'Reader scan',loading:'eager',onReadyChange:(ready)=>{window.readerReady=ready},style:{width:360,position:'relative'},...props}));
@@ -191,5 +191,33 @@ for (const cacheControl of ['no-store', 'max-age=0']) {
       expect(urls.filter(url => url.includes('w=1200'))).toHaveLength(1);
       expect(urls.every(url => url.includes('/one?'))).toBe(true);
     } finally { release(); await context.close(); }
+  });
+}
+
+for (const previewFails of [false, true]) {
+  test(`@mocked fullscreen full failure preserves a working preview or reports both failures: ${previewFails}`, async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3 });
+    const page = await context.newPage(); const urls: string[] = [];
+    await page.addInitScript(() => Object.defineProperty(navigator, 'connection', { configurable: true, value: { saveData: true } }));
+    await page.route('**/fixture-images/**', async route => {
+      const url = route.request().url(); urls.push(url);
+      if (url.includes('w=1200') || previewFails) return route.fulfill({ status: 503, body: 'Temporarily unavailable' });
+      return route.fulfill({ contentType: 'image/png', path: png });
+    });
+    try {
+      await mount(page);
+      await page.evaluate(() => { (window as any).markCached('/fixture-images/one?v=one',480); (window as any).renderViewer(); });
+      await expect.poll(() => urls.filter(url => url.includes('w=1200')).length).toBe(3);
+      await expect(page.locator('.viewer-image')).not.toBeVisible();
+      if (previewFails) {
+        await expect.poll(() => urls.filter(url => url.includes('w=480')).length).toBe(3);
+        await expect(page.locator('.viewer-image-thumb')).not.toBeVisible();
+        await expect(page.getByRole('status')).toHaveText('Image unavailable');
+      } else {
+        await expect(page.locator('.viewer-image-thumb')).toBeVisible();
+        await expect.poll(() => page.locator('.viewer-image-thumb').evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth)).toBe(480);
+        await expect(page.getByRole('status')).toHaveCount(0);
+      }
+    } finally { await context.close(); }
   });
 }

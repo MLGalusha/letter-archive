@@ -254,7 +254,9 @@ Direct entry requests 32px and the measured 1200px, with no guessed 800px or ext
 request. Tests cover resize to 480px, version changes, active-scan priority,
 reduced-data behavior, and matching viewer neighbors. Fullscreen tests also hold the
 actual displayed response with no-store and max-age=0 cache headers: its preview
-stays visible and there is exactly one full-size request. These request/visibility
+stays visible and there is exactly one full-size request. Failure tests verify a
+working cached preview survives full-image failure; if both displayed tiers fail
+after bounded retries, fullscreen shows “Image unavailable.” These request/visibility
 checks establish the intended behavior; production latency and byte savings still
 need comparable live measurements after deployment. A missing or evicted browser
 cache can still require HTTP revalidation; the bounded readiness index stores URLs

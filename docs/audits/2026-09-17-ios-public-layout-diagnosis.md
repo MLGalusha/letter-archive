@@ -148,3 +148,6 @@ The changes were isolated onto `fix-ios-public-layout` from current main (`8cb67
 A new navigation regression test reproduced an image-viewer cleanup overwriting the destination's history position (280–300px instead of zero). Cleanup now restores the old letter position only when the route has not changed. The focused check covers Chromium phone geometry, WebKit phone geometry, and desktop Chromium.
 
 On this isolated branch, all 1,331 frontend tests passed in one run; the lint regression gate passed with zero diagnostic increases. Further CI and release results are recorded on the PR rather than inferred from the original mixed-workspace checks above.
+
+
+PR #151 automated review identified horizontal overflow during touch page swipes. A regression test reproduced document widths of 550–551px in a 390px viewport. Applying `overflow-x: clip` to the public shell keeps the translated wrapper inside the viewport without creating another vertical scroll container. The test now checks the in-progress transform, zero horizontal scroll offset, and completed page navigation in Chromium/WebKit touch modes. The reviewed local mobile suite passes 21 tests with 3 intentional skips (desktop touch swipe and the two unsupported CDP inset configurations).

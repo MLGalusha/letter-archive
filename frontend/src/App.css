@@ -11,8 +11,9 @@ html, body {
   position: relative;
 }
 
-/* Header is now position: fixed, not sticky, so overflow-clip is safe
-   anywhere — it no longer breaks sticky-ancestor rules. */
+/* Clip the page-swipe wrapper as well as page content, without creating
+   another scroll container or clipping the document's vertical surface. */
+.public-site-shell,
 .main-page-layout .body-layout,
 .public-letter-shell {
   overflow-x: clip;

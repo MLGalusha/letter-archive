@@ -186,6 +186,22 @@ test.describe('@mocked Public mobile layout', () => {
     await expect(page.locator('.header')).not.toHaveClass(/header--hidden/);
   });
 
+  test('horizontal page swipes do not widen or offset the document', async ({ page, isMobile }) => {
+    test.skip(!isMobile, 'Page swipes are enabled only for touch devices.');
+    await mockPublic(page);
+    await home(page);
+    const content = page.locator('#main-content');
+    await content.dispatchEvent('touchstart', { touches: [{ identifier: 0, clientX: 80, clientY: 300 }] });
+    await content.dispatchEvent('touchmove', { touches: [{ identifier: 0, clientX: 240, clientY: 300 }] });
+    await expect.poll(() => content.evaluate(el => new DOMMatrix(getComputedStyle(el.parentElement!).transform).m41)).toBeGreaterThan(100);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(await page.evaluate(() => document.documentElement.clientWidth));
+    await page.evaluate(() => window.scrollTo(100, 0));
+    expect(await page.evaluate(() => window.scrollX)).toBe(0);
+    await content.dispatchEvent('touchend', { touches: [] });
+    await expect(page).toHaveURL(/\/support$/);
+    expect(await page.evaluate(() => window.scrollX)).toBe(0);
+  });
+
   test('safe-area inset moves header and content together, including dock rotation', async ({ page, browserName, isMobile }) => {
     test.skip(browserName !== 'chromium' || !isMobile, 'CDP inset injection is Chromium-only; not an iOS simulation.');
     await mockPublic(page);

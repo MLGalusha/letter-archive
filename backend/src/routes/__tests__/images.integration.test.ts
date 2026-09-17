@@ -16,6 +16,8 @@ const {
   createReadStreamMock,
   verifyImageSessionTokenMock,
   sharpMock,
+  previewReadMock,
+  previewWriteMock,
 } = vi.hoisted(() => ({
   eqMock: vi.fn(),
   andMock: vi.fn(),
@@ -28,6 +30,8 @@ const {
   createReadStreamMock: vi.fn(),
   verifyImageSessionTokenMock: vi.fn(),
   sharpMock: vi.fn(),
+  previewReadMock: vi.fn(),
+  previewWriteMock: vi.fn(),
 }));
 
 vi.mock('drizzle-orm', () => ({
@@ -63,6 +67,13 @@ vi.mock('../../db/index.js', () => ({
   },
   adminUsers: {
     id: 'adminUsers.id',
+  },
+}));
+
+vi.mock('../../services/image-variant-store.js', () => ({
+  ImageVariantStore: class {
+    read = previewReadMock;
+    write = previewWriteMock;
   },
 }));
 
@@ -136,6 +147,8 @@ function catalogueLetter(
 describe('images route integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    previewReadMock.mockReset().mockResolvedValue({ status: 'miss' });
+    previewWriteMock.mockReset().mockResolvedValue('busy');
     eqMock.mockImplementation((left, right) => ({ op: 'eq', left, right }));
     andMock.mockImplementation((...conditions) => ({ op: 'and', conditions }));
     sqlMock.mockImplementation((strings, ...values) => ({ strings, values }));
@@ -848,6 +861,8 @@ describe('images route integration', () => {
       server.removeAllListeners('request');
       server.on('request', app);
       sharpMock.mockClear();
+      previewReadMock.mockClear();
+      previewWriteMock.mockClear();
       const result = await request({ 'if-none-match': initial.headers.etag });
       expect(result.status).toBe(304);
       expect(result.body).toBe('');
@@ -863,6 +878,8 @@ describe('images route integration', () => {
       expect(mixed.status).toBe(304);
       expect(schedule).not.toHaveBeenCalled();
       expect(sharpMock).not.toHaveBeenCalled();
+      expect(previewReadMock).not.toHaveBeenCalled();
+      expect(previewWriteMock).not.toHaveBeenCalled();
     });
 
     it('handles weak, strong, list, wildcard and HEAD validators', async () => {
@@ -970,6 +987,118 @@ describe('images route integration', () => {
       const result = await request({ 'if-none-match': initial.headers.etag }, 'w=480&token=stale-token');
       expect(result.status).toBe(304);
       expect(result.headers['cache-control']).toBe('private, no-store');
+    });
+  });
+
+  describe('saved480px previews', () => {
+    let sequence = 0;
+    let page: { id: string; checksumSha256: string; storagePath: string; originalFilename: string; letter: ReturnType<typeof catalogueLetter> };
+    const request = (width = '480', headers: Record<string, string> = {}) => invokeRouter(imagesRouter, {
+      method: 'GET', url: `/images/${page.id}`, query: { w: width }, headers,
+    });
+    beforeEach(() => {
+      page = { id: `durable-${++sequence}`, checksumSha256: 'original', storagePath: `durable-${sequence}.jpg`,
+        originalFilename: 'image.jpg', letter: catalogueLetter() };
+      findFirstMock.mockResolvedValue(page);
+      getAbsoluteStoragePathMock.mockImplementation((path) => `/abs/storage/${path}`);
+      statMock.mockResolvedValue({ size: 4096, mtimeMs: 100 });
+    });
+
+    it('serves saved bytes without entering Sharp or writing again', async () => {
+      previewReadMock.mockResolvedValue({ status: 'hit', buffer: Buffer.from('saved image') });
+      const response = await request();
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toEqual(Buffer.from('saved image'));
+      expect(response.headers['content-type']).toBe('image/jpeg');
+      expect(sharpMock).not.toHaveBeenCalled();
+      expect(previewWriteMock).not.toHaveBeenCalled();
+      expect(findFirstMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('reuses24 real saved files from an independent store without transforming', async () => {
+      const { mkdtemp, rm } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+      const { tmpdir } = await import('node:os');
+      const { join } = await import('node:path');
+      const { ImageVariantStore: RealStore } = await vi.importActual<typeof import('../../services/image-variant-store.js')>('../../services/image-variant-store.js');
+      const { imageVariantIdentity } = await import('../../services/image-variant.js');
+      const root = await mkdtemp(join(tmpdir(), 'route-preview-'));
+      try {
+        const writer = new RealStore(root);
+        const pages = Array.from({ length: 24 }, (_, i) => ({ ...page, id: `${page.id}-${i}`, storagePath: `${page.id}-${i}.jpg` }));
+        for (const item of pages) {
+          const key = imageVariantIdentity({ pageId: item.id, ...item, size: 4096, mtimeMs: 100 }, 480, 'jpeg');
+          expect(await writer.write(key, 480, 'jpeg', Buffer.from(`saved ${item.id}`))).toBe('saved');
+        }
+        findFirstMock.mockImplementation(({ where }) => pages.find((item) => item.id === where.right));
+        const router = createImagesRouter(new ImageTransformScheduler({ concurrency: 2, maxQueued: 32, maxWaiters: 64 }), new RealStore(root));
+        const responses = await Promise.all(pages.map((item) => invokeRouter(router, {
+          method: 'GET', url: `/images/${item.id}`, query: { w: '480' },
+        })));
+        expect(responses.every((result) => result.statusCode === 200)).toBe(true);
+        expect(responses.map((result) => result.body)).toEqual(pages.map((item) => Buffer.from(`saved ${item.id}`)));
+        expect(sharpMock).not.toHaveBeenCalled();
+      } finally { await rm(root, { recursive: true, force: true }); }
+    });
+
+    it.each(['miss', 'invalid', 'error', 'busy'] as const)('falls back safely after a %s read and failed write', async (status) => {
+      previewReadMock.mockResolvedValue({ status });
+      previewWriteMock.mockResolvedValue('error');
+      expect((await request()).statusCode).toBe(200);
+      expect(sharpMock).toHaveBeenCalledOnce();
+      expect(previewWriteMock).toHaveBeenCalledOnce();
+      expect(findFirstMock).toHaveBeenCalledTimes(3);
+    });
+
+    it.each(['32', '479', '640', '1600'])('does not persist unsupported width%s', async (width) => {
+      expect((await request(width)).statusCode).toBe(200);
+      expect(sharpMock).toHaveBeenCalledOnce();
+      expect(previewReadMock).not.toHaveBeenCalled();
+      expect(previewWriteMock).not.toHaveBeenCalled();
+    });
+
+    it('does not read or save hidden admin previews', async () => {
+      page.letter = catalogueLetter({ visibility: 'HIDDEN' });
+      verifyImageSessionTokenMock.mockReturnValue({ userId: 'admin-1', purpose: 'image-session' });
+      const response = await request('480', { cookie: 'letter_archive_image_session=valid-image-session' });
+      expect(response.statusCode).toBe(200);
+      expect(response.headers['cache-control']).toBe('private, no-store');
+      expect(previewReadMock).not.toHaveBeenCalled();
+      expect(previewWriteMock).not.toHaveBeenCalled();
+    });
+
+    it.each(['read', 'write'] as const)('denies an image unpublished during the saved %s', async (stage) => {
+      const hide = () => findFirstMock.mockResolvedValue({ ...page, letter: catalogueLetter({ visibility: 'HIDDEN' }) });
+      if (stage === 'read') previewReadMock.mockImplementation(async () => { hide(); return { status: 'hit', buffer: Buffer.from('saved') }; });
+      else previewWriteMock.mockImplementation(async () => { hide(); return 'saved'; });
+      const response = await request();
+      expect(response.statusCode).toBe(404);
+      expect(response.headers['cache-control']).toBe('private, no-store');
+      // A cached variant cannot bypass publication on a subsequent request either.
+      expect((await request()).statusCode).toBe(404);
+      expect(previewReadMock).toHaveBeenCalledOnce();
+    });
+
+    it.each(['read', 'write'] as const)('rejects a source replaced during saved %s', async (stage) => {
+      const replace = () => findFirstMock.mockResolvedValue({ ...page, checksumSha256: 'replacement', storagePath: 'replacement.jpg' });
+      if (stage === 'read') previewReadMock.mockImplementation(async () => { replace(); return { status: 'hit', buffer: Buffer.from('old') }; });
+      else previewWriteMock.mockImplementation(async () => { replace(); return 'saved'; });
+      const response = await request();
+      expect(response.statusCode).toBe(503);
+      expect(response.headers['cache-control']).toBe('private, no-store');
+      expect(response.headers['retry-after']).toBe('1');
+    });
+
+    it.each(['read', 'write'] as const)('rejects a file modified during a saved %s without a database change', async (stage) => {
+      const modify = () => statMock.mockResolvedValue({ size: 5000, mtimeMs: 200 });
+      if (stage === 'read') previewReadMock.mockImplementation(async () => {
+        modify(); return { status: 'hit', buffer: Buffer.from('old') };
+      });
+      else previewWriteMock.mockImplementation(async () => { modify(); return 'saved'; });
+      expect((await request()).statusCode).toBe(503);
+      if (stage === 'read') {
+        expect(sharpMock).not.toHaveBeenCalled();
+        expect(previewWriteMock).not.toHaveBeenCalled();
+      }
     });
   });
 

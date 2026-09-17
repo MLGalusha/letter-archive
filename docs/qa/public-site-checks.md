@@ -140,3 +140,26 @@ Observation: ___
 ## Change log
 
 - Initial checklist: created alongside old-ticket reconciliation and issue 32 cleanup. Safari and Chrome coverage applies across the public site, including the iPhone 13. New implementation/deployment results will be recorded here as work lands.
+
+## Reusable archive-card previews (issue 122)
+
+**Status: candidate; release and live checks pending.** This change saves 480px card
+previews after their first successful generation so another server process can
+reuse them. It does not pre-generate every image, and the first request may still
+wait for generation and saving.
+
+- After the release is confirmed, open [Home](https://voicesthatremain.com/) and
+  [Collection 009](https://voicesthatremain.com/collections/009) in Safari and Chrome
+  on the iPhone 13. Scroll at an ordinary pace, then try a few faster jumps.
+- Expected: visible cards eventually show their scans without broken-image icons;
+  search and filtering remain responsive while previews arrive. Record the route,
+  scroll position and approximate wait if a visible card stays blank.
+- Revisit the same route normally. Repeated visits may benefit from browser,
+  process-memory or saved previews; browser speed alone cannot distinguish them.
+  Engineering acceptance uses server read/transform timings to establish durable
+  reuse. A fresh browser is not a fresh server instance.
+- Keep original scan viewing and deliberate zoom working. This change persists
+  card-sized previews only; it does not replace original downloads.
+
+Observation: date ___; browser/device ___; route ___; first visit/revisit ___;
+visible-card wait ___; effect on search ___ .

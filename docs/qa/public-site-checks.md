@@ -88,12 +88,13 @@ Observation: ___
 
 ### Image follow-up: repeat visits
 
-**Status: implemented for review; production verification pending.** [Issue 121](https://github.com/MLGalusha/letter-archive/issues/121).
+**Status: early revalidation deployed and verified; physical phone checks remain.** [Issue 121](https://github.com/MLGalusha/letter-archive/issues/121).
 
 - Open [Home](https://voicesthatremain.com/) or [Collection 003](https://voicesthatremain.com/collections/003), allow images to finish, then revisit in the same browser. Try Safari and Chrome with normal browser caching enabled.
-- Expected after release: the same images display correctly. Where the browser asks whether its cached preview is still current, the server can answer without resizing it again. This does not eliminate the first download or guarantee an instant first visit.
+- Expected: the same images display correctly. Where the browser asks whether its cached preview is still current, the server can answer without resizing it again. This does not eliminate the first download or guarantee an instant first visit.
 - A forced reload or DevTools Disable cache can deliberately bypass this shortcut. Server-side verification records a matching conditional response with no resize work; visual appearance alone cannot prove that.
-- Saved previews (#122) and measured loading-priority improvements (#123) are the next separate steps.
+- A read-only check at release `dc5c1b44` confirmed a zero-body 304 with `cache: not-modified` and no queue/transform work. The single request recorded 10ms server time and 73ms client time; this is a mechanism check, not a benchmark. [Verification receipt](https://github.com/MLGalusha/letter-archive/pull/124#issuecomment-5708570898).
+- Saved previews (#122) are deployed, with one production save and bounded Chromium/WebKit checks verified. The [local image pilot](../audits/2026-09-17-visible-image-pilot.md) confirmed byte-identical saved previews across backend restarts. It did not reproduce visible blanks, so no frontend priority change was justified locally. Issues #123 and #50 remain open for representative production and physical phone checks.
 
 Observation: ___
 
@@ -143,12 +144,12 @@ Observation: ___
 
 ## Reusable archive-card previews (issue 122)
 
-**Status: candidate; release and live checks pending.** This change saves 480px card
+**Status: deployed; bounded browser checks complete, physical phone acceptance pending.** This change saves 480px card
 previews after their first successful generation so another server process can
 reuse them. It does not pre-generate every image, and the first request may still
 wait for generation and saving.
 
-- After the release is confirmed, open [Home](https://voicesthatremain.com/) and
+- Open [Home](https://voicesthatremain.com/) and
   [Collection 009](https://voicesthatremain.com/collections/009) in Safari and Chrome
   on the iPhone 13. Scroll at an ordinary pace, then try a few faster jumps.
 - Expected: visible cards eventually show their scans without broken-image icons;
@@ -158,6 +159,15 @@ wait for generation and saving.
   process-memory or saved previews; browser speed alone cannot distinguish them.
   Engineering acceptance uses server read/transform timings to establish durable
   reuse. A fresh browser is not a fresh server instance.
+- A bounded check confirmed a preview was saved through production storage. The
+  first request still waited for generation and saving. Its subsequent 304 response
+  used early browser-cache revalidation; it did not prove reuse of the saved file.
+- Chromium still showed some waiting after fast jumps, then all eight visible
+  images settled during an additional stationary wait. WebKit ultimately showed
+  all eight visible images ready, but its fast-scroll script hit a pagination
+  click race, so that phase is not a completed timing check. Search and clear
+  worked in both engines. These desktop-engine checks do not replace your phone
+  observations or establish a production speed improvement. [Live observations](https://github.com/MLGalusha/letter-archive/issues/50#issuecomment-5708851265).
 - Keep original scan viewing and deliberate zoom working. This change persists
   card-sized previews only; it does not replace original downloads.
 

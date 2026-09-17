@@ -10,6 +10,8 @@ const mockNavigate = vi.fn();
 const getLetterByIdMock = vi.fn();
 const getAdjacentLettersMock = vi.fn();
 
+vi.mock("../../hooks/useSiteSettings", () => ({ useSiteSettings: () => null }));
+
 vi.mock("../../api/letters", () => ({
   getLetterById: (...args: unknown[]) => getLetterByIdMock(...args),
   getAdjacentLetters: (...args: unknown[]) => getAdjacentLettersMock(...args),
@@ -106,6 +108,7 @@ function renderLetterDetailPage() {
     <MemoryRouter initialEntries={["/letter/letter-1"]}>
       <HeaderDockProvider>
         <Link to="/letter/letter-2">Go to letter 2</Link>
+        <Link to="/letter/letter-3">Go to letter 3</Link>
         <Routes>
           <Route path="/letter/:letterId" element={<LetterDetailPage />} />
         </Routes>
@@ -315,7 +318,7 @@ describe("LetterDetailPage", () => {
     await waitFor(() => expect(getLetterByIdMock).toHaveBeenCalledWith("letter-2", expect.any(AbortSignal)));
   });
 
-  it("keeps the previous letter visible but disables stale navigation until the new route owns both responses", async () => {
+  it("marks retained content pending and renders the next letter before adjacency arrives", async () => {
     const letter2 = deferred<Letter>();
     const adjacent2 = deferred<{
       prev: { id: string };
@@ -359,6 +362,8 @@ describe("LetterDetailPage", () => {
     });
 
     expect(screen.getByText(/A bright dispatch from Vienna/)).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Loading letter...");
+    expect(document.querySelector("article")).toHaveAttribute("inert");
     expect(document.querySelector(".letter-nav-section")).toBeNull();
     fireEvent.keyDown(window, { key: "ArrowRight" });
     expect(mockNavigate).not.toHaveBeenCalled();
@@ -373,6 +378,13 @@ describe("LetterDetailPage", () => {
           hook: "A second dispatch",
         },
       }));
+    });
+    expect(await screen.findByText("A second dispatch")).toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(document.querySelector("article")).not.toHaveAttribute("inert");
+    expect(document.querySelector(".letter-nav-section")).toBeNull();
+
+    await act(async () => {
       adjacent2.resolve({
         prev: { id: "letter-1" },
         next: { id: "letter-3" },
@@ -390,6 +402,40 @@ describe("LetterDetailPage", () => {
     expect(document.querySelector(".letter-nav-section")).not.toBeNull();
     fireEvent.keyDown(window, { key: "ArrowRight" });
     expect(mockNavigate).toHaveBeenCalledWith("/letter/letter-3");
+  });
+
+  it("renders initial letter content while adjacency is still pending", async () => {
+    const adjacency = deferred<never>();
+    getAdjacentLettersMock.mockReturnValueOnce(adjacency.promise);
+    renderLetterDetailPage();
+    expect(await screen.findByText(/A bright dispatch/)).toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    await act(async () => adjacency.reject(new Error("optional lookup failed")));
+    expect(screen.getByText(/My dearest friend/)).toBeInTheDocument();
+  });
+
+  it("ignores late old detail errors and adjacency after rapid navigation", async () => {
+    const oldDetail = deferred<Letter>();
+    const oldAdjacent = deferred<never>();
+    getLetterByIdMock.mockImplementation((id: string) => id === "letter-2"
+      ? oldDetail.promise
+      : Promise.resolve(createLetter({ id, metadata: { hook: id, verified: false } })));
+    getAdjacentLettersMock.mockImplementation((id: string) => id === "letter-2"
+      ? oldAdjacent.promise : Promise.resolve(null));
+    const user = userEvent.setup();
+    renderLetterDetailPage();
+    await screen.findByText("letter-1", { exact: true });
+    await user.click(screen.getByRole("link", { name: "Go to letter 2" }));
+    const oldSignal = getLetterByIdMock.mock.calls.find(([id]) => id === "letter-2")![1] as AbortSignal;
+    await user.click(screen.getByRole("link", { name: "Go to letter 3" }));
+    await screen.findByText("letter-3", { exact: true });
+    expect(oldSignal.aborted).toBe(true);
+    await act(async () => {
+      oldDetail.reject(new Error("obsolete failure"));
+      oldAdjacent.reject(new Error("obsolete adjacency"));
+    });
+    expect(screen.getByText("letter-3", { exact: true })).toBeInTheDocument();
+    expect(screen.queryByText("obsolete failure")).not.toBeInTheDocument();
   });
 
 });

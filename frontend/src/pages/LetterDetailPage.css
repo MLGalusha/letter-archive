@@ -1202,3 +1202,19 @@
 #letter-scans {
   scroll-margin-top: calc(var(--header-height, 5rem) + 1rem);
 }
+
+/* Keep the current scan in place while clearly acknowledging a new destination. */
+.letter-navigation-status {
+  position: sticky;
+  top: var(--header-height, 5rem);
+  z-index: 5;
+  margin: 0;
+  padding: 0.75rem 1rem;
+  text-align: center;
+  background: var(--bg-light);
+  color: var(--text);
+}
+
+.letter-article[aria-busy="true"] {
+  opacity: 0.6;
+}

@@ -106,6 +106,16 @@ Observation: ___
 
 Observation: ___
 
+## 9. Collection card feedback
+
+**Status: PR 118 under review; deployment and physical phone checks pending.** [Issue 49](https://github.com/MLGalusha/letter-archive/issues/49), [PR 118](https://github.com/MLGalusha/letter-archive/pull/118).
+
+- Open [Collections](https://voicesthatremain.com/collections) in Safari and Chrome on the iPhone 13, then tap a card. Expected after release: first-tap navigation without the mouse-style upward lift sticking after touch.
+- On desktop, hover and press a card, then navigate using Tab and Enter. Expected: hover feedback, immediate press feedback, visible keyboard focus, and normal navigation.
+- With Reduce Motion enabled, cards should not lift or animate. The measured fix addresses retained touch hover; your physical-phone impression still matters.
+
+Observation: ___
+
 ## Change log
 
 - Initial checklist: created alongside old-ticket reconciliation and issue 32 cleanup. Safari and Chrome coverage applies across the public site, including the iPhone 13. New implementation/deployment results will be recorded here as work lands.

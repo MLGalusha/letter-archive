@@ -8,6 +8,7 @@ import { Icon } from "../common";
 import "./LetterViewer.css";
 import { scanNeedsOriginal, scanVariantWidth } from "./scanResolution";
 import { useScanDisplayWidth } from "./useScanDisplayWidth";
+import { useViewerSwipe, VIEWER_SWIPE_MS } from "./useViewerSwipe";
 
 // ============================================================================
 // CONSTANTS
@@ -17,6 +18,7 @@ const STORAGE_KEY = "letterViewerState";
 const MIN_SCALE = 1;
 const MAX_SCALE = 50;
 const ZOOM_TRANSITION_MS = 150;
+const ADJACENT_SCAN_WIDTH = 800;
 
 // ============================================================================
 // TYPES
@@ -144,6 +146,12 @@ const LetterViewer = memo(function LetterViewer({
   const displayImagesRef = useRef(displayImages);
   const currentImageIndexRef = useRef(currentImageIndex);
 
+  const swipeCommitRef = useRef<(direction: -1 | 1) => void>(() => {});
+  const commitSwipe = useCallback((direction: -1 | 1) => swipeCommitRef.current(direction), []);
+  const swipe = useViewerSwipe(imageContainerRef, commitSwipe,
+    `${letterId ?? ''}:${displayImages.map(image => `${image.id}:${image.imageUrl}`).join('|')}`);
+  const { cancel: cancelSwipe, begin: beginSwipe, move: moveSwipe, release: releaseSwipe, settlingRef: swipeSettlingRef } = swipe;
+
   // Keep refs in sync
   useEffect(() => {
     scaleRef.current = scale;
@@ -200,7 +208,7 @@ const LetterViewer = memo(function LetterViewer({
     const imgs: HTMLImageElement[] = [];
     for (const img of toPreload) {
       const el = new Image();
-      el.src = getImageUrl(img.imageUrl, { width: 800 });
+      el.src = getImageUrl(img.imageUrl, { width: ADJACENT_SCAN_WIDTH });
       imgs.push(el);
     }
     return () => { for (const el of imgs) el.onload = null; };
@@ -309,6 +317,7 @@ const LetterViewer = memo(function LetterViewer({
 
   // Apply zoom while maintaining view center
   const applyZoom = useCallback((newScale: number, animate: boolean) => {
+    cancelSwipe();
     const clampedScale = Math.min(Math.max(MIN_SCALE, newScale), MAX_SCALE);
 
     if (animate) {
@@ -332,7 +341,7 @@ const LetterViewer = memo(function LetterViewer({
     if (clampedScale === 1) {
       setPosition({ x: 0, y: 0 });
     }
-  }, [clampPosition]);
+  }, [clampPosition, cancelSwipe]);
 
   // ============================================================================
   // SLIDER HANDLERS
@@ -414,15 +423,17 @@ const LetterViewer = memo(function LetterViewer({
   // ============================================================================
 
   const nextImage = useCallback(() => {
+    cancelSwipe();
     // Save current state before switching
     saveCurrentImageState();
     // Reset before rendering the next page so the previous zoom cannot fetch its original.
     setScale(1);
     setPosition({ x: 0, y: 0 });
     setCurrentImageIndex((prev) => (prev + 1) % displayImages.length);
-  }, [displayImages.length, saveCurrentImageState]);
+  }, [displayImages.length, saveCurrentImageState, cancelSwipe]);
 
   const prevImage = useCallback(() => {
+    cancelSwipe();
     // Save current state before switching
     saveCurrentImageState();
     // Reset before rendering the next page so the previous zoom cannot fetch its original.
@@ -431,13 +442,11 @@ const LetterViewer = memo(function LetterViewer({
     setCurrentImageIndex(
       (prev) => (prev - 1 + displayImages.length) % displayImages.length
     );
-  }, [displayImages.length, saveCurrentImageState]);
+  }, [displayImages.length, saveCurrentImageState, cancelSwipe]);
 
-  // Refs for use in native touch handlers (avoids stale closures)
-  const nextImageRef = useRef(nextImage);
-  nextImageRef.current = nextImage;
-  const prevImageRef = useRef(prevImage);
-  prevImageRef.current = prevImage;
+  useEffect(() => {
+    swipeCommitRef.current = (direction) => direction > 0 ? nextImage() : prevImage();
+  }, [nextImage, prevImage]);
 
   // ============================================================================
   // IMAGE DRAG/PAN HANDLERS
@@ -488,11 +497,6 @@ const LetterViewer = memo(function LetterViewer({
   // iOS Safari requires native listeners with { passive: false } for preventDefault
   // ============================================================================
 
-  // Swipe offset for lightbox image navigation (touch only)
-  const [imageSwipeOffset, setImageSwipeOffset] = useState(0);
-  const [imageSwipeSwiping, setImageSwipeSwiping] = useState(false);
-  const imageSwipeOffsetRef = useRef(0);
-
   const touchStateRef = useRef<{
     // Pinch tracking
     initialDistance: number;
@@ -505,10 +509,6 @@ const LetterViewer = memo(function LetterViewer({
     lastTapTime: number;
     lastTapPos: { x: number; y: number };
     // Lightbox swipe navigation (scale === 1)
-    swipeStartX: number;
-    swipeStartY: number;
-    swipeDecided: boolean;
-    swipeIsHorizontal: boolean;
     swipeActive: boolean;
   }>({
     initialDistance: 0,
@@ -518,10 +518,6 @@ const LetterViewer = memo(function LetterViewer({
     isPinching: false,
     lastTapTime: 0,
     lastTapPos: { x: 0, y: 0 },
-    swipeStartX: 0,
-    swipeStartY: 0,
-    swipeDecided: false,
-    swipeIsHorizontal: false,
     swipeActive: false,
   });
 
@@ -540,7 +536,11 @@ const LetterViewer = memo(function LetterViewer({
     const onTouchStart = (e: TouchEvent) => {
       const ts = touchStateRef.current;
 
-      if (e.touches.length === 2) {
+      if (e.touches.length >= 2) {
+        // Pinch owns the gesture; a partial swipe cannot commit afterward.
+        cancelSwipe();
+        ts.swipeActive = false;
+        ts.lastTapTime = 0;
         // Start pinch
         e.preventDefault();
         ts.isPinching = true;
@@ -549,6 +549,7 @@ const LetterViewer = memo(function LetterViewer({
         ts.initialScale = scaleRef.current;
         ts.initialMidpoint = getTouchMidpoint(e.touches[0], e.touches[1]);
       } else if (e.touches.length === 1) {
+        if (swipeSettlingRef.current) { e.preventDefault(); return; }
         const now = Date.now();
         const touch = e.touches[0];
         const dt = now - ts.lastTapTime;
@@ -559,6 +560,8 @@ const LetterViewer = memo(function LetterViewer({
         if (dt < 300 && dx < 30 && dy < 30 && variant === 'lightbox') {
           e.preventDefault();
           ts.lastTapTime = 0; // Reset so triple-tap doesn't trigger
+          cancelSwipe();
+          ts.swipeActive = false;
 
           if (scaleRef.current > 1) {
             // Zoom out to 1x
@@ -592,17 +595,18 @@ const LetterViewer = memo(function LetterViewer({
           };
         } else if (variant === 'lightbox' && displayImagesRef.current.length > 1) {
           // At scale 1 in lightbox with multiple images: start swipe tracking
-          ts.swipeStartX = touch.clientX;
-          ts.swipeStartY = touch.clientY;
-          ts.swipeDecided = false;
-          ts.swipeIsHorizontal = false;
-          ts.swipeActive = true;
+          ts.swipeActive = beginSwipe(touch.clientX, touch.clientY);
         }
       }
     };
 
     const onTouchMove = (e: TouchEvent) => {
       const ts = touchStateRef.current;
+
+      if (e.touches.length === 1 && Math.hypot(
+        e.touches[0].clientX - ts.lastTapPos.x,
+        e.touches[0].clientY - ts.lastTapPos.y,
+      ) > 10) ts.lastTapTime = 0;
 
       if (e.touches.length === 2 && ts.isPinching) {
         e.preventDefault();
@@ -637,22 +641,12 @@ const LetterViewer = memo(function LetterViewer({
           y: touch.clientY - ts.panStart.y,
         }, scaleRef.current));
       } else if (e.touches.length === 1 && ts.swipeActive && !ts.isPinching) {
-        // Lightbox swipe-to-navigate at scale 1
+        // The gesture stays a swipe only while the image remains fitted.
+        if (scaleRef.current !== 1) { cancelSwipe(); ts.swipeActive = false; return; }
         const touch = e.touches[0];
-        const dx = touch.clientX - ts.swipeStartX;
-        const dy = touch.clientY - ts.swipeStartY;
-
-        if (!ts.swipeDecided) {
-          if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
-          ts.swipeDecided = true;
-          ts.swipeIsHorizontal = Math.abs(dx) > Math.abs(dy);
-          if (ts.swipeIsHorizontal) setImageSwipeSwiping(true);
-        }
-
-        if (ts.swipeIsHorizontal) {
+        if (moveSwipe(touch.clientX, touch.clientY)) {
           e.preventDefault();
-          imageSwipeOffsetRef.current = dx;
-          setImageSwipeOffset(dx);
+          ts.lastTapTime = 0; // A drag cannot be the first tap of a double-tap.
         }
       }
     };
@@ -661,32 +655,8 @@ const LetterViewer = memo(function LetterViewer({
       const ts = touchStateRef.current;
 
       if (e.touches.length === 0) {
-        // Resolve lightbox swipe if active
-        if (ts.swipeActive && ts.swipeIsHorizontal) {
-          const container = imageContainerRef.current;
-          const width = container?.clientWidth ?? window.innerWidth;
-          const off = imageSwipeOffsetRef.current;
-          const committed = Math.abs(off) > width * 0.2;
-
-          if (committed) {
-            if (off < 0) nextImageRef.current();
-            else prevImageRef.current();
-            imageSwipeOffsetRef.current = 0;
-            setImageSwipeOffset(0);
-            setImageSwipeSwiping(false);
-          } else {
-            // Snap back
-            setImageSwipeSwiping(false);
-            requestAnimationFrame(() => {
-              imageSwipeOffsetRef.current = 0;
-              setImageSwipeOffset(0);
-            });
-          }
-
-          ts.swipeActive = false;
-          ts.swipeDecided = false;
-          ts.swipeIsHorizontal = false;
-        }
+        if (ts.swipeActive) releaseSwipe();
+        ts.swipeActive = false;
 
         ts.isPinching = false;
         ts.panStart = null;
@@ -709,16 +679,27 @@ const LetterViewer = memo(function LetterViewer({
       }
     };
 
+    const onTouchCancel = () => {
+      cancelSwipe();
+      const ts = touchStateRef.current;
+      ts.swipeActive = false;
+      ts.isPinching = false;
+      ts.panStart = null;
+      ts.lastTapTime = 0;
+    };
+
+    container.addEventListener('touchcancel', onTouchCancel, { passive: true });
     container.addEventListener('touchstart', onTouchStart, { passive: false });
     container.addEventListener('touchmove', onTouchMove, { passive: false });
     container.addEventListener('touchend', onTouchEnd, { passive: false });
 
     return () => {
+      container.removeEventListener('touchcancel', onTouchCancel);
       container.removeEventListener('touchstart', onTouchStart);
       container.removeEventListener('touchmove', onTouchMove);
       container.removeEventListener('touchend', onTouchEnd);
     };
-  }, [variant, applyZoom, clampPosition]);
+  }, [variant, applyZoom, clampPosition, beginSwipe, moveSwipe, releaseSwipe, cancelSwipe, swipeSettlingRef]);
 
   // ============================================================================
   // LIGHTBOX: DOUBLE-CLICK ZOOM + MINIMAP
@@ -727,6 +708,7 @@ const LetterViewer = memo(function LetterViewer({
   const handleDoubleClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (variant !== "lightbox") return;
+      cancelSwipe();
       if (scaleRef.current > 1) {
         applyZoom(1, true);
       } else {
@@ -745,7 +727,7 @@ const LetterViewer = memo(function LetterViewer({
         });
       }
     },
-    [variant, applyZoom]
+    [variant, applyZoom, cancelSwipe]
   );
 
   const minimapPan = useCallback(
@@ -862,18 +844,28 @@ const LetterViewer = memo(function LetterViewer({
         onMouseLeave={handleMouseLeave}
         onDoubleClick={isLightbox ? handleDoubleClick : undefined}
       >
+        <div className="viewer-carriage"
+          style={{ transform: `translate3d(${swipe.offset}px, 0, 0)`,
+            transition: swipe.settling ? `transform ${VIEWER_SWIPE_MS}ms cubic-bezier(0.22, 0.61, 0.36, 1)` : 'none' }}
+          onTransitionEnd={(event) => {
+            if (event.target === event.currentTarget && event.propertyName === 'transform') swipe.finish();
+          }}
+        >
+        {isLightbox && scale === 1 && (swipe.offset !== 0 || swipe.settling) && displayImages.length > 1 && ([-1, 1] as const).map(direction => {
+          const adjacent = displayImages[(currentImageIndex + direction + displayImages.length) % displayImages.length];
+          return <div key={direction} className="viewer-swipe-neighbor" style={{ left: `${direction * 100}%` }} aria-hidden>
+            <RetryingImage src={getImageUrl(adjacent.imageUrl, { width: ADJACENT_SCAN_WIDTH })} alt="" draggable={false} />
+          </div>;
+        })}
         {!viewerReady && (
           <RetryingImage
             src={thumbSrc}
             alt=""
             className={`viewer-image-thumb ${isAnimating ? "animating" : ""}`}
             style={{
-              transform: `translateX(${imageSwipeOffset}px) scale(${scale}) translate(${position.x / scale}px, ${
+              transform: `scale(${scale}) translate(${position.x / scale}px, ${
                 position.y / scale
               }px)`,
-              transition: imageSwipeOffset !== 0 && !imageSwipeSwiping
-                ? 'transform 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)'
-                : undefined,
             }}
             draggable={false}
             aria-hidden
@@ -900,13 +892,10 @@ const LetterViewer = memo(function LetterViewer({
           }
           className={`viewer-image ${isAnimating ? "animating" : ""}`}
           style={{
-            transform: `translateX(${imageSwipeOffset}px) scale(${scale}) translate(${position.x / scale}px, ${
+            transform: `scale(${scale}) translate(${position.x / scale}px, ${
               position.y / scale
             }px)`,
             transition: [
-              imageSwipeOffset !== 0 && !imageSwipeSwiping
-                ? 'transform 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)'
-                : undefined,
               !viewerReady ? 'opacity 400ms ease-out' : undefined,
             ].filter(Boolean).join(', ') || undefined,
             cursor:
@@ -928,6 +917,7 @@ const LetterViewer = memo(function LetterViewer({
         {displayedRetry.failed && (
           <span className="viewer-image-error" role="status">Image unavailable</span>
         )}
+        </div>
 
         {/* Panel mode: bottom overlay bar */}
         {!isLightbox && (

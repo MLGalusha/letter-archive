@@ -294,5 +294,49 @@
         "errorOverlay": 0
       }
     ]
+  },
+  "chrome-reader-current-error": {
+    "fixture": "Controlled ready-tier hook state; real displayed503 then200",
+    "before": {
+      "width": 0,
+      "visibility": "hidden",
+      "src": "http://localhost:3002/test-images/first-reader?w=480"
+    },
+    "after": {
+      "width": 100,
+      "visibility": "visible",
+      "src": "http://localhost:3002/test-images/first-reader?w=480"
+    },
+    "replaced": true,
+    "counts": {
+      "first-full?w=800": 2,
+      "first-preloaded?w=800": 2,
+      "first-reader?w=800": 1,
+      "first-reader?w=480": 2,
+      "first-preview?w=480": 2
+    },
+    "errorStatus": 0
+  },
+  "webkit-reader-current-error": {
+    "fixture": "Controlled ready-tier hook state; real displayed503 then200",
+    "before": {
+      "width": 0,
+      "visibility": "hidden",
+      "src": "http://localhost:3002/test-images/first-reader?w=480"
+    },
+    "after": {
+      "width": 100,
+      "visibility": "visible",
+      "src": "http://localhost:3002/test-images/first-reader?w=480"
+    },
+    "replaced": true,
+    "counts": {
+      "first-full?w=800": 2,
+      "first-preloaded?w=800": 2,
+      "first-reader?w=800": 1,
+      "first-reader?w=480": 2,
+      "first-preview?w=480": 2
+    },
+    "errorStatus": 0
   }
 }

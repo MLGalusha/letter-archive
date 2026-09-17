@@ -919,9 +919,14 @@ const LetterViewer = memo(function LetterViewer({
                     ? "pointer"
                     : "default",
             opacity: viewerReady ? 1 : 0,
+            visibility: displayedRetry.failed ? "hidden" : undefined,
           }}
           draggable={false}
         />
+
+        {displayedRetry.failed && (
+          <span className="viewer-image-error" role="status">Image unavailable</span>
+        )}
 
         {/* Panel mode: bottom overlay bar */}
         {!isLightbox && (

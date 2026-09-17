@@ -243,7 +243,9 @@ Observation: browser ___; collection ___; query/sort preserved ___; unexpected j
 
 ### Reader rendition handoff (#127)
 
-After the release containing #127, open [collection 003](https://voicesthatremain.com/collections/003),
+**Status: deployed, including the PR #148 geometry correction in 926f477.** See [the live preview-space verification below](#reader-preview-space-reservation-127-follow-up); physical iPhone acceptance remains pending.
+
+Open [collection 003](https://voicesthatremain.com/collections/003),
 let its cards become clear, then open [the first letter](https://voicesthatremain.com/letter/be6ef848-a8f9-4696-9097-646d4257562a).
 The clear card preview should remain usable while the larger reader scan arrives.
 Try a direct visit in a fresh tab too: it should request the measured reader size,

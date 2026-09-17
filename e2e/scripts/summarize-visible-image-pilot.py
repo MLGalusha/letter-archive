@@ -1,7 +1,8 @@
-"""Summarize local #123 evidence; no HTTP calls. Usage: python3 SCRIPT FIXTURE_OUTPUT.
+"""Summarize local #123 evidence; no HTTP calls. Usage: python3 SCRIPT FIXTURE_OUTPUT [LEGACY_FEATURED_PAGE_ID].
 
 Median uses statistics.median; p95 uses nearest rank ceil(n * .95) - 1.
-Only w=480 image requests enter card timing/byte comparisons. Server rows join
+All w=480 requests enter representation timing/byte comparisons. Card-only
+statistics exclude the featured page, whose hero shares the 480px URL. Server rows join
 by response x-request-id. Empty queue/transform samples mean no such phase was
 logged, not a measured zero-duration operation. Keep excluded-* warmups separate.
 """
@@ -34,25 +35,39 @@ hash_sets, frontend_hashes = [], set()
 for file in sorted(directory.glob("*/results.json")):
     raw = json.loads(file.read_text())
     images = [r for r in raw["requests"] if "/images/" in r["url"]]
-    cards = [r for r in images if parse_qs(urlparse(r["url"]).query).get("w") == ["480"]]
-    rows = [server[r["headers"]["x-request-id"]] for r in cards if r.get("headers", {}).get("x-request-id") in server]
+    previews = [r for r in images if parse_qs(urlparse(r["url"]).query).get("w") == ["480"]]
+    featured_id = raw["fixture"].get("featuredPageId") or (sys.argv[2] if len(sys.argv) > 2 else None)
+    if not featured_id:
+        raise ValueError("Legacy evidence needs its known seeded featured-page ID; do not infer card origins from width alone")
+    nonhero = [r for r in previews if urlparse(r["url"]).path != f"/images/{featured_id}"]
+    nonhero_rows = [server[r["headers"]["x-request-id"]] for r in nonhero if r.get("headers", {}).get("x-request-id") in server]
+    rows = [server[r["headers"]["x-request-id"]] for r in previews if r.get("headers", {}).get("x-request-id") in server]
     search = raw["searches"][0]
-    card_hashes = {urlparse(r["url"]).path + "?" + urlparse(r["url"]).query: r.get("bodySha256") for r in cards}
-    samples = {"browserMs": [completed_ms(r) for r in cards if completed_ms(r) is not None],
+    preview_hashes = {urlparse(r["url"]).path + "?" + urlparse(r["url"]).query: r.get("bodySha256") for r in previews}
+    samples = {"browserMs": [completed_ms(r) for r in previews if completed_ms(r) is not None],
                "routeMs": [r["finished"] - r["started"] for r in rows]}
     for field in ["queueMs", "transformMs", "previewReadMs", "previewWriteMs"]:
         samples[field] = [r[field] for r in rows if field in r]
+    nonhero_samples = {"browserMs": [completed_ms(r) for r in nonhero if completed_ms(r) is not None],
+                      "routeMs": [r["finished"] - r["started"] for r in nonhero_rows]}
+    for field in ["queueMs", "transformMs", "previewReadMs", "previewWriteMs"]:
+        nonhero_samples[field] = [r[field] for r in nonhero_rows if field in r]
     summary = dict(raw["summary"])
     summary.pop("completedFirstVisibleWaitMs")
     entry = {"label": raw["label"], "engine": raw["engine"], "revision": raw["fixture"]["revision"],
              "workerPid": raw["fixture"]["workerPid"], "workerStarted": raw["fixture"]["workerStarted"],
              "imageRouteHash": raw["fixture"]["imageRouteHash"], "frontendHash": raw["fixture"]["frontendHash"],
              "backendLockHash": raw["fixture"]["backendLockHash"], "sources": raw["fixture"]["sources"],
-             "imageRequests": len(images), "cardRequests": len(cards), "joinedCardServerRows": len(rows),
-             "failedOrIncompleteCardRequests": sum(completed_ms(r) is None for r in cards),
-             "cardBodyBytes": sum(r.get("bodyBytes", 0) for r in cards),
-             "cardBodySetHash": hashlib.sha256(json.dumps(card_hashes, sort_keys=True).encode()).hexdigest(),
-             "cardCache": dict(Counter(r.get("cache") for r in rows)),
+             "imageRequests": len(images), "previewRepresentationRequests": len(previews), "joinedPreviewServerRows": len(rows),
+             "failedOrIncompletePreviewRequests": sum(completed_ms(r) is None for r in previews),
+             "previewBodyBytes": sum(r.get("bodyBytes", 0) for r in previews),
+             "previewBodySetHash": hashlib.sha256(json.dumps(preview_hashes, sort_keys=True).encode()).hexdigest(),
+             "previewCache": dict(Counter(r.get("cache") for r in rows)),
+             "statisticsScope": "All 480px representations, including one shared hero/card URL",
+             "nonHeroCards": {"excludedFeaturedPageId": featured_id, "requests": len(nonhero),
+                              "bodyBytes": sum(r.get("bodyBytes", 0) for r in nonhero),
+                              "cache": dict(Counter(r.get("cache") for r in nonhero_rows)),
+                              "statistics": {name: stats(values) for name, values in nonhero_samples.items()}},
              "imageStatuses": dict(Counter(r.get("status") for r in images)),
              "protocols": dict(Counter(r.get("protocol") for r in raw["priorities"] if r["event"] == "response")),
              "statistics": {name: stats(values) for name, values in samples.items()},
@@ -67,12 +82,12 @@ for file in sorted(directory.glob("*/results.json")):
     excluded = raw["label"].startswith("excluded-")
     result["excludedRuns" if excluded else "runs"].append(entry)
     if not excluded:
-        hash_sets.append(card_hashes)
+        hash_sets.append(preview_hashes)
         frontend_hashes.add(raw["fixture"]["frontendHash"])
 result["runs"].sort(key=lambda run: run["workerStarted"])
-result["sameCardBodies"] = bool(hash_sets) and all(len(h) == 48 and None not in h.values() and h == hash_sets[0] for h in hash_sets)
+result["samePreviewBodies"] = bool(hash_sets) and all(len(h) == 48 and None not in h.values() and h == hash_sets[0] for h in hash_sets)
 result["sameFrontend"] = len(frontend_hashes) == 1
 (directory / "summary.json").write_text(json.dumps(result, indent=2) + "\n")
 for run in result["runs"]:
-    print(run["label"], run["statistics"]["browserMs"], run["cardCache"], "visible wait", run["visible"]["visibleWaitMs"])
-print("Same 48 card bodies:", result["sameCardBodies"], "same frontend:", result["sameFrontend"])
+    print(run["label"], "480px", run["statistics"]["browserMs"], run["previewCache"], "nonhero cards", run["nonHeroCards"]["statistics"]["browserMs"], "visible wait", run["visible"]["visibleWaitMs"])
+print("Same 48 preview bodies:", result["samePreviewBodies"], "same frontend:", result["sameFrontend"])

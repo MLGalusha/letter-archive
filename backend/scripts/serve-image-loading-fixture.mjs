@@ -102,6 +102,7 @@ try {
   await client.unsafe('ANALYZE collections; ANALYZE letters; ANALYZE letter_pages');
   const manifest = {
     frontendHash: digest(await readFile(path.join(root, 'frontend/dist/index.html'))), cards: 48, collection003: 35,
+    featuredPageId: uid('2', 35),
     sources: sources.map(({ file, ...source }) => source), node: process.version, sharp: sharp.versions,
     logicalCpus: os.cpus().length, transport: 'local TLS HTTP/2 gateway → HTTP/1 actual Express routes',
     cache: 'Owned source directory at startup; restart retains its durable files and DB, clears worker memory', started: new Date().toISOString() };

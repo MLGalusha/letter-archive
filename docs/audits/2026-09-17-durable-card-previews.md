@@ -1,7 +1,9 @@
 # Reusable card previews — issue 122
 
 Status: merged in PR 125 after independent review, required CI and a comparable
-local workload check; release and live acceptance remain pending. This is on-demand saving, not
+local workload check. Release `bd23e037` has a verified production save and bounded
+Chromium/WebKit checks. A durable production read and physical phone acceptance
+remain unverified. This is on-demand saving, not
 pre-generation or a production backfill. Issue 50 remains open for overall image
 readiness and physical iPhone acceptance.
 
@@ -100,6 +102,53 @@ unsupported widths, private/admin images, failed storage fallbacks, publication 
 DB/file source changes during both read and write, and conditional 304 bypassing
 both storage operations as well as Sharp.
 
-Controlled comparisons and release evidence will be appended when available.
+The local comparison is recorded in the [visible-image pilot](2026-09-17-visible-image-pilot.md).
 Local filesystem tests establish application behavior; they do not emulate GCS
 FUSE performance, cross-mount metadata caching, or physical iPhone rendering.
+
+## Bounded production observation
+
+[Live verification receipt](https://github.com/MLGalusha/letter-archive/pull/125#issuecomment-5708851050)
+and [remaining issue 50 observations](https://github.com/MLGalusha/letter-archive/issues/50#issuecomment-5708851265).
+
+At backend release `bd23e03790afbe375263ad84b21520423c01390b`, one ordinary public
+GET returned 200 with 21,362 bytes. Request `885df1be-6098-4478-a177-0cb0427f62de`
+recorded a preview read miss (29.55ms), successful save through the existing
+GCS FUSE mount (252.94ms), transform (1,804.28ms), queue wait (0.49ms), and route
+time (2,349ms). Client time was 2,425ms. This verifies a production write and
+shows that first population pays storage time; it is not a paired speed or cost
+comparison.
+
+The subsequent conditional request `8edb3103-881e-4f5d-baf3-1b75c867535f`
+returned 304 with no body, `cache: not-modified`, 11ms route time and no
+queue/transform work (61ms client time). That verifies early revalidation,
+**not** a read of the saved preview. No durable production hit is claimed from
+this pair, and no restart or cold start was forced. Browser outcomes below do not
+replace physical iPhone acceptance.
+
+An ordinary Chrome check at the completed release reached all 94 Home cards using
+two bottom jumps and one Load More action. Five-second samples showed 6/8, 8/8
+and 7/8 visible images ready; an additional stationary five seconds ended at 8/8.
+Search `he` settled to three results and clearing restored 24, each at the 500ms
+sample. There were no recorded request or page errors. These observations show
+that first population can still leave visible waits; they do not close #50 or #123.
+
+A correlated subset of 67 image-completion logs contained 65 eligible read misses
+with saved writes and two misses at other widths. Its longest route took 4,487ms,
+including 3,210ms queue wait, 819ms transform, 163ms write and 102ms read. This is
+a bounded sample, not an exhaustive production request count or a priority
+diagnosis.
+
+WebKit Home loaded normally. Its fast-scroll automation found a visible Load Next
+button, but automatic pagination replaced it during the click; the action timed
+out after 30 seconds. The failed artifact was retained, and that phase is not
+reported as a completed timing check. A subsequent read-only inspection found
+94 loaded cards, 8/8 visible images ready and no image-error labels. This is a
+diagnostic click race, not proof of an application defect. Search `he` then
+returned three cards and clear restored 24 at the 500ms and later samples, with
+no recorded request or page errors.
+
+Both frontend and backend were verified at `bd23e037` after the successful normal
+[release run](https://github.com/MLGalusha/letter-archive/actions/runs/35182473651).
+The engines ran sequentially against a warming shared server, so these observations
+are not an engine speed comparison. Both owned browser sessions were closed.

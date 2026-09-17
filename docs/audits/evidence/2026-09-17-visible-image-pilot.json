@@ -32,13 +32,50 @@
           }
         ],
         "imageRequests": 50,
-        "cardRequests": 48,
-        "joinedCardServerRows": 48,
-        "failedOrIncompleteCardRequests": 0,
-        "cardBodyBytes": 1133104,
-        "cardBodySetHash": "7d07a816a0aec76d49e38645ccc3030be5b2afdd0048724ae86b99bf5b1e2e8f",
-        "cardCache": {
+        "previewRepresentationRequests": 48,
+        "joinedPreviewServerRows": 48,
+        "failedOrIncompletePreviewRequests": 0,
+        "previewBodyBytes": 1133104,
+        "previewBodySetHash": "7d07a816a0aec76d49e38645ccc3030be5b2afdd0048724ae86b99bf5b1e2e8f",
+        "previewCache": {
           "miss": 48
+        },
+        "statisticsScope": "All 480px representations, including one shared hero/card URL",
+        "nonHeroCards": {
+          "excludedFeaturedPageId": "20000000-0000-0000-0000-000000000036",
+          "requests": 47,
+          "bodyBytes": 1115917,
+          "cache": {
+            "miss": 47
+          },
+          "statistics": {
+            "browserMs": {
+              "n": 47,
+              "p50": 135.0,
+              "p95": 432.8,
+              "max": 487.23
+            },
+            "routeMs": {
+              "n": 47,
+              "p50": 130.04,
+              "p95": 414.5,
+              "max": 467.45
+            },
+            "queueMs": {
+              "n": 47,
+              "p50": 52.37,
+              "p95": 286.7,
+              "max": 339.27
+            },
+            "transformMs": {
+              "n": 47,
+              "p50": 59.82,
+              "p95": 98.84,
+              "max": 107.02
+            },
+            "previewReadMs": null,
+            "previewWriteMs": null
+          }
         },
         "imageStatuses": {
           "200": 50
@@ -337,13 +374,60 @@
           }
         ],
         "imageRequests": 50,
-        "cardRequests": 48,
-        "joinedCardServerRows": 48,
-        "failedOrIncompleteCardRequests": 0,
-        "cardBodyBytes": 1133104,
-        "cardBodySetHash": "7d07a816a0aec76d49e38645ccc3030be5b2afdd0048724ae86b99bf5b1e2e8f",
-        "cardCache": {
+        "previewRepresentationRequests": 48,
+        "joinedPreviewServerRows": 48,
+        "failedOrIncompletePreviewRequests": 0,
+        "previewBodyBytes": 1133104,
+        "previewBodySetHash": "7d07a816a0aec76d49e38645ccc3030be5b2afdd0048724ae86b99bf5b1e2e8f",
+        "previewCache": {
           "miss": 48
+        },
+        "statisticsScope": "All 480px representations, including one shared hero/card URL",
+        "nonHeroCards": {
+          "excludedFeaturedPageId": "20000000-0000-0000-0000-000000000036",
+          "requests": 47,
+          "bodyBytes": 1115917,
+          "cache": {
+            "miss": 47
+          },
+          "statistics": {
+            "browserMs": {
+              "n": 47,
+              "p50": 232.9,
+              "p95": 630.48,
+              "max": 709.97
+            },
+            "routeMs": {
+              "n": 47,
+              "p50": 229.14,
+              "p95": 611.52,
+              "max": 688.7
+            },
+            "queueMs": {
+              "n": 47,
+              "p50": 68.04,
+              "p95": 371.85,
+              "max": 474.4
+            },
+            "transformMs": {
+              "n": 47,
+              "p50": 79.79,
+              "p95": 155.72,
+              "max": 183.31
+            },
+            "previewReadMs": {
+              "n": 47,
+              "p50": 1.19,
+              "p95": 9.63,
+              "max": 9.66
+            },
+            "previewWriteMs": {
+              "n": 47,
+              "p50": 1.62,
+              "p95": 7.3,
+              "max": 20.35
+            }
+          }
         },
         "imageStatuses": {
           "200": 50
@@ -750,13 +834,45 @@
           }
         ],
         "imageRequests": 50,
-        "cardRequests": 48,
-        "joinedCardServerRows": 48,
-        "failedOrIncompleteCardRequests": 0,
-        "cardBodyBytes": 1133104,
-        "cardBodySetHash": "7d07a816a0aec76d49e38645ccc3030be5b2afdd0048724ae86b99bf5b1e2e8f",
-        "cardCache": {
+        "previewRepresentationRequests": 48,
+        "joinedPreviewServerRows": 48,
+        "failedOrIncompletePreviewRequests": 0,
+        "previewBodyBytes": 1133104,
+        "previewBodySetHash": "7d07a816a0aec76d49e38645ccc3030be5b2afdd0048724ae86b99bf5b1e2e8f",
+        "previewCache": {
           "saved": 48
+        },
+        "statisticsScope": "All 480px representations, including one shared hero/card URL",
+        "nonHeroCards": {
+          "excludedFeaturedPageId": "20000000-0000-0000-0000-000000000036",
+          "requests": 47,
+          "bodyBytes": 1115917,
+          "cache": {
+            "saved": 47
+          },
+          "statistics": {
+            "browserMs": {
+              "n": 47,
+              "p50": 27.87,
+              "p95": 159.96,
+              "max": 163.88
+            },
+            "routeMs": {
+              "n": 47,
+              "p50": 21.93,
+              "p95": 144.11,
+              "max": 144.92
+            },
+            "queueMs": null,
+            "transformMs": null,
+            "previewReadMs": {
+              "n": 47,
+              "p50": 2.31,
+              "p95": 53.59,
+              "max": 55.12
+            },
+            "previewWriteMs": null
+          }
         },
         "imageStatuses": {
           "200": 50
@@ -973,7 +1089,7 @@
       }
     ],
     "excludedRuns": [],
-    "sameCardBodies": true,
+    "samePreviewBodies": true,
     "sameFrontend": true
   },
   "reversed": {
@@ -1009,13 +1125,45 @@
           }
         ],
         "imageRequests": 50,
-        "cardRequests": 48,
-        "joinedCardServerRows": 48,
-        "failedOrIncompleteCardRequests": 0,
-        "cardBodyBytes": 1133104,
-        "cardBodySetHash": "7d07a816a0aec76d49e38645ccc3030be5b2afdd0048724ae86b99bf5b1e2e8f",
-        "cardCache": {
+        "previewRepresentationRequests": 48,
+        "joinedPreviewServerRows": 48,
+        "failedOrIncompletePreviewRequests": 0,
+        "previewBodyBytes": 1133104,
+        "previewBodySetHash": "7d07a816a0aec76d49e38645ccc3030be5b2afdd0048724ae86b99bf5b1e2e8f",
+        "previewCache": {
           "saved": 48
+        },
+        "statisticsScope": "All 480px representations, including one shared hero/card URL",
+        "nonHeroCards": {
+          "excludedFeaturedPageId": "20000000-0000-0000-0000-000000000036",
+          "requests": 47,
+          "bodyBytes": 1115917,
+          "cache": {
+            "saved": 47
+          },
+          "statistics": {
+            "browserMs": {
+              "n": 47,
+              "p50": 30.76,
+              "p95": 144.53,
+              "max": 148.29
+            },
+            "routeMs": {
+              "n": 47,
+              "p50": 24.19,
+              "p95": 122.51,
+              "max": 126.24
+            },
+            "queueMs": null,
+            "transformMs": null,
+            "previewReadMs": {
+              "n": 47,
+              "p50": 2.29,
+              "p95": 25.71,
+              "max": 33.67
+            },
+            "previewWriteMs": null
+          }
         },
         "imageStatuses": {
           "200": 50
@@ -1260,13 +1408,50 @@
           }
         ],
         "imageRequests": 50,
-        "cardRequests": 48,
-        "joinedCardServerRows": 48,
-        "failedOrIncompleteCardRequests": 0,
-        "cardBodyBytes": 1133104,
-        "cardBodySetHash": "7d07a816a0aec76d49e38645ccc3030be5b2afdd0048724ae86b99bf5b1e2e8f",
-        "cardCache": {
+        "previewRepresentationRequests": 48,
+        "joinedPreviewServerRows": 48,
+        "failedOrIncompletePreviewRequests": 0,
+        "previewBodyBytes": 1133104,
+        "previewBodySetHash": "7d07a816a0aec76d49e38645ccc3030be5b2afdd0048724ae86b99bf5b1e2e8f",
+        "previewCache": {
           "miss": 48
+        },
+        "statisticsScope": "All 480px representations, including one shared hero/card URL",
+        "nonHeroCards": {
+          "excludedFeaturedPageId": "20000000-0000-0000-0000-000000000036",
+          "requests": 47,
+          "bodyBytes": 1115917,
+          "cache": {
+            "miss": 47
+          },
+          "statistics": {
+            "browserMs": {
+              "n": 47,
+              "p50": 140.21,
+              "p95": 663.54,
+              "max": 705.08
+            },
+            "routeMs": {
+              "n": 47,
+              "p50": 135.59,
+              "p95": 627.05,
+              "max": 662.33
+            },
+            "queueMs": {
+              "n": 47,
+              "p50": 51.13,
+              "p95": 360.82,
+              "max": 398.12
+            },
+            "transformMs": {
+              "n": 47,
+              "p50": 61.7,
+              "p95": 170.83,
+              "max": 211.02
+            },
+            "previewReadMs": null,
+            "previewWriteMs": null
+          }
         },
         "imageStatuses": {
           "200": 50
@@ -1567,13 +1752,60 @@
           }
         ],
         "imageRequests": 50,
-        "cardRequests": 48,
-        "joinedCardServerRows": 48,
-        "failedOrIncompleteCardRequests": 0,
-        "cardBodyBytes": 1133104,
-        "cardBodySetHash": "7d07a816a0aec76d49e38645ccc3030be5b2afdd0048724ae86b99bf5b1e2e8f",
-        "cardCache": {
+        "previewRepresentationRequests": 48,
+        "joinedPreviewServerRows": 48,
+        "failedOrIncompletePreviewRequests": 0,
+        "previewBodyBytes": 1133104,
+        "previewBodySetHash": "7d07a816a0aec76d49e38645ccc3030be5b2afdd0048724ae86b99bf5b1e2e8f",
+        "previewCache": {
           "miss": 48
+        },
+        "statisticsScope": "All 480px representations, including one shared hero/card URL",
+        "nonHeroCards": {
+          "excludedFeaturedPageId": "20000000-0000-0000-0000-000000000036",
+          "requests": 47,
+          "bodyBytes": 1115917,
+          "cache": {
+            "miss": 47
+          },
+          "statistics": {
+            "browserMs": {
+              "n": 47,
+              "p50": 275.72,
+              "p95": 670.64,
+              "max": 719.23
+            },
+            "routeMs": {
+              "n": 47,
+              "p50": 265.96,
+              "p95": 655.43,
+              "max": 697.37
+            },
+            "queueMs": {
+              "n": 47,
+              "p50": 92.41,
+              "p95": 462.6,
+              "max": 589.9
+            },
+            "transformMs": {
+              "n": 47,
+              "p50": 98.96,
+              "p95": 231.03,
+              "max": 297.08
+            },
+            "previewReadMs": {
+              "n": 47,
+              "p50": 1.35,
+              "p95": 6.09,
+              "max": 11.26
+            },
+            "previewWriteMs": {
+              "n": 47,
+              "p50": 2.28,
+              "p95": 8.51,
+              "max": 12.8
+            }
+          }
         },
         "imageStatuses": {
           "200": 50
@@ -1951,7 +2183,7 @@
         "bodyReadErrors": []
       }
     ],
-    "sameCardBodies": true,
+    "samePreviewBodies": true,
     "sameFrontend": true
   },
   "environment": {

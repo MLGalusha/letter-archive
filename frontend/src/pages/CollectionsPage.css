@@ -308,10 +308,30 @@
   padding: 1.3rem 1.4rem 1.1rem;
 }
 
-.public-collection-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 24px 48px rgba(29, 26, 20, 0.1);
-  border-color: rgba(31, 109, 122, 0.22);
+@media (hover: hover) and (pointer: fine) {
+  .public-collection-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 24px 48px rgba(29, 26, 20, 0.1);
+    border-color: rgba(31, 109, 122, 0.22);
+  }
+}
+
+.public-collection-card:active {
+  border-color: rgba(31, 109, 122, 0.55);
+  box-shadow: 0 4px 12px rgba(29, 26, 20, 0.1);
+  /* Press feedback is immediate; pressing adds no translation or scaling. */
+  transition: transform 0.2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .public-collection-card,
+  .public-collection-card:active {
+    transition: none;
+  }
+
+  .public-collection-card:hover {
+    transform: none;
+  }
 }
 
 /* ── Card top row ─────────────────────────────────────────── */

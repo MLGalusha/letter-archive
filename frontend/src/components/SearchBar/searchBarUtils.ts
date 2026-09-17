@@ -1,12 +1,6 @@
 import type { LetterImageType } from "../../types/Letter";
 import type { SearchFilters } from "../../utils/archiveSearch";
 
-export type SortFieldOption = {
-  value: NonNullable<SearchFilters["sort"]>;
-  label: string;
-  defaultOrder: NonNullable<SearchFilters["sortOrder"]>;
-};
-
 export type FilterSuggestion = {
   display: string;
   applyValue: string;
@@ -26,15 +20,6 @@ export type CombinedSortOption = {
   defaultOrder: NonNullable<SearchFilters["sortOrder"]>;
   canToggle?: boolean;
 };
-
-export const SORT_FIELD_OPTIONS: SortFieldOption[] = [
-  { label: "Best Match", value: "relevance", defaultOrder: "desc" },
-  { label: "Publish Date", value: "createdAt", defaultOrder: "desc" },
-  { label: "Date", value: "letterDate", defaultOrder: "desc" },
-  { label: "Sender", value: "sender", defaultOrder: "asc" },
-  { label: "Recipient", value: "recipient", defaultOrder: "asc" },
-  { label: "Collection", value: "collection", defaultOrder: "asc" },
-];
 
 export const COMBINED_SORT_OPTIONS: CombinedSortOption[] = [
   { label: "Best Match", sort: "relevance", defaultOrder: "desc" },
@@ -70,14 +55,6 @@ export const ARCHIVE_FORMAT_LABELS: Record<LetterImageType, string> = {
   diary: "Diary",
   voice: "Voice",
 };
-
-export function getSortValue(option: SortFieldOption) {
-  return option.value;
-}
-
-export function parseSortValue(value: string, options: SortFieldOption[]) {
-  return options.find((option) => option.value === value) || null;
-}
 
 export function getSortDirectionAriaLabel(
   sort: NonNullable<SearchFilters["sort"]>,

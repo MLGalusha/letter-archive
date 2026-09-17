@@ -2,6 +2,7 @@ import { render, screen, act, fireEvent, createEvent } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import InfiniteCarousel from "../InfiniteCarousel";
 import ShowcaseCard from "../ShowcaseCard";
+import useSwipeNavigation from "../../hooks/useSwipeNavigation";
 
 function mockMatchMedia(reducedMotion: boolean) {
   Object.defineProperty(window, "matchMedia", {
@@ -32,6 +33,24 @@ describe("InfiniteCarousel", () => {
   it("renders no wrapper for zero effective slides", () => {
     const { container } = render(<InfiniteCarousel>{[null, false, undefined]}</InfiniteCarousel>);
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it("leaves singleton gestures available to the collection page navigation", () => {
+    vi.useFakeTimers();
+    const nextCollection = vi.fn();
+    function CollectionPage() {
+      const { ref } = useSwipeNavigation({ onSwipeLeft: nextCollection });
+      return <div ref={ref}><InfiniteCarousel>{[<div key="one">Static highlight</div>]}</InfiniteCarousel></div>;
+    }
+    const { container } = render(<CollectionPage />);
+    Object.defineProperty(container.firstElementChild, 'clientWidth', { value: 390 });
+    const highlight = screen.getByText('Static highlight');
+    fireEvent.touchStart(highlight, { touches: [{ clientX: 300, clientY: 100 }] });
+    expect(touchMove(highlight, 80, 100).defaultPrevented).toBe(true);
+    fireEvent.touchEnd(highlight, { touches: [] });
+    act(() => vi.advanceTimersByTime(500));
+    expect(nextCollection).toHaveBeenCalledOnce();
+    expect(container.querySelector('.carousel-track')).toBeNull();
   });
 
   it("renders one linked slide once without intercepting touch, wheel or mouse", () => {

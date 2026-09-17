@@ -23,7 +23,7 @@ export default function InfiniteCarousel(props: InfiniteCarouselProps) {
   if (slides.length === 0) return null;
   if (slides.length === 1) {
     return (
-      <div className={`${classPrefix}-wrap${className ? ` ${className}` : ''}`} data-swipe-ignore>
+      <div className={`${classPrefix}-wrap${className ? ` ${className}` : ''}`}>
         <div className={`${classPrefix}-viewport`}>
           <div className={`${classPrefix}-slide`}>{slides[0]}</div>
         </div>

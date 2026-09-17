@@ -23,3 +23,7 @@ A gallery is one outer card even when it contains several images. Its own Previo
 ## Limits
 
 WebKit checks use the desktop engine at phone-size viewports and synthetic events; they do not prove physical iPhone Safari/Chrome touch or browser chrome behavior. Verify a singleton collection on iPhone13: vertical scrolling, ordinary tap, and no sideways outer-card movement; then verify a collection with a gallery still supports both outer carousel navigation and gallery image buttons. Shared Home usage also gets the static behavior if it ever supplies only one effective item. No performance timing or byte-saving claim is made.
+
+## PR review follow-up
+
+The static wrapper initially retained `data-swipe-ignore` despite owning no gesture handler. Review caught that this blocked the collection page's existing horizontal navigation over the single card. Removed the marker only from the static branch; rotating carousels retain their gesture boundary. An integration regression with the real page-swipe hook verifies that a deliberate horizontal swipe reaches adjacent-collection navigation while no carousel track exists. All 19 carousel tests pass after this adjustment. Vertical scrolling and ordinary links remain native.

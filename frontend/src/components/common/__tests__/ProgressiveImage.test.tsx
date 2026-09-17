@@ -60,6 +60,28 @@ describe('ProgressiveImage', () => {
     }
   });
 
+  it('keeps decoded orientation available to reader layout before and after full readiness', () => {
+    mockHookReturn({ midLoaded: true, naturalWidth: 960, naturalHeight: 640 });
+    const { container, rerender } = render(<ProgressiveImage src="/scan?v=one" thumbSrc="/thumb" midSrc="/preview" alt="Oriented scan" preferNaturalAspectRatio aspectRatio={640 / 960} />);
+    const wrapper = container.querySelector<HTMLElement>('.progressive-image')!;
+    expect(wrapper.style.aspectRatio).toBe('1.5');
+    expect(wrapper.style.getPropertyValue('--progressive-image-aspect-ratio')).toBe('1.5');
+    mockHookReturn({ fullLoaded: true, naturalWidth: 960, naturalHeight: 640 });
+    rerender(<ProgressiveImage src="/scan?v=one" thumbSrc="/thumb" midSrc="/preview" alt="Oriented scan" preferNaturalAspectRatio aspectRatio={640 / 960} />);
+    expect(wrapper.style.getPropertyValue('--progressive-image-aspect-ratio')).toBe('1.5');
+    mockHookReturn();
+    rerender(<ProgressiveImage src="/scan?v=two" thumbSrc="/new-thumb" alt="Updated scan" aspectRatio={0.75} />);
+    expect(wrapper.style.getPropertyValue('--progressive-image-aspect-ratio')).toBe('0.75');
+  });
+
+  it('preserves intentional display ratios for non-reader callers', () => {
+    mockHookReturn({ midLoaded: true, naturalWidth: 960, naturalHeight: 640 });
+    const { container } = render(<ProgressiveImage src="/photo" thumbSrc="/thumb" alt="Cropped card" aspectRatio={1} />);
+    const wrapper = container.querySelector<HTMLElement>('.progressive-image')!;
+    expect(wrapper.style.aspectRatio).toBe('1');
+    expect(wrapper.style.getPropertyValue('--progressive-image-aspect-ratio')).toBe('1');
+  });
+
   it('renders an <img> element with the correct src and alt', () => {
     mockHookReturn({ fullLoaded: true, currentSrc: '/images/full.jpg' });
 

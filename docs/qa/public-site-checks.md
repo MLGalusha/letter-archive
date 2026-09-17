@@ -292,3 +292,21 @@ callbacks before advancing the virtual clock. An optional
 zero offscreen/reduced-motion movement with ordinary timers in Chrome and WebKit.
 
 Observation: browser ___; carousel visible/paused/resumed correctly ___; dot/swipe interaction ___; reduced motion ___ .
+
+### Reader preview space reservation (#127 follow-up)
+
+After this follow-up is deployed, open [collection 003](https://voicesthatremain.com/collections/003),
+wait for its small card images, then open [this letter](https://voicesthatremain.com/letter/be6ef848-a8f9-4696-9097-646d4257562a).
+In Safari and Chrome on your iPhone 13, the existing preview should occupy visible
+scan space immediately while the sharper image loads. The transcript below should
+stay in place as that sharper image replaces the preview. Try a direct letter link,
+a landscape scan and a desktop window too. A useful preview should remain visible
+if the larger request fails; a failed image should not collapse its reserved space.
+
+The old CSS could make a fully downloaded preview occupy zero height. Controlled
+real collection-to-letter browser tests now hold the large response and assert actual
+preview visibility, viewport intersection, nonzero scan dimensions, a 72vh height
+limit, and unchanged downstream transcript position after success or exhausted full
+retries. Phone/desktop Chromium and WebKit cases also cover landscape images whose
+raw metadata axes differ from decoded preview orientation. These are local layout
+checks, not a production loading-time or physical-device guarantee.

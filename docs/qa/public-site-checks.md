@@ -96,6 +96,16 @@ Observation: ___
 
 Observation: ___
 
+## 8. Transcript edge spacing
+
+**Status: issue 22 merged in PR 117; deployment and phone checks pending.** [Issue 22](https://github.com/MLGalusha/letter-archive/issues/22).
+
+- Open [the October 18 transcript](https://voicesthatremain.com/letter/0b5e626d-01bb-4026-a4fa-a6ebdf180c7d#letter-transcript) in Safari and Chrome. Try portrait and landscape.
+- Expected: reading text has visible space on both sides instead of reaching the right edge. Switch to Original formatting and back; both modes remain readable. The change adjusts spacing only and adds browser-reported safe-area clearance around screen cutouts.
+- The larger Reader View V2 work is tracked separately in [issue 111](https://github.com/MLGalusha/letter-archive/issues/111); it is not included in the padding fix.
+
+Observation: ___
+
 ## Change log
 
 - Initial checklist: created alongside old-ticket reconciliation and issue 32 cleanup. Safari and Chrome coverage applies across the public site, including the iPhone 13. New implementation/deployment results will be recorded here as work lands.

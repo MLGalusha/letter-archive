@@ -46,6 +46,8 @@ interface SearchBarProps {
 
 export type { SearchFilters } from "../../utils/archiveSearch";
 
+const TOUCH_LANDSCAPE_QUERY = "(max-width: 980px) and (pointer: coarse)";
+
 export default function SearchBar({
   query,
   filters,
@@ -69,6 +71,18 @@ export default function SearchBar({
   onFiltersChange,
 }: SearchBarProps) {
   const isMobile = useIsMobile(700);
+  const [isTouchLandscape, setIsTouchLandscape] = useState(() =>
+    typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? window.matchMedia(TOUCH_LANDSCAPE_QUERY).matches : false,
+  );
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const media = window.matchMedia(TOUCH_LANDSCAPE_QUERY);
+    const update = () => setIsTouchLandscape(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
   const isCompact = variant === "compact";
   const hasQuery = Boolean(query.trim());
   const selectedFormats = filters.format || null;
@@ -244,6 +258,12 @@ export default function SearchBar({
     const next = !sortDropdownOpen;
     setSortDropdownOpen(next);
     if (next) setRefineOpen(false);
+  };
+
+  const dismissMobilePanels = () => {
+    if (!isMobile && !isTouchLandscape) return;
+    setRefineOpen(false);
+    setSortDropdownOpen(false);
   };
 
   useEffect(() => {
@@ -643,6 +663,8 @@ export default function SearchBar({
             aria-label={compactPlaceholder || "Search the archive"}
             enterKeyHint="search"
             value={query}
+            onFocus={dismissMobilePanels}
+            onClick={dismissMobilePanels}
             onChange={(event) => onQueryChange(event.target.value)}
           />
 
@@ -711,6 +733,8 @@ export default function SearchBar({
           aria-label="Search the archive"
           enterKeyHint="search"
           value={query}
+          onFocus={dismissMobilePanels}
+          onClick={dismissMobilePanels}
           onChange={(event) => onQueryChange(event.target.value)}
         />
 

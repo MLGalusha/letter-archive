@@ -6,11 +6,11 @@ This is a running checklist for Mason to use whenever convenient. A pending chec
 
 The public site should work well in **Safari and Google Chrome**, on desktop and mobile. The primary physical phone for acceptance is an **iPhone 13**. Run phone checks in both installed browsers, particularly keyboard, scrolling, gestures, and fullscreen images. Chromium/WebKit automation helps catch regressions but does not establish physical iPhone behavior.
 
-CI runs the existing public archive history/image checks in both Chromium and WebKit. This is a continuing regression check for search, native navigation, and deferred images; the phone checks below still matter for keyboard and touch behavior.
+The browser-coverage candidate runs the existing public archive history/image checks in both Chromium and WebKit; Linux CI acceptance is pending its PR. This is a continuing regression check for search, native navigation, and deferred images; the phone checks below still matter for keyboard and touch behavior.
 
 Session: date ___; device ___; browser/version ___; iOS/macOS/OS version ___; Wi-Fi/cellular ___; Reduce Motion on/off ___.
 
-Latest verified shared frontend/backend release: `5c7a9654` (September 17, 2026 UTC). It includes the long-exact-preview fix, carousel gesture handling, and dead-sort cleanup. Later changes below have their own status. Counts below describe that catalogue snapshot and may change as letters are published. New work below remains pending until its own release is recorded.
+Latest checked frontend release: `28a47b3c` (September 17, 2026 UTC); backend remains `5c7a9654` because the intervening changes affect only the frontend. This includes long exact previews, carousel gesture handling, mobile filters, scan dots, and static single highlights. Later changes below have their own status. Counts below describe that catalogue snapshot and may change as letters are published. New work below remains pending until its own release is recorded.
 
 ## 1. Back to search / back to top
 
@@ -26,12 +26,12 @@ Observation: ___
 
 ## 2. Typing, keyboard, and mobile filters
 
-**Status: filter layout merged in [PR 112](https://github.com/MLGalusha/letter-archive/pull/112); release check pending. Keyboard issue remains open.** [Issue 42](https://github.com/MLGalusha/letter-archive/issues/42), [issue 12](https://github.com/MLGalusha/letter-archive/issues/12). Earlier input-responsiveness changes are already live ([PR 105](https://github.com/MLGalusha/letter-archive/pull/105)).
+**Status: filter layout deployed in [PR 112](https://github.com/MLGalusha/letter-archive/pull/112). Keyboard issue remains open.** [Issue 42](https://github.com/MLGalusha/letter-archive/issues/42), [issue 12](https://github.com/MLGalusha/letter-archive/issues/12). Earlier input-responsiveness changes are already live ([PR 105](https://github.com/MLGalusha/letter-archive/pull/105)).
 
-Issue 12 candidate: on phones, including touch-screen landscape layouts, tapping search closes open panels while retaining selected filters and valid year drafts. Filter choices use page scrolling and larger targets. Chromium/WebKit checks and independent review passed; production deployment and your physical-phone check are still pending. Try expanding Topic and reaching Clear All in both orientations, including a search with no results. Issue 42's keyboard/header shift remains separate.
+Issue 12 change: on phones, including touch-screen landscape layouts, tapping search closes open panels while retaining selected filters and valid year drafts. Filter choices use page scrolling and larger targets. Chromium/WebKit checks and independent review passed; your physical-phone check is still pending. Try expanding Topic and reaching Clear All in both orientations, including a search with no results. Issue 42's keyboard/header shift remains separate.
 
 - On [Home](https://voicesthatremain.com/), scroll to search, open the filters, then tap the search input and type. Dismiss the keyboard; repeat on [Collection 009](https://voicesthatremain.com/collections/009).
-- Expected: input remains reachable above the keyboard, header does not get stranded offscreen, and dismissing the keyboard restores a usable page. Opening/closing filters should feel predictable; the pending filter ticket covers dismissal when typing and mobile panel layout.
+- Expected: input remains reachable above the keyboard, header does not get stranded offscreen, and dismissing the keyboard restores a usable page. Opening/closing filters should feel predictable; the deployed filter fix covers dismissal when typing and mobile panel layout.
 - Type a different query quickly, change sort, then clear the query. Expected: your input updates promptly; results eventually correspond to the latest controls, with no stale results replacing newer ones.
 
 Observation: ___
@@ -61,9 +61,9 @@ Observation: ___
 
 ## 5. Scrolling across carousels and reading images
 
-**Status: issue 10 deployed; remaining carousel/reader fixes below are pending.** [Issue 10](https://github.com/MLGalusha/letter-archive/issues/10), [11](https://github.com/MLGalusha/letter-archive/issues/11), [20](https://github.com/MLGalusha/letter-archive/issues/20), [21](https://github.com/MLGalusha/letter-archive/issues/21), [23](https://github.com/MLGalusha/letter-archive/issues/23). Smaller initial reader images already live ([PR 95](https://github.com/MLGalusha/letter-archive/pull/95)).
+**Status: issues 10, 11, and 20 deployed; letter navigation and fullscreen changes below are pending.** [Issue 10](https://github.com/MLGalusha/letter-archive/issues/10), [11](https://github.com/MLGalusha/letter-archive/issues/11), [20](https://github.com/MLGalusha/letter-archive/issues/20), [21](https://github.com/MLGalusha/letter-archive/issues/21), [23](https://github.com/MLGalusha/letter-archive/issues/23). Smaller initial reader images already live ([PR 95](https://github.com/MLGalusha/letter-archive/pull/95)).
 
-Issue 10 is deployed in frontend release `5c7a9654`: carousels now wait for a clearly horizontal gesture before taking control; canceled drags and adding a second finger do not change slides. Reviewed code and automated checks passed; physical Safari/Chrome checks are still pending. Fullscreen behavior and the other tickets above are separate.
+Issue 10 is deployed in frontend release `5c7a9654`: carousels now wait for a clearly horizontal gesture before taking control; canceled drags and adding a second finger do not change slides. Reviewed code and automated checks passed; physical Safari/Chrome checks are still pending. Scan dots now follow the visible page and respond to taps (issue 11), confirmed on the live two-page letter in both engines. Single highlights no longer render an interactive outer carousel (issue 20), checked with a local singleton fixture. Fullscreen behavior and the other tickets above are separate.
 
 - On [Home](https://voicesthatremain.com/) and [Collection 003](https://voicesthatremain.com/collections/003), begin a mostly vertical swipe over a carousel. Then deliberately swipe horizontally.
 - Expected: vertical movement scrolls the page; horizontal movement changes the carousel image. A carousel containing one highlight should behave as a static item. Dots should follow the visible image without clipping.

@@ -6,11 +6,11 @@ This is a running checklist for Mason to use whenever convenient. A pending chec
 
 The public site should work well in **Safari and Google Chrome**, on desktop and mobile. The primary physical phone for acceptance is an **iPhone 13**. Run phone checks in both installed browsers, particularly keyboard, scrolling, gestures, and fullscreen images. Chromium/WebKit automation helps catch regressions but does not establish physical iPhone behavior.
 
-The browser-coverage candidate runs the existing public archive history/image checks in both Chromium and WebKit; Linux CI acceptance is pending its PR. This is a continuing regression check for search, native navigation, and deferred images; the phone checks below still matter for keyboard and touch behavior.
+CI runs the existing public archive history/image checks in both Chromium and WebKit. The first Linux run passed all three WebKit cases and the existing Chromium suite in PR 120. This is a continuing regression check for search, native navigation, and deferred images; the phone checks below still matter for keyboard and touch behavior.
 
 Session: date ___; device ___; browser/version ___; iOS/macOS/OS version ___; Wi-Fi/cellular ___; Reduce Motion on/off ___.
 
-Latest checked frontend release: `b894e3f5` (September 17, 2026 UTC); backend remains `5c7a9654` because the intervening changes affect only the frontend. This includes long exact previews, carousel gesture handling, mobile filters, scan dots, static single highlights, explicit letter navigation, and transcript gutters. Later changes below have their own status. Counts below describe that catalogue snapshot and may change as letters are published. New work below remains pending until its own release is recorded.
+Recorded release checkpoint: frontend `b894e3f5` (September 17, 2026 UTC); backend remains `5c7a9654` because the intervening changes affect only the frontend. This includes long exact previews, carousel gesture handling, mobile filters, scan dots, static single highlights, explicit letter navigation, and transcript gutters. Later changes below have their own status. Counts below describe that catalogue snapshot and may change as letters are published. New work below remains pending until its own release is recorded.
 
 ## 1. Back to search / back to top
 
@@ -61,7 +61,7 @@ Observation: ___
 
 ## 5. Scrolling across carousels and reading images
 
-**Status: issues 10, 11, and 20 deployed; letter navigation deployed; fullscreen change merged in PR 119, awaiting deployment.** [Issue 10](https://github.com/MLGalusha/letter-archive/issues/10), [11](https://github.com/MLGalusha/letter-archive/issues/11), [20](https://github.com/MLGalusha/letter-archive/issues/20), [21](https://github.com/MLGalusha/letter-archive/issues/21), [23](https://github.com/MLGalusha/letter-archive/issues/23). Smaller initial reader images already live ([PR 95](https://github.com/MLGalusha/letter-archive/pull/95)).
+**Status: issues 10, 11, and 20 deployed; letter navigation deployed; fullscreen change merged in PR 119; physical-phone acceptance pending.** [Issue 10](https://github.com/MLGalusha/letter-archive/issues/10), [11](https://github.com/MLGalusha/letter-archive/issues/11), [20](https://github.com/MLGalusha/letter-archive/issues/20), [21](https://github.com/MLGalusha/letter-archive/issues/21), [23](https://github.com/MLGalusha/letter-archive/issues/23). Smaller initial reader images already live ([PR 95](https://github.com/MLGalusha/letter-archive/pull/95)).
 
 Issue 10 is deployed in frontend release `5c7a9654`: carousels now wait for a clearly horizontal gesture before taking control; canceled drags and adding a second finger do not change slides. Reviewed code and automated checks passed; physical Safari/Chrome checks are still pending. Scan dots now follow the visible page and respond to taps (issue 11), confirmed on the live two-page letter in both engines. Single highlights no longer render an interactive outer carousel (issue 20), checked with a local singleton fixture. Fullscreen behavior and the other tickets above are separate.
 
@@ -69,14 +69,14 @@ Issue 10 is deployed in frontend release `5c7a9654`: carousels now wait for a cl
 - Expected: vertical movement scrolls the page; horizontal movement changes the carousel image. A carousel containing one highlight should behave as a static outer item; a gallery inside it can still have its own image controls. Dots should follow the visible image without clipping.
 - The ordinary letter-page swipe-to-next-letter interaction was removed in [PR 116](https://github.com/MLGalusha/letter-archive/pull/116). A horizontal gesture over reading text should stay on the same letter. The explicit previous/next links, header scrubber, and desktop arrow navigation remain available. Check bottom-link spacing in portrait and landscape, including the side with the cutout.
 - Open [a two-page letter](https://voicesthatremain.com/letter/0b5e626d-01bb-4026-a4fa-a6ebdf180c7d), enter fullscreen, swipe pages, zoom/pinch, and pan.
-- After [PR 119](https://github.com/MLGalusha/letter-archive/pull/119) is released, also try a short swipe that should return to the same page, a rapid second swipe or Next tap while the first settles, and starting a pinch during a partial swipe. Expected: no accidental page skip or stuck slide; pinch stays with the current image. With Reduce Motion enabled, committed page changes should be immediate. This change is currently pending.
+- For [PR 119](https://github.com/MLGalusha/letter-archive/pull/119), also try a short swipe that should return to the same page, a rapid second swipe or Next tap while the first settles, and starting a pinch during a partial swipe. Expected: no accidental page skip or stuck slide; pinch stays with the current image. With Reduce Motion enabled, committed page changes should be immediate. The change is merged; your physical-phone check is pending.
 - Expected: the initial image looks clear at its displayed size. Zoom can request higher detail. Fit-to-screen page swipes and zoomed-image panning should not fight each other; ordinary page swiping should not unexpectedly open another letter.
 
 Observation: ___
 
 ## 6. First load and deeper scrolling
 
-**Status: earlier payload/image/pagination improvements live; image contention fix merged in PR 113; deployment and phone validation pending.** [Issue 96](https://github.com/MLGalusha/letter-archive/issues/96), [issue 50](https://github.com/MLGalusha/letter-archive/issues/50).
+**Status: earlier payload/image/pagination improvements live; image contention fix merged in PR 113; phone and cold-start validation pending.** [Issue 96](https://github.com/MLGalusha/letter-archive/issues/96), [issue 50](https://github.com/MLGalusha/letter-archive/issues/50).
 
 - Visit [Home](https://voicesthatremain.com/) after not using it for a while. Notice when controls appear, when cards appear, and when their images appear. Repeat immediately to compare a warm visit.
 - Scroll steadily through results, then try a faster scroll. Change search or sort while images are arriving. Repeat on [Collection 003](https://voicesthatremain.com/collections/003).
@@ -111,13 +111,20 @@ Observation: ___
 
 ## 9. Collection card feedback
 
-**Status: PR 118 under review; deployment and physical phone checks pending.** [Issue 49](https://github.com/MLGalusha/letter-archive/issues/49), [PR 118](https://github.com/MLGalusha/letter-archive/pull/118).
+**Status: PR 118 merged; physical phone checks pending.** [Issue 49](https://github.com/MLGalusha/letter-archive/issues/49), [PR 118](https://github.com/MLGalusha/letter-archive/pull/118).
 
-- Open [Collections](https://voicesthatremain.com/collections) in Safari and Chrome on the iPhone 13, then tap a card. Expected after release: first-tap navigation without the mouse-style upward lift sticking after touch.
+- Open [Collections](https://voicesthatremain.com/collections) in Safari and Chrome on the iPhone 13, then tap a card. Expected: first-tap navigation without the mouse-style upward lift sticking after touch.
 - On desktop, hover and press a card, then navigate using Tab and Enter. Expected: hover feedback, immediate press feedback, visible keyboard focus, and normal navigation.
 - With Reduce Motion enabled, cards should not lift or animate. The measured fix addresses retained touch hover; your physical-phone impression still matters.
 
 Observation: ___
+
+## 10. Work still awaiting a decision or more evidence
+
+- [Best Match without typed text (#29)](https://github.com/MLGalusha/letter-archive/issues/29): prepared locally, not deployed. The proposed quality ordering adds roughly 1–3ms in the representative 100-group local comparison; the 250-group difference is inconclusive. The issue requires no measurable slowdown, so it stays open pending your cost decision or a qualifying change. Typed search is unchanged. [Measurement summary](https://github.com/MLGalusha/letter-archive/issues/29#issuecomment-5707852661).
+- [Popular sort (#30)](https://github.com/MLGalusha/letter-archive/issues/30): still needs a decision about what counts as popularity and how to measure it. No visitor tracking was added.
+- [Transcript/image comparison (#53)](https://github.com/MLGalusha/letter-archive/issues/53) and [Reader View V2 (#111)](https://github.com/MLGalusha/letter-archive/issues/111): larger reader work remains separate from these spacing and image-loading fixes.
+- The phone/intermittent reports in sections 1, 2, and 7, plus remaining performance validation in section 6, stay open. An engine check that does not reproduce a report is not a claim that the report is fixed.
 
 ## Change log
 

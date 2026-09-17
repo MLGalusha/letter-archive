@@ -167,7 +167,7 @@ export function useProgressiveImage(
     };
 
     // 1. Load thumbnail immediately (even for deferred images — it's tiny)
-    if (!alreadyPreloaded && !alreadyMid && (fullLoadMode !== 'dom' || thumbSrc !== fullSrc)) loadImage(thumbSrc, 'thumb', context, cancelled, (img) => {
+    if (!alreadyMid && (!alreadyPreloaded || fullLoadMode === 'dom') && (fullLoadMode !== 'dom' || thumbSrc !== fullSrc)) loadImage(thumbSrc, 'thumb', context, cancelled, (img) => {
       setState((value) => ({ ...value, thumbLoaded: true }));
       captureDims(img);
     }, imgs, cleanups, priority);

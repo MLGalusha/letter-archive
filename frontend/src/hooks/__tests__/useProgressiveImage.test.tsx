@@ -149,4 +149,19 @@ describe('progressive image recovery', () => {
     expect(result.current).toMatchObject({ fullLoaded: true, naturalWidth: 480, naturalHeight: 640 });
   });
 
+  it('loads a thumbnail while a historically loaded full URL awaits its actual DOM response', () => {
+    vi.spyOn(imagePreloadService, 'isPreloaded').mockImplementation(url => url === '/full');
+    const requested: string[] = [];
+    vi.stubGlobal('Image', class {
+      complete = true; naturalWidth = 32; naturalHeight = 48;
+      onload: (() => void) | null = null; onerror: (() => void) | null = null;
+      set src(value: string) { requested.push(value); }
+    });
+    const { result } = renderHook(() => useProgressiveImage({
+      thumbSrc: '/thumb', fullSrc: '/full', fullLoadMode: 'dom',
+    }));
+    expect(requested).toEqual(['/thumb']);
+    expect(result.current).toMatchObject({ fullAdmitted: true, fullLoaded: false, thumbLoaded: true, currentSrc: '/thumb' });
+  });
+
 });

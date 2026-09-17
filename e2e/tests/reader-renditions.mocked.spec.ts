@@ -154,7 +154,7 @@ test('@mocked cached readiness metadata does not admit neighbors before the disp
   let started = false; let release!: () => void;
   const held = new Promise<void>(resolve => { release = resolve; });
   await page.route('**/fixture-images/**', async route => {
-    started = true; await held;
+    if (new URL(route.request().url()).searchParams.get('w') === '1200') { started = true; await held; }
     await route.fulfill({ contentType: 'image/png', path: png });
   });
   try {
@@ -162,6 +162,9 @@ test('@mocked cached readiness metadata does not admit neighbors before the disp
     await page.evaluate(() => { (window as any).markCached('/fixture-images/scan?v=one'); (window as any).renderReader(); });
     await expect.poll(() => started).toBe(true);
     expect(await page.evaluate(() => (window as any).readerReady)).toBe(false);
+    await expect(page.locator('.progressive-image__thumb')).toHaveAttribute('src', /w=32/);
+    await expect(page.locator('.progressive-image__thumb')).toBeVisible();
+    await expect.poll(() => page.locator('.progressive-image__thumb').evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth)).toBe(480);
     release();
     await expect.poll(() => page.evaluate(() => (window as any).readerReady)).toBe(true);
   } finally { release(); await context.close(); }

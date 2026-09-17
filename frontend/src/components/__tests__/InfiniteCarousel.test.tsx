@@ -1,6 +1,8 @@
 import { render, screen, act, fireEvent, createEvent } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import InfiniteCarousel from "../InfiniteCarousel";
+import ShowcaseCard from "../ShowcaseCard";
+import useSwipeNavigation from "../../hooks/useSwipeNavigation";
 
 function mockMatchMedia(reducedMotion: boolean) {
   Object.defineProperty(window, "matchMedia", {
@@ -26,6 +28,90 @@ describe("InfiniteCarousel", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it("renders no wrapper for zero effective slides", () => {
+    const { container } = render(<InfiniteCarousel>{[null, false, undefined]}</InfiniteCarousel>);
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("leaves singleton gestures available to the collection page navigation", () => {
+    vi.useFakeTimers();
+    const nextCollection = vi.fn();
+    function CollectionPage() {
+      const { ref } = useSwipeNavigation({ onSwipeLeft: nextCollection });
+      return <div ref={ref}><InfiniteCarousel>{[<div key="one">Static highlight</div>]}</InfiniteCarousel></div>;
+    }
+    const { container } = render(<CollectionPage />);
+    Object.defineProperty(container.firstElementChild, 'clientWidth', { value: 390 });
+    const highlight = screen.getByText('Static highlight');
+    fireEvent.touchStart(highlight, { touches: [{ clientX: 300, clientY: 100 }] });
+    expect(touchMove(highlight, 80, 100).defaultPrevented).toBe(true);
+    fireEvent.touchEnd(highlight, { touches: [] });
+    act(() => vi.advanceTimersByTime(500));
+    expect(nextCollection).toHaveBeenCalledOnce();
+    expect(container.querySelector('.carousel-track')).toBeNull();
+  });
+
+  it("renders one linked slide once without intercepting touch, wheel or mouse", () => {
+    vi.useFakeTimers();
+    const navigate = vi.fn((event) => event.preventDefault());
+    const { container } = render(<InfiniteCarousel classPrefix="cd-highlights" suppressClickAfterDrag>{[
+      false, <a key="one" href="/letter/one" data-carousel-drag onClick={navigate}>Only highlight</a>, null,
+    ]}</InfiniteCarousel>);
+    const link = screen.getByRole('link', { name: 'Only highlight' });
+    expect(container.querySelectorAll('.cd-highlights-slide')).toHaveLength(1);
+    expect(container.querySelector('.cd-highlights-track')).toBeNull();
+    expect(screen.queryByRole('tab')).toBeNull();
+    expect(vi.getTimerCount()).toBe(0);
+    fireEvent.touchStart(link, { touches: [{ clientX: 300, clientY: 100 }] });
+    expect(touchMove(link, 100, 100).defaultPrevented).toBe(false);
+    fireEvent.touchEnd(link, { touches: [] });
+    const wheel = createEvent.wheel(link, { deltaX: 100, deltaY: 0, cancelable: true });
+    fireEvent(link, wheel); expect(wheel.defaultPrevented).toBe(false);
+    fireEvent.mouseDown(link, { button: 0, clientX: 300, clientY: 100 });
+    fireEvent.mouseMove(link, { clientX: 100, clientY: 100 }); fireEvent.mouseUp(link);
+    fireEvent.click(link, { detail: 1 }); expect(navigate).toHaveBeenCalledOnce();
+  });
+
+  it("mounts working interactions after one becomes many and cleans them up when returning to one", () => {
+    vi.useFakeTimers();
+    const pauseRef = { current: vi.fn() };
+    const one = [<div key="a">A</div>];
+    const many = [...one, <div key="b">B</div>];
+    const view = render(<InfiniteCarousel pauseRef={pauseRef}>{one}</InfiniteCarousel>);
+    view.rerender(<InfiniteCarousel pauseRef={pauseRef}>{many}</InfiniteCarousel>);
+    const track = view.container.querySelector('.carousel-track')!;
+    fireEvent.touchStart(track, { touches: [{ clientX: 300, clientY: 100 }] });
+    expect(touchMove(track, 100, 100).defaultPrevented).toBe(true);
+    fireEvent.touchEnd(track, { touches: [] });
+    expect(screen.getAllByRole('tab')[1]).toHaveAttribute('aria-selected', 'true');
+    const activePause = pauseRef.current;
+    view.rerender(<InfiniteCarousel pauseRef={pauseRef}>{one}</InfiniteCarousel>);
+    expect(view.container.querySelector('.carousel-track')).toBeNull();
+    expect(touchMove(track, 50, 100).defaultPrevented).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(pauseRef.current).not.toBe(activePause);
+    view.rerender(<InfiniteCarousel pauseRef={pauseRef}>{many}</InfiniteCarousel>);
+    expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true');
+    act(() => vi.advanceTimersByTime(5000));
+    expect(screen.getAllByRole('tab')[1]).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it("keeps a singleton gallery card's own image navigation and native destination", () => {
+    const onNavigate = vi.fn();
+    const gallery = ['one', 'two'].map(id => ({ letterId: `letter-${id}`, imageId: `image-${id}`,
+      imageUrl: '', label: 'Photograph', peopleLine: '', date: '', hook: `Photo ${id}`, mediaType: 'photo' as const }));
+    const { container } = render(<InfiniteCarousel>{[
+      <ShowcaseCard key="gallery" items={gallery} onNavigate={onNavigate} />,
+    ]}</InfiniteCarousel>);
+    expect(container.querySelector('.carousel-track')).toBeNull();
+    expect(screen.getByText('1/2')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByText('2/2')).toBeInTheDocument();
+    const link = screen.getByRole('link', { name: 'Photograph, Photo two' });
+    expect(link).toHaveAttribute('href', '/letter/letter-two?from=highlight&image=image-two');
+    fireEvent.click(link); expect(onNavigate).toHaveBeenCalledWith('letter-two', 'image-two');
   });
 
   it("allows opted-in links to drag without navigating, while ordinary clicks still work", () => {

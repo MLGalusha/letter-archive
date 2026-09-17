@@ -10,7 +10,7 @@ export function ReaderScanImage({ imageUrl, enabled = true, ...props }: Omit<Pro
   const containerRef = useRef<HTMLDivElement>(null);
   const physicalWidth = useScanDisplayWidth(containerRef, undefined, false, true);
   const width = scanVariantWidth(physicalWidth);
-  return <ProgressiveImage {...props} containerRef={containerRef} enabled={enabled && physicalWidth > 0}
+  return <ProgressiveImage {...props} preferNaturalAspectRatio containerRef={containerRef} enabled={enabled && physicalWidth > 0}
     midSrc={imagePreloadService.availablePreview(imageUrl, width)}
     src={getImageUrl(imageUrl, { width })}
     thumbSrc={getImageUrl(imageUrl, { width: 32 })}

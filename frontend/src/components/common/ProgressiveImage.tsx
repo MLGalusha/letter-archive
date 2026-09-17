@@ -27,6 +27,8 @@ export interface ProgressiveImageProps {
   onReadyChange?: (ready: boolean) => void;
   /** Known aspect ratio (width/height) from DB — used for placeholder sizing */
   aspectRatio?: number;
+  /** Reader metadata may have raw EXIF axes; prefer decoded scan orientation. */
+  preferNaturalAspectRatio?: boolean;
   /** Delay in ms before starting the full-quality load (gives priority images a head start) */
   fullDelay?: number;
 }
@@ -55,6 +57,7 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
       onLoad,
       onReadyChange,
       aspectRatio: knownAspectRatio,
+      preferNaturalAspectRatio = false,
       fullDelay,
     },
     ref,
@@ -124,8 +127,11 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
       : !fullLoaded && (placeholderSrc ? placeholderRetry.failed : fullFailed);
 
     // Reserve scan space even when legacy records lack dimensions and loading is deferred.
-    const resolvedAspectRatio = knownAspectRatio
-      ?? (naturalWidth && naturalHeight ? naturalWidth / naturalHeight : 3 / 4);
+    // Reader variants are EXIF-oriented; preserve explicit display ratios elsewhere.
+    const naturalAspectRatio = naturalWidth && naturalHeight ? naturalWidth / naturalHeight : undefined;
+    const resolvedAspectRatio = (preferNaturalAspectRatio
+      ? naturalAspectRatio ?? knownAspectRatio
+      : knownAspectRatio ?? naturalAspectRatio) ?? 3 / 4;
 
     const displayReady = enabled && fullLoaded && !fullRetry.failed;
     useEffect(() => { if (displayReady) onLoad?.(); }, [displayReady, src, onLoad]);
@@ -136,8 +142,9 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
       onReadyChange?.(displayReady);
     }, [displayReady, onReadyChange]);
 
-    const containerStyle: CSSProperties = {
+    const containerStyle: CSSProperties & { '--progressive-image-aspect-ratio': number } = {
       ...style,
+      '--progressive-image-aspect-ratio': resolvedAspectRatio,
       ...(resolvedAspectRatio && !fullLoaded ? { aspectRatio: resolvedAspectRatio } : {}),
     };
 

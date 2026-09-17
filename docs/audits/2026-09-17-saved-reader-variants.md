@@ -21,7 +21,7 @@ These are local filesystem operation timings, excluding process startup, HTTP, d
 
 ## Cost and limits
 
-Variants are saved only when requested. Each saved representation remains capped at 2MiB; up to four widths and three negotiated formats can exist per source version (a theoretical 24MiB payload ceiling per version, excluding envelope/filesystem overhead). This fixture's four AVIF variants total about 269KiB. Actual archive size depends on scans, requested widths and browser formats. Historical source versions are not garbage-collected by this change.
+Variants are saved only when requested. Each saved representation remains capped at 2MiB; up to four widths and three negotiated formats can exist per source and encoder recipe/library version (a theoretical 24MiB payload ceiling for each such combination, excluding envelope/filesystem overhead). This fixture's four AVIF variants total about 269KiB. Actual archive size depends on scans, requested widths and browser formats. Historical source and encoder versions are not garbage-collected by this change; encoder upgrades may add variants even for unchanged source scans.
 
 A first miss still incurs encoding and saving, including storage latency. A saved hit still needs authorization/version checks and storage reads. Memory-cache hits and browser 304s are separate paths; neither proves durable reuse. Save failures fall back to serving the generated image. Existing limits remain 40 active store reads, two writes, and a bounded transform scheduler.
 

@@ -25,6 +25,8 @@ Observation: ___
 
 **Status: keyboard/filter-layout follow-ups pending.** [Issue 42](https://github.com/MLGalusha/letter-archive/issues/42), [issue 12](https://github.com/MLGalusha/letter-archive/issues/12). Earlier input-responsiveness changes are already live ([PR 105](https://github.com/MLGalusha/letter-archive/pull/105)).
 
+Issue 12 candidate: on phones, including touch-screen landscape layouts, tapping search closes open panels while retaining selected filters and valid year drafts. Filter choices use page scrolling and larger targets. Chromium/WebKit checks and independent review passed; production deployment and your physical-phone check are still pending. Try expanding Topic and reaching Clear All in both orientations, including a search with no results. Issue 42's keyboard/header shift remains separate.
+
 - On [Home](https://voicesthatremain.com/), scroll to search, open the filters, then tap the search input and type. Dismiss the keyboard; repeat on [Collection 009](https://voicesthatremain.com/collections/009).
 - Expected: input remains reachable above the keyboard, header does not get stranded offscreen, and dismissing the keyboard restores a usable page. Opening/closing filters should feel predictable; the pending filter ticket covers dismissal when typing and mobile panel layout.
 - Type a different query quickly, change sort, then clear the query. Expected: your input updates promptly; results eventually correspond to the latest controls, with no stale results replacing newer ones.

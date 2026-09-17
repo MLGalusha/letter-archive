@@ -149,6 +149,28 @@ describe("LetterDetailPage", () => {
     consoleErrorSpy.mockRestore();
   });
 
+  it("updates the rendered current dot after scans load and scroll", async () => {
+    const loaded = deferred<Letter>();
+    getLetterByIdMock.mockReturnValue(loaded.promise);
+    const { container } = renderLetterDetailPage();
+    expect(screen.getByText("Loading letter...")).toBeInTheDocument();
+    await act(async () => loaded.resolve(createLetter({ images: [
+      { id: "scan-1", type: "letter", pageNumber: 1, imageUrl: "/images/one.jpg" },
+      { id: "scan-2", type: "letter", pageNumber: 2, imageUrl: "/images/two.jpg" },
+    ] })));
+    const carousel = container.querySelector<HTMLDivElement>(".scan-carousel")!;
+    Object.defineProperty(carousel, "clientWidth", { value: 200 });
+    carousel.getBoundingClientRect = () => ({ left: 500, width: 200 }) as DOMRect;
+    Array.from(carousel.children).forEach((slide, index) => {
+      slide.getBoundingClientRect = () => ({ left: 510 + index * 220 - carousel.scrollLeft, width: 180 }) as DOMRect;
+    });
+    carousel.scrollLeft = 220;
+    fireEvent.scroll(carousel);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Go to page 2" })).toHaveClass("active"));
+    expect(screen.getByRole("button", { name: "Go to page 2" })).toHaveAttribute("aria-current", "true");
+    expect(screen.getByRole("button", { name: "Go to page 1" })).not.toHaveClass("active");
+  });
+
   it("renders the editorial page with hero, summary, transcript, and nav", async () => {
     renderLetterDetailPage();
 

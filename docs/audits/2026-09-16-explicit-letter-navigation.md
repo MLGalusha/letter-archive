@@ -10,6 +10,10 @@ Before the change, the footer links had no horizontal padding at widths 320, 390
 
 Added `padding-inline: 1rem` to the actual navigation section through the existing 900px breakpoint. At all three narrow widths, links now have 16px space on both sides of the available content area. Chromium's viewport-relative right measurement is 31px including its 15px scrollbar. At 1440px the existing positions were unchanged (Chromium 256.5/271.5px; WebKit 264/264px). No horizontal document overflow was measured. Existing top spacing and article bottom padding remain. The independent transcript-gutter change in #22 is not included here.
 
+Final review corrected the gutter to `calc(1rem + env(safe-area-inset-left/right, 0px))` on each physical side. The detail page bypasses the shared body-layout inset, and `viewport-fit=cover` can otherwise place landscape iPhone links under the cutout. Zero-inset browser geometry remains unchanged; physical iPhone landscape acceptance must confirm the device-provided insets.
+
+A focused fixture using the actual detail-page stylesheet and footer markup measured 16/16px at 844px in Chromium and WebKit. Chromium's native safe-area override of 47px left/21px right produced 63/37px card gutters, with no horizontal overflow; at 1440px the existing 264/264px positions stayed unchanged. This verifies CSS environment-variable handling under emulation, not physical-device or full-page acceptance. Script and results: `output/playwright/check-footer-safe-area.cjs` and `footer-safe-area.json`.
+
 ## Verification
 
 - The new touch regression failed before the change because the move event was prevented. Afterward all 16 focused detail-page/shared-swipe tests pass. Tests retain the stale-route guard and verify the newly loaded route's keyboard target; an explicit bottom-link click still loads the next letter.

@@ -1050,6 +1050,10 @@
     padding-top: 7.5rem;
   }
 
+  .letter-nav-section {
+    padding-inline: 1rem;
+  }
+
   .letter-headline-hook p {
     font-size: clamp(1.3rem, 5vw, 1.8rem);
   }

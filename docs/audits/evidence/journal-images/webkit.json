@@ -12,7 +12,7 @@
       "bottom": 566.015625,
       "left": 17
     },
-    "size": "(min-width: 1000px) 360px, (min-width: 680px) 50vw, 100vw"
+    "size": "auto, 100vw"
   },
   "heroInfo": {
     "url": "http://127.0.0.1:4197/blog-images/scan.jpg?w=1200&rendition=1",
@@ -37,12 +37,12 @@
     "url": "http://127.0.0.1:4197/blog-images/scan.jpg?inline=1&w=1200&rendition=1",
     "box": {
       "x": 16,
-      "y": 331.390625,
+      "y": 421.390625,
       "width": 358,
       "height": 477.3125,
-      "top": 331.390625,
+      "top": 421.390625,
       "right": 374,
-      "bottom": 808.703125,
+      "bottom": 898.703125,
       "left": 16
     }
   },
@@ -53,7 +53,7 @@
   "resources": [
     {
       "url": "http://127.0.0.1:4197/blog-images/scan.jpg?w=1200&rendition=1",
-      "durationMs": 1,
+      "durationMs": 4,
       "bytes": 0
     },
     {
@@ -78,7 +78,7 @@
     },
     {
       "url": "http://127.0.0.1:4197/blog-images/fallback.jpg",
-      "durationMs": 30,
+      "durationMs": 10,
       "bytes": 0
     }
   ],
@@ -86,21 +86,21 @@
     {
       "requestedWidth": null,
       "bytes": 3078013,
-      "decodeMs": 78,
+      "decodeMs": 73,
       "width": 3000,
       "height": 4000
     },
     {
       "requestedWidth": 480,
       "bytes": 10958,
-      "decodeMs": 10,
+      "decodeMs": 8,
       "width": 480,
       "height": 640
     },
     {
       "requestedWidth": 1200,
       "bytes": 61550,
-      "decodeMs": 11,
+      "decodeMs": 10,
       "width": 1200,
       "height": 1600
     }

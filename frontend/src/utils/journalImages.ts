@@ -10,9 +10,11 @@ export function journalImageSources(source: string) {
   const owned = url.origin === new URL(API_BASE_URL).origin
     && /^\/(blog-images|images)\/[^/]+$/.test(url.pathname);
   if (!owned) return { src: source, original: source, srcSet: undefined };
-  const original = getImageUrl(source);
+  url.searchParams.delete('w');
+  url.searchParams.delete('rendition');
+  const original = getImageUrl(url.toString());
   const rendition = (width: number) => {
-    const result = new URL(getImageUrl(source, { width }));
+    const result = new URL(getImageUrl(original, { width }));
     // Bump this when the journal encoding recipe changes: immutable browser URLs
     // must change too. Letter images retain their existing revalidation policy.
     if (result.pathname.startsWith('/blog-images/')) result.searchParams.set('rendition', '1');

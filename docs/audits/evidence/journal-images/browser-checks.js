@@ -1,4 +1,6 @@
-async page => {
+async owner => {
+  const context = await owner.context().browser().newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
+  const page = await context.newPage();
   const requests = [];
   page.on('request', request => { if (request.url().includes('/blog-images/')) requests.push(request.url()); });
   await page.goto('http://127.0.0.1:4196/blog');
@@ -36,5 +38,7 @@ async page => {
     }
     return results;
   });
-  return { cardInfo, heroInfo, inlineBefore, inlineInfo, recoveryInfo, resources, decode, requests };
+  const result = { cardInfo, heroInfo, inlineBefore, inlineInfo, recoveryInfo, resources, decode, requests };
+  await context.close();
+  return result;
 }

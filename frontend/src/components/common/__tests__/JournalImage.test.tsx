@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { JournalImage } from '../JournalImage';
+import { API_BASE_URL } from '../../../api/client';
 import { journalImageSources } from '../../../utils/journalImages';
 
 describe('journal media', () => {
@@ -12,6 +13,11 @@ describe('journal media', () => {
     expect(sources.srcSet).toContain('v=source-two');
     expect(sources.srcSet).toContain('rendition=1');
     expect(journalImageSources('/images/page?v=one').srcSet).not.toContain('rendition=');
+  });
+  it.each(['blog-images/legacy.jpg', `${new URL(API_BASE_URL).origin.replace(/^https?:/, '')}/blog-images/legacy.jpg`])('normalizes owned paths and restores the true original: %s', (source) => {
+    const result = journalImageSources(`${source}?v=two&w=480&rendition=old`);
+    expect(result.original).toBe(`${API_BASE_URL}/blog-images/legacy.jpg?v=two`);
+    expect(result.src).toBe(`${API_BASE_URL}/blog-images/legacy.jpg?v=two&w=800&rendition=1`);
   });
   it.each(['https://external.example/photo.jpg', 'data:image/png;base64,AA', 'https://[bad'])('leaves non-owned URLs alone: %s', (source) => {
     expect(journalImageSources(source)).toEqual({ src: source, original: source, srcSet: undefined });

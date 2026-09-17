@@ -7,7 +7,7 @@ import type { BlogPost } from "../../api/client";
 
 const listBlogPostsMock = vi.fn();
 const getImageUrlMock = vi.fn((url: string, opts?: Record<string, unknown>) =>
-  `http://localhost:3002${url}${opts?.width ? `?w=${opts.width}` : ""}`);
+  `${url.startsWith("http") ? url : `http://localhost:3002${url}`}${opts?.width ? `?w=${opts.width}` : ""}`);
 
 vi.mock("../../api/client", () => ({
   API_BASE_URL: "http://localhost:3002",
@@ -290,7 +290,7 @@ describe("UpdatesPage", () => {
       expect(screen.getByText("Post 1")).toBeInTheDocument();
     });
 
-    expect(getImageUrlMock).toHaveBeenCalledWith("/blog-images/special.jpg", undefined);
+    expect(getImageUrlMock).toHaveBeenCalledWith("http://localhost:3002/blog-images/special.jpg", undefined);
 
     const img = screen.getByAltText("Hero alt 1");
     expect(img).toHaveAttribute("src", "http://localhost:3002/blog-images/special.jpg?w=800&rendition=1");

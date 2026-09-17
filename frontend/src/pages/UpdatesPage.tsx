@@ -194,7 +194,7 @@ export default function BlogPage() {
                   <div className="update-card-image">
                     <JournalImage
                       src={post.heroImageUrl}
-                      sizes="(min-width: 1000px) 360px, (min-width: 680px) 50vw, 100vw"
+                      sizes="auto, 100vw"
                       alt={post.heroImageAlt || post.title}
                       loading="lazy"
                     />

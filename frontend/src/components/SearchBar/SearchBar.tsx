@@ -150,6 +150,7 @@ export default function SearchBar({
 
   const hasActiveFilters = Boolean(
     query.trim()
+      || filters.exact
       || selectedFormats?.length
       || (!hideCollectionFilter && filters.collection)
       || filters.sender
@@ -198,6 +199,7 @@ export default function SearchBar({
     let count = 0;
     if (selectedFormats?.length) count += selectedFormats.length;
     if (filters.collection && !hideCollectionFilter) count++;
+    if (filters.exact) count++;
     if (filters.sender) count++;
     if (filters.recipient) count++;
     if (filters.place) count++;
@@ -435,6 +437,17 @@ export default function SearchBar({
   const refinementFields = (
     <div className={`filters${isCompact ? " filters-compact" : ""}`}>
 
+      <div className="filter-section">
+        <label className="search-exact-toggle">
+          <input type="checkbox" checked={filters.exact === true}
+            onChange={(event) => updateFilter({ exact: event.target.checked })}
+            aria-describedby={`${searchIdBase}-exact-help`} />
+          Exact phrase
+        </label>
+        <p id={`${searchIdBase}-exact-help`} className="search-exact-help">
+          Match these characters together, in order. Case is ignored; punctuation and spaces are literal.
+        </p>
+      </div>
       <div className="filter-section">
         <span className="filter-section-label">People &amp; Location</span>
         <div className="filter-section-row">

@@ -66,6 +66,7 @@ export const archiveSearchQuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(100).default(24),
   search: z.string().trim().max(200).optional(),
+  exact: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
   format: z.preprocess((value) => {
     if (Array.isArray(value)) return value;
     if (typeof value === 'string' && value.trim().length > 0) return [value];

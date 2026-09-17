@@ -290,3 +290,17 @@ describe('encodeArchiveSearchParams', () => {
     expect(encoded.get('hasTranscript')).toBe('false');
   });
 });
+
+
+describe('exact phrase mode', () => {
+  it('round trips mode and literal internal whitespace without adding a default flag', () => {
+    const state = decodeArchiveSearchParams(new URLSearchParams('q=red++lantern&exact=true&sender=Molly'));
+    expect(state.filters.exact).toBe(true);
+    expect(state.query).toBe('red  lantern');
+    expect(encodeArchiveSearchParams(state).get('exact')).toBe('true');
+    expect(normalizeArchiveSearchState(JSON.parse(JSON.stringify(state)))).toEqual(state);
+    expect(decodeArchiveSearchParams(new URLSearchParams()).filters.exact).toBeUndefined();
+    expect(encodeArchiveSearchParams({ ...state, filters: { ...state.filters, exact: false } }).has('exact')).toBe(false);
+    expect(decodeArchiveSearchParams(new URLSearchParams('exact=nonsense')).filters.exact).toBeUndefined();
+  });
+});

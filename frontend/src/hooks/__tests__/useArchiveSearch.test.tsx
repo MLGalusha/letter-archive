@@ -673,6 +673,29 @@ describe('useArchiveSearch defaults and fixed configuration', () => {
       year: 1947,
     });
   });
+  it('preserves exact mode on URL navigation, persistence, clearing query, and reload', async () => {
+    const harness = renderArchiveHarness({ initialEntries: ['/?q=red+lantern', '/?q=red+lantern&exact=true&sender=Molly'] });
+    await advance(350);
+    expect(lastArchiveRequest()).toMatchObject({ search: 'red lantern', exact: true, sender: 'Molly' });
+    expect(saveSearchStateMock).toHaveBeenLastCalledWith('test-home', 'red lantern', expect.objectContaining({ exact: true }));
+    act(() => harness.result.current.archive.setSearchQuery(''));
+    await advance(350);
+    expect(currentParams(harness).get('exact')).toBe('true');
+    expect(harness.result.current.archive.filters.sender).toBe('Molly');
+    await navigate(harness, -1);
+    await advance(350);
+    expect(harness.result.current.archive.filters.exact).toBeUndefined();
+    expect(lastArchiveRequest()?.exact).toBeUndefined();
+    await navigate(harness, '/?q=red+lantern&exact=true');
+    await advance(350);
+    const url = harness.result.current.location.pathname + harness.result.current.location.search;
+    harness.unmount();
+    const reloaded = renderArchiveHarness({ initialEntries: [url] });
+    await advance(350);
+    expect(reloaded.result.current.archive.filters.exact).toBe(true);
+    expect(lastArchiveRequest()).toMatchObject({ exact: true });
+  });
+
 });
 
 function deferredResponse() {

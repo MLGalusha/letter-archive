@@ -80,6 +80,7 @@ describe.skipIf(!enabled)('public archive search against PostgreSQL', () => {
       { key: 'noOperators', transcription_text: 'fox goose', date_raw: '19500112' },
       { key: 'hyphen', sender: 'Anne-Marie', date_raw: '19500113' },
       { key: 'quote', transcription_text: 'She said "lantern".', date_raw: '19500114' },
+      { key: 'spaces', transcription_text: 'blue  marble', date_raw: '19500117' },
       { key: 'turkish', transcription_text: 'İstanbul', date_raw: '19500120' },
       { key: 'foldedOffsets', transcription_text: 'İ𐐀 📨 nebula', date_raw: '19500123' },
       { key: 'sigma', transcription_text: 'ΟΣ', date_raw: '19500121' },
@@ -202,6 +203,42 @@ describe.skipIf(!enabled)('public archive search against PostgreSQL', () => {
     }
   });
 
+  it.each([
+    ['red lantern', ['phrase']], ['red  lantern', []], ['Mollly', []],
+    ['blue  marble', ['spaces']], ['blue marble', []],
+    ['İstanbul', ['turkish']], ['i\u0307stanbul', icu ? ['turkish'] : []],
+    ['istanbul', icu ? [] : ['turkish']], ['οσ', icu ? [] : ['sigma']], ['ος', icu ? ['sigma'] : []], ['Page', ['nbspMarker']],
+    ['%', ['percent']], ['ζ', ['greek']], ['quartz%', []],
+  ] as Array<[string, string[]]>)('narrows exact phrase search for %s', async (query, keys) => {
+    const response = await search({ search: query, exact: 'true', limit: '100' });
+    expect(response.letters.map((item) => item.id).sort()).toEqual(keys.map((key) => ids[key]).sort());
+    for (const item of response.letters) {
+      const preview = item.searchPreview!;
+      expect(preview.highlightRanges.map((range) => preview.excerpt.slice(range.start, range.end).toLowerCase()))
+        .toContain(['istanbul', 'İstanbul'].includes(query) ? 'i̇stanbul' : query === 'οσ' ? 'ος' : query.toLowerCase());
+    }
+  });
+
+  it('keeps exact mode through pagination/filter/sort and restores ordinary mode', async () => {
+    const params = { search: 'quartz', exact: 'true', limit: '2', sort: 'letterDate', sortOrder: 'asc' };
+    const first = await search({ ...params, page: '1' });
+    const second = await search({ ...params, page: '2' });
+    expect(first.total).toBe(6);
+    expect(second.total).toBe(6);
+    expect(new Set([...first.letters, ...second.letters].map((item) => item.id)).size).toBe(4);
+    expect((await search({ ...params, format: 'cover' })).letters.map((item) => item.id)).toEqual([ids.groupRoot]);
+    expect((await search({ search: 'red lantern', exact: 'false' })).letters).toHaveLength(2);
+  });
+
+  it('retains exact totals without exposing an empty-page placeholder', async () => {
+    for (const query of ['quartz', 'qu']) {
+      expect(await search({ search: query, exact: 'true', page: '99', limit: '2' }))
+        .toMatchObject({ total: 6, letters: [] });
+    }
+    expect(await search({ search: 'unfindablezzzz', exact: 'true', page: '99' }))
+      .toMatchObject({ total: 0, letters: [] });
+  });
+
   it('preserves original-term fuzzy eligibility through database case expansion', async () => {
     const [sender] = await client`INSERT INTO letters ${client({ collection_id: collection, date_raw: '19510101', sender: 'stanbul' })} RETURNING id`;
     try {
@@ -217,10 +254,14 @@ describe.skipIf(!enabled)('public archive search against PostgreSQL', () => {
       for (const query of ['i\u0307stanbul', 'İst', 'İstan-bul', 'İstanbul i\u0307stanbul']) {
         expect((await search({ search: query })).letters.some((item) => item.id === sender!.id)).toBe(false);
       }
+      expect((await search({ search: 'İstanbul', exact: 'true' })).letters.some((item) => item.id === sender!.id)).toBe(false);
       if (icu) {
         await client`UPDATE letters SET recipient = 'İstanbul' WHERE id = ${sender!.id}`;
         const response = await search({ search: 'İstanbul i\u0307stanbul' });
         expect(response.letters.find((item) => item.id === sender!.id)?.searchPreview)
+          .toMatchObject({ matchedFieldLabel: 'Recipient', excerpt: 'İstanbul', highlightRanges: [{ start: 0, end: 8 }] });
+        const exact = await search({ search: 'İstanbul', exact: 'true' });
+        expect(exact.letters.find((item) => item.id === sender!.id)?.searchPreview)
           .toMatchObject({ matchedFieldLabel: 'Recipient', excerpt: 'İstanbul', highlightRanges: [{ start: 0, end: 8 }] });
       }
       const [normalized] = await client`SELECT lower('İstanbul') AS query, similarity('stanbul', lower('İstanbul')) AS score`;

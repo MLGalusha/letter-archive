@@ -234,6 +234,7 @@ export default function useArchiveSearch(config: UseArchiveSearchConfig): UseArc
     () => ({
       limit: ARCHIVE_PAGE_SIZE,
       search: searchQuery.trim() || undefined,
+      exact: filters.exact || undefined,
       format: filters.format?.length ? filters.format : undefined,
       collection: filters.collection || undefined,
       sender: filters.sender || undefined,

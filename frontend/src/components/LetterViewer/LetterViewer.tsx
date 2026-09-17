@@ -198,22 +198,25 @@ const LetterViewer = memo(function LetterViewer({
   const viewerReady = fullLoaded || midLoaded;
   const displayedSrc = fullLoaded ? fullSrc : midLoaded ? midSrc : undefined;
   const displayedRetry = useImageRetry(displayedSrc ?? fullSrc);
+  const [displayState, setDisplayState] = useState({ src: displayedSrc, loaded: false });
+  if (displayState.src !== displayedSrc) setDisplayState({ src: displayedSrc, loaded: false });
+  const activeScanReady = fullLoaded && displayState.src === fullSrc && displayState.loaded && !displayedRetry.failed;
 
   // Match each neighbor's fitted rendition; no guesses before layout is measured.
   const adjacentWidth = useCallback((image: LetterImage) => {
     const element = imageContainerRef.current;
     const ratio = image.width && image.height ? image.width / image.height : 3 / 4;
     const fitted = element ? Math.min(element.clientWidth, element.clientHeight * ratio) : 0;
-    return scanVariantWidth(fitted * (window.devicePixelRatio || 1));
+    return scanVariantWidth(element ? fitted * (window.devicePixelRatio || 1) : physicalWidth);
   }, [physicalWidth]);
   useEffect(() => {
-    if (!fullLoaded || physicalWidth <= 0 || displayImages.length <= 1) return;
+    if (!activeScanReady || physicalWidth <= 0 || displayImages.length <= 1) return;
     const neighbors = [-1, 1].map(direction => displayImages[
       (currentImageIndex + direction + displayImages.length) % displayImages.length
     ]);
     return imagePreloadService.preloadNeighbors(neighbors.map(image =>
       getImageUrl(image.imageUrl, { width: adjacentWidth(image) })));
-  }, [fullLoaded, physicalWidth, currentImageIndex, displayImages, adjacentWidth]);
+  }, [activeScanReady, physicalWidth, currentImageIndex, displayImages, adjacentWidth]);
 
   // ============================================================================
   // PERSISTENCE: Save state to localStorage
@@ -875,9 +878,13 @@ const LetterViewer = memo(function LetterViewer({
         <img
           key={`${displayedSrc}:${fullLoaded}:${midLoaded}:${displayedRetry.attempt}`}
           ref={imageRef}
-          onError={() => { if (viewerReady) displayedRetry.onError(); }}
+          onError={() => {
+            setDisplayState({ src: displayedSrc, loaded: false });
+            if (viewerReady) displayedRetry.onError();
+          }}
           onLoad={(event) => {
             displayedRetry.onLoad();
+            setDisplayState({ src: displayedSrc, loaded: true });
             const image = event.currentTarget;
             if (image.naturalWidth && image.naturalHeight) {
               const ratio = image.naturalWidth / image.naturalHeight;

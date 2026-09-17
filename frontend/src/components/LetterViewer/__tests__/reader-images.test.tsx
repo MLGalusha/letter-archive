@@ -100,8 +100,10 @@ describe('reader scan requests', () => {
     expect(originals()).toEqual([]);
   });
 
-  it('prefetches only adjacent pages at bounded resolution, including after zoom', () => {
+  it('prefetches only adjacent pages after the visible DOM image loads, including after zoom', () => {
     const { container } = render(<LetterViewer images={images} variant="lightbox" />);
+    expect(widths('scan-2')).toEqual([]);
+    fireEvent.load(container.querySelector('.viewer-image')!);
     expect(widths('scan-2')).toEqual(['800']);
     expect(widths('scan-5')).toEqual(['800']);
     expect(widths('scan-3')).toEqual([]);

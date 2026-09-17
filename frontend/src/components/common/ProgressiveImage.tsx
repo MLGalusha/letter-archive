@@ -24,6 +24,7 @@ export interface ProgressiveImageProps {
   deferFullUntilVisible?: boolean;
   context?: string;
   onLoad?: () => void;
+  onReadyChange?: (ready: boolean) => void;
   /** Known aspect ratio (width/height) from DB — used for placeholder sizing */
   aspectRatio?: number;
   /** Delay in ms before starting the full-quality load (gives priority images a head start) */
@@ -52,6 +53,7 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
       deferFullUntilVisible,
       context,
       onLoad,
+      onReadyChange,
       aspectRatio: knownAspectRatio,
       fullDelay,
     },
@@ -125,10 +127,14 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
     const resolvedAspectRatio = knownAspectRatio
       ?? (naturalWidth && naturalHeight ? naturalWidth / naturalHeight : 3 / 4);
 
-    // Fire onLoad when best quality is ready
+    const displayReady = enabled && fullLoaded && !fullRetry.failed;
+    useEffect(() => { if (displayReady) onLoad?.(); }, [displayReady, src, onLoad]);
+
+    // Readiness hints can outlive browser cache entries. Only an actual DOM load
+    // admits neighbor work; errors and replacement URLs revoke that readiness.
     useEffect(() => {
-      if (enabled && fullLoaded) onLoad?.();
-    }, [enabled, fullLoaded, src, onLoad]);
+      onReadyChange?.(displayReady);
+    }, [displayReady, onReadyChange]);
 
     const containerStyle: CSSProperties = {
       ...style,

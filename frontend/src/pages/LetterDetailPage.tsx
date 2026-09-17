@@ -473,9 +473,9 @@ export default function LetterDetailPage() {
                   >
                     <ReaderScanImage
                       imageUrl={img.imageUrl}
-                      enabled={idx === activeIndex || (readyScan === activeScanKey && allowImageSpeculation())}
+                      enabled={idx === activeIndex || (Math.abs(idx - activeIndex) === 1 && readyScan === activeScanKey && allowImageSpeculation())}
                       fetchPriority={idx === activeIndex ? 'high' : 'low'}
-                      onLoad={() => { if (idx === activeIndex) setReadyScan(activeScanKey); }}
+                      onReadyChange={(ready) => { if (idx === activeIndex) setReadyScan(ready ? activeScanKey : null); }}
                       alt={
                         isLetter
                           ? `Page ${img.pageNumber ?? idx + 1} of letter`

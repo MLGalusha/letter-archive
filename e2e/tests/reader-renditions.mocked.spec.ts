@@ -18,8 +18,11 @@ async function mount(page: Page) {
       const {PreviewImage}=await import('/src/components/common/PreviewImage.tsx');
       const {default:LetterViewer}=await import('/src/components/LetterViewer/LetterViewer.tsx');
       const {getImageUrl}=await import('/src/api/client.ts');
+      const {imagePreloadService}=await import('/src/services/imagePreloadService.ts');
+      window.markCached=(imageUrl)=>imagePreloadService.recordLoaded(getImageUrl(imageUrl,{width:1200}),{naturalWidth:1200,naturalHeight:1600});
+      window.readerReady=false;
       const root=createRoot(document.getElementById('fixture'));
-      window.renderReader=(props)=>root.render(React.createElement(ReaderScanImage,{imageUrl:'/fixture-images/scan?v=one',alt:'Reader scan',loading:'eager',style:{width:360,position:'relative'},...props}));
+      window.renderReader=(props)=>root.render(React.createElement(ReaderScanImage,{imageUrl:'/fixture-images/scan?v=one',alt:'Reader scan',loading:'eager',onReadyChange:(ready)=>{window.readerReady=ready},style:{width:360,position:'relative'},...props}));
       window.renderCard=()=>root.render(React.createElement(PreviewImage,{src:getImageUrl('/fixture-images/scan?v=one',{width:480}),alt:'Card scan'}));
       window.renderViewer=()=>root.render(React.createElement(LetterViewer,{variant:'lightbox',images:[
         {id:'one',type:'letter',pageNumber:1,imageUrl:'/fixture-images/one?v=one',width:1200,height:1600},
@@ -84,7 +87,7 @@ test('@mocked viewer waits for the active measured rendition before bounded matc
     await route.fulfill({ contentType: 'image/png', path: png });
   });
   try {
-    await mount(page); await page.evaluate(() => (window as any).renderViewer());
+    await mount(page); await page.evaluate(() => { (window as any).markCached('/fixture-images/one?v=one'); (window as any).renderViewer(); });
     await expect.poll(() => urls.some(url => url.includes('w=1200'))).toBe(true);
     expect(urls.every(url => url.includes('/one?'))).toBe(true);
     release();
@@ -135,6 +138,31 @@ for (const reducedData of [false, true]) {
       await page.getByRole('button', { name: 'Go to page 3', exact: true }).click();
       await expect(page.getByAltText('Page 3 of letter')).toHaveAttribute('src', /w=1200/);
       expect(urls.some(url => /w=800(?:&|$)/.test(url))).toBe(false);
+      await page.getByRole('button', { name: 'Go to page 1', exact: true }).click();
+      await expect(page.getByAltText('Page 1 of letter')).toHaveAttribute('src', /w=1200/);
+      const beforeResize = urls.length;
+      await page.setViewportSize({ width: 700, height: 844 });
+      await expect(page.getByAltText('Page 1 of letter')).toHaveAttribute('src', /w=1600/);
+      expect(urls.slice(beforeResize).some(url => /scan-(3|4)\?/.test(url) && url.includes('w=1600'))).toBe(false);
     } finally { release(); await context.close(); }
   });
 }
+
+test('@mocked cached readiness metadata does not admit neighbors before the displayed reader image loads', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3 });
+  const page = await context.newPage();
+  let started = false; let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/fixture-images/**', async route => {
+    started = true; await held;
+    await route.fulfill({ contentType: 'image/png', path: png });
+  });
+  try {
+    await mount(page);
+    await page.evaluate(() => { (window as any).markCached('/fixture-images/scan?v=one'); (window as any).renderReader(); });
+    await expect.poll(() => started).toBe(true);
+    expect(await page.evaluate(() => (window as any).readerReady)).toBe(false);
+    release();
+    await expect.poll(() => page.evaluate(() => (window as any).readerReady)).toBe(true);
+  } finally { release(); await context.close(); }
+});

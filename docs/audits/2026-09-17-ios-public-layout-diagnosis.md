@@ -151,3 +151,6 @@ On this isolated branch, all 1,331 frontend tests passed in one run; the lint re
 
 
 PR #151 automated review identified horizontal overflow during touch page swipes. A regression test reproduced document widths of 550–551px in a 390px viewport. Applying `overflow-x: clip` to the public shell keeps the translated wrapper inside the viewport without creating another vertical scroll container. The test now checks the in-progress transform, zero horizontal scroll offset, and completed page navigation in Chromium/WebKit touch modes. The reviewed local mobile suite passes 21 tests with 3 intentional skips (desktop touch swipe and the two unsupported CDP inset configurations).
+
+
+The follow-up review found that touchstart activation could steal a swipe beginning over a floating control. Activation now waits for an unmoved, completed single-touch tap; movement and cancellation leave native scrolling alone. Unit checks cover swipes, displaced endings, multitouch, cancellation, noncancelable fallback, ordinary clicks, and listener cleanup. The browser check verifies a swipe does not launch a jump and a subsequent tap works in Chromium/WebKit touch modes.

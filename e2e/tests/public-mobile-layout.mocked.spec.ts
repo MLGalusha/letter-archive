@@ -176,7 +176,17 @@ test.describe('@mocked Public mobile layout', () => {
     const destination = await page.evaluate(() => Math.max(0,
       scrollY + document.querySelector('.home-search-panel')!.getBoundingClientRect().top
       - (document.querySelector('.header') as HTMLElement).offsetHeight - 12));
-    if (isMobile) await search.tap(); else await search.click();
+    if (isMobile) {
+      const beforeGesture = await page.evaluate(() => scrollY);
+      await search.dispatchEvent('touchstart', { touches: [{ identifier: 0, clientX: 195, clientY: 760 }] });
+      await search.dispatchEvent('touchmove', { touches: [{ identifier: 0, clientX: 195, clientY: 700 }] });
+      await search.dispatchEvent('touchend', { touches: [], changedTouches: [{ identifier: 0, clientX: 195, clientY: 700 }] });
+      // These synthetic events do not pan natively; they must not launch the
+      // programmatic jump either. A subsequent real tap still activates once.
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      expect(await page.evaluate(() => scrollY)).toBe(beforeGesture);
+      await search.tap();
+    } else await search.click();
     await expect.poll(() => page.evaluate(y => Math.abs(scrollY - y), destination)).toBeLessThan(1);
     const input = page.getByRole('searchbox', { name: 'Search the archive' });
     await input.fill('garden');

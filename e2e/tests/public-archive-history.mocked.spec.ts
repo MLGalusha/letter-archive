@@ -167,6 +167,9 @@ test('@mocked reader renders detail before adjacency and acknowledges pending na
   await page.route((url) => url.origin === new URL(API_BASE_URL).origin, async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (path === '/settings/public') return route.fulfill({ json: {} });
+    if (path === '/images/reader-fixture') return route.fulfill({
+      contentType: 'image/png', path: join(__dirname, 'fixtures/archive-preview-480x640.png'),
+    });
     if (path === '/letters/summaries') return route.fulfill({ json: { letters: [], total: 0 } });
     if (path.endsWith('/adjacent')) {
       if (path.includes('reader-b')) await adjacentGate;
@@ -179,7 +182,9 @@ test('@mocked reader renders detail before adjacency and acknowledges pending na
       const id = path.split('/').at(-1)!;
       if (id === 'reader-b') await detailGate;
       return route.fulfill({ json: {
-        id, title: id, collectionCode: '003', images: [],
+        id, title: id, collectionCode: '003', images: [{
+          id: 'reader-fixture', imageUrl: '/images/reader-fixture', type: 'letter', pageNumber: 1, width: 480, height: 640,
+        }],
         metadata: { hook: id === 'reader-a' ? 'First fixture letter' : 'Second fixture letter', verified: true },
         transcript: { pages: [], fullText: '', verified: true },
         status: 'published', visibility: 'PUBLISHED', transcriptPublished: true, metadataPublished: true,
@@ -210,8 +215,13 @@ test('@mocked reader renders detail before adjacency and acknowledges pending na
     await expect(page.locator('.letter-nav-section')).toBeVisible();
     await page.goBack();
     await expect(page.getByText('First fixture letter', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'View page 1 full size', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Close viewer', exact: true })).toBeVisible();
+    await expect(page.locator('#app-scroll')).toHaveCSS('overflow', 'hidden');
     await page.goForward();
     await expect(page.getByText('Second fixture letter', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Close viewer', exact: true })).toHaveCount(0);
+    await expect(page.locator('#app-scroll')).not.toHaveCSS('overflow', 'hidden');
   } finally {
     releaseDetail();
     releaseAdjacent();

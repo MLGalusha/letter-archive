@@ -290,4 +290,23 @@ describe("useProcessingState durable polling", () => {
     unmount();
   });
 
+  it.each(['unknown', 'active', 'idle'] as const)('preserves the %s queue retry cadence after an error', async (previous) => {
+    const active = { ...snapshot, counts: { ...snapshot.counts, activeCount: 1 } };
+    if (previous === 'unknown') getProcessingQueueStatusMock.mockRejectedValueOnce(new Error('Unavailable'));
+    else getProcessingQueueStatusMock.mockResolvedValueOnce(previous === 'active' ? active : snapshot);
+    const { unmount } = renderHook(() => useProcessingState());
+    await settle();
+    const cadence = previous === 'idle' ? PROCESSING_IDLE_INTERVAL_MS : PROCESSING_POLL_INTERVAL_MS;
+    if (previous !== 'unknown') {
+      getProcessingQueueStatusMock.mockRejectedValueOnce(new Error('Unavailable'));
+      await act(async () => { await vi.advanceTimersByTimeAsync(cadence); });
+    }
+    const calls = getProcessingQueueStatusMock.mock.calls.length;
+    await act(async () => { await vi.advanceTimersByTimeAsync(cadence - 1); });
+    expect(getProcessingQueueStatusMock).toHaveBeenCalledTimes(calls);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(getProcessingQueueStatusMock).toHaveBeenCalledTimes(calls + 1);
+    unmount();
+  });
+
 });

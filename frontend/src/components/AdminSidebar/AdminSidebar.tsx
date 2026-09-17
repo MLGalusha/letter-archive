@@ -104,10 +104,12 @@ export default function AdminSidebar({ collapsed = false, onToggle, onNavigate }
       const request = new AbortController();
       controller = request;
       const revision = notificationRevision.current;
+      let succeeded = false;
       try {
         const data = await getUnreadCount(request.signal);
         // An SSE event arriving during a read is newer than that snapshot.
         if (!stopped && !request.signal.aborted && revision === notificationRevision.current) {
+          succeeded = true;
           setUnreadCount(data.count);
           setMaxSeverity(data.maxSeverity);
         }
@@ -117,7 +119,7 @@ export default function AdminSidebar({ collapsed = false, onToggle, onNavigate }
         controller = null;
         if (!stopped && (mutationPending || document.visibilityState === 'visible')) {
           const delay = mutationPending || revision !== notificationRevision.current ? 0
-            : streamConnected.current ? CONNECTED_POLL_INTERVAL : POLL_INTERVAL;
+            : succeeded && streamConnected.current ? CONNECTED_POLL_INTERVAL : POLL_INTERVAL;
           timer = setTimeout(() => { void poll(); }, delay);
         }
       }
@@ -162,6 +164,9 @@ export default function AdminSidebar({ collapsed = false, onToggle, onNavigate }
           return SEVERITY_RANK[notif.severity] > SEVERITY_RANK[prev] ? notif.severity : prev;
         });
       }
+      // Events can update an already-unread deduplicated row. Reconcile the
+      // optimistic badge promptly; the existing read owner coalesces bursts.
+      refreshUnread.current?.();
       // If the popover is open, refresh the recent list so the new item shows up.
       if (popoverOpen && document.visibilityState === 'visible') {
         void fetchRecent();

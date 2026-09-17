@@ -255,4 +255,54 @@ describe("AdminSidebar", () => {
     unmount();
   });
 
+  it('retries failed initialization in 30 seconds even when SSE is healthy', async () => {
+    vi.useFakeTimers();
+    let reject!: (error: Error) => void;
+    getUnreadCountMock.mockReturnValueOnce(new Promise((_resolve, fail) => { reject = fail; }));
+    const { container, unmount } = render(<MemoryRouter><AdminSidebar /></MemoryRouter>);
+    act(() => stream.options?.onConnectionChange?.(true));
+    await act(async () => { reject(new Error('Unavailable')); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(29_999); });
+    expect(getUnreadCountMock).toHaveBeenCalledTimes(1);
+    getUnreadCountMock.mockResolvedValue({ count: 7, maxSeverity: 'error' });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(getUnreadCountMock).toHaveBeenCalledTimes(2);
+    expect(container.querySelector('.bell-badge')).toHaveTextContent('7');
+    await act(async () => { await vi.advanceTimersByTimeAsync(299_999); });
+    expect(getUnreadCountMock).toHaveBeenCalledTimes(2);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(getUnreadCountMock).toHaveBeenCalledTimes(3);
+    unmount();
+  });
+
+  it('reconciles repeated SSE updates without overlapping reads or polling a hidden tab', async () => {
+    vi.useFakeTimers();
+    let visibility: DocumentVisibilityState = 'visible';
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibility);
+    getUnreadCountMock.mockResolvedValue({ count: 1, maxSeverity: 'warn' });
+    const { container, unmount } = render(<MemoryRouter><AdminSidebar /></MemoryRouter>);
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { stream.options?.onConnectionChange?.(true); });
+    const calls = getUnreadCountMock.mock.calls.length;
+    let resolve!: (value: unknown) => void;
+    getUnreadCountMock.mockReturnValueOnce(new Promise(done => { resolve = done; }));
+    const event = { id: 'same-unread-row', read: false, severity: 'warn', dedupeCount: 2 } as import('../../../api/admin/notifications').AdminNotification;
+    act(() => { stream.options?.onNotification(event); stream.options?.onNotification(event); });
+    expect(getUnreadCountMock).toHaveBeenCalledTimes(calls + 1);
+    await act(async () => { resolve({ count: 99, maxSeverity: 'critical' }); });
+    expect(container.querySelector('.bell-badge')).not.toHaveTextContent('99');
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(getUnreadCountMock).toHaveBeenCalledTimes(calls + 2);
+    expect(container.querySelector('.bell-badge')).toHaveTextContent('1');
+    visibility = 'hidden'; act(() => document.dispatchEvent(new Event('visibilitychange')));
+    act(() => stream.options?.onNotification(event));
+    await act(async () => { await vi.advanceTimersByTimeAsync(300_000); });
+    expect(getUnreadCountMock).toHaveBeenCalledTimes(calls + 2);
+    visibility = 'visible';
+    await act(async () => { document.dispatchEvent(new Event('visibilitychange')); });
+    expect(getUnreadCountMock).toHaveBeenCalledTimes(calls + 3);
+    expect(container.querySelector('.bell-badge')).toHaveTextContent('1');
+    unmount();
+  });
+
 });

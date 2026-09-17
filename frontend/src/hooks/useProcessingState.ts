@@ -73,7 +73,7 @@ export function useProcessingState(): UseProcessingStateResult {
           } catch (err) {
             if (!mounted.current || run.controller.signal.aborted) return;
             if (run.invalidated) continue;
-            interval.current = PROCESSING_IDLE_INTERVAL_MS;
+            // Only a successful snapshot can establish idle cadence.
             setError(
               err instanceof Error
                 ? err.message

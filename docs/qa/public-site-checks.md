@@ -324,7 +324,11 @@ polling should stop while hidden and refresh promptly on return. Notifications
 continue arriving through the existing stream; this change does not pause backend
 processing, autosave, or transcript review. The unread-count safety check runs
 every 5 minutes with a connected stream, or every 30 seconds while connecting or
-using fallback. The visible badge may therefore take up to 5 minutes to reflect
+using fallback. Failed unread reads retry after 30 seconds even when the stream
+is connected. Queue read failures retain the last known cadence: active or unknown
+queues retry after 5 seconds; only a successful idle result permits 30 seconds.
+Visible stream events reconcile the authoritative count promptly, including updates
+to an already-unread notification, with overlapping reads coalesced. The visible badge may therefore take up to 5 minutes to reflect
 read-status changes made in another already-visible session; returning focus
 refreshes it immediately. Successful read, resolve, archive, delete and cleanup
 actions in this tab refresh the badge and an open preview promptly, including

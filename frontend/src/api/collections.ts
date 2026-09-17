@@ -98,8 +98,8 @@ export async function listCollections(): Promise<CollectionInfo[]> {
 /**
  * Fetch a single collection by code (public - only includes published letters)
  */
-export async function getCollectionByCode(code: string): Promise<CollectionWithLetters> {
-  return apiGet<CollectionWithLetters>(`/collections/${code}?view=overview`);
+export async function getCollectionByCode(code: string, signal?: AbortSignal): Promise<CollectionWithLetters> {
+  return apiGet<CollectionWithLetters>(`/collections/${code}?view=overview`, undefined, signal);
 }
 
 /**
@@ -320,6 +320,6 @@ export async function resetCollectionProfile(
 }
 
 /** Get the full public collection profile (AI + aggregations) */
-export async function getCollectionProfile(code: string): Promise<CollectionProfile> {
-  return apiGet<CollectionProfile>(`/collections/${code}/profile`);
+export async function getCollectionProfile(code: string, signal?: AbortSignal): Promise<CollectionProfile> {
+  return apiGet<CollectionProfile>(`/collections/${code}/profile`, undefined, signal);
 }

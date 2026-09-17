@@ -280,8 +280,19 @@ router.get('/collections/:code', async (req, res, next) => {
 
     const profileSourceCurrent = isVerifiedPublicContent(collection.profileStatus)
       && await collectionProfilePublicationIsCurrent(collection.id);
+    // Reuse the already-loaded public catalogue units: no profile aggregation or
+    // additional featured-letter lookup on the overview's critical path.
+    const selectedUnit = overview && profileSourceCurrent
+      ? enrichedResults.find(({ letter, relatedItems }) =>
+          [letter, ...relatedItems].some((item) => item.id === collection.profileStartHereLetterId))
+      : undefined;
+    const selectedLetterId = selectedUnit?.letter.metadataPublished ? selectedUnit.letter.id : null;
     const result = {
       ...toPublicCollection(collection, profileSourceCurrent),
+      ...(overview ? {
+        profileNarrative: profileSourceCurrent ? collection.profileNarrative ?? null : null,
+        profileStartHereLetterId: selectedLetterId,
+      } : {}),
       letters: overview ? collectionLetters.map(toPublicCollectionItem) : collectionLetters,
       letterCount: collectionLetters.length,
     };

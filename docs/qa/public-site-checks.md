@@ -220,3 +220,15 @@ of an already-loaded source. They also cover recovery, keeping a useful
 preview when the larger image fails, and exactly one full request while the actual
 DOM response is held under no-store and max-age=0 cache headers. This is
 correctness evidence, not a measured production speedup or a physical iPhone result.
+
+## Collection content independent of optional profile (issue 132)
+
+**Status: implementation under review; not yet recorded as deployed.**
+
+Open [Collection 003](https://voicesthatremain.com/collections/003) and [Collection 009](https://voicesthatremain.com/collections/009) in iPhone 13 Safari and Chrome. Try searching, sorting, opening a letter, and returning with browser Back. Expected after release: the collection header, published narrative, highlights and archive can appear as soon as overview data arrives, even when the separate profile request is still pending. Profile failure must not turn the collection into a not-found page. Late enrichment must not insert a narrative above the search area or clear your query, sort, or scroll position. Both configured featured letters and the initial fallback selection remain stable after optional profile resolution; profile data enriches popups only.
+
+Switch collections quickly with the header controls, then Back/Forward. Expected: you see the current collection or its loading state, never a late response replacing it with a previous collection. For a developer check, hold only `/collections/003/profile` in a local browser fixture: the overview and search must remain usable while it is held; releasing it must not move the archive due to narrative insertion.
+
+Validation uses controlled browser fixtures, not production speed measurements: Chrome and WebKit with iPhone 13 emulation rendered the overview and narrative while profile was held, and the archive's top position stayed unchanged on release. Focused tests cover query preservation, profile failure, overview failure, route cancellation/late responses, publication masking, hidden featured targets, and companion-to-primary selection. Physical phone checks remain yours to try.
+
+Observation: browser ___; collection ___; query/sort preserved ___; unexpected jump ___; Back/Forward result ___

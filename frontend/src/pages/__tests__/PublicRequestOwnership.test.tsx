@@ -28,6 +28,40 @@ const posts = (title: string) => ({ posts: [{ id: title, slug: title, title, exc
 beforeEach(() => { person.mockReset(); journal.mockReset(); });
 
 describe('public request ownership', () => {
+  it('does not revive an old person error on A to B to A', async () => {
+    const secondA = deferred<ReturnType<typeof personData>>();
+    const pendingB = deferred<ReturnType<typeof personData>>();
+    person.mockRejectedValueOnce(new Error('old A failure')).mockReturnValueOnce(pendingB.promise).mockReturnValueOnce(secondA.promise);
+    render(<MemoryRouter initialEntries={['/people/a']}>
+      <Link to="/people/a">Go to A</Link><Link to="/people/b">Go to B</Link>
+      <Routes><Route path="/people/:personId" element={<PersonPage />} /></Routes></MemoryRouter>);
+    await screen.findByText('old A failure');
+    fireEvent.click(screen.getByText('Go to B'));
+    fireEvent.click(screen.getByText('Go to A'));
+    expect(screen.getByText('Loading person...')).toBeInTheDocument();
+    expect(screen.queryByText('old A failure')).not.toBeInTheDocument();
+    await act(async () => pendingB.resolve(personData('b')));
+    expect(screen.getByText('Loading person...')).toBeInTheDocument();
+    await act(async () => secondA.resolve(personData('a')));
+    expect(screen.getByRole('heading', { name: 'a' })).toBeInTheDocument();
+  });
+
+  it('does not revive an old journal error on page one to two to one', async () => {
+    const secondA = deferred<ReturnType<typeof posts>>();
+    const pendingB = deferred<ReturnType<typeof posts>>();
+    journal.mockRejectedValueOnce(new Error('old page failure')).mockReturnValueOnce(pendingB.promise).mockReturnValueOnce(secondA.promise);
+    render(<MemoryRouter initialEntries={['/blog']}>
+      <Link to="/blog">Go to one</Link><Link to="/blog?page=2">Go to two</Link><UpdatesPage /></MemoryRouter>);
+    await screen.findByText('old page failure');
+    fireEvent.click(screen.getByText('Go to two'));
+    fireEvent.click(screen.getByText('Go to one'));
+    expect(screen.getByText('Loading journal entries...')).toBeInTheDocument();
+    expect(screen.queryByText('old page failure')).not.toBeInTheDocument();
+    await act(async () => pendingB.resolve(posts('old-page-two')));
+    expect(screen.getByText('Loading journal entries...')).toBeInTheDocument();
+    await act(async () => secondA.resolve(posts('new-page-one')));
+    expect(screen.getByRole('heading', { name: 'new-page-one' })).toBeInTheDocument();
+  });
   it.each(['success', 'failure'])('ignores an old person %s after navigating to another person', async (outcome) => {
     const old = deferred<ReturnType<typeof personData>>();
     const next = deferred<ReturnType<typeof personData>>();

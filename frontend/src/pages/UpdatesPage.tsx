@@ -44,6 +44,11 @@ export default function BlogPage() {
   const [result, setResult] = useState<{
     queryKey: string; posts: BlogPost[]; total: number; error: string | null;
   } | null>(null);
+  const [queryOwner, setQueryOwner] = useState(queryKey);
+  if (queryOwner !== queryKey) {
+    setQueryOwner(queryKey);
+    setResult(null);
+  }
   const current = result?.queryKey === queryKey ? result : null;
   const loading = !current;
   const posts = current?.posts ?? [];

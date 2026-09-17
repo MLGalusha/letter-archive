@@ -16,6 +16,11 @@ export default function PersonPage() {
   const [result, setResult] = useState<{
     personId: string | undefined; data: PublicPersonDetail | null; error: string | null;
   } | null>(null);
+  const [routeOwner, setRouteOwner] = useState(personId);
+  if (routeOwner !== personId) {
+    setRouteOwner(personId);
+    setResult(null);
+  }
   const current = result?.personId === personId ? result : null;
   const loading = !!personId && !current;
   const data = current?.data ?? null;

@@ -57,4 +57,51 @@ describe('progressive image recovery', () => {
     expect(images[1].removeAttribute).toHaveBeenCalledWith('src');
   });
 
+  it('updates pending and loaded priorities without restarting requests or readiness', () => {
+    const images: Array<{ url: string; complete: boolean; onload: (() => void) | null; fetchPriority: string; removeAttribute: ReturnType<typeof vi.fn> }> = [];
+    vi.stubGlobal('Image', class {
+      url = ''; complete = false; naturalWidth = 480; naturalHeight = 640;
+      onload: (() => void) | null = null; onerror: (() => void) | null = null;
+      fetchPriority = 'auto'; removeAttribute = vi.fn();
+      constructor() { images.push(this); }
+      set src(value: string) { this.url = value; }
+    });
+    const { result, rerender } = renderHook(({ fetchPriority }) => useProgressiveImage({
+      thumbSrc: '/thumb', fullSrc: '/full', fetchPriority,
+    }), { initialProps: { fetchPriority: 'auto' as 'auto' | 'high' | 'low' } });
+    act(() => { images[0].complete = true; images[0].onload?.(); });
+    rerender({ fetchPriority: 'high' });
+    expect(images).toHaveLength(2);
+    expect(images.every((img) => img.fetchPriority === 'high' && img.removeAttribute.mock.calls.length === 0)).toBe(true);
+    expect(result.current.currentSrc).toBe('/thumb');
+    act(() => { images[1].complete = true; images[1].onload?.(); });
+    rerender({ fetchPriority: 'low' });
+    expect(images).toHaveLength(2);
+    expect(result.current).toMatchObject({ fullLoaded: true, currentSrc: '/full', naturalWidth: 480, naturalHeight: 640 });
+  });
+
+  it('keeps the queued deadline and uses current priority for delayed loads and retries', () => {
+    vi.useFakeTimers();
+    const starts: Array<{ url: string; priority: string }> = [];
+    const images: Array<{ onerror: (() => void) | null }> = [];
+    vi.stubGlobal('Image', class {
+      complete = false; naturalWidth = 480; naturalHeight = 640;
+      onload: (() => void) | null = null; onerror: (() => void) | null = null;
+      fetchPriority = 'auto'; removeAttribute = vi.fn();
+      constructor() { images.push(this); }
+      set src(value: string) { starts.push({ url: value, priority: this.fetchPriority }); }
+    });
+    const { rerender } = renderHook(({ fetchPriority }) => useProgressiveImage({
+      thumbSrc: '/thumb', fullSrc: '/full', fullDelay: 1000, fetchPriority,
+    }), { initialProps: { fetchPriority: 'auto' as 'auto' | 'high' | 'low' } });
+    act(() => vi.advanceTimersByTime(400));
+    rerender({ fetchPriority: 'high' });
+    act(() => vi.advanceTimersByTime(600));
+    expect(starts).toEqual([{ url: '/thumb', priority: 'auto' }, { url: '/full', priority: 'high' }]);
+    act(() => images[1].onerror?.());
+    rerender({ fetchPriority: 'low' });
+    act(() => vi.advanceTimersByTime(1000));
+    expect(starts).toEqual([{ url: '/thumb', priority: 'auto' }, { url: '/full', priority: 'high' }, { url: '/full', priority: 'low' }]);
+  });
+
 });

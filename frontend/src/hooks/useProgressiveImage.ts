@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { recordImageLoad } from '../utils/imagePerformance';
 import { imagePreloadService } from '../services/imagePreloadService';
 import { IMAGE_RETRY_DELAYS_MS } from '../utils/imageRetry';
@@ -47,7 +47,7 @@ function loadImage(
   onLoad: (img: HTMLImageElement) => void,
   imgs: HTMLImageElement[],
   cleanups: Array<() => void>,
-  fetchPriority: 'high' | 'low' | 'auto',
+  priority: { current: 'high' | 'low' | 'auto' },
   onFailure: () => void = () => {},
 ): void {
   const start = performance.now();
@@ -59,7 +59,7 @@ function loadImage(
     // WebKit can keep an errored Image failed when its identical src is reassigned.
     const img = new Image();
     imgs.push(img);
-    img.fetchPriority = fetchPriority;
+    img.fetchPriority = priority.current;
     let settled = false;
     img.onload = () => {
       if (cancelled.current || settled) return;
@@ -109,6 +109,15 @@ export function useProgressiveImage(
     fetchPriority = 'auto',
   } = opts;
 
+  const priority = useRef(fetchPriority);
+  const ownedImages = useRef<HTMLImageElement[]>([]);
+  // Priority is a hint on existing requests, not a new loading lifecycle.
+  // Queued loads and retries read the latest hint when they actually start.
+  useLayoutEffect(() => {
+    priority.current = fetchPriority;
+    for (const img of ownedImages.current) img.fetchPriority = fetchPriority;
+  }, [fetchPriority]);
+
   // Readiness belongs to these exact URLs, including the render before effects run.
   // Otherwise a previously loaded full tier can start a replacement URL too early.
   const sourceKey = JSON.stringify([thumbSrc, midSrc, fullSrc]);
@@ -133,6 +142,7 @@ export function useProgressiveImage(
     let delay: ReturnType<typeof setTimeout> | null = null;
     const cancelled = { current: false };
     const imgs: HTMLImageElement[] = [];
+    ownedImages.current = imgs;
     const cleanups: Array<() => void> = [];
 
     const captureDims = (img: HTMLImageElement) => {
@@ -146,14 +156,14 @@ export function useProgressiveImage(
     loadImage(thumbSrc, 'thumb', context, cancelled, (img) => {
       setState((value) => ({ ...value, thumbLoaded: true }));
       captureDims(img);
-    }, imgs, cleanups, fetchPriority);
+    }, imgs, cleanups, priority);
 
     // 2. Load mid-quality immediately (if provided)
     if (midSrc) {
       loadImage(midSrc, 'mid', context, cancelled, (img) => {
         setState((value) => ({ ...value, midLoaded: true }));
         captureDims(img);
-      }, imgs, cleanups, fetchPriority);
+      }, imgs, cleanups, priority);
     }
 
     // 3. Load full — skip if preload service already has it, otherwise load
@@ -163,7 +173,7 @@ export function useProgressiveImage(
         loadImage(fullSrc, 'full', context, cancelled, (img) => {
           setState((value) => ({ ...value, fullLoaded: true }));
           captureDims(img);
-        }, imgs, cleanups, fetchPriority, () => setState((value) => ({ ...value, fullFailed: true })));
+        }, imgs, cleanups, priority, () => setState((value) => ({ ...value, fullFailed: true })));
       };
 
       if (idleUpgrade && midSrc) {
@@ -179,6 +189,7 @@ export function useProgressiveImage(
 
     return () => {
       cancelled.current = true;
+      ownedImages.current = [];
       for (const cleanup of cleanups) cleanup();
       for (const img of imgs) {
         img.onload = null;
@@ -190,7 +201,7 @@ export function useProgressiveImage(
       if (idle !== null) cancelIdle(idle);
       if (delay !== null) clearTimeout(delay);
     };
-  }, [enabled, thumbSrc, midSrc, fullSrc, idleUpgrade, deferFullUntilVisible, context, fullDelay, fetchPriority, sourceKey]);
+  }, [enabled, thumbSrc, midSrc, fullSrc, idleUpgrade, deferFullUntilVisible, context, fullDelay, sourceKey]);
 
   const { thumbLoaded, midLoaded, fullLoaded, fullFailed, naturalWidth, naturalHeight } = current;
   const currentSrc = fullLoaded ? fullSrc : midLoaded && midSrc ? midSrc : thumbLoaded ? thumbSrc : '';

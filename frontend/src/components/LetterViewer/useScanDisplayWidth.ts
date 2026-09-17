@@ -7,7 +7,7 @@ export function useScanDisplayWidth(
   fitHeight = false,
   measureParent = false,
 ) {
-  const [width, setWidth] = useState(800);
+  const [width, setWidth] = useState(0);
   useLayoutEffect(() => {
     const element = measureParent ? ref.current?.parentElement : ref.current;
     if (!element) return;

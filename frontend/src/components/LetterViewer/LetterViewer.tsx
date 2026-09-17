@@ -1,5 +1,6 @@
+import { imagePreloadService } from "../../services/imagePreloadService";
 import { RetryingImage } from "../common/RetryingImage";
-import { memo, useState, useRef, useEffect, useCallback } from "react";
+import { memo, useState, useRef, useEffect, useCallback, useMemo } from "react";
 import type { LetterImage } from "../../types/Letter";
 import { getImageUrl } from "../../api/client";
 import { useProgressiveImage } from "../../hooks/useProgressiveImage";
@@ -18,7 +19,6 @@ const STORAGE_KEY = "letterViewerState";
 const MIN_SCALE = 1;
 const MAX_SCALE = 50;
 const ZOOM_TRANSITION_MS = 150;
-const ADJACENT_SCAN_WIDTH = 800;
 
 // ============================================================================
 // TYPES
@@ -110,9 +110,9 @@ const LetterViewer = memo(function LetterViewer({
   initialIndex = 0,
 }: LetterViewerProps) {
   // Filter images if needed
-  const displayImages = showOnlyLetterPages
+  const displayImages = useMemo(() => showOnlyLetterPages
     ? images.filter((img) => img.type === "letter")
-    : images;
+    : images, [showOnlyLetterPages, images]);
 
   const [currentImageIndex, setCurrentImageIndex] = useState(initialIndex);
 
@@ -183,12 +183,12 @@ const LetterViewer = memo(function LetterViewer({
     : loadedAspect?.url === currentImage?.imageUrl ? loadedAspect.ratio : 3 / 4;
   const physicalWidth = useScanDisplayWidth(imageContainerRef, aspectRatio, true);
   const thumbSrc = getImageUrl(currentImage?.imageUrl ?? "", { width: 32 });
-  const midSrc = getImageUrl(currentImage?.imageUrl ?? "", { width: 800 });
   const fullSrc = scanNeedsOriginal(physicalWidth, scale)
     ? getImageUrl(currentImage?.imageUrl ?? "")
     : getImageUrl(currentImage?.imageUrl ?? "", { width: scanVariantWidth(physicalWidth * scale) });
-  const { fullLoaded, midLoaded } = useProgressiveImage({
-    enabled: Boolean(currentImage),
+  const midSrc = imagePreloadService.availablePreview(currentImage?.imageUrl ?? "", scanNeedsOriginal(physicalWidth, scale) ? Infinity : scanVariantWidth(physicalWidth * scale));
+  const { fullLoaded, midLoaded, fullFailed } = useProgressiveImage({
+    enabled: Boolean(currentImage) && physicalWidth > 0,
     thumbSrc,
     midSrc,
     fullSrc,
@@ -196,23 +196,24 @@ const LetterViewer = memo(function LetterViewer({
     context: variant === "lightbox" ? 'viewer-lightbox' : 'viewer-panel',
   });
   const viewerReady = fullLoaded || midLoaded;
-  const displayedSrc = fullLoaded ? fullSrc : midSrc;
-  const displayedRetry = useImageRetry(displayedSrc);
+  const displayedSrc = fullLoaded ? fullSrc : midLoaded ? midSrc : undefined;
+  const displayedRetry = useImageRetry(displayedSrc ?? fullSrc);
 
-  // Preload adjacent images so page navigation feels instant
+  // Match each neighbor's fitted rendition; no guesses before layout is measured.
+  const adjacentWidth = useCallback((image: LetterImage) => {
+    const element = imageContainerRef.current;
+    const ratio = image.width && image.height ? image.width / image.height : 3 / 4;
+    const fitted = element ? Math.min(element.clientWidth, element.clientHeight * ratio) : 0;
+    return scanVariantWidth(fitted * (window.devicePixelRatio || 1));
+  }, [physicalWidth]);
   useEffect(() => {
-    if (displayImages.length <= 1) return;
-    const nextIdx = (currentImageIndex + 1) % displayImages.length;
-    const prevIdx = (currentImageIndex - 1 + displayImages.length) % displayImages.length;
-    const toPreload = [...new Set([displayImages[nextIdx], displayImages[prevIdx]])].filter(Boolean);
-    const imgs: HTMLImageElement[] = [];
-    for (const img of toPreload) {
-      const el = new Image();
-      el.src = getImageUrl(img.imageUrl, { width: ADJACENT_SCAN_WIDTH });
-      imgs.push(el);
-    }
-    return () => { for (const el of imgs) el.onload = null; };
-  }, [currentImageIndex, displayImages]);
+    if (!fullLoaded || physicalWidth <= 0 || displayImages.length <= 1) return;
+    const neighbors = [-1, 1].map(direction => displayImages[
+      (currentImageIndex + direction + displayImages.length) % displayImages.length
+    ]);
+    return imagePreloadService.preloadNeighbors(neighbors.map(image =>
+      getImageUrl(image.imageUrl, { width: adjacentWidth(image) })));
+  }, [fullLoaded, physicalWidth, currentImageIndex, displayImages, adjacentWidth]);
 
   // ============================================================================
   // PERSISTENCE: Save state to localStorage
@@ -854,10 +855,10 @@ const LetterViewer = memo(function LetterViewer({
         {isLightbox && scale === 1 && (swipe.offset !== 0 || swipe.settling) && displayImages.length > 1 && ([-1, 1] as const).map(direction => {
           const adjacent = displayImages[(currentImageIndex + direction + displayImages.length) % displayImages.length];
           return <div key={direction} className="viewer-swipe-neighbor" style={{ left: `${direction * 100}%` }} aria-hidden>
-            <RetryingImage src={getImageUrl(adjacent.imageUrl, { width: ADJACENT_SCAN_WIDTH })} alt="" draggable={false} />
+            <RetryingImage src={getImageUrl(adjacent.imageUrl, { width: adjacentWidth(adjacent) })} alt="" draggable={false} />
           </div>;
         })}
-        {!viewerReady && (
+        {!viewerReady && physicalWidth > 0 && (
           <RetryingImage
             src={thumbSrc}
             alt=""
@@ -914,7 +915,7 @@ const LetterViewer = memo(function LetterViewer({
           draggable={false}
         />
 
-        {displayedRetry.failed && (
+        {(displayedRetry.failed || (fullFailed && !midLoaded)) && (
           <span className="viewer-image-error" role="status">Image unavailable</span>
         )}
         </div>

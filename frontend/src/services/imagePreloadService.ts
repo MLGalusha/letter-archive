@@ -1,101 +1,60 @@
 import { getImageUrl } from '../api/client';
 
-const MAX_CONCURRENT = 4;
 const MAX_CACHED_URLS = 128;
-const MAX_PAGES_PER_LETTER = 3;
-type LetterImages = { id: string; images: { imageUrl: string }[] };
 type Dimensions = { width: number; height: number };
 
-/** Speculative loading stays near the reader, never across an entire collection. */
+export function allowImageSpeculation(): boolean {
+  const connection = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
+  return !connection?.saveData && !['slow-2g', '2g'].includes(connection?.effectiveType ?? '');
+}
+
+/** Small, versioned readiness index; browser HTTP caching still owns the bytes. */
 export class ImagePreloadService {
-  private loaded = new Map<string, Dimensions | null>();
-  private queue: string[] = [];
-  private inflight = new Map<string, HTMLImageElement>();
-  private letters: LetterImages[] = [];
-  private startupTimer: ReturnType<typeof setTimeout> | null = null;
-
-  preloadCollection(letters: LetterImages[]) {
-    this.cancelPending();
-    this.letters = letters.map(({ id, images }) => ({
-      id, images: images.slice(0, MAX_PAGES_PER_LETTER),
-    }));
-    for (const letter of this.letters.slice(0, 3)) this.enqueueImages(letter, 1);
-    this.startupTimer = setTimeout(() => {
-      this.startupTimer = null;
-      this.processQueue();
-    }, 600);
-  }
-
-  focusLetter(letterId: string) {
-    this.cancelPending();
-    const index = this.letters.findIndex((letter) => letter.id === letterId);
-    if (index < 0) return;
-    this.enqueueImages(this.letters[index], MAX_PAGES_PER_LETTER);
-    for (const neighbor of [this.letters[index - 1], this.letters[index + 1]]) {
-      if (neighbor) this.enqueueImages(neighbor, 1);
-    }
-    this.processQueue();
-  }
+  private loaded = new Map<string, Dimensions>();
 
   isPreloaded(url: string): boolean { return this.loaded.has(url); }
   getDimensions(url: string): Dimensions | null { return this.loaded.get(url) ?? null; }
+  recordLoaded(url: string, image: { naturalWidth: number; naturalHeight: number }) {
+    if (!image.naturalWidth || !image.naturalHeight) return;
+    this.loaded.delete(url);
+    this.loaded.set(url, { width: image.naturalWidth, height: image.naturalHeight });
+    if (this.loaded.size > MAX_CACHED_URLS) this.loaded.delete(this.loaded.keys().next().value!);
+  }
 
-  /** Stop obsolete requests but keep the small navigation image index. */
-  cancelPending() {
-    if (this.startupTimer !== null) clearTimeout(this.startupTimer);
-    this.startupTimer = null;
-    this.queue = [];
-    for (const img of this.inflight.values()) {
-      img.onload = null;
-      img.onerror = null;
-      img.removeAttribute('src');
+  /** Reuse only an exact URL already loaded in this session; never fetch a new tier. */
+  availablePreview(imageUrl: string, targetWidth: number): string | undefined {
+    for (const width of [1600, 1200, 800, 640, 480]) {
+      if (width >= targetWidth) continue;
+      const url = getImageUrl(imageUrl, { width });
+      if (this.isPreloaded(url)) return url;
     }
-    this.inflight.clear();
+    return undefined;
   }
 
-  clear() {
-    this.cancelPending();
-    this.letters = [];
-    this.loaded.clear();
-  }
-
-  private enqueueImages(letter: LetterImages, limit: number) {
-    for (const image of letter.images.slice(0, limit)) {
-      for (const width of [800, 32]) {
-        const url = getImageUrl(image.imageUrl, { width });
-        if (!this.loaded.has(url) && !this.queue.includes(url)) this.queue.push(url);
+  /** At most two neighbors, after the visible scan is ready. Ownership is local. */
+  preloadNeighbors(urls: string[]): () => void {
+    if (!allowImageSpeculation()) return () => {};
+    const images: HTMLImageElement[] = [];
+    let cancelled = false;
+    for (const url of [...new Set(urls)].slice(0, 2)) {
+      if (this.isPreloaded(url)) continue;
+      const image = new Image();
+      images.push(image);
+      image.onload = () => { if (!cancelled) this.recordLoaded(url, image); };
+      image.fetchPriority = 'low';
+      image.src = url;
+      if (image.complete && image.naturalWidth) this.recordLoaded(url, image);
+    }
+    return () => {
+      cancelled = true;
+      for (const image of images) {
+        image.onload = null;
+        if (!image.complete) image.removeAttribute('src');
       }
-    }
+    };
   }
 
-  private processQueue() {
-    while (this.inflight.size < MAX_CONCURRENT && this.queue.length > 0) {
-      const url = this.queue.shift()!;
-      if (this.loaded.has(url) || this.inflight.has(url)) continue;
-      const img = new Image();
-      this.inflight.set(url, img);
-      const done = (success: boolean) => {
-        // Ignore duplicate cached-image events and callbacks from cancelled work.
-        if (this.inflight.get(url) !== img) return;
-        img.onload = null;
-        img.onerror = null;
-        this.inflight.delete(url);
-        if (success) {
-          this.loaded.set(url, img.naturalWidth && img.naturalHeight
-            ? { width: img.naturalWidth, height: img.naturalHeight } : null);
-          if (this.loaded.size > MAX_CACHED_URLS) {
-            this.loaded.delete(this.loaded.keys().next().value!);
-          }
-        }
-        this.processQueue();
-      };
-      img.onload = () => done(true);
-      img.onerror = () => done(false);
-      img.fetchPriority = 'low';
-      img.src = url;
-      if (img.complete) done(img.naturalWidth > 0);
-    }
-  }
+  clear() { this.loaded.clear(); }
 }
 
 export const imagePreloadService = new ImagePreloadService();

@@ -232,3 +232,28 @@ Switch collections quickly with the header controls, then Back/Forward. Expected
 Validation uses controlled browser fixtures, not production speed measurements: Chrome and WebKit with iPhone 13 emulation rendered the overview and narrative while profile was held, and the archive's top position stayed unchanged on release. Focused tests cover query preservation, profile failure, overview failure, route cancellation/late responses, publication masking, hidden featured targets, and companion-to-primary selection. Physical phone checks remain yours to try.
 
 Observation: browser ___; collection ___; query/sort preserved ___; unexpected jump ___; Back/Forward result ___
+### Reader rendition handoff (#127)
+
+After the release containing #127, open [collection 003](https://voicesthatremain.com/collections/003),
+let its cards become clear, then open [the first letter](https://voicesthatremain.com/letter/be6ef848-a8f9-4696-9097-646d4257562a).
+The clear card preview should remain usable while the larger reader scan arrives.
+Try a direct visit in a fresh tab too: it should request the measured reader size,
+without downloading an additional 480px preview solely for that visit.
+
+Try scan dots, swipes, fullscreen, next/previous letter, and resizing or rotating the
+phone. Current scans should take priority; neighboring scans warm only after the
+active scan is ready. Ordinary opening must not download the original; deliberate
+zoom can. Chrome's Save-Data/2G hint suppresses speculative neighbors where the
+browser exposes it. Safari does not expose that hint consistently, so bounded
+loading remains the default in both engines. Check your iPhone 13 in Safari and
+Chrome; desktop WebKit emulation does not replace those checks.
+
+Developer evidence: controlled Chrome and WebKit tests at DPR3 hold the 1200px
+response and verify the already-loaded versioned 480px image is visibly retained.
+Direct entry requests 32px and the measured 1200px, with no guessed 800px or extra 480px
+request. Tests cover resize to 480px, version changes, active-scan priority,
+reduced-data behavior, and matching viewer neighbors. These request/visibility
+checks establish the intended behavior; production latency and byte savings still
+need comparable live measurements after deployment. A missing or evicted browser
+cache can still require HTTP revalidation; the bounded readiness index stores URLs
+and dimensions, not image bytes, and never changes server publication checks.

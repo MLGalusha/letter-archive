@@ -9,8 +9,8 @@ import LetterViewer from "../components/LetterViewer/LetterViewer";
 import { getAdjacentLetters, getLetterById, type AdjacentLettersResponse } from "../api/letters";
 import type { LetterImage, LetterImageType, PublicLetter } from "../types/Letter";
 import { getImageUrl } from "../api/client";
+import { allowImageSpeculation } from "../services/imagePreloadService";
 import { ReaderScanImage } from "../components/LetterViewer/ReaderScanImage";
-import { imagePreloadService } from "../services/imagePreloadService";
 import { buildLetterSeo } from "../utils/seo";
 import {
   shouldShowPublicTranscript,
@@ -126,6 +126,9 @@ export default function LetterDetailPage() {
   // Scan carousel (extracted hook)
   const { carouselRef, attachCarousel, activeIndex, carouselDraggedRef, scrollToSlide } = useCarouselDrag();
 
+  const [readyScan, setReadyScan] = useState<string | null>(null);
+  const activeScanKey = `${letter?.id}:${letter?.images[activeIndex]?.id ?? activeIndex}`;
+
   // Transcript view mode: "reading" (reflowed) or "original" (1:1 line match)
   const [transcriptMode, setTranscriptMode] = useState<"reading" | "original">("reading");
 
@@ -237,13 +240,6 @@ export default function LetterDetailPage() {
     });
 
     return () => controller.abort();
-  }, [letterId]);
-
-  // Tell preload service to prioritize images around the current letter
-  useEffect(() => {
-    if (!letterId) return;
-    imagePreloadService.focusLetter(letterId);
-    return () => imagePreloadService.cancelPending();
   }, [letterId]);
 
   // Keyboard nav
@@ -477,6 +473,9 @@ export default function LetterDetailPage() {
                   >
                     <ReaderScanImage
                       imageUrl={img.imageUrl}
+                      enabled={idx === activeIndex || (readyScan === activeScanKey && allowImageSpeculation())}
+                      fetchPriority={idx === activeIndex ? 'high' : 'low'}
+                      onLoad={() => { if (idx === activeIndex) setReadyScan(activeScanKey); }}
                       alt={
                         isLetter
                           ? `Page ${img.pageNumber ?? idx + 1} of letter`

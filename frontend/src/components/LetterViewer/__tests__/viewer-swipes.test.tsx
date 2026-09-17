@@ -47,7 +47,7 @@ describe('fullscreen fit-view swipes', () => {
     expect(screen.getByText('1 / 3')).toBeInTheDocument();
     expect(carriage).toHaveStyle({ transform: 'translate3d(-390px, 0, 0)' });
     expect((carriage as HTMLElement).style.transition).toContain('230ms');
-    expect([...container.querySelectorAll('.viewer-swipe-neighbor img')].every(img => img.getAttribute('src')?.includes('w=800'))).toBe(true);
+    expect([...container.querySelectorAll('.viewer-swipe-neighbor img')].every(img => img.getAttribute('src')?.includes('w=480'))).toBe(true);
     finish(carriage);
     expect(screen.getByText('2 / 3')).toBeInTheDocument();
     expect(carriage).toHaveStyle({ transform: 'translate3d(0px, 0, 0)', transition: 'none' });
@@ -134,7 +134,7 @@ describe('fullscreen fit-view swipes', () => {
     touch(target, 'touchMove', [[200, 302]]); frame();
     const neighbor = () => container.querySelector('.viewer-swipe-neighbor img')!;
     const first = neighbor(); const source = first.getAttribute('src');
-    expect(source).toContain('w=800');
+    expect(source).toContain('w=480');
     fireEvent.error(first);
     expect(first).not.toBeVisible();
     act(() => vi.advanceTimersByTime(1000));

@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { imagePreloadService } from '../../../services/imagePreloadService';
 import LetterViewer from '../LetterViewer';
 import { ReaderScanImage } from '../ReaderScanImage';
 import type { LetterImage } from '../../../types/Letter';
@@ -17,6 +18,7 @@ const widths = (id = 'scan-1') => requested.filter((url) => url.includes(`/image
 const originals = () => requested.filter((url) => !new URL(url, 'http://localhost').searchParams.has('w'));
 
 beforeEach(() => {
+  imagePreloadService.clear();
   requested = [];
   cssWidth = 800;
   localStorage.clear();

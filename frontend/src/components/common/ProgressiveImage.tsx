@@ -5,6 +5,7 @@ import './ProgressiveImage.css';
 import { getAppScrollRootForIO } from '../../utils/appScroll';
 
 export interface ProgressiveImageProps {
+  enabled?: boolean;
   containerRef?: RefObject<HTMLDivElement | null>;
   src: string;
   thumbSrc: string;
@@ -33,6 +34,7 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
   function ProgressiveImage(
     {
       src,
+      enabled: externallyEnabled = true,
       containerRef: externalContainerRef,
       thumbSrc,
       midSrc,
@@ -59,10 +61,11 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
     const containerRef = externalContainerRef ?? internalContainerRef;
     const [hasBeenVisible, setHasBeenVisible] = useState(() => typeof IntersectionObserver === 'undefined');
     const needsVisibility = loading === 'lazy' || deferFullUntilVisible;
-    const enabled = !needsVisibility || hasBeenVisible;
+    const visible = !needsVisibility || hasBeenVisible;
+    const enabled = externallyEnabled && visible;
 
     useEffect(() => {
-      if (enabled) return;
+      if (visible) return;
       const observer = new IntersectionObserver((entries) => {
         if (entries.some((entry) => entry.isIntersecting)) {
           setHasBeenVisible(true);
@@ -71,7 +74,7 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
       }, { root: containerRef.current?.closest('[data-image-scroll-root]') ?? getAppScrollRootForIO(), rootMargin: '200px' });
       if (containerRef.current) observer.observe(containerRef.current);
       return () => observer.disconnect();
-    }, [enabled, containerRef]);
+    }, [visible, containerRef]);
 
     const { thumbLoaded, midLoaded, fullLoaded, fullFailed, fullAdmitted, onFullLoad, onFullError, naturalWidth, naturalHeight } = useProgressiveImage({
       thumbSrc,
@@ -124,8 +127,8 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
 
     // Fire onLoad when best quality is ready
     useEffect(() => {
-      if (fullLoaded) onLoad?.();
-    }, [fullLoaded, src, onLoad]);
+      if (enabled && fullLoaded) onLoad?.();
+    }, [enabled, fullLoaded, src, onLoad]);
 
     const containerStyle: CSSProperties = {
       ...style,

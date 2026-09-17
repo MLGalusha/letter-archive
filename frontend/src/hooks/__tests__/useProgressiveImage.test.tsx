@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useProgressiveImage } from '../useProgressiveImage';
 import { imagePreloadService } from '../../services/imagePreloadService';
 vi.mock('../../utils/imagePerformance', () => ({ recordImageLoad: vi.fn() }));
-vi.mock('../../services/imagePreloadService', () => ({ imagePreloadService: { isPreloaded: () => false, getDimensions: () => null } }));
+vi.mock('../../services/imagePreloadService', () => ({ imagePreloadService: { isPreloaded: () => false, getDimensions: () => null, recordLoaded: vi.fn() } }));
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe('progressive image recovery', () => {

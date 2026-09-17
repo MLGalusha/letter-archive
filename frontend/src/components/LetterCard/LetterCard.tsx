@@ -4,7 +4,6 @@ import type { ArchiveSearchHighlightRange, LetterCardData } from "../../types/Le
 import { getImageUrl } from "../../api/client";
 import { PreviewImage } from "../common/PreviewImage";
 import { getMediaLabel } from "../../utils/letterPreview";
-import { imagePreloadService } from "../../services/imagePreloadService";
 
 interface LetterCardProps {
   card: LetterCardData;
@@ -112,14 +111,7 @@ function LetterCard({
   const handleCardMouseEnter = () => {
     setHovered(true);
     setDismissed(false);
-    // Preload this letter's first image at carousel width so it's ready on click.
-    if (card.imageUrl) {
-      const url = getImageUrl(card.imageUrl, { width: 800 });
-      if (!imagePreloadService.isPreloaded(url)) {
-        const img = new Image();
-        img.src = url;
-      }
-    }
+
   };
 
   const handleCardClick = (event: MouseEvent<HTMLAnchorElement | HTMLButtonElement>) => {

@@ -262,6 +262,7 @@ checks establish the intended behavior; production latency and byte savings stil
 need comparable live measurements after deployment. A missing or evicted browser
 cache can still require HTTP revalidation; the bounded readiness index stores URLs
 and dimensions, not image bytes, and never changes server publication checks.
+
 ## Journal and person request ownership (issue 135)
 
 **Status: implementation under review; production verification pending.**
@@ -272,3 +273,17 @@ and dimensions, not image bytes, and never changes server publication checks.
 - Superseded journal/person/place reads now receive cancellation signals. Cancellation suppresses obsolete client updates; it does not guarantee the server stops work already underway.
 
 Observation: browser/device ___; route or sort sequence ___; displayed result ___; unexpected error ___ .
+
+## Collection carousel activity (issue 133)
+
+**Status: implementation under review; deployment verification pending.**
+
+- On your iPhone 13, open [Collection 003](https://voicesthatremain.com/collections/003) in Safari and Chrome. While the highlight carousel is visible, it should advance about every five seconds.
+- Scroll below the highlights into the archive and wait. Scroll back: the carousel should resume from its paused position with a fresh five-second interval, without racing through missed slides.
+- Tap a dot or swipe to a highlight, then scroll away and return. Automatic movement should respect the existing 30-second pause after your interaction; manual navigation should keep working.
+- Switch away from the browser and return. Expect no catch-up burst. With reduced motion enabled, automatic movement should stop; changing that preference while the page remains open should also take effect.
+- Collections with one highlight should stay static and preserve normal scrolling and link behavior.
+
+These checks target unnecessary offscreen work. We have not measured a battery-life improvement. Browser automation covers real scroll clipping and reduced-motion changes; hidden-document tests control the Page Visibility state rather than simulating a physical phone being put to sleep.
+
+Observation: browser ___; carousel visible/paused/resumed correctly ___; dot/swipe interaction ___; reduced motion ___ .

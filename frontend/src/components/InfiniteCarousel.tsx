@@ -102,26 +102,46 @@ function RotatingCarousel({
   }, [pauseRef, pauseAutoScroll]);
 
   useEffect(() => {
-    if (slideCount <= 1) return;
-    const prefersReducedMotion = typeof window !== 'undefined'
-      && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
-    if (prefersReducedMotion) return;
-    const id = setInterval(() => {
-      if (Date.now() < pauseUntilRef.current) return;
-      setAnimated(true);
-      setPos((p) => p + 1);
-    }, AUTO_INTERVAL);
-    return () => clearInterval(id);
-  }, [slideCount]);
-
-  // ── Visibility change ──
-  useEffect(() => {
-    const handler = () => {
-      if (document.visibilityState === 'visible') snapIfClone();
+    const container = containerRef.current;
+    if (!container || slideCount <= 1) return;
+    const motion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    let inView = false;
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const stop = () => { clearInterval(timer); timer = undefined; };
+    const update = () => {
+      const eligible = inView && document.visibilityState === 'visible' && !motion?.matches;
+      if (!eligible) { stop(); return; }
+      if (timer !== undefined) return;
+      // Resume with a fresh interval, never catch up missed slides.
+      timer = setInterval(() => {
+        if (Date.now() < pauseUntilRef.current) return;
+        setAnimated(true);
+        setPos((p) => p + 1);
+      }, AUTO_INTERVAL);
     };
-    document.addEventListener('visibilitychange', handler);
-    return () => document.removeEventListener('visibilitychange', handler);
-  }, [snapIfClone]);
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') snapIfClone();
+      update();
+    };
+    // IntersectionObserver accounts for clipping by the app's scrolling pane.
+    // A nonzero threshold avoids treating edge contact as visible, and ensures
+    // the browser reports the subsequent move into view. Without IO autoplay stays off.
+    const observer = typeof IntersectionObserver === 'undefined' ? null : new IntersectionObserver((entries) => {
+      const entry = entries.at(-1);
+      if (!entry) return;
+      inView = entry.isIntersecting && entry.intersectionRatio >= 0.01;
+      update();
+    }, { threshold: 0.01 });
+    observer?.observe(container);
+    document.addEventListener('visibilitychange', onVisibility);
+    motion?.addEventListener('change', update);
+    return () => {
+      stop();
+      observer?.disconnect();
+      document.removeEventListener('visibilitychange', onVisibility);
+      motion?.removeEventListener('change', update);
+    };
+  }, [slideCount, snapIfClone]);
 
   // ── Drag helpers ──
   const startDrag = useCallback((x: number, y: number) => {

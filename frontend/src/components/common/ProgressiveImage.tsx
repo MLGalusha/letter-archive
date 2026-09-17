@@ -1,5 +1,6 @@
 import { forwardRef, useState, useEffect, useRef, type CSSProperties, type RefObject } from 'react';
 import { useProgressiveImage } from '../../hooks/useProgressiveImage';
+import { useImageRetry } from '../../hooks/useImageRetry';
 import './ProgressiveImage.css';
 import { getAppScrollRootForIO } from '../../utils/appScroll';
 
@@ -84,14 +85,24 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
 
     const [imgError, setImgError] = useState(false);
 
+
     useEffect(() => {
       setImgError(false);
-    }, [src]);
+    }, [src, currentSrc, fullLoaded]);
 
     // Best non-full source for the placeholder layer
     const showPlaceholder = !fullLoaded;
     const placeholderSrc = midLoaded && midSrc ? midSrc : thumbLoaded ? thumbSrc : '';
     const isThumbOnly = !midLoaded || !midSrc;
+    const displayedSrc = currentSrc || src;
+    const displayedRetry = useImageRetry(fullLoaded ? src : placeholderSrc || src);
+    const mainOwnsDisplay = fullLoaded || !placeholderSrc;
+    const handleVisibleError = () => {
+      setImgError(true);
+      // Before any tier is loaded, the background loader alone owns retries.
+      if (fullLoaded || placeholderSrc) displayedRetry.onError();
+    };
+    const handleVisibleLoad = () => { setImgError(false); displayedRetry.onLoad(); };
 
     // Reserve scan space even when legacy records lack dimensions and loading is deferred.
     const resolvedAspectRatio = knownAspectRatio
@@ -109,7 +120,10 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
       <div ref={containerRef} className={`progressive-image ${className ?? ''}`} style={containerStyle}>
         {showPlaceholder && placeholderSrc && (
           <img
+            key={`placeholder:${placeholderSrc}:${displayedRetry.attempt}`}
             src={placeholderSrc}
+            onError={handleVisibleError}
+            onLoad={handleVisibleLoad}
             alt=""
             className={`progressive-image__thumb ${imgClassName ?? ''}`}
             style={{
@@ -123,8 +137,9 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
           />
         )}
         <img
+          key={`main:${currentSrc}:${displayedRetry.attempt}`}
           ref={ref}
-          src={enabled ? currentSrc || src : undefined}
+          src={enabled ? displayedSrc : undefined}
           alt={alt}
           className={`progressive-image__full ${imgClassName ?? ''} ${fullLoaded ? '' : 'progressive-image__full--loading'}`}
           style={{ ...imgStyle, objectFit, ...(imgError ? { visibility: 'hidden' as const } : {}) }}
@@ -132,7 +147,9 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
           decoding={decoding}
           draggable={draggable}
           fetchPriority={fetchPriority}
-          onError={() => setImgError(true)}
+          // A hidden main layer must not cancel recovery of the visible placeholder.
+          onError={() => { if (mainOwnsDisplay) handleVisibleError(); }}
+          onLoad={() => { if (mainOwnsDisplay) handleVisibleLoad(); }}
         />
         {imgError && (
           <div style={{

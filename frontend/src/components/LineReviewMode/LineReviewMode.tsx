@@ -1,3 +1,4 @@
+import { RetryingImage } from "../common/RetryingImage";
 import {
   useState,
   useEffect,
@@ -2023,7 +2024,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
             onPointerUp={handleMinimapPointerEnd}
             onPointerCancel={handleMinimapPointerEnd}
           >
-            <img
+            <RetryingImage
               src={getImageUrl(currentPage.imageUrl, { width: 200 })}
               alt=""
               className="line-review-minimap-thumb"

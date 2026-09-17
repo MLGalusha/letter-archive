@@ -1,3 +1,4 @@
+import { RetryingImage } from "./common/RetryingImage";
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { getAdminCollections, getAdminCollectionByCode, type AdminCollectionInfo } from '../api/collections';
 import { getImageUrl } from '../api/client';
@@ -309,7 +310,7 @@ export default function JournalImageDialog({ isOpen, onClose, onInsert }: Props)
                           onClick={() => setSelectedLetter(letter)}
                         >
                           {thumbUrl ? (
-                            <img
+                            <RetryingImage
                               className="jid-letter-thumb"
                               src={thumbUrl}
                               alt={letter.title || 'Letter'}
@@ -347,7 +348,7 @@ export default function JournalImageDialog({ isOpen, onClose, onInsert }: Props)
                         className="jid-page-card"
                         onClick={() => handleDatabaseImageSelect(img)}
                       >
-                        <img
+                        <RetryingImage
                           className="jid-page-thumb"
                           src={getImageUrl(img.imageUrl, { width: 300 })}
                           alt={img.originalFilename || `Page ${img.pageNumber}`}

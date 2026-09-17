@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ProgressiveImage } from '../ProgressiveImage';
 
 // Mock the hook so we control what loading state the component sees
@@ -21,6 +21,8 @@ function mockHookReturn(overrides: Partial<ReturnType<typeof useProgressiveImage
   };
   mockUseProgressiveImage.mockReturnValue({ ...defaults, ...overrides });
 }
+
+afterEach(() => vi.useRealTimers());
 
 describe('ProgressiveImage', () => {
   it.each([false, true])('defers image tiers until near the applicable scrollport (nested=%s)', (nested) => {
@@ -189,4 +191,61 @@ describe('ProgressiveImage', () => {
     const wrapper = container.querySelector('.progressive-image') as HTMLElement;
     expect(wrapper.style.aspectRatio).toBe('0.75');
   });
+  it('replaces the failed DOM image when its same URL succeeds in the background retry', () => {
+    mockHookReturn();
+    const props = { src: '/images/scan?w=800', thumbSrc: '/images/scan?w=32', alt: 'Recovered scan' };
+    const { rerender } = render(<ProgressiveImage {...props} />);
+    const failed = screen.getByAltText('Recovered scan');
+    fireEvent.error(failed);
+    expect(screen.getByText('Image unavailable')).toBeVisible();
+    mockHookReturn({ fullLoaded: true, currentSrc: props.src });
+    rerender(<ProgressiveImage {...props} />);
+    const recovered = screen.getByAltText('Recovered scan');
+    expect(recovered).not.toBe(failed);
+    expect(recovered).toHaveAttribute('src', props.src);
+    expect(recovered).toBeVisible();
+    expect(screen.queryByText('Image unavailable')).not.toBeInTheDocument();
+  });
+
+  it('retries a preloaded image whose visible request fails without a background loader', () => {
+    vi.useFakeTimers();
+    mockHookReturn({ fullLoaded: true, currentSrc: '/preloaded?w=800' });
+    render(<ProgressiveImage src="/preloaded?w=800" thumbSrc="/preloaded?w=32" alt="Preloaded scan" />);
+    const first = screen.getByAltText('Preloaded scan');
+    fireEvent.error(first);
+    act(() => vi.advanceTimersByTime(1000));
+    const second = screen.getByAltText('Preloaded scan');
+    expect(second).not.toBe(first);
+    expect(second).toHaveAttribute('src', '/preloaded?w=800');
+    fireEvent.load(second);
+    expect(second).toBeVisible();
+    expect(screen.queryByText('Image unavailable')).not.toBeInTheDocument();
+  });
+
+  it.each(['thumb', 'mid'] as const)('retries the displayed %s after its background load succeeded while full remains unavailable', (tier) => {
+    vi.useFakeTimers();
+    const src = tier === 'thumb' ? '/scan?w=32' : '/scan?w=480';
+    mockHookReturn({ thumbLoaded: true, midLoaded: tier === 'mid', currentSrc: src });
+    const props = { src: '/scan?w=800', thumbSrc: '/scan?w=32', midSrc: '/scan?w=480', alt: 'Lower tier' };
+    const { container, rerender } = render(<ProgressiveImage {...props} />);
+    const first = container.querySelector('.progressive-image__thumb')!;
+    fireEvent.error(first);
+    // Success from the hidden layer must not cancel the visible layer's retry.
+    fireEvent.load(screen.getByAltText('Lower tier'));
+    act(() => vi.advanceTimersByTime(1000));
+    const retry = container.querySelector('.progressive-image__thumb')!;
+    expect(retry).not.toBe(first);
+    expect(retry).toHaveAttribute('src', src);
+    fireEvent.load(retry);
+    expect(screen.queryByText('Image unavailable')).not.toBeInTheDocument();
+    // A later full tier gets its own retry budget, without inheriting this source's attempt.
+    mockHookReturn({ thumbLoaded: true, midLoaded: true, fullLoaded: true, currentSrc: props.src });
+    rerender(<ProgressiveImage {...props} />);
+    const full = screen.getByAltText('Lower tier');
+    fireEvent.error(full);
+    act(() => vi.advanceTimersByTime(1000));
+    expect(screen.getByAltText('Lower tier')).not.toBe(full);
+    expect(screen.getByAltText('Lower tier')).toHaveAttribute('src', props.src);
+  });
+
 });

@@ -1,3 +1,4 @@
+import { RetryingImage } from "../../components/common/RetryingImage";
 import { useState, useEffect, useCallback, useRef, useMemo, type MouseEvent as ReactMouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AdminLayout from '../../components/AdminLayout';
@@ -737,7 +738,7 @@ function HomepageTab() {
                   >
                     {featuredImages.length > 0 ? (
                       featuredImages.map((image, index) => (
-                        <img
+                        <RetryingImage
                           key={image.id}
                           className="letter-card-image"
                           src={getImageUrl(image.imageUrl, { width: 1200 })}
@@ -748,7 +749,7 @@ function HomepageTab() {
                         />
                       ))
                     ) : fl.imageUrl ? (
-                      <img
+                      <RetryingImage
                         className="letter-card-image"
                         src={getImageUrl(fl.imageUrl, { width: 1200 })}
                         alt=""

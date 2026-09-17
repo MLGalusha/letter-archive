@@ -1,0 +1,390 @@
+{
+  "chrome-recovery": {
+    "counts": {
+      "first-full?w=800": 2,
+      "first-preloaded?w=800": 2,
+      "first-reader?w=32": 2,
+      "first-reader?w=800": 2,
+      "first-thumb?w=32": 3,
+      "first-preloaded-thumb?w=32": 3,
+      "first-reader?w=480": 2,
+      "first-preview?w=480": 2
+    },
+    "images": [
+      {
+        "alt": "Preview",
+        "src": "/test-images/first-preview?w=480",
+        "complete": true,
+        "width": 100,
+        "visibility": "visible",
+        "opacity": "1"
+      },
+      {
+        "alt": "Progressive",
+        "src": "/test-images/first-full?w=800",
+        "complete": true,
+        "width": 100,
+        "visibility": "visible",
+        "opacity": "1"
+      },
+      {
+        "alt": "Preloaded",
+        "src": "/test-images/first-preloaded?w=800",
+        "complete": true,
+        "width": 100,
+        "visibility": "visible",
+        "opacity": "1"
+      },
+      {
+        "alt": "letter 1",
+        "src": "http://localhost:3002/test-images/first-reader?w=480",
+        "complete": true,
+        "width": 100,
+        "visibility": "visible",
+        "opacity": "1"
+      }
+    ],
+    "errors": 0
+  },
+  "chrome-permanent": {
+    "settled": {
+      "first-full?w=800": 3,
+      "first-preloaded?w=800": 3,
+      "first-reader?w=32": 3,
+      "first-reader?w=800": 3,
+      "first-thumb?w=32": 3,
+      "first-preloaded-thumb?w=32": 3,
+      "first-reader?w=480": 3,
+      "first-preview?w=480": 3
+    },
+    "final": {
+      "first-full?w=800": 3,
+      "first-preloaded?w=800": 3,
+      "first-reader?w=32": 3,
+      "first-reader?w=800": 3,
+      "first-thumb?w=32": 3,
+      "first-preloaded-thumb?w=32": 3,
+      "first-reader?w=480": 3,
+      "first-preview?w=480": 3
+    },
+    "errors": 3
+  },
+  "chrome-cancel": {
+    "beforeUnmount": {
+      "first-full?w=800": 1,
+      "first-preloaded?w=800": 1,
+      "first-reader?w=32": 1,
+      "first-reader?w=800": 1,
+      "first-thumb?w=32": 1,
+      "first-preloaded-thumb?w=32": 1,
+      "first-reader?w=480": 1,
+      "first-preview?w=480": 1,
+      "replacement-full?w=800": 1,
+      "replacement-reader?w=32": 1,
+      "replacement-preview?w=480": 1,
+      "replacement-preloaded?w=800": 1,
+      "replacement-reader?w=800": 1,
+      "replacement-thumb?w=32": 1,
+      "replacement-preloaded-thumb?w=32": 1,
+      "replacement-reader?w=480": 1
+    },
+    "final": {
+      "first-full?w=800": 1,
+      "first-preloaded?w=800": 1,
+      "first-reader?w=32": 1,
+      "first-reader?w=800": 1,
+      "first-thumb?w=32": 1,
+      "first-preloaded-thumb?w=32": 1,
+      "first-reader?w=480": 1,
+      "first-preview?w=480": 1,
+      "replacement-full?w=800": 1,
+      "replacement-reader?w=32": 1,
+      "replacement-preview?w=480": 1,
+      "replacement-preloaded?w=800": 1,
+      "replacement-reader?w=800": 1,
+      "replacement-thumb?w=32": 1,
+      "replacement-preloaded-thumb?w=32": 1,
+      "replacement-reader?w=480": 1
+    },
+    "remainingImages": 0
+  },
+  "webkit-recovery": {
+    "counts": {
+      "first-full?w=800": 2,
+      "first-preloaded?w=800": 2,
+      "first-reader?w=32": 2,
+      "first-reader?w=800": 2,
+      "first-thumb?w=32": 3,
+      "first-preloaded-thumb?w=32": 3,
+      "first-reader?w=480": 2,
+      "first-preview?w=480": 2
+    },
+    "images": [
+      {
+        "alt": "Preview",
+        "src": "/test-images/first-preview?w=480",
+        "complete": true,
+        "width": 100,
+        "visibility": "visible",
+        "opacity": "1"
+      },
+      {
+        "alt": "Progressive",
+        "src": "/test-images/first-full?w=800",
+        "complete": true,
+        "width": 100,
+        "visibility": "visible",
+        "opacity": "1"
+      },
+      {
+        "alt": "Preloaded",
+        "src": "/test-images/first-preloaded?w=800",
+        "complete": true,
+        "width": 100,
+        "visibility": "visible",
+        "opacity": "1"
+      },
+      {
+        "alt": "letter 1",
+        "src": "http://localhost:3002/test-images/first-reader?w=480",
+        "complete": true,
+        "width": 100,
+        "visibility": "visible",
+        "opacity": "1"
+      }
+    ],
+    "errors": 0
+  },
+  "webkit-permanent": {
+    "settled": {
+      "first-full?w=800": 3,
+      "first-preloaded?w=800": 3,
+      "first-reader?w=32": 3,
+      "first-reader?w=800": 3,
+      "first-thumb?w=32": 3,
+      "first-preloaded-thumb?w=32": 3,
+      "first-reader?w=480": 3,
+      "first-preview?w=480": 3
+    },
+    "final": {
+      "first-full?w=800": 3,
+      "first-preloaded?w=800": 3,
+      "first-reader?w=32": 3,
+      "first-reader?w=800": 3,
+      "first-thumb?w=32": 3,
+      "first-preloaded-thumb?w=32": 3,
+      "first-reader?w=480": 3,
+      "first-preview?w=480": 3
+    },
+    "errors": 3
+  },
+  "webkit-cancel": {
+    "beforeUnmount": {
+      "first-full?w=800": 1,
+      "first-preloaded?w=800": 1,
+      "first-reader?w=32": 1,
+      "first-reader?w=800": 1,
+      "first-thumb?w=32": 1,
+      "first-preloaded-thumb?w=32": 1,
+      "first-reader?w=480": 1,
+      "first-preview?w=480": 1,
+      "replacement-preview?w=480": 1,
+      "replacement-preloaded?w=800": 1,
+      "replacement-reader?w=800": 1,
+      "replacement-full?w=800": 1,
+      "replacement-reader?w=32": 1,
+      "replacement-thumb?w=32": 1,
+      "replacement-preloaded-thumb?w=32": 1,
+      "replacement-reader?w=480": 1
+    },
+    "final": {
+      "first-full?w=800": 1,
+      "first-preloaded?w=800": 1,
+      "first-reader?w=32": 1,
+      "first-reader?w=800": 1,
+      "first-thumb?w=32": 1,
+      "first-preloaded-thumb?w=32": 1,
+      "first-reader?w=480": 1,
+      "first-preview?w=480": 1,
+      "replacement-preview?w=480": 1,
+      "replacement-preloaded?w=800": 1,
+      "replacement-reader?w=800": 1,
+      "replacement-full?w=800": 1,
+      "replacement-reader?w=32": 1,
+      "replacement-thumb?w=32": 1,
+      "replacement-preloaded-thumb?w=32": 1,
+      "replacement-reader?w=480": 1
+    },
+    "remainingImages": 0
+  },
+  "chrome-lower-tier": {
+    "fixture": "Already-loaded thumb/mid hook state; native503 then200; hidden-main load event injected while placeholder retry pending",
+    "results": [
+      {
+        "tier": "thumb",
+        "counts": {
+          "thumb?w=32": 2
+        },
+        "before": {
+          "width": 0,
+          "hiddenMainOpacity": "0"
+        },
+        "after": {
+          "replaced": true,
+          "width": 100,
+          "src": "/test-lower/thumb?w=32",
+          "visibility": "visible"
+        },
+        "errorOverlay": 0
+      },
+      {
+        "tier": "mid",
+        "counts": {
+          "mid?w=480": 2
+        },
+        "before": {
+          "width": 0,
+          "hiddenMainOpacity": "0"
+        },
+        "after": {
+          "replaced": true,
+          "width": 100,
+          "src": "/test-lower/mid?w=480",
+          "visibility": "visible"
+        },
+        "errorOverlay": 0
+      }
+    ]
+  },
+  "webkit-lower-tier": {
+    "fixture": "Already-loaded thumb/mid hook state; native503 then200; hidden-main load event injected while placeholder retry pending",
+    "results": [
+      {
+        "tier": "thumb",
+        "counts": {
+          "thumb?w=32": 2
+        },
+        "before": {
+          "width": 0,
+          "hiddenMainOpacity": "0"
+        },
+        "after": {
+          "replaced": true,
+          "width": 100,
+          "src": "/test-lower/thumb?w=32",
+          "visibility": "visible"
+        },
+        "errorOverlay": 0
+      },
+      {
+        "tier": "mid",
+        "counts": {
+          "mid?w=480": 2
+        },
+        "before": {
+          "width": 0,
+          "hiddenMainOpacity": "0"
+        },
+        "after": {
+          "replaced": true,
+          "width": 100,
+          "src": "/test-lower/mid?w=480",
+          "visibility": "visible"
+        },
+        "errorOverlay": 0
+      }
+    ]
+  },
+  "chrome-reader-current-error": {
+    "fixture": "Controlled ready-tier hook state; real displayed503 then200",
+    "before": {
+      "width": 0,
+      "visibility": "hidden",
+      "src": "http://localhost:3002/test-images/first-reader?w=480"
+    },
+    "after": {
+      "width": 100,
+      "visibility": "visible",
+      "src": "http://localhost:3002/test-images/first-reader?w=480"
+    },
+    "replaced": true,
+    "counts": {
+      "first-full?w=800": 2,
+      "first-preloaded?w=800": 2,
+      "first-reader?w=800": 1,
+      "first-reader?w=480": 2,
+      "first-preview?w=480": 2
+    },
+    "errorStatus": 0
+  },
+  "webkit-reader-current-error": {
+    "fixture": "Controlled ready-tier hook state; real displayed503 then200",
+    "before": {
+      "width": 0,
+      "visibility": "hidden",
+      "src": "http://localhost:3002/test-images/first-reader?w=480"
+    },
+    "after": {
+      "width": 100,
+      "visibility": "visible",
+      "src": "http://localhost:3002/test-images/first-reader?w=480"
+    },
+    "replaced": true,
+    "counts": {
+      "first-full?w=800": 2,
+      "first-preloaded?w=800": 2,
+      "first-reader?w=800": 1,
+      "first-reader?w=480": 2,
+      "first-preview?w=480": 2
+    },
+    "errorStatus": 0
+  },
+  "chrome-plain-consumers": {
+    "fixture": "40 visible actual RetryingImage nodes; mocked503\u2192200/permanent503; source replacement+unmount",
+    "recovered": {
+      "count": 40,
+      "requests": 80,
+      "max": 2,
+      "visible": true,
+      "directChildren": 40,
+      "allSized": true
+    },
+    "permanent": {
+      "count": 40,
+      "requests": 120,
+      "max": 3,
+      "stable": true,
+      "hidden": true
+    },
+    "canceled": {
+      "count": 80,
+      "max": 1,
+      "stable": true,
+      "remaining": 0
+    }
+  },
+  "webkit-plain-consumers": {
+    "fixture": "40 visible actual RetryingImage nodes; mocked503\u2192200/permanent503; source replacement+unmount",
+    "recovered": {
+      "count": 40,
+      "requests": 80,
+      "max": 2,
+      "visible": true,
+      "directChildren": 40,
+      "allSized": true
+    },
+    "permanent": {
+      "count": 40,
+      "requests": 120,
+      "max": 3,
+      "stable": true,
+      "hidden": true
+    },
+    "canceled": {
+      "count": 80,
+      "max": 1,
+      "stable": true,
+      "remaining": 0
+    }
+  }
+}

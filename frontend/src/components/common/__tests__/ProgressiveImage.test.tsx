@@ -222,4 +222,30 @@ describe('ProgressiveImage', () => {
     expect(screen.queryByText('Image unavailable')).not.toBeInTheDocument();
   });
 
+  it.each(['thumb', 'mid'] as const)('retries the displayed %s after its background load succeeded while full remains unavailable', (tier) => {
+    vi.useFakeTimers();
+    const src = tier === 'thumb' ? '/scan?w=32' : '/scan?w=480';
+    mockHookReturn({ thumbLoaded: true, midLoaded: tier === 'mid', currentSrc: src });
+    const props = { src: '/scan?w=800', thumbSrc: '/scan?w=32', midSrc: '/scan?w=480', alt: 'Lower tier' };
+    const { container, rerender } = render(<ProgressiveImage {...props} />);
+    const first = container.querySelector('.progressive-image__thumb')!;
+    fireEvent.error(first);
+    // Success from the hidden layer must not cancel the visible layer's retry.
+    fireEvent.load(screen.getByAltText('Lower tier'));
+    act(() => vi.advanceTimersByTime(1000));
+    const retry = container.querySelector('.progressive-image__thumb')!;
+    expect(retry).not.toBe(first);
+    expect(retry).toHaveAttribute('src', src);
+    fireEvent.load(retry);
+    expect(screen.queryByText('Image unavailable')).not.toBeInTheDocument();
+    // A later full tier gets its own retry budget, without inheriting this source's attempt.
+    mockHookReturn({ thumbLoaded: true, midLoaded: true, fullLoaded: true, currentSrc: props.src });
+    rerender(<ProgressiveImage {...props} />);
+    const full = screen.getByAltText('Lower tier');
+    fireEvent.error(full);
+    act(() => vi.advanceTimersByTime(1000));
+    expect(screen.getByAltText('Lower tier')).not.toBe(full);
+    expect(screen.getByAltText('Lower tier')).toHaveAttribute('src', props.src);
+  });
+
 });

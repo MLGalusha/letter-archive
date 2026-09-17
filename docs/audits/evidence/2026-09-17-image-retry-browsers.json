@@ -216,5 +216,83 @@
       "replacement-reader?w=480": 1
     },
     "remainingImages": 0
+  },
+  "chrome-lower-tier": {
+    "fixture": "Already-loaded thumb/mid hook state; native503 then200; hidden-main load event injected while placeholder retry pending",
+    "results": [
+      {
+        "tier": "thumb",
+        "counts": {
+          "thumb?w=32": 2
+        },
+        "before": {
+          "width": 0,
+          "hiddenMainOpacity": "0"
+        },
+        "after": {
+          "replaced": true,
+          "width": 100,
+          "src": "/test-lower/thumb?w=32",
+          "visibility": "visible"
+        },
+        "errorOverlay": 0
+      },
+      {
+        "tier": "mid",
+        "counts": {
+          "mid?w=480": 2
+        },
+        "before": {
+          "width": 0,
+          "hiddenMainOpacity": "0"
+        },
+        "after": {
+          "replaced": true,
+          "width": 100,
+          "src": "/test-lower/mid?w=480",
+          "visibility": "visible"
+        },
+        "errorOverlay": 0
+      }
+    ]
+  },
+  "webkit-lower-tier": {
+    "fixture": "Already-loaded thumb/mid hook state; native503 then200; hidden-main load event injected while placeholder retry pending",
+    "results": [
+      {
+        "tier": "thumb",
+        "counts": {
+          "thumb?w=32": 2
+        },
+        "before": {
+          "width": 0,
+          "hiddenMainOpacity": "0"
+        },
+        "after": {
+          "replaced": true,
+          "width": 100,
+          "src": "/test-lower/thumb?w=32",
+          "visibility": "visible"
+        },
+        "errorOverlay": 0
+      },
+      {
+        "tier": "mid",
+        "counts": {
+          "mid?w=480": 2
+        },
+        "before": {
+          "width": 0,
+          "hiddenMainOpacity": "0"
+        },
+        "after": {
+          "replaced": true,
+          "width": 100,
+          "src": "/test-lower/mid?w=480",
+          "visibility": "visible"
+        },
+        "errorOverlay": 0
+      }
+    ]
   }
 }

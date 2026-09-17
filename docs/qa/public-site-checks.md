@@ -10,7 +10,7 @@ The browser-coverage candidate runs the existing public archive history/image ch
 
 Session: date ___; device ___; browser/version ___; iOS/macOS/OS version ___; Wi-Fi/cellular ___; Reduce Motion on/off ___.
 
-Latest checked frontend release: `28a47b3c` (September 17, 2026 UTC); backend remains `5c7a9654` because the intervening changes affect only the frontend. This includes long exact previews, carousel gesture handling, mobile filters, scan dots, and static single highlights. Later changes below have their own status. Counts below describe that catalogue snapshot and may change as letters are published. New work below remains pending until its own release is recorded.
+Latest checked frontend release: `b894e3f5` (September 17, 2026 UTC); backend remains `5c7a9654` because the intervening changes affect only the frontend. This includes long exact previews, carousel gesture handling, mobile filters, scan dots, static single highlights, explicit letter navigation, and transcript gutters. Later changes below have their own status. Counts below describe that catalogue snapshot and may change as letters are published. New work below remains pending until its own release is recorded.
 
 ## 1. Back to search / back to top
 
@@ -61,13 +61,13 @@ Observation: ___
 
 ## 5. Scrolling across carousels and reading images
 
-**Status: issues 10, 11, and 20 deployed; letter navigation is merged awaiting release, and fullscreen changes remain pending.** [Issue 10](https://github.com/MLGalusha/letter-archive/issues/10), [11](https://github.com/MLGalusha/letter-archive/issues/11), [20](https://github.com/MLGalusha/letter-archive/issues/20), [21](https://github.com/MLGalusha/letter-archive/issues/21), [23](https://github.com/MLGalusha/letter-archive/issues/23). Smaller initial reader images already live ([PR 95](https://github.com/MLGalusha/letter-archive/pull/95)).
+**Status: issues 10, 11, and 20 deployed; letter navigation deployed; fullscreen changes remain pending.** [Issue 10](https://github.com/MLGalusha/letter-archive/issues/10), [11](https://github.com/MLGalusha/letter-archive/issues/11), [20](https://github.com/MLGalusha/letter-archive/issues/20), [21](https://github.com/MLGalusha/letter-archive/issues/21), [23](https://github.com/MLGalusha/letter-archive/issues/23). Smaller initial reader images already live ([PR 95](https://github.com/MLGalusha/letter-archive/pull/95)).
 
 Issue 10 is deployed in frontend release `5c7a9654`: carousels now wait for a clearly horizontal gesture before taking control; canceled drags and adding a second finger do not change slides. Reviewed code and automated checks passed; physical Safari/Chrome checks are still pending. Scan dots now follow the visible page and respond to taps (issue 11), confirmed on the live two-page letter in both engines. Single highlights no longer render an interactive outer carousel (issue 20), checked with a local singleton fixture. Fullscreen behavior and the other tickets above are separate.
 
 - On [Home](https://voicesthatremain.com/) and [Collection 003](https://voicesthatremain.com/collections/003), begin a mostly vertical swipe over a carousel. Then deliberately swipe horizontally.
 - Expected: vertical movement scrolls the page; horizontal movement changes the carousel image. A carousel containing one highlight should behave as a static item. Dots should follow the visible image without clipping.
-- The ordinary letter-page swipe-to-next-letter interaction was removed in [PR 116](https://github.com/MLGalusha/letter-archive/pull/116). After release, a horizontal gesture over reading text should stay on the same letter. The explicit previous/next links, header scrubber, and desktop arrow navigation remain available. Check bottom-link spacing in portrait and landscape, including the side with the cutout.
+- The ordinary letter-page swipe-to-next-letter interaction was removed in [PR 116](https://github.com/MLGalusha/letter-archive/pull/116). A horizontal gesture over reading text should stay on the same letter. The explicit previous/next links, header scrubber, and desktop arrow navigation remain available. Check bottom-link spacing in portrait and landscape, including the side with the cutout.
 - Open [a two-page letter](https://voicesthatremain.com/letter/0b5e626d-01bb-4026-a4fa-a6ebdf180c7d), enter fullscreen, swipe pages, zoom/pinch, and pan.
 - Expected: the initial image looks clear at its displayed size. Zoom can request higher detail. Fit-to-screen page swipes and zoomed-image panning should not fight each other; ordinary page swiping should not unexpectedly open another letter.
 
@@ -99,10 +99,11 @@ Observation: ___
 
 ## 8. Transcript edge spacing
 
-**Status: issue 22 merged in PR 117; deployment and phone checks pending.** [Issue 22](https://github.com/MLGalusha/letter-archive/issues/22).
+**Status: issue 22 deployed in PR 117; physical phone checks pending.** [Issue 22](https://github.com/MLGalusha/letter-archive/issues/22).
 
 - Open [the October 18 transcript](https://voicesthatremain.com/letter/0b5e626d-01bb-4026-a4fa-a6ebdf180c7d#letter-transcript) in Safari and Chrome. Try portrait and landscape.
 - Expected: reading text has visible space on both sides instead of reaching the right edge. Switch to Original formatting and back; both modes remain readable. The change adjusts spacing only and adds browser-reported safe-area clearance around screen cutouts.
+- Live Chromium/WebKit checks at 390px and 844px confirmed 20px reading padding on both sides, 16px navigation padding, and text inside the viewport. Nonzero safe-area behavior was checked locally with emulated insets; physical rotation remains your check.
 - The larger Reader View V2 work is tracked separately in [issue 111](https://github.com/MLGalusha/letter-archive/issues/111); it is not included in the padding fix.
 
 Observation: ___

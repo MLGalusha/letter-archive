@@ -14,6 +14,8 @@ export interface BlogPost {
   authorRole: string | null;
   heroImageUrl: string | null;
   heroImageAlt: string | null;
+  imageDimensions?: Record<string, { width: number; height: number }> | null;
+  unresolvedImageSources?: string[];
   seoTitle: string | null;
   seoDescription: string | null;
   ctaLabel: string | null;
@@ -45,11 +47,11 @@ export async function adminGetBlogPost(id: string): Promise<BlogPost> {
   return apiGet<BlogPost>(`/admin/content/blog/${id}`);
 }
 
-export async function adminCreateBlogPost(data: Partial<BlogPost>): Promise<BlogPost> {
+export async function adminCreateBlogPost(data: Partial<BlogPost> & { resolveImageSources?: string[] }): Promise<BlogPost> {
   return apiPost<BlogPost>('/admin/content/blog', data);
 }
 
-export async function adminUpdateBlogPost(id: string, data: Partial<BlogPost>): Promise<BlogPost> {
+export async function adminUpdateBlogPost(id: string, data: Partial<BlogPost> & { resolveImageSources?: string[] }): Promise<BlogPost> {
   return apiPut<BlogPost>(`/admin/content/blog/${id}`, data);
 }
 
@@ -116,8 +118,8 @@ export async function adminClearFeaturedLetter(): Promise<void> {
 
 // ── Blog Images ─────────────────────────────────────────
 
-export async function uploadBlogImage(file: File): Promise<{ url: string }> {
+export async function uploadBlogImage(file: File): Promise<{ url: string; dimensions?: { width: number; height: number } }> {
   const formData = new FormData();
   formData.append('file', file);
-  return apiPost<{ url: string }>('/admin/blog/images', formData);
+  return apiPost<{ url: string; dimensions?: { width: number; height: number } }>('/admin/blog/images', formData);
 }

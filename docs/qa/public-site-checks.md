@@ -356,3 +356,13 @@ production traffic, CPU energy, physical-phone sleep, or battery savings.
 - Local Chromium/WebKit checks passed; they do not establish real-phone battery savings or production loading times.
 
 Observation: date ___; browser/device ___; article ___; first/repeat ___; image wait ___; unexpected layout shift ___ .
+
+## Journal image space (remaining issue 136 acceptance)
+
+**Status: implementation under review; migration/deployment and physical phone checks pending.**
+
+- After release, open [Journal](https://voicesthatremain.com/blog) and an article with images in iPhone 13 Safari and Chrome. Expected for images whose dimensions have been saved: the text below them stays in place while they load; portrait/landscape images retain natural proportions and float-left/right images retain wrapping. A failed image keeps its reserved space.
+- For your own draft in the admin journal, insert/upload images and explicitly Save before Publish. Reopen the draft: dimensions remain attached to their exact source. Replacing an image URL must not borrow another image's shape. Legacy owned images can gain metadata on explicit Save; this implementation did not edit existing production posts.
+- Unknown external/missing/unsupported media can still shift until accurate dimensions are available. Do not infer that all legacy articles have been backfilled. [Implementation and local layout checks](../audits/2026-09-17-journal-image-dimensions.md).
+
+Observation: article ___; browser/device ___; known/legacy media ___; text moved while loading ___; failed-image space preserved ___ .

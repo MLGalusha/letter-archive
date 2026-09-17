@@ -11,11 +11,25 @@ import {
   siteSettings,
   letters,
   collections,
+  letterPages,
 } from '../../db/index.js';
 import { validateBody } from '../../middleware/validate.js';
 import { slugify } from '../../utils/slugify.js';
 
+import { getAbsoluteStoragePath } from '../../services/storage.js';
+import { env } from '../../config/env.js';
+import { journalDimensionsSchema, resolveJournalImageDimensions } from '../../services/journal-image-dimensions.js';
+
 const router = Router();
+
+const resolveDimensions = (req: import('express').Request, sources: string[], dimensions: z.infer<typeof journalDimensionsSchema>) =>
+  resolveJournalImageDimensions(sources, dimensions, {
+    storageDir: env.STORAGE_DIR, apiOrigin: `${req.protocol}://${req.get('host')}`,
+    findLetterPath: async id => {
+      const [page] = await db.select({ storagePath: letterPages.storagePath }).from(letterPages).where(eq(letterPages.id, id)).limit(1);
+      return page?.storagePath ? getAbsoluteStoragePath(page.storagePath) : undefined;
+    },
+  });
 
 // ============================================================================
 // Schemas
@@ -23,14 +37,14 @@ const router = Router();
 
 const imageAssetSchema = z.union([
   z.string().url(),
-  z.string().regex(/^\/[\w./-]+$/),
+  z.string().regex(/^\/[\w./-]+(?:\?[^\s#]*)?(?:#[^\s]*)?$/),
   z.string().regex(/^data:image\/[a-zA-Z0-9.+-]+;base64,[a-zA-Z0-9+/=]+$/),
 ]);
 
 const createBlogPostSchema = z.object({
   slug: z.string().optional(),
   title: z.string().min(1),
-  excerpt: z.string().optional(),
+  excerpt: z.string().optional().nullable(),
   bodyMarkdown: z.string().default(''),
   status: z.enum(['draft', 'published']).default('draft'),
   category: z.string().trim().min(1).max(60).optional().nullable(),
@@ -38,6 +52,8 @@ const createBlogPostSchema = z.object({
   authorRole: z.string().optional().nullable(),
   heroImageUrl: imageAssetSchema.optional().nullable(),
   heroImageAlt: z.string().optional().nullable(),
+  imageDimensions: journalDimensionsSchema.optional().nullable(),
+  resolveImageSources: z.array(z.string().min(1).max(2048)).max(64).optional(),
   seoTitle: z.string().optional().nullable(),
   seoDescription: z.string().optional().nullable(),
   ctaLabel: z.string().optional().nullable(),
@@ -56,6 +72,8 @@ const updateBlogPostSchema = z.object({
   authorRole: z.string().optional().nullable(),
   heroImageUrl: imageAssetSchema.optional().nullable(),
   heroImageAlt: z.string().optional().nullable(),
+  imageDimensions: journalDimensionsSchema.optional().nullable(),
+  resolveImageSources: z.array(z.string().min(1).max(2048)).max(64).optional(),
   seoTitle: z.string().optional().nullable(),
   seoDescription: z.string().optional().nullable(),
   ctaLabel: z.string().optional().nullable(),
@@ -124,6 +142,7 @@ router.post('/content/blog', validateBody(createBlogPostSchema), async (req, res
       return;
     }
 
+    const resolved = await resolveDimensions(req, data.resolveImageSources ?? [], data.imageDimensions ?? {});
     const [post] = await db
       .insert(updatePosts)
       .values({
@@ -137,6 +156,7 @@ router.post('/content/blog', validateBody(createBlogPostSchema), async (req, res
         authorRole: data.authorRole ?? null,
         heroImageUrl: data.heroImageUrl ?? null,
         heroImageAlt: data.heroImageAlt ?? null,
+        imageDimensions: resolved.dimensions,
         seoTitle: data.seoTitle ?? null,
         seoDescription: data.seoDescription ?? null,
         ctaLabel: data.ctaLabel ?? null,
@@ -146,7 +166,7 @@ router.post('/content/blog', validateBody(createBlogPostSchema), async (req, res
       .returning();
 
     req.log?.info({ postId: post.id, slug }, 'Blog post created');
-    res.status(201).json(post);
+    res.status(201).json({ ...post, unresolvedImageSources: resolved.unresolved });
   } catch (error) {
     req.log?.error({ error }, 'Failed to create blog post');
     res.status(500).json({ error: 'Internal server error' });
@@ -208,7 +228,8 @@ router.put('/content/blog/:id', validateBody(updateBlogPostSchema), async (req, 
       }
     }
 
-    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    const resolved = await resolveDimensions(req, data.resolveImageSources ?? [], data.imageDimensions !== undefined ? data.imageDimensions ?? {} : existing.imageDimensions ?? {});
+    const updates: Record<string, unknown> = { updatedAt: new Date(), imageDimensions: resolved.dimensions };
     if (data.slug !== undefined) updates.slug = data.slug;
     if (data.title !== undefined) updates.title = data.title;
     if (data.excerpt !== undefined) updates.excerpt = data.excerpt;
@@ -232,7 +253,7 @@ router.put('/content/blog/:id', validateBody(updateBlogPostSchema), async (req, 
       .returning();
 
     req.log?.info({ postId: id }, 'Blog post updated');
-    res.json(updated);
+    res.json({ ...updated, unresolvedImageSources: resolved.unresolved });
   } catch (error) {
     req.log?.error({ error }, 'Failed to update blog post');
     res.status(500).json({ error: 'Internal server error' });

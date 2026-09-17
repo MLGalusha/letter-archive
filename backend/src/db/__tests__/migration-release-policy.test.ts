@@ -65,6 +65,7 @@ describe('migration release policy', () => {
       '0054_add_page_source_revisions',
       '0055_add_transcript_confirmation_intent',
       '0056_repair_extra_content_job_ownership',
+      '0057_add_journal_image_dimensions',
     ]);
   });
 

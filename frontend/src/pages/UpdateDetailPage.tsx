@@ -11,14 +11,16 @@ import Footer from '../components/Footer/Footer';
 import { buildBlogPostSeo, stripMarkdown, truncateText } from '../utils/seo';
 import { formatDate } from '../utils/dateFormatting';
 import './UpdateDetailPage.css';
+import { validImageDimensions, type JournalImageDimensions } from '../utils/journalImageDimensions';
 
-const MARKDOWN_COMPONENTS: import('react-markdown').Components = {
+const markdownComponents = (dimensions: JournalImageDimensions): import('react-markdown').Components => ({
   img({ alt, src, title }) {
     if (!src) return null;
     return (
       <JournalImage
         className="markdown-inline-image"
         src={src}
+        {...validImageDimensions(dimensions[src])}
         sizes="(max-width: 820px) calc(100vw - 40px), 780px"
         alt={alt || ''}
         title={title || undefined}
@@ -50,7 +52,7 @@ const MARKDOWN_COMPONENTS: import('react-markdown').Components = {
       </div>
     );
   },
-};
+});
 
 export default function BlogDetailPage() {
   const settings = useSiteSettings();
@@ -131,6 +133,7 @@ export default function BlogDetailPage() {
           <div className="update-hero-image">
             <JournalImage
               src={post.heroImageUrl}
+              {...validImageDimensions(post.imageDimensions?.[post.heroImageUrl])}
               sizes="(max-width: 820px) calc(100vw - 40px), 780px"
               loading="eager"
               fetchPriority="high"
@@ -152,7 +155,7 @@ export default function BlogDetailPage() {
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             rehypePlugins={[rehypeSanitize]}
-            components={MARKDOWN_COMPONENTS}
+            components={markdownComponents(post.imageDimensions ?? {})}
           >
             {post.bodyMarkdown}
           </ReactMarkdown>

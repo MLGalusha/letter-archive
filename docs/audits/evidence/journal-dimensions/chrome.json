@@ -1,0 +1,158 @@
+[
+  {
+    "width": 390,
+    "before": {
+      "images": [
+        {
+          "alt": "Hero",
+          "width": 358,
+          "height": 477.328125,
+          "top": 0,
+          "complete": false,
+          "title": ""
+        },
+        {
+          "alt": "Inline",
+          "width": 358,
+          "height": 238.65625,
+          "top": 848.3125,
+          "complete": false,
+          "title": ""
+        },
+        {
+          "alt": "Float",
+          "width": 179,
+          "height": 358,
+          "top": 1169.65625,
+          "complete": false,
+          "title": "float-left"
+        },
+        {
+          "alt": "Failed",
+          "width": 358,
+          "height": 238.65625,
+          "top": 1543.65625,
+          "complete": false,
+          "title": ""
+        }
+      ],
+      "after": 1814.3125
+    },
+    "after": {
+      "images": [
+        {
+          "alt": "Hero",
+          "width": 358,
+          "height": 477.328125,
+          "top": 0,
+          "complete": true,
+          "title": ""
+        },
+        {
+          "alt": "Inline",
+          "width": 358,
+          "height": 238.65625,
+          "top": 848.3125,
+          "complete": true,
+          "title": ""
+        },
+        {
+          "alt": "Float",
+          "width": 179,
+          "height": 358,
+          "top": 1169.65625,
+          "complete": true,
+          "title": "float-left"
+        },
+        {
+          "alt": "Failed",
+          "width": 358,
+          "height": 238.65625,
+          "top": 1543.65625,
+          "complete": true,
+          "title": ""
+        }
+      ],
+      "after": 1814.3125
+    },
+    "imageRequests": 5
+  },
+  {
+    "width": 1440,
+    "before": {
+      "images": [
+        {
+          "alt": "Hero",
+          "width": 780,
+          "height": 1040,
+          "top": 0,
+          "complete": false,
+          "title": ""
+        },
+        {
+          "alt": "Inline",
+          "width": 780,
+          "height": 520,
+          "top": 1365.640625,
+          "complete": false,
+          "title": ""
+        },
+        {
+          "alt": "Float",
+          "width": 390,
+          "height": 780,
+          "top": 1970.359375,
+          "complete": false,
+          "title": "float-left"
+        },
+        {
+          "alt": "Failed",
+          "width": 780,
+          "height": 520,
+          "top": 2766.359375,
+          "complete": false,
+          "title": ""
+        }
+      ],
+      "after": 3318.359375
+    },
+    "after": {
+      "images": [
+        {
+          "alt": "Hero",
+          "width": 780,
+          "height": 1040,
+          "top": 0,
+          "complete": true,
+          "title": ""
+        },
+        {
+          "alt": "Inline",
+          "width": 780,
+          "height": 520,
+          "top": 1365.640625,
+          "complete": true,
+          "title": ""
+        },
+        {
+          "alt": "Float",
+          "width": 390,
+          "height": 780,
+          "top": 1970.359375,
+          "complete": true,
+          "title": "float-left"
+        },
+        {
+          "alt": "Failed",
+          "width": 780,
+          "height": 520,
+          "top": 2766.359375,
+          "complete": true,
+          "title": ""
+        }
+      ],
+      "after": 3318.359375
+    },
+    "imageRequests": 5
+  }
+]

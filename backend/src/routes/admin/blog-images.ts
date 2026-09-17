@@ -8,6 +8,8 @@ import { mkdir } from 'node:fs/promises';
 import { env } from '../../config/env.js';
 import { createLogger } from '../../utils/logger.js';
 
+import { readImageDimensions } from '../../services/journal-image-dimensions.js';
+
 const router = Router();
 const log = createLogger({ module: 'blog-images' });
 
@@ -58,7 +60,7 @@ router.post('/blog/images', upload.single('file'), async (req, res, next) => {
     const url = `/blog-images/${filename}`;
     log.info({ filename, originalName: file.originalname, size: file.size }, 'Blog image uploaded');
 
-    res.json({ url });
+    res.json({ url, dimensions: await readImageDimensions(destPath) });
   } catch (error) {
     next(error);
   }

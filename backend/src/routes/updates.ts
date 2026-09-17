@@ -57,7 +57,11 @@ router.get('/blog', async (req, res) => {
         .where(where),
     ]);
 
-    res.json({ posts, total });
+    res.json({ posts: posts.map(post => ({
+      ...post,
+      imageDimensions: post.heroImageUrl && post.imageDimensions?.[post.heroImageUrl]
+        ? { [post.heroImageUrl]: post.imageDimensions[post.heroImageUrl] } : {},
+    })), total });
   } catch (error) {
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: 'Invalid query parameters', details: error.errors });

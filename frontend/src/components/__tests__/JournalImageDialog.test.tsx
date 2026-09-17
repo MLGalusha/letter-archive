@@ -46,3 +46,18 @@ describe('journal database image recovery', () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 });
+
+it('keeps author-browser dimensions tied to the exact preview URL', () => {
+  const insert = vi.fn();
+  render(<JournalImageDialog isOpen onClose={() => {}} onInsert={insert} />);
+  const input = screen.getByPlaceholderText('https://example.com/image.jpg');
+  fireEvent.change(input, { target: { value: 'https://example.test/a.jpg' } });
+  const image = screen.getByAltText('Preview');
+  Object.defineProperties(image, { naturalWidth: { value: 300 }, naturalHeight: { value: 200 } });
+  fireEvent.load(image);
+  fireEvent.click(screen.getByRole('button', { name: 'Insert' }));
+  expect(insert).toHaveBeenLastCalledWith('https://example.test/a.jpg', undefined, { width: 300, height: 200 });
+  fireEvent.change(input, { target: { value: 'https://example.test/b.jpg' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Insert' }));
+  expect(insert).toHaveBeenLastCalledWith('https://example.test/b.jpg', undefined, undefined);
+});

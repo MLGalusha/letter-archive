@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { Link, MemoryRouter, Route, Routes } from "react-router-dom";
 import CollectionDetailPage from "../CollectionDetailPage";
 import type { Letter } from "../../types/Letter";
 
@@ -43,7 +43,9 @@ vi.mock("../../components/Header/HeaderDock", () => ({
 }));
 
 vi.mock("../../components/SearchBar/SearchBar", () => ({
-  default: () => <div data-testid="search-bar">SearchBar</div>,
+  default: ({ query, onQueryChange }: { query: string; onQueryChange: (value: string) => void }) => (
+    <div data-testid="search-bar"><input aria-label="Search collection" value={query} onChange={(event) => onQueryChange(event.target.value)} /></div>
+  ),
 }));
 
 vi.mock("../../components/ArchiveList/ArchiveList", () => ({
@@ -125,6 +127,7 @@ const EMPTY_ARCHIVE_RESPONSE = {
 function renderCollectionDetailPage() {
   return render(
     <MemoryRouter initialEntries={["/collections/009"]}>
+      <Link to="/collections/010">Switch to Ten</Link>
       <Routes>
         <Route path="/collections/:collectionCode" element={<CollectionDetailPage />} />
       </Routes>
@@ -135,6 +138,7 @@ function renderCollectionDetailPage() {
 describe("CollectionDetailPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionStorage.clear();
 
     getCollectionProfileMock.mockResolvedValue(null);
     searchArchiveShelfMock.mockResolvedValue(EMPTY_ARCHIVE_RESPONSE);
@@ -287,10 +291,10 @@ describe("CollectionDetailPage", () => {
     expect(screen.queryByText("Pinned")).not.toBeInTheDocument();
   });
 
-  it("shows narrative when profile has one", async () => {
-    getCollectionProfileMock.mockResolvedValue({
-      narrative: "This collection tells the story of wartime correspondence.",
-      profileStatus: "AI_DRAFT",
+  it("shows the published overview narrative", async () => {
+    const overview = await getCollectionByCodeMock();
+    getCollectionByCodeMock.mockResolvedValue({ ...overview,
+      profileNarrative: "This collection tells the story of wartime correspondence.",
     });
 
     renderCollectionDetailPage();
@@ -299,4 +303,58 @@ describe("CollectionDetailPage", () => {
 
     expect(screen.getByText("This collection tells the story of wartime correspondence.")).toBeInTheDocument();
   });
+  it('renders overview, narrative and searchable archive while profile is held', async () => {
+    let resolveProfile!: (value: unknown) => void;
+    getCollectionProfileMock.mockReturnValue(new Promise((resolve) => { resolveProfile = resolve; }));
+    const overview = await getCollectionByCodeMock();
+    getCollectionByCodeMock.mockResolvedValue({ ...overview, profileNarrative: 'Published narrative', profileStartHereLetterId: 'letter-1' });
+    renderCollectionDetailPage();
+    await screen.findByRole('heading', { name: 'Collection Nine' });
+    expect(screen.getByText('Published narrative')).toBeInTheDocument();
+    const archiveNode = screen.getByTestId('archive-list');
+    const input = screen.getByRole('textbox', { name: 'Search collection' });
+    await userEvent.setup().type(input, 'travel');
+    await act(async () => { resolveProfile({ narrative: 'Different late narrative', keyPeople: [] }); });
+    expect(input).toHaveValue('travel');
+    expect(screen.getByTestId('archive-list')).toBe(archiveNode);
+    expect(screen.getByText('Published narrative')).toBeInTheDocument();
+    expect(screen.queryByText('Different late narrative')).not.toBeInTheDocument();
+  });
+
+  it('keeps the usable collection when profile fails', async () => {
+    getCollectionProfileMock.mockRejectedValue(new Error('Profile unavailable'));
+    renderCollectionDetailPage();
+    await screen.findByRole('heading', { name: 'Collection Nine' });
+    expect(screen.getByTestId('archive-list')).toBeInTheDocument();
+    expect(screen.queryByText('Collection Not Found')).not.toBeInTheDocument();
+  });
+
+  it('reports an overview failure without waiting for profile and cancels its request', async () => {
+    getCollectionProfileMock.mockReturnValue(new Promise(() => {}));
+    getCollectionByCodeMock.mockRejectedValue(new Error('Overview failed'));
+    renderCollectionDetailPage();
+    await screen.findByText('Overview failed');
+    expect(getCollectionProfileMock.mock.calls[0][1].aborted).toBe(true);
+  });
+
+  it('aborts old requests and ignores late results after a collection switch', async () => {
+    let resolveOld!: (value: unknown) => void;
+    let resolveOldProfile!: (value: unknown) => void;
+    const oldOverview = await getCollectionByCodeMock();
+    getCollectionByCodeMock.mockImplementation((code: string) => code === '009'
+      ? new Promise((resolve) => { resolveOld = resolve; })
+      : Promise.resolve({ ...oldOverview, collectionCode: '010', title: 'Collection Ten' }));
+    getCollectionProfileMock.mockImplementation((code: string) => code === '009'
+      ? new Promise((resolve) => { resolveOldProfile = resolve; }) : Promise.resolve(null));
+    renderCollectionDetailPage();
+    const oldSignal = getCollectionProfileMock.mock.calls[0][1] as AbortSignal;
+    await userEvent.setup().click(screen.getByRole('link', { name: 'Switch to Ten' }));
+    await screen.findByRole('heading', { name: 'Collection Ten' });
+    expect(oldSignal.aborted).toBe(true);
+    await act(async () => { resolveOld(oldOverview); resolveOldProfile({ narrative: 'Old collection narrative' }); });
+    expect(screen.getByRole('heading', { name: 'Collection Ten' })).toBeInTheDocument();
+    expect(screen.queryByText('Old collection narrative')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Collection Nine' })).not.toBeInTheDocument();
+  });
+
 });

@@ -447,6 +447,38 @@ describe('collections route integration', () => {
     expect(query.with.pages.columns.lineSegments).toBe(false);
   });
 
+  it.each([
+    ['VERIFIED', true, true, 'cover-1', 'Published narrative', 'letter-1'],
+    ['AI_DRAFT', true, true, 'cover-1', null, null],
+    ['VERIFIED', false, true, 'cover-1', null, null],
+    ['VERIFIED', true, false, 'cover-1', 'Published narrative', null],
+    ['VERIFIED', true, true, 'hidden-letter', 'Published narrative', null],
+  ])('masks overview enrichment and resolves only existing public units: %s/current=%s/metadata=%s/id=%s',
+    async (profileStatus, current, metadataPublished, selectedId, narrative, featuredId) => {
+      getCollectionByCodeMock.mockResolvedValueOnce({
+        id: 'collection-9', collectionCode: '009', title: 'Nine', description: null,
+        createdAt: '2024-01-01', profileStatus, profileNarrative: 'Published narrative',
+        profileStartHereLetterId: selectedId, profileStartHereReason: 'Not part of overview',
+        profileCorrespondents: [{ name: 'Private extra fields' }],
+      });
+      lettersFindManyMock.mockResolvedValueOnce([
+        { id: 'letter-1', dateRaw: '19470810', typeSequence: 1, type: 'L', metadataPublished },
+        { id: 'cover-1', dateRaw: '19470810', typeSequence: 1, type: 'C', metadataPublished: true },
+      ]);
+      transformLettersWithRelatedToDTOMock.mockReturnValueOnce([{
+        id: 'letter-1', images: [], metadata: {}, transcriptStatus: 'VERIFIED', metadataContentStatus: 'VERIFIED',
+      }]);
+      collectionProfilePublicationIsCurrentMock.mockResolvedValue(current);
+      const response = await invokeRouter(collectionsRouter, { method: 'GET', url: '/collections/009', query: { view: 'overview' } });
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toMatchObject({ profileNarrative: narrative, profileStartHereLetterId: featuredId });
+      expect(response.body).not.toHaveProperty('profileCorrespondents');
+      expect(response.body).not.toHaveProperty('profileStartHereReason');
+      expect(getCollectionAggregationsMock).not.toHaveBeenCalled();
+      expect(resolveCollectionStartHereMock).not.toHaveBeenCalled();
+      expect(lettersFindManyMock).toHaveBeenCalledTimes(1);
+    });
+
   it('withholds a detail hook revoked after the collection and letters are read', async () => {
     getCollectionByCodeMock.mockResolvedValueOnce({
       id: 'collection-9',

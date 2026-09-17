@@ -48,10 +48,12 @@ export default function CollectionDetailPage() {
   });
 
   /* ---- Collection data ---- */
-  const [collection, setCollection] = useState<CollectionWithLetters | null>(null);
-  const [profile, setProfile] = useState<CollectionProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [overview, setOverview] = useState<{ code: string; data: CollectionWithLetters | null; error: string | null } | null>(null);
+  const [profileResult, setProfileResult] = useState<{ code: string; data: CollectionProfile | null } | null>(null);
+  const collection = overview && overview.code === collectionCode ? overview.data : null;
+  const profile = profileResult && profileResult.code === collectionCode ? profileResult.data : null;
+  const loading = overview?.code !== collectionCode;
+  const error = overview && overview.code === collectionCode ? overview.error : null;
 
   /* ---- Popup state ---- */
   const [popup, setPopup] = useState<{ title: string; content: ReactNode } | null>(null);
@@ -96,8 +98,8 @@ export default function CollectionDetailPage() {
   );
 
   const highlights = useMemo(
-    () => pickLetterHighlights(collectionLetters, profile?.startHere?.letterId),
-    [collectionLetters, profile?.startHere?.letterId],
+    () => pickLetterHighlights(collectionLetters, profile?.startHere?.letterId ?? collection?.profileStartHereLetterId),
+    [collectionLetters, profile?.startHere?.letterId, collection?.profileStartHereLetterId],
   );
 
   const correspondents = useMemo(
@@ -114,35 +116,30 @@ export default function CollectionDetailPage() {
   useEffect(() => {
     if (!collectionCode) return;
 
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    setCollection(null);
-    setProfile(null);
+    const controller = new AbortController();
+    setOverview(null);
+    setProfileResult(null);
+    setPopup(null);
 
-    async function fetchCollection() {
-      try {
-        const [data, profileData] = await Promise.all([
-          getCollectionByCode(collectionCode!),
-          getCollectionProfile(collectionCode!).catch(() => null),
-        ]);
-        if (cancelled) return;
-        setCollection(data);
-        setProfile(profileData);
-        // Warm a small preview window without downloading the entire collection.
-        if (data?.letters) {
-          imagePreloadService.preloadCollection(data.letters);
-        }
-      } catch (err) {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : 'Collection not found');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
+    void getCollectionByCode(collectionCode, controller.signal).then((data) => {
+      if (controller.signal.aborted) return;
+      setOverview({ code: collectionCode, data, error: null });
+      imagePreloadService.preloadCollection(data.letters);
+    }).catch((err: unknown) => {
+      if (controller.signal.aborted) return;
+      setOverview({ code: collectionCode, data: null, error: err instanceof Error ? err.message : 'Collection not found' });
+      // Optional enrichment is no longer useful when the primary read fails.
+      controller.abort();
+    });
 
-    fetchCollection();
-    return () => { cancelled = true; imagePreloadService.cancelPending(); };
+    void getCollectionProfile(collectionCode, controller.signal).then((data) => {
+      if (!controller.signal.aborted) setProfileResult({ code: collectionCode, data });
+    }).catch(() => {
+      // Profile absence/failure does not invalidate the usable overview/archive.
+      if (!controller.signal.aborted) setProfileResult({ code: collectionCode, data: null });
+    });
+
+    return () => { controller.abort(); imagePreloadService.cancelPending(); };
   }, [collectionCode]);
 
   /* ---- Header dock content ---- */
@@ -316,10 +313,10 @@ export default function CollectionDetailPage() {
         </header>
 
         {/* ---- 2. Narrative (optional, standalone) ---- */}
-        {profile?.narrative && (
+        {collection.profileNarrative && (
           <section className="cd-narrative">
             <div className="cd-narrative-label">About This Collection</div>
-            <p>{profile.narrative}</p>
+            <p>{collection.profileNarrative}</p>
           </section>
         )}
 

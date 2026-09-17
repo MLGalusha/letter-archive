@@ -72,10 +72,25 @@ Release `926f477` includes the reviewed layout correction in PR #148; its main d
 
 This follow-up caught a gap in the earlier verification: release `8cec7331` requested the measured rendition and retained a loaded preview in the DOM, but the actual page gave it **zero height**. Earlier fixed-size component checks did not establish page geometry. PR #148 adds real collection-to-letter Chrome/WebKit geometry checks, including image failure and landscape orientation. Do not interpret a loaded image or `visibility: visible` alone as proof that users can see it.
 
+## Admin background polling (#134, PR #144)
+
+Implemented and verified with controlled read-only Chromium/WebKit fixtures; production behavior verification is not claimed here. Open [Processing](https://voicesthatremain.com/admin/processing) in your normal authenticated session without starting or canceling work for this check. An idle queue checks every 30 seconds, active work every 5 seconds after the previous read completes, and Refresh remains immediate. Automatic reads pause in a hidden tab and refresh on return. The notification stream remains connected.
+
+During a settled local idle minute, there were **2 queue reads** and **0 additional healthy-stream safety reads**. A controlled hidden five-minute window added **0 automatic reads**, while a streamed notification still arrived. Explicit hidden refresh worked; returning visibility/focus caused one refresh per endpoint. Healthy-stream unread safety checks run every five minutes, with 30-second fallback/retries; visible events and this tab's notification actions reconcile promptly. These observations establish avoided requests, not production traffic or battery savings. [Detailed manual checks](public-site-checks.md#admin-background-polling-134).
+
+## Journal image delivery and stable layout (#136, PRs #145 and #147)
+
+Implemented and validated with controlled fixtures; final deployment and physical iPhone verification remain pending. Open [Journal](https://voicesthatremain.com/blog), then an article with images, in Safari and Chrome. Owned static media can use bounded 480/800/1200/1600px variants; cards and distant article images load lazily, while the main article image starts immediately. Original URLs and animations remain available, and failed variants have a bounded original fallback.
+
+One local fixture decreased from **3,078,013 original bytes to 61,550 bytes for a 1200px WebP** (about **98% less**). This compares one file and rendition, not site-wide loading speed. Native responsive selection varies by browser and layout; the fallback remains large enough for stretched cards. [Delivery method and browser evidence](../audits/2026-09-17-journal-images.md).
+
+Saved exact-source dimensions now reserve natural article/inline height before decode, including portrait, landscape, floated images, and failed images. Uploads, editor Save/Publish, autosave, and reload preserve source ownership; serialized saves keep older requests from overwriting newer snapshots. Public list responses carry only hero dimensions. Controlled Chromium/WebKit checks held images at phone and desktop widths and verified image boxes and downstream text stayed within **1px** before/after completion. Orientation, animations, reference-style Markdown, source replacement, and save races have focused regression coverage. [Dimension persistence and layout checks](../audits/2026-09-17-journal-image-dimensions.md).
+
+Unknown legacy/external or unsupported sources keep their natural-rendering fallback and may still shift until accurate dimensions exist. Existing owned sources can resolve dimensions on explicit Save/Publish; no production content writes, backfills, or public per-image metadata fetches were performed. The public journal was empty during the audit, so controlled fixtures do not establish production article loading time.
+
 ## Follow-up work
 
 - **#130: startup latency.** Diagnostics identify where time passes; they are not themselves a latency fix. A controlled local experiment deferring the OpenAI SDK imports reduced median entry time from 284ms to 252ms across six alternating fresh-process pairs, with overlapping ranges. That is a candidate for a separate bounded change, not evidence that it removes seconds of production waiting. No paid capacity was enabled.
-- **#136: journal layout stability.** Responsive delivery and smaller decodes are implemented in PR #145. A separate implementation is carrying source dimensions through uploads, editing, persistence and rendering to reserve the natural height of article/inline images before decode. Existing card frames already reserve space. Unknown external-image dimensions retain an explicit natural-rendering fallback rather than a guessed crop. This section will be updated when that follow-up passes review and deployment.
 
 ## Your observations
 

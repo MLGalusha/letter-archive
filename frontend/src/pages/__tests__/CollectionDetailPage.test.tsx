@@ -273,15 +273,8 @@ describe("CollectionDetailPage", () => {
   });
 
   it("keeps the collection highlight label as Featured Letter even for a start-here selection", async () => {
-    getCollectionProfileMock.mockResolvedValue({
-      profileStatus: "AI_DRAFT",
-      startHere: {
-        letterId: "letter-1",
-        reason: "Begin here.",
-        hook: "First travel note",
-        date: "1947-08-10",
-      },
-    });
+    const overview = await getCollectionByCodeMock();
+    getCollectionByCodeMock.mockResolvedValue({ ...overview, profileStartHereLetterId: 'letter-1' });
 
     renderCollectionDetailPage();
 
@@ -289,6 +282,42 @@ describe("CollectionDetailPage", () => {
 
     expect(screen.getByText("Featured Letter")).toBeInTheDocument();
     expect(screen.queryByText("Pinned")).not.toBeInTheDocument();
+  });
+
+  it.each([null, 'letter-1'])('preserves the interacted overview showcase when a different profile selection arrives (saved=%s)', async (savedSelection) => {
+    let resolveProfile!: (value: unknown) => void;
+    getCollectionProfileMock.mockReturnValue(new Promise((resolve) => { resolveProfile = resolve; }));
+    const overview = await getCollectionByCodeMock();
+    const letters = overview.letters.map((letter: Letter) => letter.id === 'letter-1'
+      ? { ...letter, images: [
+          ...letter.images,
+          { id: 'letter-1-page-2', type: 'letter', imageUrl: '/images/letter-1-page-2' },
+        ] }
+      : letter);
+    getCollectionByCodeMock.mockResolvedValue({ ...overview, letters, profileStartHereLetterId: savedSelection });
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0);
+    try {
+      const user = userEvent.setup();
+      renderCollectionDetailPage();
+      await screen.findByRole('heading', { name: 'Collection Nine' });
+      const featuredLink = screen.getAllByRole('link').find(link =>
+        link.classList.contains('cd-highlight-open-link'))!;
+      expect(featuredLink).toHaveAttribute('href', expect.stringContaining('/letter/letter-1'));
+      await user.click(screen.getByRole('button', { name: 'Next' }));
+      expect(featuredLink).toHaveAttribute('href', expect.stringContaining('image=letter-1-page-2'));
+      expect(screen.getByText('2/2')).toBeInTheDocument();
+
+      await act(async () => { resolveProfile({
+        startHere: { letterId: 'letter-2' },
+        keyPeople: [{ name: 'Alice Smith', biography: 'Biography from optional profile' }],
+      }); });
+
+      expect(featuredLink).toBeInTheDocument();
+      expect(featuredLink).toHaveAttribute('href', expect.stringContaining('image=letter-1-page-2'));
+      expect(screen.getByText('2/2')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /Alice Smith/ }));
+      expect(screen.getByText('Biography from optional profile')).toBeInTheDocument();
+    } finally { random.mockRestore(); }
   });
 
   it("shows the published overview narrative", async () => {

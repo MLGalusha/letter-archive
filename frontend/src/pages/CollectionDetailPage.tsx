@@ -98,8 +98,10 @@ export default function CollectionDetailPage() {
   );
 
   const highlights = useMemo(
-    () => pickLetterHighlights(collectionLetters, profile?.startHere?.letterId ?? collection?.profileStartHereLetterId),
-    [collectionLetters, profile?.startHere?.letterId, collection?.profileStartHereLetterId],
+    // Keep the overview selection (or its fallback) stable while optional profile
+    // enrichment arrives, so an already-interacted showcase is not replaced.
+    () => pickLetterHighlights(collectionLetters, collection?.profileStartHereLetterId),
+    [collectionLetters, collection?.profileStartHereLetterId],
   );
 
   const correspondents = useMemo(

@@ -307,7 +307,9 @@ Observation: browser ___; carousel visible/paused/resumed correctly ___; dot/swi
 
 ### Reader preview space reservation (#127 follow-up)
 
-After this follow-up is deployed, open [collection 003](https://voicesthatremain.com/collections/003),
+**Status: deployed in 926f477; live Chromium geometry verified. Physical iPhone acceptance pending.** A fresh 390×844 DPR3 collection-to-letter visit held the 1200px response: the loaded 480px preview visibly occupied 296.390625×395.1875px, and its rectangle stayed identical after release (0px height change). The earlier zero-height failure is recorded in [the results report](2026-09-17-performance-results.md#reader-page-layout-follow-up-127).
+
+Open [collection 003](https://voicesthatremain.com/collections/003),
 wait for its small card images, then open [this letter](https://voicesthatremain.com/letter/be6ef848-a8f9-4696-9097-646d4257562a).
 In Safari and Chrome on your iPhone 13, the existing preview should occupy visible
 scan space immediately while the sharper image loads. The transcript below should

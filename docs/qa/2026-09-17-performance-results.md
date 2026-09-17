@@ -68,7 +68,9 @@ Diagnostics are deployed; the latency issue remains open. Two naturally started 
 
 ## Reader page layout follow-up (#127)
 
-Release `8cec7331` correctly requested the measured 1200px rendition and retained the known loaded 480px preview in the DOM during a held full response. However, a full-page iPhone 13 emulation check found the scan container at 296.39px wide and **zero height**, so that preview was not visibly usable. The earlier fixed-size component checks did not establish actual page geometry. Issue #127 was reopened for a bounded layout fix and real-page Chrome/WebKit regression checks. Do not interpret a loaded image or `visibility: visible` alone as proof that users can see it.
+Release `926f477` includes the reviewed layout correction in PR #148; its main deployment run `35247434281` succeeded. A fresh live Chromium visit at 390×844 and DPR3 followed Collection 003 into the three-page letter while holding the actual 1200px response. The already-loaded 480px preview visibly occupied **296.390625×395.1875px**, at x46.796875/y277.734375. Its rectangle stayed identical when the sharper image arrived: **0px height change**. This verifies usable preview space and stable geometry in that check, not a production image-latency or physical iPhone measurement.
+
+This follow-up caught a gap in the earlier verification: release `8cec7331` requested the measured rendition and retained a loaded preview in the DOM, but the actual page gave it **zero height**. Earlier fixed-size component checks did not establish page geometry. PR #148 adds real collection-to-letter Chrome/WebKit geometry checks, including image failure and landscape orientation. Do not interpret a loaded image or `visibility: visible` alone as proof that users can see it.
 
 ## Follow-up work
 

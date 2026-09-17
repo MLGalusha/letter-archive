@@ -1,7 +1,7 @@
 # Reusable card previews — issue 122
 
-Status: implementation candidate; independent review, comparable workload results,
-CI, release and live acceptance remain pending. This is on-demand saving, not
+Status: merged in PR 125 after independent review, required CI and a comparable
+local workload check; release and live acceptance remain pending. This is on-demand saving, not
 pre-generation or a production backfill. Issue 50 remains open for overall image
 readiness and physical iPhone acceptance.
 
@@ -75,7 +75,13 @@ it does not delete the private bucket object. Old source/recipe variants become
 unreachable by current identity. There is no automatic garbage collection in this
 change: total storage grows with historical source/recipe versions, even though
 width/format cardinality and each object's size are bounded. Storage operations and
-saved bytes have costs; no net cost or speed claim is made before measurement.
+saved bytes have costs; no production net cost or speed claim is established.
+
+The [local pilot](2026-09-17-visible-image-pilot.md) observed 48 byte-identical saved
+previews after process restart, without another 480px transform, in both comparison
+orders. Its first population sample was slower than baseline. Native loopback
+scrolling had no observed blank cards even before persistence, so it does not
+establish production visible-readiness improvements or remove physical phone checks.
 
 `Image response completed` adds `previewRead`, `previewReadMs`, `previewWrite`, and
 `previewWriteMs` when applicable. Read outcomes distinguish hit/miss/invalid/error/

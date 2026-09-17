@@ -88,12 +88,13 @@ Observation: ___
 
 ### Image follow-up: repeat visits
 
-**Status: implemented for review; production verification pending.** [Issue 121](https://github.com/MLGalusha/letter-archive/issues/121).
+**Status: early revalidation deployed and verified; physical phone checks remain.** [Issue 121](https://github.com/MLGalusha/letter-archive/issues/121).
 
 - Open [Home](https://voicesthatremain.com/) or [Collection 003](https://voicesthatremain.com/collections/003), allow images to finish, then revisit in the same browser. Try Safari and Chrome with normal browser caching enabled.
-- Expected after release: the same images display correctly. Where the browser asks whether its cached preview is still current, the server can answer without resizing it again. This does not eliminate the first download or guarantee an instant first visit.
+- Expected: the same images display correctly. Where the browser asks whether its cached preview is still current, the server can answer without resizing it again. This does not eliminate the first download or guarantee an instant first visit.
 - A forced reload or DevTools Disable cache can deliberately bypass this shortcut. Server-side verification records a matching conditional response with no resize work; visual appearance alone cannot prove that.
-- Saved previews (#122) and measured loading-priority improvements (#123) are the next separate steps.
+- A read-only check at release `dc5c1b44` confirmed a zero-body 304 with `cache: not-modified` and no queue/transform work. The single request recorded 10ms server time and 73ms client time; this is a mechanism check, not a benchmark. [Verification receipt](https://github.com/MLGalusha/letter-archive/pull/124#issuecomment-5708570898).
+- Saved previews (#122) have merged; release verification is separate. The [local image pilot](../audits/2026-09-17-visible-image-pilot.md) confirmed byte-identical saved previews across backend restarts. It did not reproduce visible blanks, so no frontend priority change was justified locally. Issues #123 and #50 remain open for representative production and physical phone checks.
 
 Observation: ___
 
@@ -143,7 +144,7 @@ Observation: ___
 
 ## Reusable archive-card previews (issue 122)
 
-**Status: candidate; release and live checks pending.** This change saves 480px card
+**Status: merged; release and live checks pending.** This change saves 480px card
 previews after their first successful generation so another server process can
 reuse them. It does not pre-generate every image, and the first request may still
 wait for generation and saving.

@@ -157,3 +157,63 @@ test('@mocked archive previews use one size, defer distant cards, and stay loade
   await expect(cards.last()).toHaveAttribute('src', lastUrl!);
   expect(requests.filter((url) => url === lastUrl)).toHaveLength(1);
 });
+
+test('@mocked reader renders detail before adjacency and acknowledges pending navigation', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  let releaseDetail!: () => void;
+  let releaseAdjacent!: () => void;
+  const detailGate = new Promise<void>((resolve) => { releaseDetail = resolve; });
+  const adjacentGate = new Promise<void>((resolve) => { releaseAdjacent = resolve; });
+  await page.route((url) => url.origin === new URL(API_BASE_URL).origin, async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === '/settings/public') return route.fulfill({ json: {} });
+    if (path === '/letters/summaries') return route.fulfill({ json: { letters: [], total: 0 } });
+    if (path.endsWith('/adjacent')) {
+      if (path.includes('reader-b')) await adjacentGate;
+      return route.fulfill({ json: {
+        prev: null, next: { id: 'reader-b', date: 'Second letter' },
+        total: 2, position: 1, collectionCode: '003', collectionTitle: 'Fixture collection',
+      } });
+    }
+    if (path.startsWith('/letters/')) {
+      const id = path.split('/').at(-1)!;
+      if (id === 'reader-b') await detailGate;
+      return route.fulfill({ json: {
+        id, title: id, collectionCode: '003', images: [],
+        metadata: { hook: id === 'reader-a' ? 'First fixture letter' : 'Second fixture letter', verified: true },
+        transcript: { pages: [], fullText: '', verified: true },
+        status: 'published', visibility: 'PUBLISHED', transcriptPublished: true, metadataPublished: true,
+        transcriptStatus: 'VERIFIED', metadataContentStatus: 'VERIFIED', extraContentStatus: 'EMPTY',
+      } });
+    }
+    return route.fulfill({ status: 404, json: { error: 'Not found' } });
+  });
+  try {
+    await page.goto('/letter/reader-a');
+    await expect(page.getByText('First fixture letter', { exact: true })).toBeVisible();
+    await page.locator('a.teaser-next').click();
+    await expect(page).toHaveURL(/reader-b$/);
+    const status = page.getByRole('status');
+    await expect(status).toHaveText('Loading letter...');
+    await expect(status).toBeInViewport();
+    await expect(page.locator('article')).toHaveAttribute('inert', '');
+    await expect.poll(() => status.evaluate((element) => {
+      const r = element.getBoundingClientRect();
+      return element.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+    })).toBe(true);
+    releaseDetail();
+    await expect(page.getByText('Second fixture letter', { exact: true })).toBeVisible();
+    await expect(page.locator('article')).not.toHaveAttribute('inert');
+    await expect(status).toHaveCount(0);
+    await expect(page.locator('.letter-nav-section')).toHaveCount(0);
+    releaseAdjacent();
+    await expect(page.locator('.letter-nav-section')).toBeVisible();
+    await page.goBack();
+    await expect(page.getByText('First fixture letter', { exact: true })).toBeVisible();
+    await page.goForward();
+    await expect(page.getByText('Second fixture letter', { exact: true })).toBeVisible();
+  } finally {
+    releaseDetail();
+    releaseAdjacent();
+  }
+});

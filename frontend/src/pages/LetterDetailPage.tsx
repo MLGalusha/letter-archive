@@ -96,13 +96,14 @@ export default function LetterDetailPage() {
     ownerLetterId: string;
     value: AdjacentLettersResponse | null;
   } | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<{ ownerLetterId: string; message: string } | null>(null);
+  const error = loadError && loadError.ownerLetterId === letterId ? loadError.message : null;
   const letter = loadedLetter?.value ?? null;
   const displayedLetterIsCurrent = (
     !!letterId
     && loadedLetter?.ownerLetterId === letterId
   );
+  const pending = !displayedLetterIsCurrent && !error;
   const adjacent = (
     displayedLetterIsCurrent
     && loadedAdjacent?.ownerLetterId === letterId
@@ -113,6 +114,14 @@ export default function LetterDetailPage() {
   // Image viewer modal
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerStartPage, setViewerStartPage] = useState(0);
+  const [routeOwner, setRouteOwner] = useState(letterId);
+  // Reset route-local UI before committing a different destination, including Back.
+  if (routeOwner !== letterId) {
+    setRouteOwner(letterId);
+    setLoadError(null);
+    setViewerOpen(false);
+  }
+
 
   // Scan carousel (extracted hook)
   const { carouselRef, attachCarousel, activeIndex, carouselDraggedRef, scrollToSlide } = useCarouselDrag();
@@ -202,38 +211,33 @@ export default function LetterDetailPage() {
   useEffect(() => {
     if (!letterId) return;
     const controller = new AbortController();
-    const isFirstLoad = !loadedLetter;
     const requestedLetterId = letterId;
-    async function fetchLetter() {
-      // Only show loading state on first load — keep previous letter visible during navigation
-      if (isFirstLoad) setLoading(true);
-      setError(null);
-      try {
-        const [data, adj] = await Promise.all([
-          getLetterById(letterId!, controller.signal),
-          getAdjacentLetters(letterId!, controller.signal).catch(() => null),
-        ]);
-        if (!controller.signal.aborted) {
-          setLoadedLetter({
-            ownerLetterId: requestedLetterId,
-            value: data,
-          });
-          setLoadedAdjacent({
-            ownerLetterId: requestedLetterId,
-            value: adj,
-          });
-        }
-      } catch (err) {
-        if (controller.signal.aborted) return;
-        setError(err instanceof Error ? err.message : "Letter not found");
-        console.error("Failed to fetch letter:", err);
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
+    // Navigation metadata is optional and must not hold up the letter itself.
+    void getLetterById(requestedLetterId, controller.signal).then((data) => {
+      if (!controller.signal.aborted) {
+        setLoadedLetter({ ownerLetterId: requestedLetterId, value: data });
       }
-    }
-    fetchLetter();
+    }).catch((err: unknown) => {
+      if (controller.signal.aborted) return;
+      setLoadError({
+        ownerLetterId: requestedLetterId,
+        message: err instanceof Error ? err.message : "Letter not found",
+      });
+      console.error("Failed to fetch letter:", err);
+    });
+
+    void getAdjacentLetters(requestedLetterId, controller.signal).then((data) => {
+      if (!controller.signal.aborted) {
+        setLoadedAdjacent({ ownerLetterId: requestedLetterId, value: data });
+      }
+    }).catch(() => {
+      if (!controller.signal.aborted) {
+        setLoadedAdjacent({ ownerLetterId: requestedLetterId, value: null });
+      }
+    });
+
     return () => controller.abort();
-  }, [letterId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [letterId]);
 
   // Tell preload service to prioritize images around the current letter
   useEffect(() => {
@@ -364,8 +368,8 @@ export default function LetterDetailPage() {
     };
   }, [letter]);
 
-  if (loading) {
-    return <div className="letter-article"><p className="letter-loading">Loading letter...</p></div>;
+  if (pending && !letter) {
+    return <div className="letter-article" aria-busy="true"><p className="letter-loading" role="status">Loading letter...</p></div>;
   }
 
   if (error || !letter || !derived) {
@@ -393,7 +397,8 @@ export default function LetterDetailPage() {
       <HeaderDock transparent collectionsLink={collectionsLink}>
         {scrubberProps && <HeaderScrubber {...scrubberProps} />}
       </HeaderDock>
-      <article className="letter-article">
+      {pending && <p className="letter-navigation-status" role="status">Loading letter...</p>}
+      <article className="letter-article" aria-busy={pending} inert={pending}>
         {seo && (
           <SEO
             title={seo.title}
@@ -858,7 +863,7 @@ export default function LetterDetailPage() {
       </article>
 
       {/* ── Image Viewer Modal ─────────────────────────────── */}
-      {viewerOpen && createPortal(
+      {viewerOpen && displayedLetterIsCurrent && createPortal(
         // Portaled to document.body so the backdrop escapes #app-scroll's
         // stacking context and reliably covers the fixed header (#40).
         <div

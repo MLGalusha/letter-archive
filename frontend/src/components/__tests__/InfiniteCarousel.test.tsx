@@ -21,13 +21,23 @@ function mockMatchMedia(reducedMotion: boolean) {
   });
 }
 
+const originalObserver = globalThis.IntersectionObserver;
+
 describe("InfiniteCarousel", () => {
   beforeEach(() => {
+    globalThis.IntersectionObserver = class {
+      private callback: IntersectionObserverCallback;
+      constructor(callback: IntersectionObserverCallback) { this.callback = callback; }
+      observe(target: Element) { this.callback([{ target, isIntersecting: true, intersectionRatio: 1 } as IntersectionObserverEntry], this as unknown as IntersectionObserver); }
+      disconnect() {}
+    } as unknown as typeof IntersectionObserver;
     mockMatchMedia(false);
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    globalThis.IntersectionObserver = originalObserver;
+    vi.restoreAllMocks();
   });
 
   it("renders no wrapper for zero effective slides", () => {
@@ -357,4 +367,91 @@ describe("InfiniteCarousel", () => {
     // Should have advanced to the second slide
     expect(dots[1]).toHaveAttribute("aria-selected", "true");
   });
+
+  function controlledVisibility() {
+    let notify!: IntersectionObserverCallback;
+    const disconnect = vi.fn();
+    globalThis.IntersectionObserver = class {
+      constructor(callback: IntersectionObserverCallback, options: IntersectionObserverInit) {
+        notify = callback;
+        expect(options.threshold).toBe(0.01);
+      }
+      observe() {}
+      disconnect = disconnect;
+    } as unknown as typeof IntersectionObserver;
+    const motion = Object.assign(new EventTarget(), { matches: false });
+    Object.defineProperty(window, 'matchMedia', { configurable: true, value: () => motion });
+    let visibility: DocumentVisibilityState = 'visible';
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibility);
+    return {
+      disconnect,
+      intersection: (...ratios: number[]) => act(() => notify(ratios.map((ratio) => ({
+        isIntersecting: ratio >= 0, intersectionRatio: Math.max(0, ratio),
+      } as IntersectionObserverEntry)), {} as IntersectionObserver)),
+      visibility: (value: DocumentVisibilityState) => act(() => {
+        visibility = value; document.dispatchEvent(new Event('visibilitychange'));
+      }),
+      reducedMotion: (value: boolean) => act(() => { motion.matches = value; motion.dispatchEvent(new Event('change')); }),
+    };
+  }
+
+  it('runs one timer only while visible and resumes with a full interval', () => {
+    vi.useFakeTimers();
+    const control = controlledVisibility();
+    const { unmount } = render(<InfiniteCarousel>{[<div key="a">A</div>, <div key="b">B</div>, <div key="c">C</div>]}</InfiniteCarousel>);
+    expect(vi.getTimerCount()).toBe(0);
+    control.intersection(0); // Touching the viewport edge is not visible.
+    expect(vi.getTimerCount()).toBe(0);
+    control.intersection(1);
+    act(() => vi.advanceTimersByTime(4000));
+    control.intersection(1, -1); // Latest observation wins when records are batched.
+    expect(vi.getTimerCount()).toBe(0);
+    act(() => vi.advanceTimersByTime(60000));
+    expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true');
+    control.intersection(1);
+    control.intersection(1);
+    expect(vi.getTimerCount()).toBe(1);
+    act(() => vi.advanceTimersByTime(4999));
+    expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true');
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.getAllByRole('tab')[1]).toHaveAttribute('aria-selected', 'true');
+    control.visibility('hidden');
+    expect(vi.getTimerCount()).toBe(0);
+    act(() => vi.advanceTimersByTime(60000));
+    control.visibility('visible');
+    expect(vi.getTimerCount()).toBe(1);
+    act(() => vi.advanceTimersByTime(4999));
+    expect(screen.getAllByRole('tab')[1]).toHaveAttribute('aria-selected', 'true');
+    unmount();
+    expect(control.disconnect).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+    control.visibility('visible');
+    control.reducedMotion(false);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('reacts to reduced motion without overriding the manual interaction pause', () => {
+    vi.useFakeTimers();
+    const control = controlledVisibility();
+    render(<InfiniteCarousel>{[<div key="a">A</div>, <div key="b">B</div>, <div key="c">C</div>]}</InfiniteCarousel>);
+    control.intersection(1);
+    control.reducedMotion(true);
+    expect(vi.getTimerCount()).toBe(0);
+    act(() => vi.advanceTimersByTime(15000));
+    fireEvent.click(screen.getAllByRole('tab')[1]);
+    expect(screen.getAllByRole('tab')[1]).toHaveAttribute('aria-selected', 'true');
+    control.intersection(-1);
+    control.reducedMotion(false);
+    control.visibility('hidden');
+    act(() => vi.advanceTimersByTime(5000));
+    control.intersection(1);
+    expect(vi.getTimerCount()).toBe(0);
+    control.visibility('visible');
+    act(() => vi.advanceTimersByTime(20000));
+    expect(screen.getAllByRole('tab')[1]).toHaveAttribute('aria-selected', 'true');
+    expect(vi.getTimerCount()).toBe(1);
+    act(() => vi.advanceTimersByTime(5000));
+    expect(screen.getAllByRole('tab')[2]).toHaveAttribute('aria-selected', 'true');
+  });
+
 });

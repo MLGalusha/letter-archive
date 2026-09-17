@@ -61,7 +61,7 @@ Observation: ___
 
 ## 5. Scrolling across carousels and reading images
 
-**Status: issues 10, 11, and 20 deployed; letter navigation deployed; fullscreen changes remain pending.** [Issue 10](https://github.com/MLGalusha/letter-archive/issues/10), [11](https://github.com/MLGalusha/letter-archive/issues/11), [20](https://github.com/MLGalusha/letter-archive/issues/20), [21](https://github.com/MLGalusha/letter-archive/issues/21), [23](https://github.com/MLGalusha/letter-archive/issues/23). Smaller initial reader images already live ([PR 95](https://github.com/MLGalusha/letter-archive/pull/95)).
+**Status: issues 10, 11, and 20 deployed; letter navigation deployed; fullscreen change merged in PR 119, awaiting deployment.** [Issue 10](https://github.com/MLGalusha/letter-archive/issues/10), [11](https://github.com/MLGalusha/letter-archive/issues/11), [20](https://github.com/MLGalusha/letter-archive/issues/20), [21](https://github.com/MLGalusha/letter-archive/issues/21), [23](https://github.com/MLGalusha/letter-archive/issues/23). Smaller initial reader images already live ([PR 95](https://github.com/MLGalusha/letter-archive/pull/95)).
 
 Issue 10 is deployed in frontend release `5c7a9654`: carousels now wait for a clearly horizontal gesture before taking control; canceled drags and adding a second finger do not change slides. Reviewed code and automated checks passed; physical Safari/Chrome checks are still pending. Scan dots now follow the visible page and respond to taps (issue 11), confirmed on the live two-page letter in both engines. Single highlights no longer render an interactive outer carousel (issue 20), checked with a local singleton fixture. Fullscreen behavior and the other tickets above are separate.
 

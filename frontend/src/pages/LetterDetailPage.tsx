@@ -127,7 +127,7 @@ export default function LetterDetailPage() {
   const { carouselRef, attachCarousel, activeIndex, carouselDraggedRef, scrollToSlide } = useCarouselDrag();
 
   const [readyScan, setReadyScan] = useState<string | null>(null);
-  const activeScanKey = `${letter?.id}:${letter?.images[activeIndex]?.id ?? activeIndex}`;
+  const activeScanKey = `${letter?.id}:${letter?.images[activeIndex]?.imageUrl ?? activeIndex}`;
 
   // Transcript view mode: "reading" (reflowed) or "original" (1:1 line match)
   const [transcriptMode, setTranscriptMode] = useState<"reading" | "original">("reading");

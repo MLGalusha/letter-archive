@@ -130,8 +130,9 @@ export function useProgressiveImage(
   const sourceKey = JSON.stringify([thumbSrc, midSrc, fullSrc, fullLoadMode]);
   const fullTiming = useRef<{ sourceKey: string; start: number; reported?: boolean } | null>(null);
   const preloaded = imagePreloadService.isPreloaded(fullSrc);
-  const preloadedDims = preloaded ? imagePreloadService.getDimensions(fullSrc) : null;
   const cachedMid = !!midSrc && imagePreloadService.isPreloaded(midSrc);
+  const preloadedDims = preloaded ? imagePreloadService.getDimensions(fullSrc)
+    : cachedMid && midSrc ? imagePreloadService.getDimensions(midSrc) : null;
   const initial = {
     sourceKey, thumbLoaded: false, midLoaded: cachedMid, fullLoaded: fullLoadMode === 'background' && preloaded, fullFailed: false,
     fullAdmitted: fullLoadMode === 'background' && preloaded,
@@ -144,8 +145,9 @@ export function useProgressiveImage(
   useEffect(() => {
     if (!enabled) return;
     const alreadyPreloaded = imagePreloadService.isPreloaded(fullSrc);
-    const dims = alreadyPreloaded ? imagePreloadService.getDimensions(fullSrc) : null;
     const alreadyMid = !!midSrc && imagePreloadService.isPreloaded(midSrc);
+    const dims = alreadyPreloaded ? imagePreloadService.getDimensions(fullSrc)
+      : alreadyMid && midSrc ? imagePreloadService.getDimensions(midSrc) : null;
     fullTiming.current = { sourceKey, start: performance.now() };
     setState({ sourceKey, thumbLoaded: false, midLoaded: alreadyMid, fullLoaded: fullLoadMode === 'background' && alreadyPreloaded,
       fullAdmitted: alreadyPreloaded, fullFailed: false, naturalWidth: dims?.width ?? null, naturalHeight: dims?.height ?? null });

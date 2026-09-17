@@ -4,7 +4,7 @@ Baseline: main `5a54cce0`. On the live Home page, WebKit with the iPhone 13 prof
 
 ## Change
 
-At the existing phone breakpoint (700px), focusing or clicking the main search field dismisses refine and sort panels. It does not clear selected filters. The focus event comes after the outgoing year field's blur, preserving valid draft commits. Desktop behavior stays unchanged.
+At the existing phone breakpoint (700px), and on coarse-pointer screens up to 980px (including phone landscape), focusing or clicking the main search field dismisses refine and sort panels. It does not clear selected filters. The focus event comes after the outgoing year field's blur, preserving valid draft commits. Wider fine-pointer desktop behavior stays unchanged.
 
 On phones, the refine overlay grows with content and uses the existing page scroller. Expanded choices occupy the full available row and flow within the panel, with no independent choice-list scrollbar. Choice buttons, filter inputs, format chips, and Clear All have at least 44px height. The panel remains an overlay rather than moving result cards. No bottom sheet, viewport compensation, or new scrolling system was introduced.
 
@@ -15,9 +15,10 @@ On phones, the refine overlay grows with content and uses the existing page scro
 - At both phone widths, expanded panel and option content fit their own client heights (`overflow: visible`), Clear All was reachable through page scrolling, no document horizontal overflow occurred, and choice buttons measured at least 44px. Tapping main search closed the panel. At 1440px the filter panel stayed open when search was focused, preserving desktop behavior.
 - Example WebKit expanded heights: Home 1347px at 320px and 1234px at 390px; the no-result collection panel 1329px and 1150px. Those are intentionally page-scrolled content, not viewport-height dialogs. Desktop panels remained 492px tall with the existing nested choice behavior.
 - Artifacts and the reproducible browser check are in local `output/playwright/`. A development image telemetry request returned 400 before telemetry was intercepted for the test; no claim of a completely clean production console follows from this local harness.
+- Independent review caught an omitted 844px phone-landscape case. CSS and JavaScript now use the same coarse-pointer condition. Chromium and WebKit contexts at 844×390 reported `pointer: coarse` true, accessible page-scrolled panels, and input dismissal; fine-pointer contexts at the same width retained the old desktop behavior. WebKit still reported zero touch points, so this verifies the media policy and geometry, not native iOS gestures. Final search/year tests passed 42 cases, with TypeScript and the lint regression gate passing.
 
 ## Manual acceptance after deployment
 
-Use Safari and Google Chrome, including the physical iPhone 13. Open [Home](https://voicesthatremain.com/) and [Collection 003](https://voicesthatremain.com/collections/003), expand filters and Topic, and scroll to Clear All. The page should scroll naturally without a small inner scrolling box. Select options, then tap the main query field: panels should close, the query should receive focus, and selected filters should remain. A valid year typed immediately before the tap should be retained when filters reopen. Also test zero-result searches.
+Use Safari and Google Chrome, including the physical iPhone 13 in portrait and landscape. Open [Home](https://voicesthatremain.com/) and [Collection 003](https://voicesthatremain.com/collections/003), expand filters and Topic, and scroll to Clear All. The page should scroll naturally without a small inner scrolling box. Select options, then tap the main query field: panels should close, the query should receive focus, and selected filters should remain. A valid year typed immediately before the tap should be retained when filters reopen. Also test zero-result searches.
 
 The physical iOS keyboard/visual-viewport problem is separate (#42) and remains unverified here. These browser checks do not substitute for the phone checks in `docs/qa/public-site-checks.md`.

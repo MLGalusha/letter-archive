@@ -974,6 +974,15 @@
   .filter-section-row .filter-group {
     flex-basis: calc(50% - 0.25rem);
   }
+}
+
+/* Include phones in landscape without changing small desktop windows. */
+@media (max-width: 700px), (max-width: 980px) and (pointer: coarse) {
+  .search-compact-flyout,
+  .search-full-flyout {
+    max-height: none;
+    overflow: visible;
+  }
 
   /* Expanded choices belong to the page's scroll area on phones. Keeping
      them in flow avoids a second tiny scroll box or an upward overlay that

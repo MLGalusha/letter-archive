@@ -6,11 +6,25 @@ import SearchBar, { type SearchFilters } from './SearchBar';
 
 const device = vi.hoisted(() => ({ mobile: true }));
 vi.mock('../../hooks/useIsMobile', () => ({ default: () => device.mobile }));
-afterEach(() => { device.mobile = true; });
+afterEach(() => { device.mobile = true; vi.unstubAllGlobals(); });
 
 const facets = { formats: [], collections: [], correspondents: [], places: [], years: [], topics: [], tones: [], relationships: [] };
 
 describe('mobile search panel dismissal', () => {
+  it.each([true, false])('uses touch landscape policy only when its media query matches (%s)', async (matches) => {
+    device.mobile = false;
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query === '(max-width: 980px) and (pointer: coarse)' && matches,
+      addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    const user = userEvent.setup();
+    render(<SearchBar query="" filters={{}} facets={facets} total={0} loading={false}
+      onQueryChange={vi.fn()} onFiltersChange={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: /Open archive refine/ }));
+    await user.click(screen.getByRole('searchbox'));
+    expect(screen.queryByLabelText('To year') !== null).toBe(!matches);
+  });
+
   it.each(['full', 'compact'] as const)('commits the year draft and closes controlled %s panels when focusing search', async (variant) => {
     const user = userEvent.setup();
     function Harness() {

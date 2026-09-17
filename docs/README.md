@@ -7,6 +7,7 @@
 | [about-this-project.md](about-this-project.md) | Project vision, "wise guide" AI concept |
 | [collaboration-style.md](collaboration-style.md) | Proactive questioning, planning before implementing |
 | [architecture-cleanup/](architecture-cleanup/) | Active cleanup loop, baseline, and resumable checkpoint |
+| [qa/public-site-checks.md](qa/public-site-checks.md) | Public-site links, expected behavior, and Safari/Chrome checks to try |
 
 ## Technical Reference
 

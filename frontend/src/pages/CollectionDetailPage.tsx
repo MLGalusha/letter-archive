@@ -7,7 +7,6 @@ import ArchiveList from '../components/ArchiveList/ArchiveList';
 import Footer from '../components/Footer/Footer';
 import BackToSearch from '../components/BackToSearch';
 import { getCollectionByCode, getCollectionProfile, type CollectionWithLetters, type CollectionProfile } from '../api/collections';
-import { imagePreloadService } from '../services/imagePreloadService';
 import HeaderDock from '../components/Header/HeaderDock';
 import { getPrimaryMediaType } from '../utils/letterPreview';
 import {
@@ -126,7 +125,6 @@ export default function CollectionDetailPage() {
     void getCollectionByCode(collectionCode, controller.signal).then((data) => {
       if (controller.signal.aborted) return;
       setOverview({ code: collectionCode, data, error: null });
-      imagePreloadService.preloadCollection(data.letters);
     }).catch((err: unknown) => {
       if (controller.signal.aborted) return;
       setOverview({ code: collectionCode, data: null, error: err instanceof Error ? err.message : 'Collection not found' });
@@ -141,7 +139,7 @@ export default function CollectionDetailPage() {
       if (!controller.signal.aborted) setProfileResult({ code: collectionCode, data: null });
     });
 
-    return () => { controller.abort(); imagePreloadService.cancelPending(); };
+    return () => { controller.abort(); };
   }, [collectionCode]);
 
   /* ---- Header dock content ---- */

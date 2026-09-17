@@ -71,6 +71,7 @@ function loadImage(
       settled = true;
       const durationMs = performance.now() - start;
       recordImageLoad({ url: src, tier, context, durationMs, cached: attempt === 0 && durationMs < 15 });
+      imagePreloadService.recordLoaded(src, img);
       onLoad(img);
     };
     img.onerror = () => {
@@ -129,9 +130,11 @@ export function useProgressiveImage(
   const sourceKey = JSON.stringify([thumbSrc, midSrc, fullSrc, fullLoadMode]);
   const fullTiming = useRef<{ sourceKey: string; start: number; reported?: boolean } | null>(null);
   const preloaded = imagePreloadService.isPreloaded(fullSrc);
-  const preloadedDims = preloaded ? imagePreloadService.getDimensions(fullSrc) : null;
+  const cachedMid = !!midSrc && imagePreloadService.isPreloaded(midSrc);
+  const preloadedDims = preloaded ? imagePreloadService.getDimensions(fullSrc)
+    : cachedMid && midSrc ? imagePreloadService.getDimensions(midSrc) : null;
   const initial = {
-    sourceKey, thumbLoaded: false, midLoaded: false, fullLoaded: fullLoadMode === 'background' && preloaded, fullFailed: false,
+    sourceKey, thumbLoaded: false, midLoaded: cachedMid, fullLoaded: fullLoadMode === 'background' && preloaded, fullFailed: false,
     fullAdmitted: fullLoadMode === 'background' && preloaded,
     naturalWidth: preloadedDims?.width ?? null, naturalHeight: preloadedDims?.height ?? null,
   };
@@ -142,9 +145,11 @@ export function useProgressiveImage(
   useEffect(() => {
     if (!enabled) return;
     const alreadyPreloaded = imagePreloadService.isPreloaded(fullSrc);
-    const dims = alreadyPreloaded ? imagePreloadService.getDimensions(fullSrc) : null;
+    const alreadyMid = !!midSrc && imagePreloadService.isPreloaded(midSrc);
+    const dims = alreadyPreloaded ? imagePreloadService.getDimensions(fullSrc)
+      : alreadyMid && midSrc ? imagePreloadService.getDimensions(midSrc) : null;
     fullTiming.current = { sourceKey, start: performance.now() };
-    setState({ sourceKey, thumbLoaded: false, midLoaded: false, fullLoaded: fullLoadMode === 'background' && alreadyPreloaded,
+    setState({ sourceKey, thumbLoaded: false, midLoaded: alreadyMid, fullLoaded: fullLoadMode === 'background' && alreadyPreloaded,
       fullAdmitted: alreadyPreloaded, fullFailed: false, naturalWidth: dims?.width ?? null, naturalHeight: dims?.height ?? null });
     let dimsSet = !!dims;
     let idle: number | null = null;
@@ -162,13 +167,13 @@ export function useProgressiveImage(
     };
 
     // 1. Load thumbnail immediately (even for deferred images — it's tiny)
-    if (fullLoadMode !== 'dom' || thumbSrc !== fullSrc) loadImage(thumbSrc, 'thumb', context, cancelled, (img) => {
+    if (!alreadyMid && (!alreadyPreloaded || fullLoadMode === 'dom') && (fullLoadMode !== 'dom' || thumbSrc !== fullSrc)) loadImage(thumbSrc, 'thumb', context, cancelled, (img) => {
       setState((value) => ({ ...value, thumbLoaded: true }));
       captureDims(img);
     }, imgs, cleanups, priority);
 
     // 2. Load mid-quality immediately (if provided)
-    if (midSrc && (fullLoadMode !== 'dom' || midSrc !== fullSrc)) {
+    if (midSrc && !alreadyMid && !alreadyPreloaded && (fullLoadMode !== 'dom' || midSrc !== fullSrc)) {
       loadImage(midSrc, 'mid', context, cancelled, (img) => {
         setState((value) => ({ ...value, midLoaded: true }));
         captureDims(img);
@@ -221,6 +226,7 @@ export function useProgressiveImage(
   const onFullLoad = (image: HTMLImageElement) => {
     const timing = fullTiming.current;
     if (fullLoadMode !== 'dom' || timing?.sourceKey !== sourceKey) return;
+    imagePreloadService.recordLoaded(fullSrc, image);
     const durationMs = performance.now() - timing.start;
     if (!timing.reported) {
       timing.reported = true;

@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { getAppScrollRootForIO } from '../../utils/appScroll';
 import './PreviewImage.css';
 import { recordImageLoad } from '../../utils/imagePerformance';
+import { imagePreloadService } from '../../services/imagePreloadService';
 import { useImageRetry } from '../../hooks/useImageRetry';
 
 /** Small card previews need one display-sized image, not several competing tiers. */
@@ -36,8 +37,9 @@ export function PreviewImage({ src, alt, className }: { src: string; alt: string
         loading="eager"
         decoding="async"
         draggable={false}
-        onLoad={() => {
+        onLoad={(event) => {
           onLoad();
+          imagePreloadService.recordLoaded(src, event.currentTarget);
           const timing = performance.getEntriesByName(src, 'resource').at(-1) as PerformanceResourceTiming | undefined;
           // Keep measuring after a long session fills the Resource Timing buffer.
           recordImageLoad({

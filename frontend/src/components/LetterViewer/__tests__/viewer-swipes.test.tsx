@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import LetterViewer from '../LetterViewer';
 import type { LetterImage } from '../../../types/Letter';
 
-vi.mock('../../../hooks/useProgressiveImage', () => ({ useProgressiveImage: () => ({ fullLoaded: true, midLoaded: true }) }));
+vi.mock('../../../hooks/useProgressiveImage', () => ({ useProgressiveImage: () => ({ fullLoaded: true, midLoaded: true, fullAdmitted: true, onFullLoad: vi.fn(), onFullError: vi.fn() }) }));
 vi.mock('../useScanDisplayWidth', () => ({ useScanDisplayWidth: () => 400 }));
 const images: LetterImage[] = [1, 2, 3].map(pageNumber => ({
   id: `page-${pageNumber}`, type: 'letter', pageNumber, imageUrl: `/images/page-${pageNumber}`, width: 1200, height: 1600,
@@ -47,7 +47,7 @@ describe('fullscreen fit-view swipes', () => {
     expect(screen.getByText('1 / 3')).toBeInTheDocument();
     expect(carriage).toHaveStyle({ transform: 'translate3d(-390px, 0, 0)' });
     expect((carriage as HTMLElement).style.transition).toContain('230ms');
-    expect([...container.querySelectorAll('.viewer-swipe-neighbor img')].every(img => img.getAttribute('src')?.includes('w=800'))).toBe(true);
+    expect([...container.querySelectorAll('.viewer-swipe-neighbor img')].every(img => img.getAttribute('src')?.includes('w=480'))).toBe(true);
     finish(carriage);
     expect(screen.getByText('2 / 3')).toBeInTheDocument();
     expect(carriage).toHaveStyle({ transform: 'translate3d(0px, 0, 0)', transition: 'none' });
@@ -134,7 +134,7 @@ describe('fullscreen fit-view swipes', () => {
     touch(target, 'touchMove', [[200, 302]]); frame();
     const neighbor = () => container.querySelector('.viewer-swipe-neighbor img')!;
     const first = neighbor(); const source = first.getAttribute('src');
-    expect(source).toContain('w=800');
+    expect(source).toContain('w=480');
     fireEvent.error(first);
     expect(first).not.toBeVisible();
     act(() => vi.advanceTimersByTime(1000));

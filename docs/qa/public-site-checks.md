@@ -85,11 +85,12 @@ Observation: ___
 
 ## 7. Collection first visit and intermittent visual reports
 
-**Status: investigation / physical reproduction pending.** [19](https://github.com/MLGalusha/letter-archive/issues/19), [46](https://github.com/MLGalusha/letter-archive/issues/46), [48](https://github.com/MLGalusha/letter-archive/issues/48).
+**Status: investigation / physical reproduction pending.** [19](https://github.com/MLGalusha/letter-archive/issues/19), [46](https://github.com/MLGalusha/letter-archive/issues/46), [48](https://github.com/MLGalusha/letter-archive/issues/48), [24](https://github.com/MLGalusha/letter-archive/issues/24).
 
 - Open [Collections](https://voicesthatremain.com/collections), scroll down, and enter a collection you have not visited in that tab. Expected: title fully below the header without manually correcting the scroll. Distinguish clicking a new collection from browser Back, which should restore your prior position.
 - On [Collection 003](https://voicesthatremain.com/collections/003), swipe the highlights and watch the dots during the transition. Expected: complete, unclipped dots throughout.
 - Check the format breakdown under the title on first load and after rotating your phone. Expected: consistently smaller supporting text. Record which browser/orientation shows an oversized line.
+- On [Collection 009](https://voicesthatremain.com/collections/009), tap Jimmie under People. Expected: the backdrop covers the header and the bottom of the screen. This collection popup covers the full 390×844 viewport in both engine checks and already uses a body portal (earlier issue 41). Issue 24 names a letter-page trigger that remains unconfirmed; record the exact page and control if its backdrop still clips.
 - Current delayed-data/browser checks did not reproduce the first-visit overlap; a measured desktop-engine dot transition also did not show clipping. These checks do not close the intermittent iPhone reports.
 
 Observation: ___

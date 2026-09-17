@@ -18,6 +18,7 @@ import { logIfSlow, TIMING_THRESHOLDS } from '../utils/logger.js';
 import { isSensitiveQueryKey } from '../utils/log-redaction.js';
 import { ImageTransformScheduler, ImageTransformOverloadError, ImageTransformAbortedError } from '../services/image-transform-scheduler.js';
 import { imageVariantIdentity } from '../services/image-variant.js';
+import { ImageVariantStore } from '../services/image-variant-store.js';
 
 // In-memory LRU cache for resized images (avoids re-encoding on repeated requests)
 const IMAGE_CACHE_MAX = 1000;
@@ -54,7 +55,10 @@ const MIME_TYPES: Record<string, string> = {
 const MAX_THUMBNAIL_WIDTH = 1600;
 
 /** Allows isolated diagnostics to exercise the real route with explicit scheduler limits. */
-export function createImagesRouter(imageTransforms = new ImageTransformScheduler({ concurrency: 2, maxQueued: 32, maxWaiters: 64 })) {
+export function createImagesRouter(
+  imageTransforms = new ImageTransformScheduler({ concurrency: 2, maxQueued: 32, maxWaiters: 64 }),
+  previewStore: Pick<ImageVariantStore, 'read' | 'write'> = new ImageVariantStore(),
+) {
   const router = Router();
 
   /**
@@ -170,52 +174,83 @@ export function createImagesRouter(imageTransforms = new ImageTransformScheduler
         }
 
         metrics.cache = 'miss';
-        const variant = await imageTransforms.schedule(async () => {
-          const pipeline = sharp(absolutePath).rotate().resize({
-            width: requestedWidth, fit: 'inside', withoutEnlargement: true,
-          });
-          const transformed = format === 'avif'
-            ? pipeline.avif({ quality: 60, effort: 2 })
-            : format === 'webp'
-            ? pipeline.webp({ quality: 76, effort: 4 })
-            : pipeline.jpeg({ quality: 78, progressive: true, mozjpeg: true });
-          return { buffer: await transformed.toBuffer(), contentType: `image/${format}` };
-        }, { key: canUseSharedCache ? cacheKey : undefined, signal: abandoned.signal });
-        metrics.queueMs = variant.queueMs;
-        metrics.transformMs = variant.transformMs;
-        metrics.shared = variant.shared;
+        let variant: { buffer: Buffer; contentType: string } | undefined;
+        let savedHit = false;
+        if (canUseSharedCache && requestedWidth === 480) {
+          const readStarted = performance.now();
+          const saved = await previewStore.read(cacheKey, requestedWidth, format);
+          metrics.previewReadMs = performance.now() - readStarted;
+          metrics.previewRead = saved.status;
+          if (abandoned.signal.aborted) return;
+          if (saved.status === 'hit') {
+            variant = { buffer: saved.buffer, contentType: `image/${format}` };
+            savedHit = true;
+            metrics.cache = 'saved';
+          }
+        }
+        if (!variant) {
+          const generated = await imageTransforms.schedule(async () => {
+            const pipeline = sharp(absolutePath).rotate().resize({
+              width: requestedWidth, fit: 'inside', withoutEnlargement: true,
+            });
+            const transformed = format === 'avif'
+              ? pipeline.avif({ quality: 60, effort: 2 })
+              : format === 'webp'
+              ? pipeline.webp({ quality: 76, effort: 4 })
+              : pipeline.jpeg({ quality: 78, progressive: true, mozjpeg: true });
+            return { buffer: await transformed.toBuffer(), contentType: `image/${format}` };
+          }, { key: canUseSharedCache ? cacheKey : undefined, signal: abandoned.signal });
+          metrics.queueMs = generated.queueMs;
+          metrics.transformMs = generated.transformMs;
+          metrics.shared = generated.shared;
+          variant = generated;
+        }
 
-        // Waiting must not let a shared result bypass a caller's current access.
-        const recheckStarted = performance.now();
-        const current = await findAccessibleImage(pageId, imageSessionToken);
-        metrics.accessRecheckMs = performance.now() - recheckStarted;
-        if (abandoned.signal.aborted) return;
-        if (!current) {
-          res.setHeader('Cache-Control', 'private, no-store');
-          res.status(404).json({ error: 'Image not found' });
-          return;
+        // Both stored reads and generated results must retain current access.
+        const recheck = async () => {
+          const recheckStarted = performance.now();
+          const current = await findAccessibleImage(pageId, imageSessionToken);
+          metrics.accessRecheckMs = Number(metrics.accessRecheckMs ?? 0) + performance.now() - recheckStarted;
+          if (abandoned.signal.aborted) return null;
+          if (!current) {
+            res.setHeader('Cache-Control', 'private, no-store');
+            res.status(404).json({ error: 'Image not found' });
+            return null;
+          }
+          if (current.page.checksumSha256 !== page.checksumSha256 || current.page.storagePath !== page.storagePath) {
+            res.setHeader('Cache-Control', 'private, no-store');
+            res.setHeader('Retry-After', '1');
+            res.status(503).json({ error: 'Image changed during processing; retry the request' });
+            return null;
+          }
+          const versionStarted = performance.now();
+          let currentStats;
+          try { currentStats = await stat(absolutePath); } catch {
+            res.setHeader('Cache-Control', 'private, no-store');
+            res.status(404).json({ error: 'Image file not found on disk' });
+            return null;
+          }
+          metrics.versionRecheckMs = Number(metrics.versionRecheckMs ?? 0) + performance.now() - versionStarted;
+          if (currentStats.mtimeMs !== fileStats.mtimeMs || currentStats.size !== fileStats.size) {
+            res.setHeader('Cache-Control', 'private, no-store');
+            res.setHeader('Retry-After', '1');
+            res.status(503).json({ error: 'Image changed during processing; retry the request' });
+            return null;
+          }
+          if (abandoned.signal.aborted) return null;
+          return current;
+        };
+        let current = await recheck();
+        if (!current) return;
+        if (!savedHit && canUseSharedCache && current.isPublicCatalogueImage && requestedWidth === 480) {
+          const writeStarted = performance.now();
+          metrics.previewWrite = await previewStore.write(cacheKey, requestedWidth, format, variant.buffer);
+          metrics.previewWriteMs = performance.now() - writeStarted;
+          // Accepted writes are awaited, not left running after the response.
+          // A publication/source change while saving still prevents delivery.
+          current = await recheck();
+          if (!current) return;
         }
-        if (current.page.checksumSha256 !== page.checksumSha256 || current.page.storagePath !== page.storagePath) {
-          res.setHeader('Cache-Control', 'private, no-store');
-          res.setHeader('Retry-After', '1');
-          res.status(503).json({ error: 'Image changed during processing; retry the request' });
-          return;
-        }
-        const versionStarted = performance.now();
-        let currentStats;
-        try { currentStats = await stat(absolutePath); } catch {
-          res.setHeader('Cache-Control', 'private, no-store');
-          res.status(404).json({ error: 'Image file not found on disk' });
-          return;
-        }
-        metrics.versionRecheckMs = performance.now() - versionStarted;
-        if (currentStats.mtimeMs !== fileStats.mtimeMs || currentStats.size !== fileStats.size) {
-          res.setHeader('Cache-Control', 'private, no-store');
-          res.setHeader('Retry-After', '1');
-          res.status(503).json({ error: 'Image changed during processing; retry the request' });
-          return;
-        }
-        if (abandoned.signal.aborted) return;
         const outputBuffer = variant.buffer;
         const contentType = variant.contentType;
         if (current.isPublicCatalogueImage) setCachedImage(cacheKey, outputBuffer, contentType);

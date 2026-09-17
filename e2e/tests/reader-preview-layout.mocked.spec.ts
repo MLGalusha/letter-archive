@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { API_BASE_URL } from './utils/test-helpers';
 
@@ -30,7 +31,7 @@ for (const viewport of [{ name: 'phone', width: 390, height: 844, deviceScaleFac
           const width = Number(url.searchParams.get('w'));
           if (width > 480) { fullRequests++; await held; }
           if (width > 480 && scenario === 'failed full image') return route.fulfill({ status: 503, body: 'Unavailable' });
-          return route.fulfill({ contentType: 'image/svg+xml', body: `<svg xmlns="http://www.w3.org/2000/svg" width="${imageWidth}" height="${imageHeight}"><rect width="100%" height="100%" fill="#b59165"/><text x="40" y="80" font-size="32">Visible archive scan</text></svg>` });
+          return route.fulfill({ contentType: 'image/png', path: join(__dirname, landscape ? 'fixtures/reader-landscape-960x640.png' : 'fixtures/archive-preview-480x640.png') });
         }
         if (url.pathname === '/settings/public') return route.fulfill({ json: {} });
         if (url.pathname === '/collections') return route.fulfill({ json: [collection] });
@@ -45,6 +46,7 @@ for (const viewport of [{ name: 'phone', width: 390, height: 844, deviceScaleFac
         if (scenario !== 'direct entry') {
           await page.goto('/collections/003');
           const card = page.locator('a.letter-card');
+          await card.scrollIntoViewIfNeeded();
           await expect.poll(() => card.locator('img').evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth)).toBeGreaterThan(0);
           await card.click();
         } else await page.goto(`/letter/${letterId}`);

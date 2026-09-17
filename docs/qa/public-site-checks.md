@@ -286,4 +286,9 @@ Observation: browser/device ___; route or sort sequence ___; displayed result __
 
 These checks target unnecessary offscreen work. We have not measured a battery-life improvement. Browser automation covers real scroll clipping and reduced-motion changes; hidden-document tests control the Page Visibility state rather than simulating a physical phone being put to sleep.
 
+Developer regression checks wait for actual native intersection and motion-change
+callbacks before advancing the virtual clock. An optional
+`VERIFY_CAROUSEL_REALTIME=1` browser check also verifies visible advancement and
+zero offscreen/reduced-motion movement with ordinary timers in Chrome and WebKit.
+
 Observation: browser ___; carousel visible/paused/resumed correctly ___; dot/swipe interaction ___; reduced motion ___ .

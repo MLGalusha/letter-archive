@@ -7,6 +7,52 @@ async function openCollection(page: Page, virtualClock = true) {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   if (virtualClock) await page.clock.install({ time: new Date('2026-09-17T12:00:00Z') });
+  // Observe delivery through the real browser APIs, rather than assuming a
+  // wall-clock sleep also advances WebKit's virtual rendering clock.
+  await page.addInitScript(() => {
+    (window as any).carouselSignals = { intersecting: null, reducedMotion: null };
+    const NativeObserver = window.IntersectionObserver;
+    window.IntersectionObserver = class extends NativeObserver {
+      constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
+        super((entries, observer) => {
+          callback(entries, observer);
+          const entry = entries.find(value => value.target.classList.contains('cd-highlights-wrap'));
+          if (entry) (window as any).carouselSignals.intersecting = entry.isIntersecting && entry.intersectionRatio >= 0.01;
+        }, options);
+      }
+    };
+    const motionDeliveries = new Map<EventListener, boolean | null>();
+    const nativeMatchMedia = window.matchMedia.bind(window);
+    window.matchMedia = (query) => {
+      const media = nativeMatchMedia(query);
+      if (query !== '(prefers-reduced-motion: reduce)') return media;
+      const add = media.addEventListener.bind(media);
+      const remove = media.removeEventListener.bind(media);
+      const listeners = new Map<any, EventListener>();
+      media.addEventListener = ((type: string, listener: any, options: any) => {
+        if (type !== 'change') return add(type as 'change', listener, options);
+        const wrapped: EventListener = (event) => {
+          if (typeof listener === 'function') listener.call(media, event);
+          else listener.handleEvent(event);
+          motionDeliveries.set(wrapped, media.matches);
+          // Other components subscribe too; wait until every actual listener
+          // has received this setting, not just the first media-query object.
+          (window as any).carouselSignals.reducedMotion = [...motionDeliveries.values()].every(value => value === media.matches)
+            ? media.matches : null;
+        };
+        listeners.set(listener, wrapped);
+        motionDeliveries.set(wrapped, null);
+        add('change', wrapped, options);
+      }) as typeof media.addEventListener;
+      media.removeEventListener = ((type: string, listener: any, options: any) => {
+        const wrapped = listeners.get(listener);
+        remove(type as 'change', wrapped ?? listener, options);
+        if (wrapped) motionDeliveries.delete(wrapped);
+        listeners.delete(listener);
+      }) as typeof media.removeEventListener;
+      return media;
+    };
+  });
   const collection = { id: 'collection-003', collectionCode: '003', title: 'Carousel collection', description: 'Carousel browser checks', createdAt: '2026-01-01', letterCount: 24 };
   const letters = ['letter', 'photo'].map((type, index) => ({
     id: `item-${index}`, images: [{ id: `scan-${index}`, type, imageUrl: `/images/scan-${index}` }],
@@ -32,8 +78,16 @@ async function openCollection(page: Page, virtualClock = true) {
   await expect(carousel.getByRole('tab')).toHaveCount(2);
   if (virtualClock) await page.clock.pauseAt(new Date(await page.evaluate(() => Date.now() + 1000)));
   await carousel.evaluate((node) => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
-  await page.waitForTimeout(100); // Deliver real browser intersection records.
+  await waitForSignal(page, 'intersecting', true, virtualClock);
   return carousel;
+}
+async function waitForSignal(page: Page, key: 'intersecting' | 'reducedMotion', expected: boolean, virtualClock = true) {
+  await expect.poll(async () => {
+    // Native observer/media delivery needs browser rendering opportunities while
+    // the clock is paused. Advance one frame, then inspect actual callback delivery.
+    if (virtualClock) await page.clock.runFor(16);
+    return page.evaluate(key => (window as any).carouselSignals[key], key);
+  }).toBe(expected);
 }
 async function advance(page: Page, ms: number) { await page.clock.runFor(ms); await page.waitForTimeout(50); }
 async function trackChanges(page: Page) {
@@ -49,14 +103,14 @@ test('@mocked collection autoplay stops outside the app scrollport and resumes w
   await advance(page, 5100);
   await expect(carousel.getByRole('tab', { name: 'Slide 2' })).toHaveAttribute('aria-selected', 'true');
   await page.locator('#app-scroll').evaluate((node) => { node.scrollTop = node.scrollHeight; });
-  await page.waitForTimeout(100);
+  await waitForSignal(page, 'intersecting', false);
   expect(await carousel.evaluate((node) => node.getBoundingClientRect().bottom)).toBeLessThan(0);
   await advance(page, 600);
   await trackChanges(page);
   await advance(page, 12000);
   expect(await page.evaluate(() => (window as any).carouselMutations)).toBe(0);
   await carousel.evaluate((node) => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
-  await page.waitForTimeout(100);
+  await waitForSignal(page, 'intersecting', true);
   await advance(page, 4900);
   await expect(carousel.getByRole('tab', { name: 'Slide 2' })).toHaveAttribute('aria-selected', 'true');
   await advance(page, 700);
@@ -82,12 +136,12 @@ test('@mocked collection respects hidden state, live reduced motion, and manual 
   await advance(page, 200);
   await expect(carousel.getByRole('tab', { name: 'Slide 2' })).toHaveAttribute('aria-selected', 'true');
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.waitForTimeout(100);
+  await waitForSignal(page, 'reducedMotion', true);
   await advance(page, 12000);
   await expect(carousel.getByRole('tab', { name: 'Slide 2' })).toHaveAttribute('aria-selected', 'true');
   await carousel.getByRole('tab', { name: 'Slide 1' }).click();
   await page.emulateMedia({ reducedMotion: 'no-preference' });
-  await page.waitForTimeout(100);
+  await waitForSignal(page, 'reducedMotion', false);
   for (let i = 0; i < 3; i++) {
     await page.evaluate(() => (window as any).setDocumentVisibility('hidden'));
     await page.evaluate(() => (window as any).setDocumentVisibility('visible'));
@@ -139,4 +193,25 @@ test('@mocked bounded carousel activity trace', async ({ page, browserName }, te
   await testInfo.attach('carousel-performance-trace.json', { path: tracePath, contentType: 'application/json' });
   expect(measurements[0].styleMutations).toBeGreaterThan(0);
   expect(measurements[1].styleMutations).toBe(0);
+});
+
+// Diagnostic cross-check: native timers and native observer/media delivery, with
+// no Playwright clock installed. Keep it opt-in rather than extending every CI run.
+test('@mocked real-time carousel visibility and live reduced-motion check', async ({ page }) => {
+  test.skip(process.env.VERIFY_CAROUSEL_REALTIME !== '1', 'Opt-in native-time correctness check');
+  test.setTimeout(45000);
+  const carousel = await openCollection(page, false);
+  await expect(carousel.getByRole('tab', { name: 'Slide 2' })).toHaveAttribute('aria-selected', 'true', { timeout: 6500 });
+  await page.locator('#app-scroll').evaluate(node => { node.scrollTop = node.scrollHeight; });
+  await waitForSignal(page, 'intersecting', false, false);
+  await trackChanges(page);
+  await page.waitForTimeout(6000);
+  expect(await page.evaluate(() => (window as any).carouselMutations)).toBe(0);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await waitForSignal(page, 'reducedMotion', true, false);
+  await carousel.evaluate(node => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
+  await waitForSignal(page, 'intersecting', true, false);
+  await page.waitForTimeout(6000);
+  expect(await page.evaluate(() => (window as any).carouselMutations)).toBe(0);
+  await expect(carousel.getByRole('tab', { name: 'Slide 2' })).toHaveAttribute('aria-selected', 'true');
 });

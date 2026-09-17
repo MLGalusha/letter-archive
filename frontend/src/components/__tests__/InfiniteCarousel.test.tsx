@@ -1,4 +1,4 @@
-import { render, screen, act, fireEvent } from "@testing-library/react";
+import { render, screen, act, fireEvent, createEvent } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import InfiniteCarousel from "../InfiniteCarousel";
 
@@ -95,6 +95,69 @@ describe("InfiniteCarousel", () => {
     fireEvent.mouseUp(link);
     fireEvent.click(link, { detail: 1 });
     expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  function touchMove(track: Element, x: number, y: number, fingers = 1) {
+    const touches = Array.from({ length: fingers }, (_, index) => ({ identifier: index, clientX: x + index * 20, clientY: y }));
+    const event = createEvent.touchMove(track, { touches, cancelable: true });
+    fireEvent(track, event);
+    return event;
+  }
+
+  it("leaves undecided and diagonal vertical gestures to page scrolling", () => {
+    const { container } = render(<InfiniteCarousel>{[<div key="a">A</div>, <div key="b">B</div>]}</InfiniteCarousel>);
+    const track = container.querySelector('.carousel-track')!;
+    fireEvent.touchStart(track, { touches: [{ clientX: 100, clientY: 100 }] });
+    expect(touchMove(track, 106, 105).defaultPrevented).toBe(false);
+    expect(touchMove(track, 130, 125).defaultPrevented).toBe(false);
+    expect(touchMove(track, 280, 130).defaultPrevented).toBe(false);
+    fireEvent.touchEnd(track, { touches: [] });
+    expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true');
+    expect(track).toHaveStyle({ transform: 'translateX(-100%)' });
+  });
+
+  it("keeps intentional horizontal touch swipes and ordinary tap activation", () => {
+    const onClick = vi.fn((event) => event.preventDefault());
+    const { container } = render(<InfiniteCarousel suppressClickAfterDrag>{[<a key="a" href="/letter/one" onClick={onClick}>Open touch scan</a>, <div key="b">B</div>]}</InfiniteCarousel>);
+    const track = container.querySelector('.carousel-track')!;
+    const link = screen.getAllByText('Open touch scan')[0];
+    fireEvent.touchStart(link, { touches: [{ clientX: 300, clientY: 100 }] });
+    expect(touchMove(track, 250, 110).defaultPrevented).toBe(true);
+    expect(touchMove(track, 100, 220).defaultPrevented).toBe(true);
+    fireEvent.touchEnd(track, { touches: [] });
+    expect(screen.getAllByRole('tab')[1]).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(link, { detail: 1 });
+    expect(onClick).not.toHaveBeenCalled();
+    fireEvent.touchStart(link, { touches: [{ clientX: 100, clientY: 100 }] });
+    fireEvent.touchEnd(link, { touches: [] });
+    fireEvent.click(link, { detail: 1 });
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  it.each(['cancel', 'pinch'])("cancels a horizontal gesture on %s without changing slides", (reason) => {
+    const { container } = render(<InfiniteCarousel>{[<div key="a">A</div>, <div key="b">B</div>]}</InfiniteCarousel>);
+    const track = container.querySelector('.carousel-track')!;
+    fireEvent.touchStart(track, { touches: [{ clientX: 300, clientY: 100 }] });
+    expect(touchMove(track, 100, 105).defaultPrevented).toBe(true);
+    if (reason === 'cancel') fireEvent.touchCancel(track, { touches: [] });
+    else {
+      fireEvent.touchStart(track, { touches: [{ clientX: 100, clientY: 105 }, { clientX: 150, clientY: 105 }] });
+      expect(touchMove(track, 90, 100, 2).defaultPrevented).toBe(false);
+    }
+    fireEvent.touchEnd(track, { touches: reason === 'pinch' ? [{ clientX: 90, clientY: 100 }] : [] });
+    expect(touchMove(track, 50, 100).defaultPrevented).toBe(false);
+    fireEvent.touchEnd(track, { touches: [] });
+    expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true');
+    expect(track).toHaveStyle({ transform: 'translateX(-100%)' });
+  });
+
+  it("does not turn trackpad pinch zoom into a carousel wheel swipe", () => {
+    const { container } = render(<InfiniteCarousel>{[<div key="a">A</div>, <div key="b">B</div>]}</InfiniteCarousel>);
+    const track = container.querySelector('.carousel-track')!;
+    const event = createEvent.wheel(track, { deltaX: 100, deltaY: 0, ctrlKey: true, cancelable: true });
+    fireEvent(track, event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true');
   });
 
   it("renders children as slides", () => {

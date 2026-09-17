@@ -219,6 +219,54 @@ describe.skipIf(!enabled)('public archive search against PostgreSQL', () => {
     }
   });
 
+  it.each(['start', 'middle', 'end'])('keeps a complete long exact match near the %s of its source', async (position) => {
+    const query = 'The violet lantern arrived with a handwritten note from İstanbul 📨 and a careful account of the journey.\n  Every small detail was recorded for the family to remember.';
+    expect(query.length).toBeLessThanOrEqual(200);
+    const context = 'Unrelated context with a parcel 📨 near the boundary. '.repeat(12);
+    const source = `${position === 'start' ? '' : context}${query}${position === 'end' ? '' : context}`;
+    const [inserted] = await client`INSERT INTO letters ${client({ collection_id: collection, date_raw: '19600101', transcription_text: source })} RETURNING id`;
+    try {
+      const response = await search({ search: query, exact: 'true' });
+      const preview = response.letters.find((item) => item.id === inserted!.id)!.searchPreview!;
+      expect(preview.excerpt).toContain(query);
+      expect(preview.highlightRanges.map((range) => preview.excerpt.slice(range.start, range.end))).toContain(query);
+      // At most 18 characters of context per side and two ellipses, not the source's full paragraph.
+      expect(preview.excerpt.length).toBeLessThanOrEqual(query.length + 38);
+      expect(preview.excerpt).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u);
+      if (position === 'start') expect(preview.excerpt.startsWith('…')).toBe(false);
+      if (position === 'end') expect(preview.excerpt.endsWith('…')).toBe(false);
+    } finally {
+      await client`DELETE FROM letters WHERE id = ${inserted!.id}`;
+    }
+  });
+
+  it.each([91, 108])('keeps a complete %s-character exact phrase at the window threshold', async (length) => {
+    const query = 'a '.repeat(54).slice(0, length - 1) + 'z';
+    const [inserted] = await client`INSERT INTO letters ${client({ collection_id: collection, date_raw: '19600103', transcription_text: `Before the phrase with surrounding words. ${query} After the phrase with surrounding words.` })} RETURNING id`;
+    try {
+      const response = await search({ search: query, exact: 'true' });
+      const preview = response.letters.find((item) => item.id === inserted!.id)!.searchPreview!;
+      expect(preview.highlightRanges.map((range) => preview.excerpt.slice(range.start, range.end))).toContain(query);
+      expect(preview.excerpt.length).toBeLessThanOrEqual(length + 38);
+    } finally {
+      await client`DELETE FROM letters WHERE id = ${inserted!.id}`;
+    }
+  });
+
+  it('bounds a max-length exact excerpt even when adjacent matches merge', async () => {
+    const query = 'x'.repeat(200);
+    const [inserted] = await client`INSERT INTO letters ${client({ collection_id: collection, date_raw: '19600102', transcription_text: query.repeat(30) })} RETURNING id`;
+    try {
+      const response = await search({ search: query, exact: 'true' });
+      const preview = response.letters.find((item) => item.id === inserted!.id)!.searchPreview!;
+      expect(preview.excerpt).toContain(query);
+      expect(preview.excerpt.length).toBeLessThanOrEqual(query.length + 38);
+      expect(preview.highlightRanges.some((range) => preview.excerpt.slice(range.start, range.end).includes(query))).toBe(true);
+    } finally {
+      await client`DELETE FROM letters WHERE id = ${inserted!.id}`;
+    }
+  });
+
   it('keeps exact mode through pagination/filter/sort and restores ordinary mode', async () => {
     const params = { search: 'quartz', exact: 'true', limit: '2', sort: 'letterDate', sortOrder: 'asc' };
     const first = await search({ ...params, page: '1' });

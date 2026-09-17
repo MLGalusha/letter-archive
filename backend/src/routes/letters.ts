@@ -1668,7 +1668,7 @@ function buildArchiveSearchPreview(
         return scoreArchivePreviewValue(prepareArchivePreviewText(original, query.exact), search, searchTerms, field.fuzzy && !query.exact,
           prepareArchivePreviewText(folded, query.exact),
           field.fuzzy && row.searchWordMap && Object.hasOwn(row.searchWordMap, original) ? row.searchWordMap[original] : undefined,
-          row.searchWordMap);
+          row.searchWordMap, query.exact);
       })
       .filter((candidate): candidate is ArchivePreviewCandidate => candidate !== null)
       .sort((left, right) => right.score - left.score || right.totalMatches - left.totalMatches
@@ -1760,6 +1760,7 @@ function scoreArchivePreviewValue(
   foldedValue: string,
   sourceWords?: string[],
   wordMap?: Record<string, string[]> | null,
+  exact = false,
 ): ArchivePreviewCandidate | null {
   const originalTerms = rawSearch.trim().split(/\s+/u);
   // Deduplicate only after pairing: differently typed terms can fold identically
@@ -1772,9 +1773,12 @@ function scoreArchivePreviewValue(
   const termRanges = [...terms.values()].map(({ term, originalTerm }) => archiveTermRanges(value, term, allowFuzzy, foldedValue, originalTerm,
     sourceWords && wordMap && Object.hasOwn(wordMap, originalTerm) ? { source: sourceWords, term: wordMap[originalTerm]! } : undefined));
   if (termRanges.some((ranges) => ranges.length === 0)) return null;
+  // Preserve one complete phrase before adjacent highlights are merged. A run
+  // of repeated phrases must not expand the excerpt to the entire transcript.
+  const exactMatch = exact && termRanges[0]?.[0] ? { ...termRanges[0][0] } : undefined;
   const ranges = mergeArchiveHighlightRanges(termRanges.flat());
   if (!ranges.length) return null;
-  const excerpt = buildArchiveExcerptWithHighlights(value, ranges);
+  const excerpt = buildArchiveExcerptWithHighlights(value, ranges, exactMatch);
   return {
     ...excerpt,
     totalMatches: ranges.length,
@@ -1806,6 +1810,7 @@ function mergeArchiveHighlightRanges(ranges: ArchiveSearchHighlightRange[]) {
 function buildArchiveExcerptWithHighlights(
   value: string,
   ranges: ArchiveSearchHighlightRange[],
+  exactMatch?: ArchiveSearchHighlightRange,
 ) {
   const maxLength = 108;
   const preferredLead = 18;
@@ -1821,7 +1826,9 @@ function buildArchiveExcerptWithHighlights(
     };
   }
 
-  const window = chooseArchiveExcerptWindow(value, ranges, maxLength, preferredLead);
+  const window = exactMatch && exactMatch.end - exactMatch.start > maxLength - preferredLead
+    ? chooseCompleteArchiveMatchWindow(value, exactMatch, preferredLead)
+    : chooseArchiveExcerptWindow(value, ranges, maxLength, preferredLead);
   const excerptSource = value.slice(window.start, window.end);
   const leadingTrim = excerptSource.length - excerptSource.trimStart().length;
   const trailingTrim = excerptSource.length - excerptSource.trimEnd().length;
@@ -1840,6 +1847,21 @@ function buildArchiveExcerptWithHighlights(
         end: Math.min(range.end, trimmedEnd) - trimmedStart + prefix.length,
       })),
   };
+}
+
+// Exact queries are capped at 200 characters by request validation. Keep the
+// mapped original match plus bounded context; trim partial context words inward
+// instead of expanding into an arbitrarily long word or repeated match run.
+function chooseCompleteArchiveMatchWindow(
+  value: string,
+  match: ArchiveSearchHighlightRange,
+  contextLength: number,
+) {
+  let start = Math.max(0, match.start - contextLength);
+  let end = Math.min(value.length, match.end + contextLength);
+  while (start > 0 && start < match.start && !/\s/u.test(value[start - 1]!)) start += 1;
+  while (end < value.length && end > match.end && !/\s/u.test(value[end]!)) end -= 1;
+  return { start, end };
 }
 
 function chooseArchiveExcerptWindow(

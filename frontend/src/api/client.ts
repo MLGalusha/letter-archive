@@ -454,6 +454,7 @@ export interface ContentPage {
 
 export async function listBlogPosts(
   params?: { limit?: number; offset?: number; category?: string; sort?: string; sortOrder?: string },
+  signal?: AbortSignal,
 ): Promise<{ posts: BlogPost[]; total: number }> {
   return apiGet<{ posts: BlogPost[]; total: number }>('/blog', {
     limit: params?.limit,
@@ -461,7 +462,7 @@ export async function listBlogPosts(
     category: params?.category,
     sort: params?.sort,
     sortOrder: params?.sortOrder,
-  });
+  }, signal);
 }
 
 export async function getBlogPost(slug: string): Promise<BlogPost> {

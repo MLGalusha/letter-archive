@@ -29,11 +29,6 @@ export default function BlogPage() {
     Number.isFinite(currentPageParam) && currentPageParam > 0
       ? Math.floor(currentPageParam)
       : 1;
-  const [posts, setPosts] = useState<BlogPost[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const blogIndexSeo = buildBlogIndexSeo(currentPage, siteName);
 
   const savedSort = loadJournalSort();
@@ -45,6 +40,16 @@ export default function BlogPage() {
   );
   const [sortOpen, setSortOpen] = useState(false);
   const sortRef = useRef<HTMLDivElement>(null);
+  const queryKey = JSON.stringify([currentPage, sortField, sortOrder]);
+  const [result, setResult] = useState<{
+    queryKey: string; posts: BlogPost[]; total: number; error: string | null;
+  } | null>(null);
+  const current = result?.queryKey === queryKey ? result : null;
+  const loading = !current;
+  const posts = current?.posts ?? [];
+  const total = current?.total ?? 0;
+  const error = current?.error ?? null;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   useEffect(() => {
     if (!sortOpen) return;
@@ -60,27 +65,25 @@ export default function BlogPage() {
   }, [sortField, sortOrder]);
 
   useEffect(() => {
+    const controller = new AbortController();
     async function fetchBlogPosts() {
-      setLoading(true);
       try {
         const data = await listBlogPosts({
           limit: PAGE_SIZE,
           offset: (currentPage - 1) * PAGE_SIZE,
           sort: sortField,
           sortOrder,
-        });
-        setPosts(data.posts);
-        setTotal(data.total);
-        setError(null);
+        }, controller.signal);
+        if (!controller.signal.aborted) setResult({ queryKey, ...data, error: null });
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load journal entries');
-      } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setResult({ queryKey, posts: [], total: 0,
+          error: err instanceof Error ? err.message : 'Failed to load journal entries' });
       }
     }
 
     fetchBlogPosts();
-  }, [currentPage, sortField, sortOrder]);
+    return () => controller.abort();
+  }, [currentPage, sortField, sortOrder, queryKey]);
 
   useEffect(() => {
     if (!loading && total > 0 && currentPage > totalPages) {

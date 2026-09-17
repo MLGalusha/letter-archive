@@ -8,7 +8,7 @@ interface UseAsyncResult<T> {
 }
 
 export function useAsync<T>(
-  fn: () => Promise<T>,
+  fn: (signal: AbortSignal) => Promise<T>,
   deps: DependencyList = [],
 ): UseAsyncResult<T> {
   const [data, setData] = useState<T | null>(null);
@@ -25,7 +25,7 @@ export function useAsync<T>(
     setError(null);
 
     try {
-      const result = await fn();
+      const result = await fn(controller.signal);
       if (!controller.signal.aborted) {
         setData(result);
       }

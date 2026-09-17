@@ -262,3 +262,13 @@ checks establish the intended behavior; production latency and byte savings stil
 need comparable live measurements after deployment. A missing or evicted browser
 cache can still require HTTP revalidation; the bounded readiness index stores URLs
 and dimensions, not image bytes, and never changes server publication checks.
+## Journal and person request ownership (issue 135)
+
+**Status: implementation under review; production verification pending.**
+
+- Visit [Journal](https://voicesthatremain.com/blog) in Safari and Chrome. Change Title → Author quickly, then switch pages when entries are available. Expected: the list always matches the latest selected sort/page; a slow earlier request cannot replace it or show an outdated error. Keyboard Enter/Space selection still works.
+- The live journal was empty during the audit. Automated checks use browser-local posts to exercise this case without publishing anything.
+- From [Collection 003](https://voicesthatremain.com/collections/003), follow an available person link and then a relationship link. Use Back/Forward quickly. Expected: a pending destination shows “Loading person...”; the final name matches the URL, and a previous error clears when navigating to a valid person.
+- Superseded journal/person/place reads now receive cancellation signals. Cancellation suppresses obsolete client updates; it does not guarantee the server stops work already underway.
+
+Observation: browser/device ___; route or sort sequence ___; displayed result ___; unexpected error ___ .

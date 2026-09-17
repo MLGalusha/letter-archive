@@ -1,11 +1,10 @@
-import { Suspense, lazy, useCallback } from "react";
+import { Suspense, lazy } from "react";
 import { createBrowserRouter, RouterProvider, Routes, Route } from "react-router-dom";
 import Header from "./components/Header/Header";
 import ScrollToTop from "./components/ScrollToTop";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { HeaderDockProvider } from "./contexts/HeaderDockContext";
 import PageSwipeLayer from "./components/SwipeNavigation/PageSwipeLayer";
-import { setAppScrollElement } from "./utils/appScroll";
 import "./App.css";
 
 const HomePage = lazy(() => import("./pages/HomePage"));
@@ -43,13 +42,6 @@ function RouteLoading() {
 }
 
 function AppRoutes() {
-  // Registers the public-site scroll container with the appScroll helper
-  // module. See utils/appScroll.ts and the scroll-container refactor (#35)
-  // for background on why scroll lives on a child div instead of window.
-  const registerAppScroll = useCallback((node: HTMLDivElement | null) => {
-    setAppScrollElement(node);
-  }, []);
-
   return (
     <>
       <ScrollToTop />
@@ -81,25 +73,23 @@ function AppRoutes() {
               <main className="main-page-layout public-site-shell">
                 <HeaderDockProvider>
                   <Header />
-                  <div id="app-scroll" ref={registerAppScroll}>
-                    <PageSwipeLayer>
+                  <PageSwipeLayer>
                     <div id="main-content">
-                    <Routes>
-                      <Route path="/" element={<HomePage />} />
-                      <Route path="/about" element={<AboutPage />} />
-                      <Route path="/support" element={<SupportPage />} />
-                      <Route path="/collections" element={<CollectionsPage />} />
-                      <Route path="/collections/:collectionCode" element={<CollectionDetailPage />} />
-                      <Route path="/blog" element={<BlogPage />} />
-                      <Route path="/blog/:slug" element={<BlogDetailPage />} />
-                      <Route path="/people/:personId" element={<PersonPage />} />
-                      <Route path="/places/:placeId" element={<PlacePage />} />
-                      <Route path="/letter/:letterId" element={<LetterDetailPage />} />
-                      <Route path="*" element={<NotFoundPage />} />
-                    </Routes>
+                      <Routes>
+                        <Route path="/" element={<HomePage />} />
+                        <Route path="/about" element={<AboutPage />} />
+                        <Route path="/support" element={<SupportPage />} />
+                        <Route path="/collections" element={<CollectionsPage />} />
+                        <Route path="/collections/:collectionCode" element={<CollectionDetailPage />} />
+                        <Route path="/blog" element={<BlogPage />} />
+                        <Route path="/blog/:slug" element={<BlogDetailPage />} />
+                        <Route path="/people/:personId" element={<PersonPage />} />
+                        <Route path="/places/:placeId" element={<PlacePage />} />
+                        <Route path="/letter/:letterId" element={<LetterDetailPage />} />
+                        <Route path="*" element={<NotFoundPage />} />
+                      </Routes>
                     </div>
-                    </PageSwipeLayer>
-                  </div>
+                  </PageSwipeLayer>
                 </HeaderDockProvider>
               </main>
             }

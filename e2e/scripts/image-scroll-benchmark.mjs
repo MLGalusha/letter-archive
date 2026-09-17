@@ -85,21 +85,21 @@ try {
             if(usable && record.usableReady===null)record.usableReady=now;
             if(inView){visible++;if(!isFull){unready++;record.visibleBlockedMs+=Math.min(now-last,100);}}
           }
-          state.samples.push({ms:now,phase:state.phase,y:document.querySelector('#app-scroll')?.scrollTop||0,visible,unready});last=now;
+          state.samples.push({ms:now,phase:state.phase,y:(document.querySelector('#app-scroll') ?? document.scrollingElement).scrollTop||0,visible,unready});last=now;
         },50);
       });
       await page.goto(base+path,{waitUntil:'domcontentloaded'});
       await page.locator('.letter-card').first().waitFor({timeout:30000});
       await page.waitForTimeout(2000);
       // Start at the first card (featured on Home), then scroll without waiting for images.
-      await page.evaluate(()=>{const root=document.querySelector('#app-scroll');window.__scrollImageBench.phase='scroll';root.scrollTop+=document.querySelector('.letter-card').getBoundingClientRect().top-100;});
+      await page.evaluate(()=>{const root=document.querySelector('#app-scroll') ?? document.scrollingElement;window.__scrollImageBench.phase='scroll';root.scrollTop+=document.querySelector('.letter-card').getBoundingClientRect().top-100;});
       for(let step=0;step<16;step++) {
         await page.waitForTimeout(stepMs);
-        await page.evaluate(()=>{document.querySelector('#app-scroll').scrollBy({top:innerHeight*.65,behavior:'instant'});});
+        await page.evaluate(()=>{(document.querySelector('#app-scroll') ?? window).scrollBy({top:innerHeight*.65,behavior:'instant'});});
         if(step===10 && run===1) await page.screenshot({path:`${dir}/${viewportName}-${path==='/'?'home':'collection'}-scroll.jpg`,quality:75});
       }
       await page.waitForTimeout(5000);
-      await page.evaluate(()=>{window.__scrollImageBench.phase='return';document.querySelector('#app-scroll').scrollTo({top:0,behavior:'instant'});});
+      await page.evaluate(()=>{window.__scrollImageBench.phase='return';(document.querySelector('#app-scroll') ?? window).scrollTo({top:0,behavior:'instant'});});
       await page.waitForTimeout(1000);
       const state=await page.evaluate(()=>window.__scrollImageBench);
       const scrollCards=state.cards.filter(c=>c.phase==='scroll');

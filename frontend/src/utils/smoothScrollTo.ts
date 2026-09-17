@@ -6,8 +6,8 @@ import { appScrollTo, getAppScrollY } from "./appScroll";
  * Why a custom RAF loop instead of `{ behavior: 'smooth' }`? iOS Safari has
  * historically silently fallen back to instant scroll in several edge cases
  * (body overflow, address-bar transitions, container scrollers with
- * momentum). Driving the animation ourselves guarantees the same behavior
- * across browsers and across document/container scroll.
+ * momentum). Keep the existing animation timing while moving its writes to
+ * document scroll; native iOS toolbar behavior still needs device validation.
  *
  * Returns a function that can be called to cancel the in-flight animation.
  */

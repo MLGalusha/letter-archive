@@ -23,7 +23,7 @@ import useLetterScrubber from "../components/LetterHeaderDock/useLetterScrubber"
 import useCarouselDrag from "../hooks/useCarouselDrag";
 import useThumbParallax from "../hooks/useThumbParallax";
 import BackToTop from "../components/BackToTop";
-import { appScrollTo, getAppScrollElement, getAppScrollY } from "../utils/appScroll";
+import { appScrollTo, getAppScrollY } from "../utils/appScroll";
 import "./LetterDetailPage.css";
 
 /* ── helpers ─────────────────────────────────────────────── */
@@ -144,14 +144,13 @@ export default function LetterDetailPage() {
       clean.delete("from");
       clean.delete("image");
       const qs = clean.toString();
-      window.history.replaceState({}, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
+      window.history.replaceState(window.history.state, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (carouselRef.current) carouselRef.current.scrollLeft = 0;
-    // Scroll to top on letter change (unless coming from a highlight)
-    if (!fromHighlightRef.current) appScrollTo(0);
+    // Vertical position belongs to ScrollToTop, including history restoration.
   }, [carouselRef, letterId]);
 
   // Auto-scroll to a specific image when navigated with ?image= param
@@ -179,12 +178,12 @@ export default function LetterDetailPage() {
       ) as HTMLElement | null;
       if (!target) return;
 
-      const idealTarget = target.offsetTop;
+      const idealTarget = getAppScrollY() + target.getBoundingClientRect().top;
 
       // Cap: bottom of carousel should never scroll above bottom of viewport
       const carousel = document.querySelector(".letter-scan-figure") as HTMLElement | null;
       const maxScroll = carousel
-        ? carousel.offsetTop + carousel.offsetHeight - window.innerHeight
+        ? getAppScrollY() + carousel.getBoundingClientRect().bottom - window.innerHeight
         : Infinity;
       const scrollTarget = Math.min(idealTarget, Math.max(0, maxScroll));
 
@@ -308,27 +307,22 @@ export default function LetterDetailPage() {
     setViewerOpen(true);
   }, []);
 
-  // Lock scroll while viewer is open. With container scroll, body is already
-  // overflow:hidden — we freeze the #app-scroll container instead by setting
-  // overflow:hidden on it and restoring scrollTop on close.
+  // Lock background touch scrolling only while the viewer is open, then
+  // restore the exact body styles and reading position.
   useEffect(() => {
     if (viewerOpen) {
-      const scroller = getAppScrollElement();
       const savedY = getAppScrollY();
-      if (scroller) {
-        scroller.style.overflow = "hidden";
-      } else {
-        // Fallback for admin routes / tests without a container.
-        document.body.style.overflow = "hidden";
-      }
+      const openedPath = window.location.pathname;
+      const body = document.body;
+      const previous = { position: body.style.position, top: body.style.top,
+        width: body.style.width, overflow: body.style.overflow };
+      Object.assign(body.style, {
+        position: "fixed", top: `-${savedY}px`, width: "100%", overflow: "hidden",
+      });
       return () => {
-        if (scroller) {
-          scroller.style.overflow = "";
-          scroller.scrollTop = savedY;
-        } else {
-          document.body.style.overflow = "";
-          window.scrollTo(0, savedY);
-        }
+        Object.assign(body.style, previous);
+        // A route change has its own history target; do not overwrite it.
+        if (window.location.pathname === openedPath) appScrollTo(savedY);
       };
     }
   }, [viewerOpen]);
@@ -862,8 +856,7 @@ export default function LetterDetailPage() {
 
       {/* ── Image Viewer Modal ─────────────────────────────── */}
       {viewerOpen && displayedLetterIsCurrent && createPortal(
-        // Portaled to document.body so the backdrop escapes #app-scroll's
-        // stacking context and reliably covers the fixed header (#40).
+        // Portal escapes page transforms and covers the fixed header.
         <div
           className="viewer-backdrop"
           onMouseDown={(e) => {

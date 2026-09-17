@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { smoothScrollToY } from "../utils/smoothScrollTo";
 import { addAppScrollListener, getAppScrollY } from "../utils/appScroll";
 import "./BackToTop.css";
+import useTouchScrollAction from "../hooks/useTouchScrollAction";
 
 const SCROLL_THRESHOLD = 600;
 const SCROLL_UP_DELTA = 30;
@@ -51,11 +52,9 @@ export default function BackToTop() {
     smoothScrollToY(0);
   }, []);
 
-  // Floating button is portaled to document.body so it sits OUTSIDE the
-  // #app-scroll container (see #35). This is what makes taps during momentum
-  // scroll actually fire the action on iOS: the button is no longer a
-  // descendant of the scroller, so iOS's "tap to stop fling" gesture doesn't
-  // consume touches that land on it.
+  const buttonRef = useTouchScrollAction(scrollToTop);
+
+  // Portal keeps fixed controls outside page swipe transforms.
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLButtonElement>) => {
       e.preventDefault();
@@ -66,6 +65,7 @@ export default function BackToTop() {
 
   return createPortal(
     <button
+      ref={buttonRef}
       type="button"
       className={`back-to-top${visible ? " back-to-top--visible" : ""}`}
       onClick={handleClick}

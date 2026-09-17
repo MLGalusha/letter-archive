@@ -32,9 +32,6 @@ describe('ProgressiveImage', () => {
   it.each([false, true])('defers image tiers until near the applicable scrollport (nested=%s)', (nested) => {
     let notify: IntersectionObserverCallback;
     let options: IntersectionObserverInit | undefined;
-    const scrollRoot = document.createElement('div');
-    scrollRoot.id = 'app-scroll';
-    document.body.append(scrollRoot);
     const disconnect = vi.fn();
     const OriginalObserver = globalThis.IntersectionObserver;
     globalThis.IntersectionObserver = class {
@@ -45,7 +42,7 @@ describe('ProgressiveImage', () => {
     try {
       mockHookReturn();
       const { container, unmount } = render(<div data-image-scroll-root={nested ? '' : undefined}><ProgressiveImage src="/full.jpg" thumbSrc="/thumb.jpg" midSrc="/mid.jpg" alt="Lazy scan" loading="lazy" /></div>);
-      expect(options).toMatchObject({ root: nested ? container.firstChild : scrollRoot, rootMargin: '200px' });
+      expect(options).toMatchObject({ root: nested ? container.firstChild : null, rootMargin: '200px' });
       expect(mockUseProgressiveImage).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: false }));
       expect(screen.getByAltText('Lazy scan')).not.toHaveAttribute('src');
       expect(container.querySelector<HTMLElement>('.progressive-image')?.style.aspectRatio).toBe('0.75');
@@ -56,7 +53,6 @@ describe('ProgressiveImage', () => {
       expect(disconnect).toHaveBeenCalled();
     } finally {
       globalThis.IntersectionObserver = OriginalObserver;
-      scrollRoot.remove();
     }
   });
 

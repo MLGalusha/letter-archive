@@ -63,7 +63,7 @@ for (const viewport of [{ name: 'phone', width: 390, height: 844, deviceScaleFac
           const image = document.querySelector('.scan-slide[data-index="0"] .scan-slide-img')!.getBoundingClientRect();
           const transcript = document.querySelector('#letter-transcript')!.getBoundingClientRect();
           return { slideHeight: slide.height, imageWidth: image.width, imageHeight: image.height,
-            transcriptTop: transcript.top + document.querySelector('#app-scroll')!.scrollTop };
+            transcriptTop: transcript.top + window.scrollY };
         });
         const pending = await geometry();
         expect(pending.slideHeight).toBeGreaterThan(150);

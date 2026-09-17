@@ -1,58 +1,65 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { useLocation, useNavigationType } from 'react-router-dom';
 import { addAppScrollListener, appScrollTo, getAppScrollY } from '../utils/appScroll';
 
-/**
- * Drives scroll behavior across route changes for the public site.
- *
- * Pre-#35, the document was the scroller, and the browser natively restored
- * scroll position on history POP navigations — so this component only had to
- * handle scrolling to top on PUSH. After moving to a container scroller
- * (#app-scroll), the browser no longer restores position on Back/Forward, and
- * users lost their prior list position. This component now tracks scroll
- * position per history entry and restores it manually on POP.
- *
- * Scroll position is keyed on `location.key` (a unique id per history entry)
- * rather than pathname so that visiting the same path twice keeps distinct
- * positions. The map is in-memory only and resets on full reload, which
- * matches browser behavior anyway.
- */
+/** One owner for SPA history restoration, including pages that load asynchronously. */
 export default function ScrollToTop() {
   const location = useLocation();
   const navType = useNavigationType();
   const prevPathnameRef = useRef(location.pathname);
   const positionsRef = useRef<Map<string, number>>(new Map());
+  const restoringRef = useRef(false);
 
-  // Continuously record the current entry's scroll position as the user
-  // scrolls. When they navigate away and later POP back, the most recent
-  // position is already in the map ready to restore.
+  useEffect(() => {
+    const previous = window.history.scrollRestoration;
+    window.history.scrollRestoration = 'manual';
+    return () => { window.history.scrollRestoration = previous; };
+  }, []);
+
   useEffect(() => {
     const key = location.key;
     const onScroll = () => {
-      positionsRef.current.set(key, getAppScrollY());
+      // Modal body locking temporarily resets window.scrollY to zero.
+      if (!restoringRef.current && document.body.style.position !== 'fixed') {
+        positionsRef.current.set(key, getAppScrollY());
+      }
     };
     return addAppScrollListener(onScroll);
   }, [location.key]);
 
-  useEffect(() => {
-    // Only scroll on actual pathname change. Query-param updates (e.g. the
-    // archive search syncing ?q=... via setSearchParams({ replace: true }))
-    // flip navType from POP → REPLACE without changing pathname; we must
-    // NOT scroll in that case or typing into search yanks the page to top.
+  useLayoutEffect(() => {
     const pathnameChanged = prevPathnameRef.current !== location.pathname;
     prevPathnameRef.current = location.pathname;
-
-    if (!pathnameChanged) return;
-
-    if (navType === 'POP') {
-      // Back/forward: restore the saved position for this history entry, or
-      // fall back to top if we never recorded one (e.g. first visit).
-      const saved = positionsRef.current.get(location.key) ?? 0;
-      appScrollTo(saved);
-    } else {
-      // PUSH/REPLACE with a new pathname: start at the top.
-      appScrollTo(0);
+    // Search updates replace the history key without leaving the page.
+    if (!pathnameChanged) {
+      positionsRef.current.set(location.key, getAppScrollY());
+      return;
     }
+
+    const target = navType === 'POP' ? positionsRef.current.get(location.key) ?? 0 : 0;
+    restoringRef.current = true;
+    const stop = () => {
+      restoringRef.current = false;
+      observer.disconnect();
+      clearTimeout(timeout);
+      window.removeEventListener('wheel', stop);
+      window.removeEventListener('touchstart', stop);
+      window.removeEventListener('keydown', stop);
+    };
+    const restore = () => {
+      appScrollTo(target);
+      // A lazy route or archive request may not have supplied enough content
+      // yet. Retry on content growth, not on every animation frame.
+      if (Math.abs(getAppScrollY() - target) <= 1) stop();
+    };
+    const observer = new ResizeObserver(restore);
+    observer.observe(document.body);
+    const timeout = setTimeout(stop, 5000);
+    window.addEventListener('wheel', stop, { passive: true });
+    window.addEventListener('touchstart', stop, { passive: true });
+    window.addEventListener('keydown', stop);
+    restore();
+    return stop;
   }, [location.pathname, location.key, navType]);
 
   return null;

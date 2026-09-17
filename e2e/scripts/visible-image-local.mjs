@@ -120,7 +120,7 @@ try {
       for (const [container, row] of cards) if (!container.isConnected && row.removedAt === undefined) {
         row.removedAt = now; row.removedPhase = state.searchApplied ? 'search' : state.phase;
       }
-      state.samples.push({ at: now, phase: state.phase, visible, blank, elapsed, scrollY: document.querySelector('#app-scroll')?.scrollTop });
+      state.samples.push({ at: now, phase: state.phase, visible, blank, elapsed, scrollY: (document.querySelector('#app-scroll') ?? document.scrollingElement).scrollTop });
       previous = now;
     }, 50);
   });
@@ -128,13 +128,13 @@ try {
   await page.locator('.archive-section .letter-card').first().waitFor({ timeout: 30000 });
   await page.waitForTimeout(500);
   await page.evaluate(() => {
-    const root = document.querySelector('#app-scroll');
+    const root = document.querySelector('#app-scroll') ?? document.scrollingElement;
     root.scrollTop += document.querySelector('.archive-section .letter-card').getBoundingClientRect().top - 150;
   });
   for (const [phase, step, interval] of [['steady', 350, 700], ['fast', 700, 350]]) {
     await page.evaluate(value => { window.__visibleImageLedger.phase = value; }, phase);
     for (let n = 0; n < 8; n++) {
-      await page.evaluate(amount => document.querySelector('#app-scroll').scrollBy({ top: amount, behavior: 'instant' }), step);
+      await page.evaluate(amount => (document.querySelector('#app-scroll') ?? window).scrollBy({ top: amount, behavior: 'instant' }), step);
       await page.waitForTimeout(interval);
     }
   }
@@ -142,7 +142,7 @@ try {
   await page.evaluate(() => {
     window.__visibleImageLedger.phase = 'search';
     window.__visibleImageLedger.searchApplied = true;
-    document.querySelector('#app-scroll').scrollTo({ top: 0, behavior: 'instant' });
+    (document.querySelector('#app-scroll') ?? window).scrollTo({ top: 0, behavior: 'instant' });
   });
   const input = page.locator('.search:not(.search-compact) input[type="search"]');
   const started = Date.now(); // Action start includes Playwright dispatch/autowait, not just native input latency.

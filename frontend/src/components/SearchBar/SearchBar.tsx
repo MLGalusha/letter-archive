@@ -246,6 +246,12 @@ export default function SearchBar({
     if (next) setRefineOpen(false);
   };
 
+  const dismissMobilePanels = () => {
+    if (!isMobile) return;
+    setRefineOpen(false);
+    setSortDropdownOpen(false);
+  };
+
   useEffect(() => {
     if (!sortDropdownOpen) return;
     const close = (e: MouseEvent) => {
@@ -643,6 +649,8 @@ export default function SearchBar({
             aria-label={compactPlaceholder || "Search the archive"}
             enterKeyHint="search"
             value={query}
+            onFocus={dismissMobilePanels}
+            onClick={dismissMobilePanels}
             onChange={(event) => onQueryChange(event.target.value)}
           />
 
@@ -711,6 +719,8 @@ export default function SearchBar({
           aria-label="Search the archive"
           enterKeyHint="search"
           value={query}
+          onFocus={dismissMobilePanels}
+          onClick={dismissMobilePanels}
           onChange={(event) => onQueryChange(event.target.value)}
         />
 

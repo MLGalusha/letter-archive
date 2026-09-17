@@ -953,8 +953,8 @@
   .search-compact-flyout {
     left: 0;
     right: 0;
-    max-height: min(78vh, 34rem);
-    overflow: auto;
+    max-height: none;
+    overflow: visible;
   }
 
   .search-full-flyout {
@@ -963,8 +963,8 @@
     width: 100%;
     max-width: none;
     transform: none;
-    max-height: min(80vh, 34rem);
-    overflow: auto;
+    max-height: none;
+    overflow: visible;
   }
 
   .filter-section-row {
@@ -973,6 +973,31 @@
 
   .filter-section-row .filter-group {
     flex-basis: calc(50% - 0.25rem);
+  }
+
+  /* Expanded choices belong to the page's scroll area on phones. Keeping
+     them in flow avoids a second tiny scroll box or an upward overlay that
+     covers the field the visitor just opened. */
+  .filter-group:has(.filter-choice.is-open) {
+    flex-basis: 100%;
+  }
+
+  .filter-choice-panel {
+    position: static;
+    margin-top: 0.3rem;
+  }
+
+  .filter-choice-options {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .filter-choice-trigger,
+  .filter-choice-option,
+  .filter-input,
+  .search-facet-chip,
+  .clear-filters {
+    min-height: 44px;
   }
 
 }

@@ -33,12 +33,13 @@ Observation: ___
 
 ## 3. Search matches and preview placement
 
-**Status: transcript-first search and accessible preview controls already live.** [PR 98](https://github.com/MLGalusha/letter-archive/pull/98), [PR 102](https://github.com/MLGalusha/letter-archive/pull/102). Older clipping/layout reports [44](https://github.com/MLGalusha/letter-archive/issues/44) and [45](https://github.com/MLGalusha/letter-archive/issues/45) are being rechecked.
+**Status: transcript-first search and accessible preview controls already live.** [PR 98](https://github.com/MLGalusha/letter-archive/pull/98), [PR 102](https://github.com/MLGalusha/letter-archive/pull/102). Ordinary previews stayed inside their panels and cards did not move in Chromium/WebKit checks. [Issue 44](https://github.com/MLGalusha/letter-archive/issues/44) remains open for long exact-phrase truncation; [45](https://github.com/MLGalusha/letter-archive/issues/45)'s old hold interaction was replaced by the explicit preview button. Physical-phone checks remain useful.
 
 - Open [search for “he”](https://voicesthatremain.com/?q=he). Open the magnifying-glass preview on a result; on desktop also try keyboard focus and Escape.
 - Expected: transcript matches take priority. If a particular result has no transcript match, its explanation may match date, sender, recipient, or location. Format, summary, and hook alone must not produce a typed-search match.
 - Expected: the highlighted excerpt stays inside the preview, neighboring cards keep their size/position, and dismissing the preview restores normal interaction. On mobile, use the preview button rather than requiring a long press.
 - The baseline snapshot has three results for “he”; searching “ephemera” has none, while selecting that format as a filter can still find its item. This illustrates the difference between text search and filters.
+- Known pending case: [this long exact phrase](https://voicesthatremain.com/?q=I+did+receive+your+letter+saying+that+you+were+married+and%0A++honestly%2C+I%27ve+tried+so+many+times+to+write+you%2C+but+somehow%2C+the+words%0A++didn%27t+seem+to+come--at&exact=true) returns a match but currently cuts the highlighted phrase at “so many times…”. Expected after issue 44: the complete matched phrase is supplied and readable, scrolling inside the preview if necessary. Open the link directly; it contains transcript line breaks.
 
 Observation: ___
 

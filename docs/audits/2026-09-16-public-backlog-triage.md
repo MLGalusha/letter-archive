@@ -18,6 +18,7 @@ The paired preload audit already records fewer early result requests/cards and m
 
 ## Keyboard/header (#42)
 
+
 The public shell has one fixed scrolling container (`#app-scroll`); the header is fixed outside it. `useHeaderScroll` pins the header visible while an input is focused. In WebKit with an emulated iPhone 13, focusing Home search changed the header from its intentionally hidden scroll state to top 0; `visualViewport.offsetTop` stayed 0. This environment did not open a physical iOS keyboard and cannot reproduce or disprove the reported viewport shift. Leave 42 open pending device evidence; no compensating transform has been introduced.
 
 [VisualViewport documentation](https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport) explains why keyboard-related visual viewport changes can differ from layout dimensions. This supports measuring both viewports; it does not establish the cause on this site.
@@ -25,6 +26,12 @@ The public shell has one fixed scrolling container (`#app-scroll`); the header i
 ## Mobile filters (#12)
 
 The same live WebKit check did reproduce two acceptance failures: focusing the main search input left the filter panel open, and its inner content was 936px tall inside a 529px client area with `overflow-y: auto`. This is actionable independently of the physical-keyboard issue. Work continues in a separate focused change.
+
+## Preview reports (#44 / #45)
+
+An independent check of release `5a54cce0` covered `he`, `Molly`, and `how the kids` at 320px and 390px: 14 cases each in Chromium and WebKit emulation. First highlights were inside the preview and no horizontal overflow or card-box movement was measured. Continuous tap-open sampling (44 Chromium / 23 WebKit frames) also recorded 0px card movement. The old hold-to-preview handlers are absent; an 800ms emulated Chromium hold did not open the application preview. Issue 45 is superseded by the explicit control in PR 102; native browser long-press and physical-device behavior remain separate manual checks.
+
+Issue 44 stays open for a different, reproduced truncation mechanism: a valid 158-character exact transcript phrase returned one match, but only 95 highlighted characters were included before the excerpt ellipsis. Both engines displayed the same cut. The missing text was absent from the API excerpt, so CSS scrolling cannot recover it. The manual checklist links the exact query. These checks do not establish that previews are automatically repositioned when near the viewport bottom.
 
 ## Manual acceptance
 

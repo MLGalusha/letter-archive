@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import './InfiniteCarousel.css';
+import { decideGestureAxis, type GestureAxis } from '../utils/directionalGesture';
 
 const AUTO_INTERVAL = 5000;
 const PAUSE_AFTER_INTERACTION = 30000;
@@ -32,7 +33,8 @@ export default function InfiniteCarousel({
   const [dragOffset, setDragOffset] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
-  const touchRef = useRef<{ x: number; y: number; decided: boolean; isVertical: boolean } | null>(null);
+  const touchRef = useRef<{ x: number; y: number; axis: GestureAxis } | null>(null);
+  const dragOffsetRef = useRef(0);
   const draggedRef = useRef(false);
   const pauseUntilRef = useRef(0);
 
@@ -103,7 +105,9 @@ export default function InfiniteCarousel({
   const startDrag = useCallback((x: number, y: number) => {
     setAnimated(false);
     draggedRef.current = false;
-    touchRef.current = { x, y, decided: false, isVertical: false };
+    dragOffsetRef.current = 0;
+    setDragOffset(0);
+    touchRef.current = { x, y, axis: 'undecided' };
   }, []);
 
   const moveDrag = useCallback((x: number, y: number, preventDefault?: () => void) => {
@@ -111,20 +115,11 @@ export default function InfiniteCarousel({
     if (!start) return;
     const dx = x - start.x;
     const dy = y - start.y;
-    if (!start.decided) {
-      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 8) {
-        start.decided = true;
-        start.isVertical = true;
-        return;
-      }
-      if (Math.abs(dx) > 8) {
-        start.decided = true;
-        start.isVertical = false;
-      }
-    }
-    if (start.isVertical) return;
-    if (Math.abs(dx) > 5) draggedRef.current = true;
+    if (start.axis === 'undecided') start.axis = decideGestureAxis(dx, dy);
+    if (start.axis !== 'horizontal') return;
+    draggedRef.current = true;
     preventDefault?.();
+    dragOffsetRef.current = dx;
     setDragOffset(dx);
   }, []);
 
@@ -134,25 +129,42 @@ export default function InfiniteCarousel({
     setAnimated(true);
     const width = containerRef.current?.offsetWidth || 1;
     const threshold = width * 0.2;
-    if (start && !start.isVertical && Math.abs(dragOffset) > threshold) {
-      if (dragOffset < 0) setPos((p) => p + 1);
+    if (start?.axis === 'horizontal' && Math.abs(dragOffsetRef.current) > threshold) {
+      if (dragOffsetRef.current < 0) setPos((p) => p + 1);
       else setPos((p) => p - 1);
     }
+    dragOffsetRef.current = 0;
     setDragOffset(0);
     pauseAutoScroll();
-  }, [dragOffset, pauseAutoScroll]);
+  }, [pauseAutoScroll]);
+
+  const cancelDrag = useCallback(() => {
+    touchRef.current = null;
+    dragOffsetRef.current = 0;
+    setDragOffset(0);
+    setAnimated(true);
+  }, []);
 
   // ── Native touch/wheel listeners (non-passive for preventDefault) ──
   useEffect(() => {
     const el = trackRef.current;
     if (!el) return;
 
-    const onTouchStart = (e: TouchEvent) => startDrag(e.touches[0].clientX, e.touches[0].clientY);
-    const onTouchMove = (e: TouchEvent) => moveDrag(e.touches[0].clientX, e.touches[0].clientY, () => e.preventDefault());
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) { cancelDrag(); return; }
+      startDrag(e.touches[0].clientX, e.touches[0].clientY);
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 1) { cancelDrag(); return; }
+      moveDrag(e.touches[0].clientX, e.touches[0].clientY, () => {
+        if (e.cancelable) e.preventDefault();
+      });
+    };
     const onTouchEnd = () => endDrag();
 
     let wheelCooldown = false;
     const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey) return; // Trackpad pinch belongs to browser zoom.
       if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
       if (wheelCooldown || Math.abs(e.deltaX) < 30) return;
       e.preventDefault();
@@ -166,14 +178,16 @@ export default function InfiniteCarousel({
     el.addEventListener('touchstart', onTouchStart, { passive: true });
     el.addEventListener('touchmove', onTouchMove, { passive: false });
     el.addEventListener('touchend', onTouchEnd, { passive: true });
+    el.addEventListener('touchcancel', cancelDrag, { passive: true });
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => {
       el.removeEventListener('touchstart', onTouchStart);
       el.removeEventListener('touchmove', onTouchMove);
       el.removeEventListener('touchend', onTouchEnd);
+      el.removeEventListener('touchcancel', cancelDrag);
       el.removeEventListener('wheel', onWheel);
     };
-  }, [startDrag, moveDrag, endDrag, pauseAutoScroll]);
+  }, [startDrag, moveDrag, endDrag, cancelDrag, pauseAutoScroll]);
 
   // ── Mouse drag ──
   const mouseDownRef = useRef(false);
@@ -231,7 +245,7 @@ export default function InfiniteCarousel({
         <div
           ref={trackRef}
           className={`${classPrefix}-track${animated ? ` ${classPrefix}-track--animated` : ''}`}
-          style={{ transform: `translateX(${translateX}%)` }}
+          style={{ transform: `translateX(${translateX}%)`, touchAction: 'pan-y pinch-zoom' }}
           onTransitionEnd={handleTransitionEnd}
           onClickCapture={handleClickCapture}
           onMouseDown={handleMouseDown}

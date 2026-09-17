@@ -1,17 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
+import { decideGestureAxis } from '../utils/directionalGesture';
 
 /**
  * Horizontal swipe gesture hook with direction locking.
  *
  * Features:
- * - Direction locking after 10px of movement (horizontal wins → swipe; vertical wins → scroll)
+ * - Direction locking after 20px of movement (strongly horizontal → swipe; otherwise → scroll)
  * - Rubber-band resistance when swiping toward a non-existent destination
  * - Smooth exit animation: content slides off-screen before navigation
  * - Ignores touches originating inside [data-swipe-ignore] elements (carousels, etc.)
  */
 
-const DIRECTION_LOCK_PX = 20;
-const HORIZONTAL_RATIO = 1.8; // horizontal delta must exceed vertical by this factor
 const TRANSITION_MS = 280;
 
 // Text-like input types where horizontal drag is used for text selection, not swiping.
@@ -91,8 +90,18 @@ export default function useSwipeNavigation({
       return;
     }
 
+    const cancelTouch = () => {
+      touchRef.current.active = false;
+      touchRef.current.decided = false;
+      touchRef.current.isHorizontal = false;
+      offsetRef.current = 0;
+      setOffset(0);
+      setIsSwiping(false);
+      setIsAnimating(false);
+    };
+
     const onTouchStart = (e: TouchEvent) => {
-      if (e.touches.length !== 1) return;
+      if (e.touches.length !== 1) { cancelTouch(); return; }
 
       // If a text input / textarea / contenteditable is focused, horizontal
       // drags are text selection — don't hijack them for page navigation.
@@ -114,17 +123,18 @@ export default function useSwipeNavigation({
 
     const onTouchMove = (e: TouchEvent) => {
       const ts = touchRef.current;
-      if (!ts.active || e.touches.length !== 1) return;
+      if (e.touches.length !== 1) { cancelTouch(); return; }
+      if (!ts.active) return;
 
       const touch = e.touches[0];
       const dx = touch.clientX - ts.startX;
       const dy = touch.clientY - ts.startY;
 
       if (!ts.decided) {
-        if (Math.abs(dx) < DIRECTION_LOCK_PX && Math.abs(dy) < DIRECTION_LOCK_PX) return;
+        const axis = decideGestureAxis(dx, dy);
+        if (axis === 'undecided') return;
         ts.decided = true;
-        // Require a strongly horizontal gesture — dx must exceed dy by HORIZONTAL_RATIO
-        ts.isHorizontal = Math.abs(dx) > Math.abs(dy) * HORIZONTAL_RATIO;
+        ts.isHorizontal = axis === 'horizontal';
         if (ts.isHorizontal) {
           setIsSwiping(true);
           setIsAnimating(false);
@@ -133,7 +143,7 @@ export default function useSwipeNavigation({
 
       if (!ts.isHorizontal) return;
 
-      e.preventDefault();
+      if (e.cancelable) e.preventDefault();
 
       const { onSwipeLeft: sl, onSwipeRight: sr } = callbacksRef.current;
       let adj = dx;
@@ -206,11 +216,13 @@ export default function useSwipeNavigation({
     el.addEventListener('touchstart', onTouchStart, { passive: true });
     el.addEventListener('touchmove', onTouchMove, { passive: false });
     el.addEventListener('touchend', onTouchEnd, { passive: true });
+    el.addEventListener('touchcancel', cancelTouch, { passive: true });
 
     return () => {
       el.removeEventListener('touchstart', onTouchStart);
       el.removeEventListener('touchmove', onTouchMove);
       el.removeEventListener('touchend', onTouchEnd);
+      el.removeEventListener('touchcancel', cancelTouch);
       timersRef.current.forEach(clearTimeout);
       timersRef.current = [];
     };

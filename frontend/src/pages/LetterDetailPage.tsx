@@ -489,7 +489,6 @@ export default function LetterDetailPage() {
                       decoding="async"
                       context="carousel"
                       aspectRatio={img.width && img.height ? img.width / img.height : undefined}
-                      idleUpgrade
                     />
                     {typeLabel && (
                       <span className="scan-slide-type-label">{typeLabel}</span>

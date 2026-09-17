@@ -27,6 +27,7 @@ export default memo(function Header() {
   const headerRef = useRef<HTMLElement>(null);
   const navRef = useRef<HTMLElement>(null);
   const maxHeaderHeightRef = useRef(0);
+  const headerGeometryRef = useRef("");
   const [indicator, setIndicator] = useState<{ left: number; width: number } | null>(null);
 
   // Publish the header's real height to --header-height on the closest site shell
@@ -53,6 +54,12 @@ export default memo(function Header() {
 
     const update = () => {
       if (!atTop) return;
+      // Reset for width/safe-area changes, but not height-only dock animations.
+      const geometry = `${el.clientWidth}:${getComputedStyle(el).paddingTop}`;
+      if (geometry !== headerGeometryRef.current) {
+        headerGeometryRef.current = geometry;
+        maxHeaderHeightRef.current = 0;
+      }
       const h = el.offsetHeight;
       if (h > maxHeaderHeightRef.current) {
         maxHeaderHeightRef.current = h;

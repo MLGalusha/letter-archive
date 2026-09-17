@@ -27,7 +27,7 @@ html, body {
      Header.tsx dynamically overrides this with the real measured height
      once the dock content is present, so pages with a scrubber reserve
      enough space for the fully-expanded header. */
-  --header-height: 5.5rem;
+  --header-height: calc(5.5rem + env(safe-area-inset-top, 0px));
   --bg-dark: #eee2cf;
   --bg: #f5ede1;
   --bg-light: #fffaf2;
@@ -146,7 +146,7 @@ html, body {
   .public-site-shell,
   .public-letter-shell {
     /* Shorter header card on mobile (no brand text). */
-    --header-height: 4.75rem;
+    --header-height: calc(4.75rem + env(safe-area-inset-top, 0px));
   }
 }
 

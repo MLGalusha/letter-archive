@@ -217,11 +217,12 @@ test('@mocked reader renders detail before adjacency and acknowledges pending na
     await expect(page.getByText('First fixture letter', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'View page 1 full size', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Close viewer', exact: true })).toBeVisible();
-    await expect(page.locator('#app-scroll')).toHaveCSS('overflow', 'hidden');
+    await expect(page.locator('body')).toHaveCSS('overflow', 'hidden');
     await page.goForward();
     await expect(page.getByText('Second fixture letter', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Close viewer', exact: true })).toHaveCount(0);
-    await expect(page.locator('#app-scroll')).not.toHaveCSS('overflow', 'hidden');
+    await expect(page.locator('body')).not.toHaveCSS('overflow', 'hidden');
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   } finally {
     releaseDetail();
     releaseAdjacent();

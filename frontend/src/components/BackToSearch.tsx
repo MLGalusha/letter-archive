@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { smoothScrollToY } from "../utils/smoothScrollTo";
 import { addAppScrollListener, getAppScrollY } from "../utils/appScroll";
 import "./BackToSearch.css";
+import useTouchScrollAction from "../hooks/useTouchScrollAction";
 
 interface BackToSearchProps {
   /** When true, the button is shown. Drive this from useStickyDock.stickyDockActive. */
@@ -100,11 +101,9 @@ export default function BackToSearch({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [enableKeyboardShortcut, jumpToSearch]);
 
-  // Floating button is portaled to document.body so it sits OUTSIDE the
-  // #app-scroll container (see #35). The iOS "tap to stop fling" gesture
-  // only consumes touches on the scrolling element and its descendants —
-  // portaling lifts the button out of that subtree entirely, so a single
-  // tap mid-fling both stops the scroll AND triggers the action.
+  const buttonRef = useTouchScrollAction(jumpToSearch);
+
+  // Portal keeps fixed controls outside page swipe transforms.
   const handleClick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.preventDefault();
@@ -115,6 +114,7 @@ export default function BackToSearch({
 
   return createPortal(
     <button
+      ref={buttonRef}
       type="button"
       className={`back-to-search${visible && scrollingUp ? " back-to-search--visible" : ""}`}
       onClick={handleClick}

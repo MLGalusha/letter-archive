@@ -465,10 +465,8 @@ export default function CollectionDetailPage() {
 
       {/* ---- Popup overlay ----
            Portaled to document.body so the backdrop-filter: blur() can see
-           the full viewport (including the header, which is a sibling of
-           #app-scroll). Rendering inline would clip the blur to #app-scroll's
-           bounds, leaving the header strip un-blurred. Same pattern as the
-           letter-detail viewer backdrop. See #41. */}
+           the full viewport and fixed header, outside page transforms and
+           clipping. Same pattern as the letter-detail viewer backdrop. */}
       {popup && createPortal(
         <div className="cd-popup-overlay" onClick={() => setPopup(null)}>
           <div className="cd-popup" onClick={(e) => e.stopPropagation()}>

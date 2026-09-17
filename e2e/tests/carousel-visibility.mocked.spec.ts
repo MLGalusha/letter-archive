@@ -102,7 +102,7 @@ test('@mocked collection autoplay stops outside the app scrollport and resumes w
   const carousel = await openCollection(page);
   await advance(page, 5100);
   await expect(carousel.getByRole('tab', { name: 'Slide 2' })).toHaveAttribute('aria-selected', 'true');
-  await page.locator('#app-scroll').evaluate((node) => { node.scrollTop = node.scrollHeight; });
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   await waitForSignal(page, 'intersecting', false);
   expect(await carousel.evaluate((node) => node.getBoundingClientRect().bottom)).toBeLessThan(0);
   await advance(page, 600);
@@ -169,7 +169,7 @@ test('@mocked bounded carousel activity trace', async ({ page, browserName }, te
   const measurements = [];
   for (const phase of ['visible', 'offscreen']) {
     if (phase === 'offscreen') {
-      await page.locator('#app-scroll').evaluate((node) => { node.scrollTop = node.scrollHeight; });
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
       await page.waitForTimeout(600);
       expect(await carousel.evaluate((node) => node.getBoundingClientRect().bottom)).toBeLessThan(0);
     }
@@ -202,7 +202,7 @@ test('@mocked real-time carousel visibility and live reduced-motion check', asyn
   test.setTimeout(45000);
   const carousel = await openCollection(page, false);
   await expect(carousel.getByRole('tab', { name: 'Slide 2' })).toHaveAttribute('aria-selected', 'true', { timeout: 6500 });
-  await page.locator('#app-scroll').evaluate(node => { node.scrollTop = node.scrollHeight; });
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   await waitForSignal(page, 'intersecting', false, false);
   await trackChanges(page);
   await page.waitForTimeout(6000);

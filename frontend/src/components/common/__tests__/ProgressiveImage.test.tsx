@@ -15,6 +15,10 @@ function mockHookReturn(overrides: Partial<ReturnType<typeof useProgressiveImage
     thumbLoaded: false,
     midLoaded: false,
     fullLoaded: false,
+    fullFailed: false,
+    fullAdmitted: overrides.fullLoaded ?? false,
+    onFullLoad: vi.fn(),
+    onFullError: vi.fn(),
     currentSrc: '',
     naturalWidth: null,
     naturalHeight: null,
@@ -47,7 +51,7 @@ describe('ProgressiveImage', () => {
       expect(container.querySelector<HTMLElement>('.progressive-image')?.style.aspectRatio).toBe('0.75');
       act(() => notify([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver));
       expect(mockUseProgressiveImage).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: true }));
-      expect(screen.getByAltText('Lazy scan')).toHaveAttribute('src', '/full.jpg');
+      expect(screen.getByAltText('Lazy scan')).not.toHaveAttribute('src');
       unmount();
       expect(disconnect).toHaveBeenCalled();
     } finally {
@@ -191,19 +195,14 @@ describe('ProgressiveImage', () => {
     const wrapper = container.querySelector('.progressive-image') as HTMLElement;
     expect(wrapper.style.aspectRatio).toBe('0.75');
   });
-  it('replaces the failed DOM image when its same URL succeeds in the background retry', () => {
-    mockHookReturn();
-    const props = { src: '/images/scan?w=800', thumbSrc: '/images/scan?w=32', alt: 'Recovered scan' };
+  it('shows exhausted background failure only when no useful lower tier exists', () => {
+    mockHookReturn({ fullFailed: true });
+    const props = { src: '/full', thumbSrc: '/thumb', alt: 'Failed scan' };
     const { rerender } = render(<ProgressiveImage {...props} />);
-    const failed = screen.getByAltText('Recovered scan');
-    fireEvent.error(failed);
     expect(screen.getByText('Image unavailable')).toBeVisible();
-    mockHookReturn({ fullLoaded: true, currentSrc: props.src });
+    expect(screen.getByAltText('Failed scan')).not.toHaveAttribute('src');
+    mockHookReturn({ fullFailed: true, thumbLoaded: true, currentSrc: '/thumb' });
     rerender(<ProgressiveImage {...props} />);
-    const recovered = screen.getByAltText('Recovered scan');
-    expect(recovered).not.toBe(failed);
-    expect(recovered).toHaveAttribute('src', props.src);
-    expect(recovered).toBeVisible();
     expect(screen.queryByText('Image unavailable')).not.toBeInTheDocument();
   });
 

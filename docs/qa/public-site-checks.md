@@ -194,3 +194,29 @@ Observation: browser ___; connection ___; feedback visible ___; correct destinat
 - Record the page/scan, browser, first/repeat visit and approximate time until readable. There is no promised fixed loading time; these observations will catch regressions that a local benchmark cannot.
 
 Observation: date ___; browser/device ___; letter/scan ___; first/repeat ___; readable after ___ .
+
+### Progressive image scheduling (#129)
+
+After the release containing #129, try [collection 003](https://voicesthatremain.com/collections/003)
+and [its first letter](https://voicesthatremain.com/letter/be6ef848-a8f9-4696-9097-646d4257562a)
+in Chrome and Safari. A smaller preview should appear while a larger scan loads;
+switching letters should not briefly show the previous scan as fully ready. Opening
+and paging the fullscreen viewer should still work. Try the same image navigation
+in an existing admin review without changing the transcript.
+
+The scheduler now admits the rendered full image after the planned delay, and
+that DOM image owns its request and completion. The useful preview stays until
+the displayed image has loaded, including with no-store or revalidated responses.
+Priority changes update the active request without restarting it. Navigation
+releases unfinished image objects owned by the component. That release is best
+effort: another consumer can still need the same URL, and server work already started may continue.
+
+Developer check: in a fresh Network recording, collection showcase 32/320px
+previews should be admitted before the deferred 640px tier. Cached responses can
+be immediate, and the browser may run an idle callback quickly; this is not a
+promise of a fixed visible delay or fewer total bytes. Controlled Chromium and
+WebKit tests hold idle callbacks and test a 1.2-second delay, including replacement
+of an already-loaded source. They also cover recovery, keeping a useful
+preview when the larger image fails, and exactly one full request while the actual
+DOM response is held under no-store and max-age=0 cache headers. This is
+correctness evidence, not a measured production speedup or a physical iPhone result.

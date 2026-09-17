@@ -42,12 +42,13 @@ afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(
 describe('reader scan requests', () => {
   it('uses bounded, density-aware variants for carousel and original transcript previews', () => {
     render(<ReaderScanImage imageUrl={images[0].imageUrl} alt="Scan preview" />);
-    expect(widths()).toContain('1600');
+    // The rendered scan owns its full request; only lower tiers use new Image.
+    expect(widths()).not.toContain('1600');
     expect(originals()).toEqual([]);
     expect(screen.getByAltText('Scan preview').getAttribute('src')).toContain('w=1600');
     cssWidth = 300;
     act(() => resize([], {} as ResizeObserver));
-    expect(widths()).toContain('800');
+    expect(screen.getByAltText('Scan preview').getAttribute('src')).toContain('w=800');
     expect(originals()).toEqual([]);
   });
 

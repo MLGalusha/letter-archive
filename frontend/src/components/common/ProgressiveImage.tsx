@@ -1,4 +1,4 @@
-import { forwardRef, useState, useEffect, useRef, type CSSProperties, type RefObject } from 'react';
+import { forwardRef, useState, useEffect, useLayoutEffect, useCallback, useRef, type CSSProperties, type RefObject } from 'react';
 import { useProgressiveImage } from '../../hooks/useProgressiveImage';
 import { useImageRetry } from '../../hooks/useImageRetry';
 import './ProgressiveImage.css';
@@ -73,7 +73,7 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
       return () => observer.disconnect();
     }, [enabled, containerRef]);
 
-    const { thumbLoaded, midLoaded, fullLoaded, currentSrc, naturalWidth, naturalHeight } = useProgressiveImage({
+    const { thumbLoaded, midLoaded, fullLoaded, fullFailed, fullAdmitted, onFullLoad, onFullError, naturalWidth, naturalHeight } = useProgressiveImage({
       thumbSrc,
       midSrc,
       fullSrc: src,
@@ -81,35 +81,51 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
       enabled,
       context,
       fullDelay,
+      fetchPriority,
+      fullLoadMode: 'dom',
     });
 
-    const [imgError, setImgError] = useState(false);
-
-
-    useEffect(() => {
-      setImgError(false);
-    }, [src, currentSrc, fullLoaded]);
-
-    // Best non-full source for the placeholder layer
+    // The preview and full DOM image have independent recovery budgets. A
+    // pending/full failure must not hide a useful preview or cancel its retry.
     const showPlaceholder = !fullLoaded;
     const placeholderSrc = midLoaded && midSrc ? midSrc : thumbLoaded ? thumbSrc : '';
     const isThumbOnly = !midLoaded || !midSrc;
-    const displayedSrc = currentSrc || src;
-    const displayedRetry = useImageRetry(fullLoaded ? src : placeholderSrc || src);
-    const mainOwnsDisplay = fullLoaded || !placeholderSrc;
-    const handleVisibleError = () => {
-      setImgError(true);
-      // Before any tier is loaded, the background loader alone owns retries.
-      if (fullLoaded || placeholderSrc) displayedRetry.onError();
-    };
-    const handleVisibleLoad = () => { setImgError(false); displayedRetry.onLoad(); };
+    const placeholderRetry = useImageRetry(placeholderSrc);
+    const fullRetry = useImageRetry(src);
+    const mainRef = useRef<HTMLImageElement>(null);
+    const attachMain = useCallback((image: HTMLImageElement | null) => {
+      mainRef.current = image;
+      if (typeof ref === 'function') return ref(image);
+      if (ref) ref.current = image;
+    }, [ref]);
+    useLayoutEffect(() => {
+      const image = mainRef.current;
+      return () => {
+        // Release this DOM owner's pending request without touching another
+        // consumer of the URL. Cancellation remains browser-dependent.
+        if (image && !image.complete) image.removeAttribute('src');
+      };
+    }, [src, fullRetry.attempt]);
+    useLayoutEffect(() => {
+      const image = mainRef.current;
+      // A retained/cached DOM node may already have fired load. Its own complete
+      // state is authoritative; background readiness never substitutes for it.
+      if (fullAdmitted && !fullLoaded && !fullRetry.failed && image?.complete && image.naturalWidth > 0) {
+        onFullLoad(image);
+      }
+    }, [fullAdmitted, fullLoaded, fullRetry.failed, onFullLoad]);
+    const unavailable = fullRetry.failed
+      ? !placeholderSrc || placeholderRetry.failed
+      : !fullLoaded && (placeholderSrc ? placeholderRetry.failed : fullFailed);
 
     // Reserve scan space even when legacy records lack dimensions and loading is deferred.
     const resolvedAspectRatio = knownAspectRatio
       ?? (naturalWidth && naturalHeight ? naturalWidth / naturalHeight : 3 / 4);
 
     // Fire onLoad when best quality is ready
-    if (fullLoaded && onLoad) onLoad();
+    useEffect(() => {
+      if (fullLoaded) onLoad?.();
+    }, [fullLoaded, src, onLoad]);
 
     const containerStyle: CSSProperties = {
       ...style,
@@ -120,10 +136,10 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
       <div ref={containerRef} className={`progressive-image ${className ?? ''}`} style={containerStyle}>
         {showPlaceholder && placeholderSrc && (
           <img
-            key={`placeholder:${placeholderSrc}:${displayedRetry.attempt}`}
+            key={`placeholder:${placeholderSrc}:${placeholderRetry.attempt}`}
             src={placeholderSrc}
-            onError={handleVisibleError}
-            onLoad={handleVisibleLoad}
+            onError={placeholderRetry.onError}
+            onLoad={placeholderRetry.onLoad}
             alt=""
             className={`progressive-image__thumb ${imgClassName ?? ''}`}
             style={{
@@ -136,22 +152,22 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
             aria-hidden
           />
         )}
+        {/* Admission starts the only full request; its DOM load owns readiness. */}
         <img
-          key={`main:${currentSrc}:${displayedRetry.attempt}`}
-          ref={ref}
-          src={enabled ? displayedSrc : undefined}
+          key={`main:${src}:${fullRetry.attempt}`}
+          ref={attachMain}
+          src={enabled && fullAdmitted ? src : undefined}
           alt={alt}
           className={`progressive-image__full ${imgClassName ?? ''} ${fullLoaded ? '' : 'progressive-image__full--loading'}`}
-          style={{ ...imgStyle, objectFit, ...(imgError ? { visibility: 'hidden' as const } : {}) }}
+          style={{ ...imgStyle, objectFit, ...(fullRetry.failed ? { visibility: 'hidden' as const } : {}) }}
           loading={loading}
           decoding={decoding}
           draggable={draggable}
           fetchPriority={fetchPriority}
-          // A hidden main layer must not cancel recovery of the visible placeholder.
-          onError={() => { if (mainOwnsDisplay) handleVisibleError(); }}
-          onLoad={() => { if (mainOwnsDisplay) handleVisibleLoad(); }}
+          onError={() => { onFullError(); fullRetry.onError(); }}
+          onLoad={(event) => { fullRetry.onLoad(); onFullLoad(event.currentTarget); }}
         />
-        {imgError && (
+        {unavailable && (
           <div style={{
             position: 'absolute', inset: 0,
             background: 'linear-gradient(160deg, rgba(250,245,237,0.98), rgba(227,216,201,0.88))',

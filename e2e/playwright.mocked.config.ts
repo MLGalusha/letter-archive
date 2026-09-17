@@ -34,7 +34,7 @@ export default defineConfig({
     },
     {
       name: 'public-webkit',
-      testMatch: 'public-archive-history.mocked.spec.ts',
+      testMatch: ['public-archive-history.mocked.spec.ts', 'progressive-image-scheduling.mocked.spec.ts'],
       use: { ...devices['Desktop Safari'] },
     },
   ],

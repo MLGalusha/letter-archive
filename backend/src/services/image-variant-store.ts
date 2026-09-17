@@ -3,7 +3,7 @@ import { mkdir, open } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { env } from '../config/env.js';
 import { getAbsoluteStoragePath } from './storage.js';
-import type { ImageVariantFormat } from './image-variant.js';
+import { isSavedPreviewWidth, type ImageVariantFormat } from './image-variant.js';
 
 export const MAX_SAVED_PREVIEW_BYTES = 2 * 1024 * 1024;
 const MAGIC = Buffer.from('LAPRV001');
@@ -29,7 +29,7 @@ export class ImageVariantStore {
 
   private location(identity: string, width: number, format: ImageVariantFormat): string | null {
     // Other widths still work through the original resize path without disk growth.
-    if (width !== 480 || !['avif', 'webp', 'jpeg'].includes(format) || !/^[a-f0-9]{64}$/.test(identity)) return null;
+    if (!isSavedPreviewWidth(width) || !['avif', 'webp', 'jpeg'].includes(format) || !/^[a-f0-9]{64}$/.test(identity)) return null;
     const root = this.root ?? getAbsoluteStoragePath(env.STORAGE_DIR);
     return join(root, 'image-previews-v1', identity.slice(0, 2), `${identity}.preview`);
   }

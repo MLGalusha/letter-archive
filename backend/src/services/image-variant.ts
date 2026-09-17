@@ -22,3 +22,8 @@ export function imageVariantIdentity(source: {
     Object.entries(sharp.versions ?? {}).sort(([a], [b]) => a.localeCompare(b)),
   ])).digest('hex');
 }
+
+/** Persist only the card/reader renditions used by the public frontend. */
+export function isSavedPreviewWidth(width: number): boolean {
+  return width === 480 || width === 800 || width === 1200 || width === 1600;
+}

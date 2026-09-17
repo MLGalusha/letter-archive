@@ -990,14 +990,14 @@ describe('images route integration', () => {
     });
   });
 
-  describe('saved480px previews', () => {
+  describe.each([480, 800, 1200, 1600])('saved %dpx previews', (savedWidth) => {
     let sequence = 0;
     let page: { id: string; checksumSha256: string; storagePath: string; originalFilename: string; letter: ReturnType<typeof catalogueLetter> };
-    const request = (width = '480', headers: Record<string, string> = {}) => invokeRouter(imagesRouter, {
+    const request = (width = String(savedWidth), headers: Record<string, string> = {}) => invokeRouter(imagesRouter, {
       method: 'GET', url: `/images/${page.id}`, query: { w: width }, headers,
     });
     beforeEach(() => {
-      page = { id: `durable-${++sequence}`, checksumSha256: 'original', storagePath: `durable-${sequence}.jpg`,
+      page = { id: `durable-${savedWidth}-${++sequence}`, checksumSha256: 'original', storagePath: `durable-${savedWidth}-${sequence}.jpg`,
         originalFilename: 'image.jpg', letter: catalogueLetter() };
       findFirstMock.mockResolvedValue(page);
       getAbsoluteStoragePathMock.mockImplementation((path) => `/abs/storage/${path}`);
@@ -1026,13 +1026,13 @@ describe('images route integration', () => {
         const writer = new RealStore(root);
         const pages = Array.from({ length: 24 }, (_, i) => ({ ...page, id: `${page.id}-${i}`, storagePath: `${page.id}-${i}.jpg` }));
         for (const item of pages) {
-          const key = imageVariantIdentity({ pageId: item.id, ...item, size: 4096, mtimeMs: 100 }, 480, 'jpeg');
-          expect(await writer.write(key, 480, 'jpeg', Buffer.from(`saved ${item.id}`))).toBe('saved');
+          const key = imageVariantIdentity({ pageId: item.id, ...item, size: 4096, mtimeMs: 100 }, savedWidth, 'jpeg');
+          expect(await writer.write(key, savedWidth, 'jpeg', Buffer.from(`saved ${item.id}`))).toBe('saved');
         }
         findFirstMock.mockImplementation(({ where }) => pages.find((item) => item.id === where.right));
         const router = createImagesRouter(new ImageTransformScheduler({ concurrency: 2, maxQueued: 32, maxWaiters: 64 }), new RealStore(root));
         const responses = await Promise.all(pages.map((item) => invokeRouter(router, {
-          method: 'GET', url: `/images/${item.id}`, query: { w: '480' },
+          method: 'GET', url: `/images/${item.id}`, query: { w: String(savedWidth) },
         })));
         expect(responses.every((result) => result.statusCode === 200)).toBe(true);
         expect(responses.map((result) => result.body)).toEqual(pages.map((item) => Buffer.from(`saved ${item.id}`)));
@@ -1049,7 +1049,7 @@ describe('images route integration', () => {
       expect(findFirstMock).toHaveBeenCalledTimes(3);
     });
 
-    it.each(['32', '479', '640', '1600'])('does not persist unsupported width%s', async (width) => {
+    it.each(['32', '479', '640', '1000'])('does not persist unsupported width%s', async (width) => {
       expect((await request(width)).statusCode).toBe(200);
       expect(sharpMock).toHaveBeenCalledOnce();
       expect(previewReadMock).not.toHaveBeenCalled();
@@ -1059,7 +1059,7 @@ describe('images route integration', () => {
     it('does not read or save hidden admin previews', async () => {
       page.letter = catalogueLetter({ visibility: 'HIDDEN' });
       verifyImageSessionTokenMock.mockReturnValue({ userId: 'admin-1', purpose: 'image-session' });
-      const response = await request('480', { cookie: 'letter_archive_image_session=valid-image-session' });
+      const response = await request(String(savedWidth), { cookie: 'letter_archive_image_session=valid-image-session' });
       expect(response.statusCode).toBe(200);
       expect(response.headers['cache-control']).toBe('private, no-store');
       expect(previewReadMock).not.toHaveBeenCalled();

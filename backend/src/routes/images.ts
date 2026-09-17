@@ -17,7 +17,7 @@ import { getAbsoluteStoragePath } from '../services/storage.js';
 import { logIfSlow, TIMING_THRESHOLDS } from '../utils/logger.js';
 import { isSensitiveQueryKey } from '../utils/log-redaction.js';
 import { ImageTransformScheduler, ImageTransformOverloadError, ImageTransformAbortedError } from '../services/image-transform-scheduler.js';
-import { imageVariantIdentity } from '../services/image-variant.js';
+import { imageVariantIdentity, isSavedPreviewWidth } from '../services/image-variant.js';
 import { ImageVariantStore } from '../services/image-variant-store.js';
 
 // In-memory LRU cache for resized images (avoids re-encoding on repeated requests)
@@ -176,7 +176,7 @@ export function createImagesRouter(
         metrics.cache = 'miss';
         let variant: { buffer: Buffer; contentType: string } | undefined;
         let savedHit = false;
-        if (canUseSharedCache && requestedWidth === 480) {
+        if (canUseSharedCache && isSavedPreviewWidth(requestedWidth)) {
           const readStarted = performance.now();
           const saved = await previewStore.read(cacheKey, requestedWidth, format);
           metrics.previewReadMs = performance.now() - readStarted;
@@ -242,7 +242,7 @@ export function createImagesRouter(
         };
         let current = await recheck();
         if (!current) return;
-        if (!savedHit && canUseSharedCache && current.isPublicCatalogueImage && requestedWidth === 480) {
+        if (!savedHit && canUseSharedCache && current.isPublicCatalogueImage && isSavedPreviewWidth(requestedWidth)) {
           const writeStarted = performance.now();
           metrics.previewWrite = await previewStore.write(cacheKey, requestedWidth, format, variant.buffer);
           metrics.previewWriteMs = performance.now() - writeStarted;

@@ -177,24 +177,29 @@ test('@mocked synthetic swipe takeover, zoomed pan and pinch keep their gesture 
 });
 
 test('@mocked a touch takes over the visible zoom before its target arrives', async ({ page }) => {
-  await openReader(page);
-  await expect(page.locator('.viewer-image')).toHaveCSS('opacity', '1');
-  // Freeze JS cleanup timers, then seek the real CSS transition explicitly.
-  // Sampling a naturally running 150ms transition races a busy CI renderer.
   const now = new Date();
   await page.clock.install({ time: now });
-  await page.clock.pauseAt(now);
+  await openReader(page);
+  await expect(page.locator('.viewer-image')).toHaveCSS('opacity', '1');
+  // Playwright controls JS timers, not the compositor's CSS clock. Hold the
+  // real transition open beyond this test's deadline, then seek its midpoint.
+  // This is a controlled timeline; application timing and assertions are unchanged.
+  await page.addStyleTag({ content: '.viewer-transform.animating { transition-duration: 60s !important; }' });
+  await page.clock.pauseAt(new Date(now.getTime() + 60_000));
   await page.evaluate(() => {
     const surface = document.querySelector('.viewer-transform')!;
     (window as typeof window & { zoomPaused: Promise<void> }).zoomPaused = new Promise<void>((resolve, reject) => {
-      surface.addEventListener('transitionrun', () => {
+      const capture = (event: TransitionEvent) => {
+        if (event.target !== surface || event.propertyName !== 'transform') return;
+        surface.removeEventListener('transitionrun', capture);
         const animation = surface.getAnimations().find(animation =>
-          animation instanceof CSSTransition && animation.transitionProperty === 'transform');
+          (animation as CSSTransition).transitionProperty === 'transform');
         if (!animation) { reject(new Error('Transform transition is missing')); return; }
         animation.pause();
         animation.currentTime = Number(animation.effect!.getTiming().duration) / 2;
         resolve();
-      }, { once: true });
+      };
+      surface.addEventListener('transitionrun', capture);
     });
     // Establish the initial computed style before starting a CSS transition.
     surface.getBoundingClientRect();

@@ -42,18 +42,35 @@ represented in these desktop screenshots.
 
 A manual wheel probe caught inherited fullscreen scroll containment trapping
 vertical reading over inline thumbnails (scrollY stayed 0 after a 350px wheel).
-The inline variant now uses normal scroll chaining and hides vertical overflow;
-only its horizontal axis is a user scroll surface. The new
-regression failed before that correction. Thirteen of fourteen targeted checks
-passed initially; desktop WebKit closed during newContext before one test ran.
-That one check passed in an isolated worker. This is recorded as environment
-recovery, not a repaired application failure or evidence of zero flakiness.
+The inline variant overrides vertical overscroll containment. That regression
+failed before the override and passes in Chromium and macOS WebKit.
 
-CI run 35376909819 exposed vertical wheel trapping in Linux WebKit at all three
-widths despite the earlier per-axis override passing on macOS. The inline strip
-now removes fullscreen containment entirely. The wheel assertion remains intact;
-geometry is logged to distinguish overflow from document readiness. Local
-Chromium/WebKit repetitions passed 24/24 without retries after this adjustment.
+CI runs 35376909819 and 35379185545 failed the native wheel assertion in Linux
+WebKit at all three widths. Isolated reproduction in the official Playwright
+1.58.2 Linux image showed this also affects a bare 3000px-tall page: with
+`html { overscroll-behavior: none }`, a 300px wheel leaves scrollY at 0; removing
+that rule yields scrollY=300. The body-only rule also yields 300. The same real
+reader remains stuck after reload, despite no modal, no inert elements, restored
+styles and uncancelled wheel events. Changing thumbnail containment did not help.
+This is a bundled Linux WebKit limitation, not evidence of a viewer cleanup bug.
+The trial thumbnail CSS changes were reverted; production root behavior remains.
+
+The unchanged wheel assertion now lives in scan-reading-scroll.mocked.spec.ts:
+Linux Chromium still runs it, and a required macOS WebKit CI job runs it without
+retries. Production release depends on this job. Other reader WebKit coverage
+continues on Linux, including all compact paging and position assertions. This
+keeps native scroll coverage on the platform closest to Safari, as recommended
+by [Playwright browser documentation](https://playwright.dev/docs/browsers#webkit).
+Local checks passed 24/24 without retries during isolation. A separate earlier
+macOS WebKit newContext process failure recovered on an isolated rerun; this is
+recorded as environment recovery, not an application fix.
+
 The paused-swipe measurement now waits for the rendered drag offset before its
 intentional pause, instead of assuming the animation frame ran within 120ms.
-Linux CI must pass before release; these local repetitions do not replace it.
+That adjustment passed both subsequent Linux runs without a retry.
+
+Review found that the shared thumbnail error label inherited near-white text on
+the inline near-white surface. The inline variant now uses the public muted-text
+token (#6d5f51), giving 5.93:1 contrast against #fffaf2 instead of 1:1. An aborted
+thumbnail request confirmed the real error message and computed colors in the
+browser; the fullscreen error styling remains unchanged.

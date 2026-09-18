@@ -37,9 +37,8 @@
 /* Inline readers always browse horizontally, even beside a desktop transcript. */
 .viewer-page-drawer--inline {
   flex-direction: row;
-  overflow-y: hidden;
   /* Inline browsing must still hand vertical movement to the letter page. */
-  overscroll-behavior: auto;
+  overscroll-behavior-y: auto;
   margin-top: 8px;
   max-width: 100%;
   scrollbar-color: var(--border) transparent;
@@ -57,4 +56,7 @@
 .viewer-page-drawer--inline .viewer-page-choice .preview-image {
   height: 72px;
   background: var(--bg-light);
+}
+.viewer-page-drawer--inline .preview-image__error {
+  color: var(--text-muted);
 }

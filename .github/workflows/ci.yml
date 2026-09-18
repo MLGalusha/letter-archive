@@ -132,6 +132,44 @@ jobs:
         if: always() && steps.playwright_mocked_report.outcome == 'failure'
         run: echo "::warning::Diagnostic upload failed; test results remain in this job's logs."
 
+  e2e-webkit-scroll:
+    name: WebKit Native Scrolling
+    runs-on: macos-15
+    needs: quality
+    timeout-minutes: 10
+    env:
+      CI: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Setup Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            e2e/package-lock.json
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+      - name: Install e2e deps
+        working-directory: e2e
+        run: npm ci
+      - name: Install WebKit
+        working-directory: e2e
+        run: npx playwright install webkit
+      - name: Verify native WebKit scrolling
+        working-directory: e2e
+        run: npx playwright test --config=playwright.webkit-scroll.config.ts
+      - name: Upload WebKit scrolling report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-webkit-scroll-report
+          path: e2e/playwright-report
+          if-no-files-found: ignore
+
   e2e-smoke:
     name: E2E Smoke
     runs-on: ubuntu-latest
@@ -431,6 +469,7 @@ jobs:
       - quality
       - e2e-mocked
       - e2e-smoke
+      - e2e-webkit-scroll
     if: >-
       github.event_name == 'push'
       && github.ref == 'refs/heads/main'

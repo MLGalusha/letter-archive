@@ -134,7 +134,7 @@ describe('fullscreen fit-view swipes', () => {
     touch(target, 'touchStart', [[300, 300]]); touch(target, 'touchMove', [[100, 300]]); frame();
     touch(target, 'touchCancel', []); touch(target, 'touchEnd', []); frame();
     expect(screen.getByText('1 / 3')).toBeInTheDocument();
-    swipe(target); fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    swipe(target); fireEvent.click(screen.getByRole('button', { name: 'Go to scan 2: letter' }));
     finish(carriage); act(() => vi.advanceTimersByTime(500));
     expect(screen.getByText('2 / 3')).toBeInTheDocument(); expect(carriage).toHaveStyle({ transition: 'none' });
   });
@@ -214,15 +214,12 @@ describe('fullscreen fit-view swipes', () => {
   it('selects a drawer page at Fit while retaining the drawer and its selected state', () => {
     setup();
     fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Pages' }));
     const choice = screen.getByRole('button', { name: 'Go to scan 3: letter' });
     fireEvent.click(choice);
     expect(screen.getByText('3 / 3')).toBeInTheDocument();
     expect(screen.getByText('100%')).toBeInTheDocument();
     expect(choice).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('button', { name: 'Pages' })).toHaveAttribute('aria-expanded', 'true');
-    fireEvent.click(screen.getByRole('button', { name: 'Pages' }));
-    expect(screen.queryByRole('region', { name: 'Scan pages' })).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Scan pages' })).toBeInTheDocument();
   });
   it('keeps the transform surface while a higher resolution replaces the image', () => {
     const { target, container, image } = setup();
@@ -247,7 +244,7 @@ describe('fullscreen fit-view swipes', () => {
     const view = render(<LetterViewer images={images} letterId="same" variant="lightbox" />);
     fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
     act(() => vi.advanceTimersByTime(500));
-    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Go to scan 2: letter' }));
     view.unmount();
     expect(localStorage.getItem('letterViewerState')).toBe(saved);
   });

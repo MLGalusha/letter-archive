@@ -113,7 +113,6 @@ const LetterViewer = memo(function LetterViewer({
   onClose,
 }: LetterViewerProps) {
   const isLightbox = variant === "lightbox";
-  const [pagesOpen, setPagesOpen] = useState(false);
   const drawerId = useId();
   const zoomTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const zoomAnimating = useRef(false);
@@ -861,9 +860,7 @@ const LetterViewer = memo(function LetterViewer({
         <span className="viewer-mobile-zoom" aria-label="Zoom level">{Math.round(scale * 100)}%</span>
         <button type="button" className="viewer-close" tabIndex={0} onClick={onClose} aria-label="Close viewer"><Icon name="close" size={24} /></button>
       </div>}
-      <div className={`viewer-workspace${isLightbox && pagesOpen ? ' viewer-workspace--pages' : ''}`}>
-      {isLightbox && pagesOpen && <ViewerPageDrawer id={drawerId} images={displayImages}
-        selected={currentImageIndex} onSelect={selectImage} />}
+      <div className="viewer-workspace">
       <div
         ref={imageContainerRef}
         className={`viewer-container ${isDragging ? "dragging" : ""}`}
@@ -997,25 +994,17 @@ const LetterViewer = memo(function LetterViewer({
         )}
       </div>
 
+      {isLightbox && <ViewerPageDrawer id={drawerId} images={displayImages}
+        selected={currentImageIndex} onSelect={selectImage} />}
       </div>
+      {isLightbox && <span className="viewer-page-counter sr-only" role="status" aria-live="polite" aria-atomic="true" aria-label="Scan page">{currentImageIndex + 1} / {displayImages.length}</span>}
       {isLightbox && <div className="viewer-toolbar" aria-label="Scan controls">
-        <div className="viewer-page-controls">
-          <button type="button" tabIndex={0} className="viewer-nav viewer-nav--prev" disabled={displayImages.length < 2}
-            onClick={prevImage} aria-label="Previous page"><Icon name="arrow-left" size={20} /></button>
-          <span className="viewer-page-counter" role="status" aria-live="polite" aria-atomic="true" aria-label="Scan page">
-            {currentImageIndex + 1} / {displayImages.length}
-          </span>
-          <button type="button" tabIndex={0} className="viewer-nav viewer-nav--next" disabled={displayImages.length < 2}
-            onClick={nextImage} aria-label="Next page"><Icon name="arrow-right" size={20} /></button>
-        </div>
         <div className="viewer-zoom-controls">
           <button type="button" tabIndex={0} onClick={() => applyZoom(scaleRef.current / 1.4, true)} disabled={scale <= MIN_SCALE} aria-label="Zoom out">−</button>
           <span className="viewer-zoom-badge" aria-label="Zoom level">{Math.round(scale * 100)}%</span>
           <button type="button" tabIndex={0} onClick={() => applyZoom(scaleRef.current * 1.4, true)} disabled={scale >= MAX_SCALE} aria-label="Zoom in">+</button>
           <button type="button" tabIndex={0} onClick={() => applyZoom(1, true)} aria-label="Fit scan">Fit</button>
         </div>
-        {displayImages.length > 1 && <button className="viewer-pages-toggle" type="button" tabIndex={0} aria-expanded={pagesOpen} aria-controls={drawerId}
-          onClick={() => { cancelSwipe(); setPagesOpen(open => !open); }}>Pages</button>}
       </div>}
 
     </div>

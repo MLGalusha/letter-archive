@@ -10,13 +10,11 @@ for (const width of [320, 390, 1440]) test(`@mocked 24 scan previews stay compac
   await page.getByRole('button', { name: 'Close viewer' }).click();
   const nav = page.locator('.scan-navigation');
   await expect(nav.getByRole('status')).toHaveText('1 / 24');
-  expect((await nav.boundingBox())!.height).toBeLessThanOrEqual(48);
-  await expect(page.getByRole('region', { name: 'Scan pages' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Pages', exact: true }).click();
+  expect((await nav.boundingBox())!.height).toBeLessThanOrEqual(100);
   const drawer = page.getByRole('region', { name: 'Scan pages' });
   await expect(drawer.getByRole('button')).toHaveCount(24);
-  // Labels are accessible names; the visual drawer contains only previews.
-  expect(await drawer.locator('button').evaluateAll(buttons => buttons.every(el => el.textContent!.trim() === ''))).toBe(true);
+  // Page numbers occupy thumbnail notches; full accessible names remain.
+  expect(await drawer.locator('button').evaluateAll(buttons => buttons.every((el, index) => el.textContent!.trim() === String(index + 1)))).toBe(true);
   expect(await drawer.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const results = await page.evaluate(async () => {
@@ -38,10 +36,9 @@ for (const width of [320, 390, 1440]) test(`@mocked 24 scan previews stay compac
     expect(result.centerError).toBeLessThan(1);
     expect(result.counter).toBe(`${result.index + 1} / 24`);
   }
-  await page.getByRole('button', { name: 'Next scan', exact: true }).click();
+  await drawer.getByRole('button', { name: 'Go to scan 1: letter', exact: true }).evaluate(el => el.click());
   await expect(nav.getByRole('status')).toHaveText('1 / 24');
-  await page.getByRole('button', { name: 'Pages', exact: true }).click();
-  await expect(drawer).toHaveCount(0);
+  await expect(drawer).toBeVisible();
 });
 
 for (const width of [390, 1440]) for (const reducedMotion of ['reduce', 'no-preference'] as const) {
@@ -63,8 +60,7 @@ for (const width of [390, 1440]) for (const reducedMotion of ['reduce', 'no-pref
       return route.fulfill({ status: 404, json: {} });
     });
     await page.goto('/letter/paging');
-    await page.getByRole('button', { name: 'Pages', exact: true }).click();
-    const dot = page.getByRole('button', { name: 'Go to scan 2: letter', exact: true });
+      const dot = page.getByRole('button', { name: 'Go to scan 2: letter', exact: true });
     await expect(dot).toBeVisible();
     await page.evaluate(() => document.fonts.ready);
     await dot.evaluate(el => window.scrollTo({ top: window.scrollY + el.getBoundingClientRect().top - 260, behavior: 'instant' }));
@@ -82,3 +78,35 @@ for (const width of [390, 1440]) for (const reducedMotion of ['reduce', 'no-pref
     expect(await page.evaluate(() => window.scrollY)).toBeCloseTo(y, 0);
   });
 }
+
+for (const mode of ['inline', 'fullscreen']) test(`@mocked centered ${mode} filmstrip selects settled scroll and centers endpoints after resize`, async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openReader(page, Array.from({ length: 24 }, (_, i) => ({
+    id: `scan-${i}`, type: 'letter', pageNumber: i + 1, imageUrl: `/images/${i}.svg`, width: 600, height: 800,
+  })));
+  if (mode === 'inline') await page.getByRole('button', { name: 'Close viewer' }).click();
+  const strip = mode === 'inline' ? page.locator('.viewer-page-drawer--inline') : page.getByRole('dialog').locator('.viewer-page-drawer');
+  const error = () => strip.evaluate(el => {
+    const box = el.getBoundingClientRect(), selected = el.querySelector('[aria-current="page"]')!.getBoundingClientRect();
+    return Math.abs(selected.left + selected.width / 2 - box.left - box.width / 2);
+  });
+  await expect.poll(error).toBeLessThan(1);
+  const first = strip.getByRole('button').first();
+  await first.focus(); await first.press('End');
+  await expect(strip.getByRole('button').last()).toHaveAttribute('aria-current', 'page');
+  await expect.poll(error).toBeLessThan(1);
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expect.poll(error).toBeLessThan(1);
+  await strip.getByRole('button').last().press('Home');
+  await expect(first).toHaveAttribute('aria-current', 'page');
+  await expect.poll(error).toBeLessThan(1);
+  await strip.scrollIntoViewIfNeeded();
+  await strip.hover(); await page.mouse.wheel(200, 0);
+  await expect(first).not.toHaveAttribute('aria-current', 'page');
+  await expect.poll(error).toBeLessThan(1);
+  const selected = strip.locator('[aria-current="page"]');
+  const notch = await selected.locator('.viewer-page-notch').boundingBox();
+  const thumb = (await selected.boundingBox())!;
+  expect(notch!.y + notch!.height).toBeLessThanOrEqual(thumb.y + thumb.height + 1);
+  expect(notch!.y).toBeGreaterThan(thumb.y);
+});

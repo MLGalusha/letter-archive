@@ -368,7 +368,7 @@
 .letter-viewer--lightbox .viewer-workspace {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
   min-width: 0;
   min-height: 0;
   padding: 8px;
@@ -462,24 +462,10 @@
 .viewer-toolbar button[aria-expanded="true"] { border-color: #9dd4d1; background: #255356; }
 .viewer-page-counter { min-width: 5.5ch; text-align: center; font-size: .9rem; font-variant-numeric: tabular-nums; }
 .viewer-zoom-badge { min-width: 6ch; text-align: center; font-size: .85rem; font-variant-numeric: tabular-nums; }
-.letter-viewer--lightbox .viewer-workspace--pages { grid-template-columns: 100px minmax(0, 1fr); }
-.viewer-workspace--pages .viewer-container { grid-column: 2; }
-@media (max-width: 759px) {
-  .viewer-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
-  .viewer-page-controls { grid-column: 1 / -1; }
-  .viewer-zoom-controls { justify-content: start; }
-  .viewer-toolbar .viewer-pages-toggle { padding-inline: 12px; }
-  .letter-viewer--lightbox .viewer-workspace--pages {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) auto;
-    gap: 6px;
-  }
-  .viewer-workspace--pages .viewer-container { grid-column: 1; }
-}
 /* Phones use direct pinch/double-tap zoom. Keep navigation in one bottom row
    and the readout beside Close; mouse/keyboard layouts retain explicit zoom. */
 @media (pointer: coarse) and (max-width: 1023px) {
-  .viewer-toolbar { display: flex; flex-wrap: nowrap; justify-content: space-between; gap: 6px; }
+  .viewer-toolbar { display: none; }
   .viewer-page-controls, .viewer-zoom-controls { flex: none; }
   .viewer-page-counter { white-space: nowrap; }
   .viewer-zoom-controls { display: none; }
@@ -489,3 +475,5 @@
   .letter-viewer .animating { transition: none !important; }
   .viewer-toolbar button { transition: none; }
 }
+
+.letter-viewer--lightbox .viewer-page-drawer { grid-row: 2; grid-column: 1; }

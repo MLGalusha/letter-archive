@@ -19,8 +19,10 @@
   overflow-wrap: anywhere;
 }
 .letter-hero-section {
+  grid-column: 1 / -1;
+  grid-row: 1;
   max-width: 42rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 0;
 }
 .letter-hero-section h1 {
   margin: 0;
@@ -62,7 +64,7 @@
 }
 .letter-reading-column {
   grid-column: 1;
-  grid-row: 1;
+  grid-row: 2;
   min-width: 0;
 }
 .letter-reader--text-only {
@@ -70,7 +72,7 @@
 }
 .letter-scan-figure {
   grid-column: 2;
-  grid-row: 1;
+  grid-row: 2;
   margin: 0;
   min-width: 0;
   --scan-height: min(32rem, 60svh);
@@ -135,32 +137,7 @@
   font-size: .8rem;
   color: var(--text-muted);
 }
-.scan-navigation, .scan-navigation-pages {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.scan-navigation { justify-content: space-between; gap: 12px; }
-.scan-navigation-pages { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.scan-navigation-pages [role="status"] { min-width: 5.5ch; text-align: center; }
-.scan-navigation button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 44px;
-  min-height: 44px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text);
-  background: transparent;
-  font: inherit;
-  touch-action: manipulation;
-}
-.scan-navigation button[aria-expanded="true"] {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
+.scan-navigation { min-width: 0; }
 .transcript-header-row, .supporting-header-row {
   display: flex;
   align-items: center;
@@ -261,7 +238,7 @@
 @media (max-width: 900px) {
   .letter-article {
     padding-top: calc(var(--header-height, 6rem) + 1rem);
-    padding-inline: calc(1.25rem + env(safe-area-inset-left, 0px)) calc(1.25rem + env(safe-area-inset-right, 0px));
+    padding-inline: calc(12px + env(safe-area-inset-left, 0px)) calc(12px + env(safe-area-inset-right, 0px));
   }
   .letter-reader {
     grid-template-columns: minmax(0, 1fr);
@@ -270,15 +247,17 @@
   .letter-scan-figure {
     grid-column: 1;
     grid-row: auto;
-    --scan-height: 15rem;
-    width: min(100%, 24rem);
+    container-type: inline-size;
+    --scan-height: calc(100cqw / var(--active-scan-ratio, .75));
+    width: 100%;
     justify-self: center;
   }
   .letter-reading-column {
     grid-row: auto;
   }
   .letter-hero-section {
-    margin-bottom: 1rem;
+    grid-row: auto;
+    margin-bottom: 0;
   }
   .transcript-text, .supporting-text {
     font-size: 1.0625rem;

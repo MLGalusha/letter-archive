@@ -53,6 +53,25 @@ test('@mocked releasing a paused swipe starts gently and reaches the next page c
 
 test.describe('touch toolbar', () => {
   test.use({ hasTouch: true, deviceScaleFactor: 3 });
+  test('@mocked native thumbnail drag waits for finger release before selecting', async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'Trusted touch dispatch uses CDP; physical iPhone acceptance is separate.');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openReader(page);
+    const strip = page.getByRole('dialog').locator('.viewer-page-drawer');
+    const box = (await strip.boundingBox())!;
+    const cdp = await page.context().newCDPSession(page);
+    const y = box.y + box.height / 2;
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 250, y, id: 1 }] });
+    for (const x of [220, 190, 160, 130]) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y, id: 1 }] });
+    await page.waitForTimeout(220);
+    await expect(page.locator('.viewer-page-counter')).toHaveText('1 / 3');
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await expect(page.locator('.viewer-page-counter')).not.toHaveText('1 / 3');
+    await expect.poll(() => strip.evaluate(el => {
+      const box = el.getBoundingClientRect(), selected = el.querySelector('[aria-current="page"]')!.getBoundingClientRect();
+      return Math.abs(selected.left + selected.width / 2 - box.left - box.width / 2);
+    })).toBeLessThan(1);
+  });
   test('@mocked a native pinch survives both image rendition replacements', async ({ page, browserName }) => {
     test.skip(browserName !== 'chromium', 'Trusted multi-touch dispatch uses CDP; not physical iOS validation.');
     await page.setViewportSize({ width: 390, height: 844 });
@@ -75,7 +94,7 @@ test.describe('touch toolbar', () => {
     }
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await expect(page.locator('.viewer-page-counter')).toHaveText('1 / 3');
-    await page.getByRole('button', { name: 'Next page' }).tap();
+    await page.getByRole('dialog').getByRole('button', { name: 'Go to scan 2: letter' }).tap();
     await expect(page.locator('.viewer-mobile-zoom')).toHaveText('100%');
   });
   for (const width of [320, 390, 844]) test(`@mocked phone controls share one row at ${width}px`, async ({ page }) => {
@@ -88,26 +107,14 @@ test.describe('touch toolbar', () => {
     await expect(page.locator('.viewer-mobile-zoom')).toHaveText('100%');
     await expect(page.locator('.viewer-mobile-zoom')).toBeVisible();
     await expect(page.locator('.viewer-zoom-controls')).toBeHidden();
-    const geometry = await toolbar.evaluate(el => {
-      const elements = [...el.querySelectorAll('.viewer-nav, .viewer-page-counter, .viewer-pages-toggle')];
-      return { toolbar: el.getBoundingClientRect().toJSON(), controls: elements.map(el => el.getBoundingClientRect().toJSON()) };
-    });
-    for (const box of geometry.controls) {
-      expect(box.y + box.height / 2).toBeCloseTo(geometry.controls[0].y + geometry.controls[0].height / 2, 0);
-      expect(box.left).toBeGreaterThanOrEqual(geometry.toolbar.left);
-      expect(box.right).toBeLessThanOrEqual(geometry.toolbar.right);
-    }
-    for (const button of await toolbar.getByRole('button').all()) {
-      const box = (await button.boundingBox())!;
-      expect(box.width).toBeGreaterThanOrEqual(44);
-      expect(box.height).toBeGreaterThanOrEqual(44);
-    }
-    expect(geometry.toolbar.height).toBeLessThan(65);
-    await toolbar.getByRole('button', { name: 'Next page' }).tap();
+    const strip = page.getByRole('dialog').locator('.viewer-page-drawer');
+    const geometry = await strip.boundingBox();
+    expect(geometry!.height).toBeLessThanOrEqual(90);
+    expect(geometry!.y + geometry!.height).toBeLessThanOrEqual(width === 844 ? 390 : 844);
+    await expect(toolbar).toBeHidden();
+    await strip.getByRole('button', { name: 'Go to scan 2: letter' }).tap();
     await expect(page.locator('.viewer-page-counter')).toHaveText('2 / 3');
-    await toolbar.getByRole('button', { name: 'Pages', exact: true }).tap();
-    await expect(page.getByRole('region', { name: 'Scan pages' })).toBeVisible();
-    await page.getByRole('button', { name: 'Go to scan 3: letter' }).tap();
+    await strip.getByRole('button', { name: 'Go to scan 3: letter' }).tap();
     await expect(page.locator('.viewer-page-counter')).toHaveText('3 / 3');
   });
 });
@@ -150,8 +157,6 @@ for (const width of [320, 844, 1440]) test(`@mocked drawer reserves scan space a
     { id: 'scan-2', type: 'cover', pageNumber: 2, imageUrl: '/images/2.svg', width: 1000, height: 400 },
   ]);
   const dialog = page.getByRole('dialog');
-  const toggle = dialog.getByRole('button', { name: 'Pages', exact: true });
-  await toggle.click();
   const choice = dialog.getByRole('button', { name: 'Go to scan 2: cover' });
   await choice.click();
   await expect(dialog.locator('.viewer-page-counter')).toHaveText('2 / 2');
@@ -169,18 +174,16 @@ for (const width of [320, 844, 1440]) test(`@mocked drawer reserves scan space a
   expect(boxes.image.bottom).toBeLessThanOrEqual(boxes.stage.bottom + 1);
   expect(boxes.toolbar.top).toBeGreaterThanOrEqual(boxes.stage.bottom);
   expect(boxes.close.bottom).toBeLessThanOrEqual(boxes.stage.top);
-  if (width < 760) expect(boxes.drawer.top).toBeGreaterThanOrEqual(boxes.stage.bottom);
-  else expect(boxes.drawer.right).toBeLessThanOrEqual(boxes.stage.left);
+  expect(boxes.drawer.top).toBeGreaterThanOrEqual(boxes.stage.bottom);
   for (const box of boxes.controls) {
     expect(box.width).toBeGreaterThanOrEqual(44); expect(box.height).toBeGreaterThanOrEqual(44);
     expect(box.right).toBeLessThanOrEqual(width);
   }
-  await toggle.focus(); await toggle.press('Enter');
-  await expect(dialog.getByRole('region', { name: 'Scan pages' })).toHaveCount(0);
-  await expect(toggle).toBeFocused();
+  await choice.focus(); await choice.press('Home');
+  await expect(dialog.getByRole('button', { name: 'Go to scan 1: letter' })).toBeFocused();
 });
 
-test('@mocked opening Pages re-clamps an edge pan after the scan refits', async ({ page }) => {
+test('@mocked viewport resizing re-clamps an edge pan after the scan refits', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 600 });
   await openReader(page);
   await expect(page.locator('.viewer-image')).toHaveCSS('opacity', '1');
@@ -193,7 +196,7 @@ test('@mocked opening Pages re-clamps an edge pan after the scan refits', async 
   await page.mouse.move(box.x + box.width - 2, box.y + box.height / 2);
   await page.mouse.up();
   const beforeWidth = (await page.locator('.viewer-transform').boundingBox())!.width;
-  await page.getByRole('dialog', { name: 'Original scans' }).getByRole('button', { name: 'Pages', exact: true }).click();
+  await page.setViewportSize({ width: 390, height: 450 });
   await expect.poll(async () => (await page.locator('.viewer-transform').boundingBox())!.width).toBeLessThan(beforeWidth - 50);
   await expect.poll(() => page.evaluate(() => {
     const scan = document.querySelector('.viewer-transform')!.getBoundingClientRect();
@@ -202,15 +205,13 @@ test('@mocked opening Pages re-clamps an edge pan after the scan refits', async 
   })).toBeLessThanOrEqual(1);
 });
 
-test('@mocked drawer loads only nearby thumbnails after opening', async ({ page }) => {
+test('@mocked always-visible strip loads only nearby thumbnails', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const requested = new Set<string>();
   page.on('request', request => { if (new URL(request.url()).searchParams.get('w') === '200') requested.add(request.url()); });
   await openReader(page, Array.from({ length: 32 }, (_, i) => ({ id: `scan-${i + 1}`, type: 'letter', pageNumber: i + 1,
     imageUrl: `/images/${i + 1}.svg`, width: 600, height: 800 })));
-  expect(requested.size).toBe(0);
-  await page.getByRole('dialog', { name: 'Original scans' }).getByRole('button', { name: 'Pages', exact: true }).click();
-  const drawer = page.getByRole('region', { name: 'Scan pages' });
+  const drawer = page.getByRole('dialog').getByRole('region', { name: 'Scan pages' });
   await expect.poll(() => requested.size).toBeGreaterThan(0);
   expect(requested.size).toBeLessThan(12);
   await drawer.evaluate(el => el.scrollTo({ left: el.scrollWidth, behavior: 'instant' }));
@@ -351,7 +352,7 @@ test('@mocked reduced motion removes zoom interpolation', async ({ page }) => {
   await page.getByRole('button', { name: 'Zoom in' }).click();
   await expect(page.locator('.viewer-transform')).toHaveCSS('transition-duration', '0s');
   await expect(page.locator('.viewer-image')).toHaveCSS('transition-duration', '0s');
-  await page.getByRole('button', { name: 'Next page' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Go to scan 2: letter' }).click();
   await expect(page.locator('.viewer-page-counter')).toHaveText('2 / 3');
   await expect(page.locator('.viewer-zoom-badge')).toHaveText('100%');
 });

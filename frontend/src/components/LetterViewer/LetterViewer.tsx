@@ -906,6 +906,7 @@ const LetterViewer = memo(function LetterViewer({
           className={`viewer-image ${isAnimating ? "animating" : ""}`}
           style={{
             transform: isLightbox ? undefined : `scale(${scale}) translate(${position.x / scale}px, ${position.y / scale}px)`,
+            transition: !isLightbox && !fullLoaded ? 'opacity 400ms ease-out' : undefined,
             cursor:
               scale > 1
                 ? isDragging

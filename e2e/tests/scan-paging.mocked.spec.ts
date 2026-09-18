@@ -110,3 +110,66 @@ for (const mode of ['inline', 'fullscreen']) test(`@mocked centered ${mode} film
   expect(notch!.y + notch!.height).toBeLessThanOrEqual(thumb.y + thumb.height + 1);
   expect(notch!.y).toBeGreaterThan(thumb.y);
 });
+
+for (const mode of ['inline', 'fullscreen']) test(`@mocked ${mode} thumbnails track partial main-image progress before selection`, async ({ page, browserName }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openReader(page);
+  if (mode === 'inline') await page.getByRole('button', { name: 'Close viewer' }).click();
+  const strip = page.locator(mode === 'inline' ? '.viewer-page-drawer--inline' : '[role="dialog"] .viewer-page-drawer');
+  if (mode === 'inline') {
+    test.skip(browserName !== 'chromium', 'Native held-touch progress uses CDP; fullscreen progress also runs in WebKit.');
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 2 });
+    const box = (await page.locator('.scan-carousel').boundingBox())!;
+    const y = box.y + Math.min(160, box.height / 2);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 290, y, id: 1 }] });
+    for (const x of [270, 250, 230, 210, 190]) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y, id: 1 }] });
+  }
+  else await page.locator('.viewer-container').evaluate(stage => {
+    for (const [type, x] of [['touchstart', 280], ['touchmove', 180]] as const) {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'touches', { value: [{ clientX: x, clientY: 250 }] }); stage.dispatchEvent(event);
+    }
+  });
+  await expect.poll(() => strip.evaluate(el => el.scrollLeft)).toBeGreaterThan(10);
+  await expect(strip.getByRole('button').first()).toHaveAttribute('aria-current', 'page');
+  const measured = await page.evaluate(mode => {
+    const strip = document.querySelector(mode === 'inline' ? '.viewer-page-drawer--inline' : '[role="dialog"] .viewer-page-drawer')!;
+    const items = strip.querySelectorAll('button');
+    const pitch = items[1].getBoundingClientRect().left - items[0].getBoundingClientRect().left;
+    const stage = document.querySelector(mode === 'inline' ? '.scan-carousel' : '.viewer-container')!;
+    const progress = mode === 'inline' ? stage.scrollLeft / stage.clientWidth : -new DOMMatrixReadOnly(getComputedStyle(stage.querySelector('.viewer-carriage')!).transform).m41 / stage.clientWidth;
+    return { actual: strip.scrollLeft, expected: progress * pitch };
+  }, mode);
+  expect(Math.abs(measured.actual - measured.expected)).toBeLessThan(2);
+  if (mode === 'fullscreen') {
+    await page.locator('.viewer-container').evaluate(el => el.dispatchEvent(new Event('touchcancel', { bubbles: true })));
+    await expect.poll(() => strip.evaluate(el => el.scrollLeft)).toBe(0);
+    await expect(strip.getByRole('button').first()).toHaveAttribute('aria-current', 'page');
+  }
+});
+
+for (const mode of ['inline', 'fullscreen']) test(`@mocked ${mode} thumbnail coast can be grabbed and reversed in a 24-page letter`, async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openReader(page, Array.from({ length: 24 }, (_, i) => ({ id: `scan-${i}`, type: 'letter', pageNumber: i + 1, imageUrl: `/images/${i}.svg`, width: 600, height: 800 })));
+  if (mode === 'inline') await page.getByRole('button', { name: 'Close viewer' }).click();
+  const strip = page.locator(mode === 'inline' ? '.viewer-page-drawer--inline' : '[role="dialog"] .viewer-page-drawer');
+  await strip.scrollIntoViewIfNeeded();
+  const box = (await strip.boundingBox())!, y = box.y + box.height / 2;
+  await page.mouse.move(290, y); await page.mouse.down();
+  await page.mouse.move(90, y, { steps: 8 }); await page.mouse.up();
+  await page.mouse.move(200, y); await page.mouse.down();
+  const grabbed = await strip.evaluate(el => el.scrollLeft);
+  await page.waitForTimeout(200);
+  expect(await strip.evaluate(el => el.scrollLeft)).toBeCloseTo(grabbed, 0);
+  await page.mouse.move(280, y, { steps: 8 });
+  expect(await strip.evaluate(el => el.scrollLeft)).toBeLessThan(grabbed - 50);
+  await page.waitForTimeout(100); await page.mouse.up();
+  await expect.poll(() => strip.evaluate(el => {
+    const selected = el.querySelector('[aria-current="page"]')!.getBoundingClientRect(), box = el.getBoundingClientRect();
+    return Math.abs(selected.left + selected.width / 2 - box.left - box.width / 2);
+  })).toBeLessThan(1);
+  const settled = await strip.evaluate(el => el.scrollLeft);
+  await page.waitForTimeout(300);
+  expect(await strip.evaluate(el => el.scrollLeft)).toBeCloseTo(settled, 0);
+});

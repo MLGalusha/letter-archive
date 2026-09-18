@@ -92,10 +92,10 @@ describe('fullscreen fit-view swipes', () => {
     const { target, container } = setup();
     fireEvent.doubleClick(target);
     touch(target, 'touchStart', [[100, 250], [200, 250]]);
-    touch(target, 'touchMove', [[140, 250], [240, 250]]);
+    touch(target, 'touchMove', [[140, 250], [240, 250]]); frame();
     expect(container.querySelector('.viewer-transform')?.getAttribute('style')).toContain('translate3d(40px');
     expect(screen.getByText('250%')).toBeInTheDocument();
-    touch(target, 'touchMove', [[160, 250], [260, 250]]);
+    touch(target, 'touchMove', [[160, 250], [260, 250]]); frame();
     expect(container.querySelector('.viewer-transform')?.getAttribute('style')).toContain('translate3d(60px');
     expect(screen.getByText('1 / 3')).toBeInTheDocument();
   });

@@ -10,6 +10,7 @@ import "./LetterViewer.css";
 import { scanNeedsOriginal, scanVariantWidth } from "./scanResolution";
 import { useScanDisplayWidth } from "./useScanDisplayWidth";
 import { useViewerSwipe } from "./useViewerSwipe";
+import { createPageMotion } from './pageMotion';
 import { ViewerPageDrawer } from "./ViewerPageDrawer";
 
 // ============================================================================
@@ -153,11 +154,30 @@ const LetterViewer = memo(function LetterViewer({
   const displayImagesRef = useRef(displayImages);
   const currentImageIndexRef = useRef(currentImageIndex);
 
+  const pageMotion = useMemo(() => createPageMotion(), []);
   const swipeCommitRef = useRef<(direction: -1 | 1) => void>(() => {});
   const commitSwipe = useCallback((direction: -1 | 1) => swipeCommitRef.current(direction), []);
   const swipe = useViewerSwipe(imageContainerRef, commitSwipe,
     `${letterId ?? ''}:${displayImages.map(image => `${image.id}:${image.imageUrl}`).join('|')}`);
-  const { cancel: cancelSwipe, begin: beginSwipe, move: moveSwipe, release: releaseSwipe, settlingRef: swipeSettlingRef } = swipe;
+  const { readOffset: readSwipeOffset, cancel: cancelSwipe, begin: beginSwipe, move: moveSwipe, release: releaseSwipe, settlingRef: swipeSettlingRef } = swipe;
+
+  // Read the rendered carriage during both finger tracking and CSS settlement.
+  // This gives the filmstrip the same progress instead of a second animation.
+  useLayoutEffect(() => {
+    if (!swipe.offset && !swipe.settling) { pageMotion.publish(null); return; }
+    let frame = 0;
+    const follow = () => {
+      const stage = imageContainerRef.current;
+      const carriage = stage?.querySelector('.viewer-carriage');
+      if (carriage && stage?.clientWidth) {
+        const x = readSwipeOffset();
+        pageMotion.publish(currentImageIndex - x / stage.clientWidth);
+      }
+      frame = requestAnimationFrame(follow);
+    };
+    follow();
+    return () => cancelAnimationFrame(frame);
+  }, [swipe.offset, swipe.settling, currentImageIndex, pageMotion, readSwipeOffset]);
 
   // Keep refs in sync
   useEffect(() => {
@@ -180,6 +200,8 @@ const LetterViewer = memo(function LetterViewer({
     currentImageIndexRef.current = currentImageIndex;
   }, [currentImageIndex]);
 
+  const [pinchResolutionScale, setPinchResolutionScale] = useState<number | null>(null);
+  const resolutionScale = pinchResolutionScale ?? scale;
   const currentImage = displayImages[currentImageIndex];
   const [loadedAspect, setLoadedAspect] = useState<{ url: string; ratio: number } | null>(null);
 
@@ -190,10 +212,10 @@ const LetterViewer = memo(function LetterViewer({
     : loadedAspect?.url === currentImage?.imageUrl ? loadedAspect.ratio : 3 / 4;
   const physicalWidth = useScanDisplayWidth(imageContainerRef, aspectRatio, true);
   const thumbSrc = getImageUrl(currentImage?.imageUrl ?? "", { width: 32 });
-  const fullSrc = scanNeedsOriginal(physicalWidth, scale)
+  const fullSrc = scanNeedsOriginal(physicalWidth, resolutionScale)
     ? getImageUrl(currentImage?.imageUrl ?? "")
-    : getImageUrl(currentImage?.imageUrl ?? "", { width: scanVariantWidth(physicalWidth * scale) });
-  const midSrc = imagePreloadService.availablePreview(currentImage?.imageUrl ?? "", scanNeedsOriginal(physicalWidth, scale) ? Infinity : scanVariantWidth(physicalWidth * scale));
+    : getImageUrl(currentImage?.imageUrl ?? "", { width: scanVariantWidth(physicalWidth * resolutionScale) });
+  const midSrc = imagePreloadService.availablePreview(currentImage?.imageUrl ?? "", scanNeedsOriginal(physicalWidth, resolutionScale) ? Infinity : scanVariantWidth(physicalWidth * resolutionScale));
   const { fullLoaded, midLoaded, fullFailed, fullAdmitted, onFullLoad, onFullError } = useProgressiveImage({
     enabled: Boolean(currentImage) && physicalWidth > 0,
     thumbSrc,
@@ -498,6 +520,9 @@ const LetterViewer = memo(function LetterViewer({
     setScale(1);
     setPosition({ x: 0, y: 0 });
     currentImageIndexRef.current = index;
+    if (gestureFrame.current !== null) cancelAnimationFrame(gestureFrame.current);
+    gestureFrame.current = null;
+    setPinchResolutionScale(null);
     touchStateRef.current.swipeActive = false;
     touchStateRef.current.panStart = null;
     touchStateRef.current.isPinching = false;
@@ -580,6 +605,18 @@ const LetterViewer = memo(function LetterViewer({
   // iOS Safari requires native listeners with { passive: false } for preventDefault
   // ============================================================================
 
+  const gestureFrame = useRef<number | null>(null);
+  const flushGesture = useCallback(() => {
+    if (gestureFrame.current !== null) cancelAnimationFrame(gestureFrame.current);
+    gestureFrame.current = null;
+    setScale(scaleRef.current);
+    setPosition(positionRef.current);
+  }, []);
+  const paintGesture = useCallback(() => {
+    if (gestureFrame.current === null) gestureFrame.current = requestAnimationFrame(flushGesture);
+  }, [flushGesture]);
+  useEffect(() => () => { if (gestureFrame.current !== null) cancelAnimationFrame(gestureFrame.current); }, []);
+
   const touchStateRef = useRef<{
     // Pinch tracking
     initialDistance: number;
@@ -631,6 +668,7 @@ const LetterViewer = memo(function LetterViewer({
         ts.panStart = null;
         ts.initialDistance = Math.max(1, getTouchDistance(e.touches[0], e.touches[1]));
         ts.initialScale = scaleRef.current;
+        setPinchResolutionScale(scaleRef.current);
         ts.previousMidpoint = getTouchMidpoint(e.touches[0], e.touches[1]);
       } else if (e.touches.length === 1) {
         ts.panStart = null;
@@ -716,22 +754,20 @@ const LetterViewer = memo(function LetterViewer({
         const scaleChange = newScale / prevScale;
 
         scaleRef.current = newScale;
-        setScale(newScale);
-        setPosition((prev) => clampPosition({
+        const prev = positionRef.current;
+        positionRef.current = newScale === 1 ? { x: 0, y: 0 } : clampPosition({
           x: cx - scaleChange * (previousX - prev.x),
           y: cy - scaleChange * (previousY - prev.y),
-        }, newScale));
-
-        if (newScale === 1) {
-          setPosition({ x: 0, y: 0 });
-        }
+        }, newScale);
+        paintGesture();
       } else if (e.touches.length === 1 && ts.panStart && !ts.isPinching) {
         e.preventDefault();
         const touch = e.touches[0];
-        setPosition(clampPosition({
+        positionRef.current = clampPosition({
           x: touch.clientX - ts.panStart.x,
           y: touch.clientY - ts.panStart.y,
-        }, scaleRef.current));
+        }, scaleRef.current);
+        paintGesture();
       } else if (e.touches.length === 1 && ts.swipeActive && !ts.isPinching) {
         // The gesture stays a swipe only while the image remains fitted.
         if (scaleRef.current !== 1) { cancelSwipe(); ts.swipeActive = false; return; }
@@ -745,6 +781,8 @@ const LetterViewer = memo(function LetterViewer({
 
     const onTouchEnd = (e: TouchEvent) => {
       const ts = touchStateRef.current;
+      if (ts.isPinching || ts.panStart) flushGesture();
+      if (e.touches.length < 2) setPinchResolutionScale(null);
 
       if (e.touches.length === 0) {
         if (ts.swipeActive) releaseSwipe();
@@ -771,6 +809,8 @@ const LetterViewer = memo(function LetterViewer({
     };
 
     const onTouchCancel = () => {
+      flushGesture();
+      setPinchResolutionScale(null);
       cancelSwipe();
       const ts = touchStateRef.current;
       ts.swipeActive = false;
@@ -790,7 +830,7 @@ const LetterViewer = memo(function LetterViewer({
       container.removeEventListener('touchmove', onTouchMove);
       container.removeEventListener('touchend', onTouchEnd);
     };
-  }, [variant, applyZoom, clampPosition, beginSwipe, moveSwipe, releaseSwipe, cancelSwipe, swipeSettlingRef, animateZoom, interruptZoom]);
+  }, [variant, applyZoom, clampPosition, beginSwipe, moveSwipe, releaseSwipe, cancelSwipe, swipeSettlingRef, animateZoom, interruptZoom, flushGesture, paintGesture]);
 
   useEffect(() => {
     const element = imageContainerRef.current;
@@ -802,6 +842,9 @@ const LetterViewer = memo(function LetterViewer({
       width = element.clientWidth;
       height = element.clientHeight;
       cancelSwipe();
+      if (gestureFrame.current !== null) cancelAnimationFrame(gestureFrame.current);
+      gestureFrame.current = null;
+      setPinchResolutionScale(null);
       touchStateRef.current.panStart = null;
       touchStateRef.current.swipeActive = false;
       touchStateRef.current.isPinching = false;
@@ -995,7 +1038,7 @@ const LetterViewer = memo(function LetterViewer({
       </div>
 
       {isLightbox && <ViewerPageDrawer id={drawerId} images={displayImages}
-        selected={currentImageIndex} onSelect={selectImage} />}
+        selected={currentImageIndex} onSelect={selectImage} motion={pageMotion} />}
       </div>
       {isLightbox && <span className="viewer-page-counter sr-only" role="status" aria-live="polite" aria-atomic="true" aria-label="Scan page">{currentImageIndex + 1} / {displayImages.length}</span>}
       {isLightbox && <div className="viewer-toolbar" aria-label="Scan controls">

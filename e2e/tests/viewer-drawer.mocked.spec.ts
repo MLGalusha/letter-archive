@@ -177,34 +177,52 @@ test('@mocked synthetic swipe takeover, zoomed pan and pinch keep their gesture 
 });
 
 test('@mocked a touch takes over the visible zoom before its target arrives', async ({ page }) => {
+  const now = new Date();
+  await page.clock.install({ time: now });
   await openReader(page);
   await expect(page.locator('.viewer-image')).toHaveCSS('opacity', '1');
-  const values = await page.evaluate(async () => {
+  // Playwright controls JS timers, not the compositor's CSS clock. Hold the
+  // real transition open beyond this test's deadline, then seek its midpoint.
+  // This is a controlled timeline; application timing and assertions are unchanged.
+  await page.addStyleTag({ content: '.viewer-transform.animating { transition-duration: 60s !important; }' });
+  await page.clock.pauseAt(new Date(now.getTime() + 60_000));
+  await page.evaluate(() => {
     const surface = document.querySelector('.viewer-transform')!;
-    const read = () => new DOMMatrixReadOnly(getComputedStyle(surface).transform).a;
-    // Observe a real animation frame, then touch in that same browser task.
-    const target = 1.4;
+    (window as typeof window & { zoomPaused: Promise<void> }).zoomPaused = new Promise<void>((resolve, reject) => {
+      const capture = (event: TransitionEvent) => {
+        if (event.target !== surface || event.propertyName !== 'transform') return;
+        surface.removeEventListener('transitionrun', capture);
+        const animation = surface.getAnimations().find(animation =>
+          (animation as CSSTransition).transitionProperty === 'transform');
+        if (!animation) { reject(new Error('Transform transition is missing')); return; }
+        animation.pause();
+        animation.currentTime = Number(animation.effect!.getTiming().duration) / 2;
+        resolve();
+      };
+      surface.addEventListener('transitionrun', capture);
+    });
+    // Establish the initial computed style before starting a CSS transition.
+    surface.getBoundingClientRect();
     document.querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!.click();
-    let before = 1;
-    for (let frame = 0; frame < 10 && before === 1; frame++) {
-      await new Promise(requestAnimationFrame);
-      before = read();
-    }
-    const animations = surface.getAnimations();
-    animations.forEach(animation => animation.pause());
-    await Promise.all(animations.map(animation => animation.ready));
-    before = read();
+  });
+  // React may schedule the programmatic click's commit with a zero-delay task.
+  // Advance it while keeping the 150ms application cleanup timer pending.
+  await page.clock.runFor(32);
+  const values = await page.evaluate(async () => {
+    await (window as typeof window & { zoomPaused: Promise<void> }).zoomPaused;
+    const surface = document.querySelector('.viewer-transform')!;
+    const before = new DOMMatrixReadOnly(getComputedStyle(surface).transform).a;
     const event = new Event('touchstart', { bubbles: true, cancelable: true });
     Object.defineProperty(event, 'touches', { value: [{ clientX: 260, clientY: 250 }] });
     document.querySelector('.viewer-container')!.dispatchEvent(event);
-    await new Promise(requestAnimationFrame); await new Promise(requestAnimationFrame);
-    const after = read();
-    document.querySelector('.viewer-container')!.dispatchEvent(new Event('touchcancel', { bubbles: true }));
-    return { before, after, target };
+    return { before, target: 1.4 };
   });
   expect(values.before).toBeGreaterThan(1);
   expect(values.before).toBeLessThan(values.target);
-  expect(values.after).toBeCloseTo(values.before, 3);
+  await page.clock.runFor(32);
+  await expect(page.locator('.viewer-transform')).not.toHaveClass(/animating/);
+  await expect.poll(() => page.locator('.viewer-transform').evaluate(el =>
+    new DOMMatrixReadOnly(getComputedStyle(el).transform).a)).toBeCloseTo(values.before, 3);
 });
 
 test('@mocked reduced motion removes zoom interpolation', async ({ page }) => {

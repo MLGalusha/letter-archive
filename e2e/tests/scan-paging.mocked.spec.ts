@@ -229,3 +229,16 @@ test('@mocked grabbing thumbnails keeps ownership when the main swipe commits', 
     return Math.abs(active.left + active.width / 2 - box.left - box.width / 2);
   })).toBeLessThan(1);
 });
+
+test('@mocked diagonal trackpad movement selects the centered thumbnail', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openReader(page);
+  const strip = page.getByRole('dialog').locator('.viewer-page-drawer');
+  await strip.hover(); await page.mouse.wheel(96, 150);
+  await expect.poll(() => strip.evaluate(el => el.scrollLeft)).toBeGreaterThan(32);
+  await expect(page.locator('.viewer-page-counter')).not.toHaveText('1 / 3');
+  await expect.poll(() => strip.evaluate(el => {
+    const box = el.getBoundingClientRect(), active = el.querySelector('[aria-current="page"]')!.getBoundingClientRect();
+    return Math.abs(active.left + active.width / 2 - box.left - box.width / 2);
+  })).toBeLessThan(1);
+});

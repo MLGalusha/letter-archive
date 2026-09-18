@@ -101,7 +101,7 @@ export function usePageStripMotion(selected: number,
       else settle(nearest(list.scrollLeft), true);
     };
     const wheel = (event: WheelEvent) => {
-      if (!event.shiftKey && Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return;
+      if (!event.shiftKey && event.deltaX === 0) return;
       stop(); following = false; browsing = true; list.style.scrollSnapType = '';
       // An outward wheel at an endpoint has no scroll/scrollend event.
       idle = setTimeout(nativeEnd, 160);

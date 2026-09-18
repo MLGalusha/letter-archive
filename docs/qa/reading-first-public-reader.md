@@ -52,6 +52,11 @@ scrolling, with reduced-motion support; the viewer owns zoom and fullscreen.
 - Browser regression fixtures exercise 320/390/900/901/1440, source selection,
   long notes, summary, complete portrait geometry, header clearance, no overflow,
   no forced entry scrolling, and source-view return in Chromium and WebKit.
+- Chromium with root text size doubled at 320/900/901/1440px kept heading
+  clearance at 32.3px (mobile) / 48.2px (desktop), with no horizontal overflow.
+  This is CSS text enlargement, not a physical browser zoom certification.
+- Review regressions preserve single-page mapped source links, photo-primary
+  workflow gating, and page-text fallback for whitespace-only saved reading text.
 - Final CI reproduced a safe-area regression: adding 47px of header padding
   moved the header but not content clearance. Observing the header border box
   instead of its content box fixes padding-only changes; the unchanged inset

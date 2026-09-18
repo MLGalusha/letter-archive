@@ -299,7 +299,7 @@ describe("LetterDetailPage", () => {
     }));
     renderLetterDetailPage();
     await screen.findByText('A family in the garden.');
-    expect(screen.queryByRole('heading', { name: 'Transcript', exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Transcript' })).not.toBeInTheDocument();
     expect(screen.queryByText('Published reading text from an older workflow.')).not.toBeInTheDocument();
   });
 

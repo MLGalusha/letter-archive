@@ -48,6 +48,9 @@ test('@mocked leaving the route while fullscreen restores background interaction
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.locator('#root')).not.toHaveAttribute('inert');
   expect(await page.locator('body').evaluate(el => el.style.position)).toBe('');
+  await expect(page.locator('html')).toHaveCSS('overflow', 'visible');
+  await expect(page.locator('html')).toHaveCSS('background-color', 'rgb(245, 237, 225)');
+  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#f5ede1');
 });
 
 test('@mocked pointer opening restores focus to its actual scan trigger', async ({ page }) => {

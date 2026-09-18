@@ -7,7 +7,10 @@ N1/N2 end-of-letter navigation is outside this change.
 
 ## Ownership and invariants
 
-The public modal owns all four safe-area insets and its dynamic viewport height.
+The public modal owns all four safe-area insets. Its backdrop fills the fixed
+viewport through `inset: 0`, without a competing `100dvh` height. The reader surface
+hook synchronizes document colors, browser color hints, and temporary scroll
+locking with modal entry/exit; see [viewport follow-up](reader-viewport.md).
 The viewer owns its normal-flow zoom/Close row and a grid with one image stage,
 an optional page drawer, and a reserved toolbar. Drawer scroll is native and local:
 horizontal below the image on phones, vertical beside it at 760px and above.

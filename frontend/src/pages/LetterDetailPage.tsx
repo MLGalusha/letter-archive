@@ -21,7 +21,7 @@ import HeaderScrubber from "../components/HeaderScrubber/HeaderScrubber";
 import useLetterScrubber from "../components/LetterHeaderDock/useLetterScrubber";
 import useCarouselDrag from "../hooks/useCarouselDrag";
 import BackToTop from "../components/BackToTop";
-import { appScrollTo, getAppScrollY } from "../utils/appScroll";
+import { useReaderViewerSurface } from "../hooks/useReaderViewerSurface";
 import "./LetterDetailPage.css";
 
 /* ── helpers ─────────────────────────────────────────────── */
@@ -223,31 +223,12 @@ export default function LetterDetailPage() {
 
   const viewerIsActive = viewerOpen && displayedLetterIsCurrent;
 
-  // Lock background touch scrolling only while the viewer is open, then
-  // restore the exact body styles and reading position.
-  useEffect(() => {
-    if (viewerIsActive) {
-      const savedY = getAppScrollY();
-      const openedPath = window.location.pathname;
-      const body = document.body;
-      const previous = { position: body.style.position, top: body.style.top,
-        width: body.style.width, overflow: body.style.overflow };
-      Object.assign(body.style, {
-        position: "fixed", top: `-${savedY}px`, width: "100%", overflow: "hidden",
-      });
-      return () => {
-        Object.assign(body.style, previous);
-        // A route change has its own history target; do not overwrite it.
-        if (window.location.pathname === openedPath) appScrollTo(savedY);
-      };
-    }
-  }, [viewerIsActive]);
-
   const { dialogRef: viewerDialogRef } = useAccessibleDialog({
     isOpen: viewerIsActive,
     onClose: () => setViewerOpen(false),
     isolateBackground: true,
   });
+  useReaderViewerSurface(viewerIsActive, viewerDialogRef);
 
   // Memoize all derived values — must be before conditional returns (Rules of Hooks)
   const derived = useMemo(() => {

@@ -40,6 +40,10 @@ for (const width of [320, 390, 1440]) test(`@mocked 24 scan previews stay compac
   }
   await page.getByRole('button', { name: 'Next scan', exact: true }).click();
   await expect(nav.getByRole('status')).toHaveText('1 / 24');
+  await drawer.hover();
+  const beforeReadingScroll = await page.evaluate(() => scrollY);
+  await page.mouse.wheel(0, 300);
+  await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(beforeReadingScroll + 150);
   await page.getByRole('button', { name: 'Pages', exact: true }).click();
   await expect(drawer).toHaveCount(0);
 });

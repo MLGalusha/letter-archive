@@ -4,7 +4,8 @@ Approved design: C1 plain Close icon, P2 Pages button reveals thumbnails. The
 inline reader now shares ViewerPageDrawer with fullscreen. Both use thumbnail-only
 visuals, accessible scan/type names and selected-state borders. The main reader
 keeps a compact previous/count/next/Pages row regardless of collection length.
-The inline drawer scrolls horizontally at every breakpoint; fullscreen preserves
+The inline drawer scrolls horizontally at every breakpoint and allows vertical
+scroll chaining into the letter; fullscreen preserves
 its existing horizontal-phone/vertical-desktop layout. A centered SVG replaces
 the font-based multiplication character in a transparent 44px Close hit target.
 
@@ -38,3 +39,11 @@ the dialog. Production build and lint regression checks passed. Visual review
 used actual public letter imagery at phone and desktop widths; local captures
 are under output/playwright/page-picker. Native phone browser chrome is not
 represented in these desktop screenshots.
+
+A manual wheel probe caught inherited fullscreen scroll containment trapping
+vertical reading over inline thumbnails (scrollY stayed 0 after a 350px wheel).
+The inline variant now overrides only vertical overscroll containment. The new
+regression failed before that correction. Thirteen of fourteen targeted checks
+passed initially; desktop WebKit closed during newContext before one test ran.
+That one check passed in an isolated worker. This is recorded as environment
+recovery, not a repaired application failure or evidence of zero flakiness.

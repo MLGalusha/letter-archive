@@ -21,7 +21,7 @@ for (const width of [320, 390, 900, 901, 1440]) {
       return route.fulfill({ status: 404, json: {} });
     });
     await page.goto('/letter/reading?from=highlight&image=scan-2');
-    await expect(page.getByRole('button', { name: 'Go to page 2', exact: true })).toHaveAttribute('aria-current', 'true');
+    await expect(page.getByRole('status', { name: 'Scan page' })).toHaveText('2 / 2');
     await page.evaluate(() => document.fonts.ready);
     await expect(page.getByText('My dearest friend,', { exact: false }).first()).toBeVisible();
     // Observe beyond the former entry timers and their animation lifetime.

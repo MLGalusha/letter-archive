@@ -1,0 +1,62 @@
+.viewer-page-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  min-width: 0;
+  min-height: 0;
+  padding: 5px;
+  scrollbar-width: thin;
+  scrollbar-color: #ffffff55 transparent;
+}
+.viewer-page-choice {
+  position: relative;
+  flex: none;
+  display: grid;
+  gap: 4px;
+  width: 86px;
+  padding: 6px;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  color: #e9e4db;
+  background: #ffffff08;
+  font-size: .75rem;
+}
+.viewer-page-choice[aria-current="page"] { border-color: #9dd4d1; background: #255356; }
+.viewer-page-choice .preview-image { height: 80px; background: #ffffff0a; }
+.viewer-page-choice .preview-image__image { object-fit: contain; }
+.viewer-page-choice .preview-image__error { font-size: .65rem; }
+
+@media (max-width: 759px) {
+  .viewer-page-drawer { flex-direction: row; grid-row: 2; padding-block: 4px; }
+  .viewer-page-choice { width: 72px; padding: 4px; }
+  .viewer-page-choice .preview-image { height: 56px; }
+}
+
+/* Inline readers always browse horizontally, even beside a desktop transcript. */
+.viewer-page-drawer--inline {
+  flex-direction: row;
+  /* Inline browsing must still hand vertical movement to the letter page. */
+  overscroll-behavior-y: auto;
+  margin-top: 8px;
+  max-width: 100%;
+  scrollbar-color: var(--border) transparent;
+}
+.viewer-page-drawer--inline .viewer-page-choice {
+  width: 72px;
+  padding: 4px;
+  color: var(--text);
+  background: transparent;
+}
+.viewer-page-drawer--inline .viewer-page-choice[aria-current="page"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.viewer-page-drawer--inline .viewer-page-choice .preview-image {
+  height: 72px;
+  background: var(--bg-light);
+}
+.viewer-page-drawer--inline .preview-image__error {
+  color: var(--text-muted);
+}

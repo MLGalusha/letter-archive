@@ -859,7 +859,7 @@ const LetterViewer = memo(function LetterViewer({
     >
       {isLightbox && onClose && <div className="viewer-modal-header">
         <span className="viewer-mobile-zoom" aria-label="Zoom level">{Math.round(scale * 100)}%</span>
-        <button type="button" className="viewer-close" tabIndex={0} onClick={onClose} aria-label="Close viewer">&times;</button>
+        <button type="button" className="viewer-close" tabIndex={0} onClick={onClose} aria-label="Close viewer"><Icon name="close" size={24} /></button>
       </div>}
       <div className={`viewer-workspace${isLightbox && pagesOpen ? ' viewer-workspace--pages' : ''}`}>
       {isLightbox && pagesOpen && <ViewerPageDrawer id={drawerId} images={displayImages}

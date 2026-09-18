@@ -5,6 +5,16 @@ test('@mocked releasing a paused swipe starts gently and reaches the next page c
   await page.setViewportSize({ width: 390, height: 844 });
   await openReader(page);
   await expect(page.locator('.viewer-image')).toHaveCSS('opacity', '1');
+  // Observe the rendered drag before measuring release: a fixed delay can end
+  // before React's animation-frame update on a loaded CI worker.
+  await page.locator('.viewer-container').evaluate(stage => {
+    for (const [type, x] of [['touchstart', 300], ['touchmove', 180]] as const) {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'touches', { value: [{ clientX: x, clientY: 250 }] });
+      stage.dispatchEvent(event);
+    }
+  });
+  await expect(page.locator('.viewer-carriage')).toHaveCSS('transform', 'matrix(1, 0, 0, 1, -120, 0)');
   const measured = await page.evaluate(async () => {
     const stage = document.querySelector('.viewer-container')!;
     const carriage = document.querySelector('.viewer-carriage')!;
@@ -14,7 +24,6 @@ test('@mocked releasing a paused swipe starts gently and reaches the next page c
       stage.dispatchEvent(event);
     };
     const read = () => new DOMMatrixReadOnly(getComputedStyle(carriage).transform).m41;
-    touch('touchstart', 300); touch('touchmove', 180);
     await new Promise(resolve => setTimeout(resolve, 120)); // Release from rest, not a flick.
     const start = read();
     const animationReady = new Promise<Animation>(resolve => {
@@ -184,7 +193,7 @@ test('@mocked opening Pages re-clamps an edge pan after the scan refits', async 
   await page.mouse.move(box.x + box.width - 2, box.y + box.height / 2);
   await page.mouse.up();
   const beforeWidth = (await page.locator('.viewer-transform').boundingBox())!.width;
-  await page.getByRole('button', { name: 'Pages', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Original scans' }).getByRole('button', { name: 'Pages', exact: true }).click();
   await expect.poll(async () => (await page.locator('.viewer-transform').boundingBox())!.width).toBeLessThan(beforeWidth - 50);
   await expect.poll(() => page.evaluate(() => {
     const scan = document.querySelector('.viewer-transform')!.getBoundingClientRect();
@@ -200,7 +209,7 @@ test('@mocked drawer loads only nearby thumbnails after opening', async ({ page 
   await openReader(page, Array.from({ length: 32 }, (_, i) => ({ id: `scan-${i + 1}`, type: 'letter', pageNumber: i + 1,
     imageUrl: `/images/${i + 1}.svg`, width: 600, height: 800 })));
   expect(requested.size).toBe(0);
-  await page.getByRole('button', { name: 'Pages', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Original scans' }).getByRole('button', { name: 'Pages', exact: true }).click();
   const drawer = page.getByRole('region', { name: 'Scan pages' });
   await expect.poll(() => requested.size).toBeGreaterThan(0);
   expect(requested.size).toBeLessThan(12);

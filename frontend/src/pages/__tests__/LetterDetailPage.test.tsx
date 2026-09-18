@@ -160,7 +160,7 @@ describe("LetterDetailPage", () => {
     vi.unstubAllGlobals();
   });
 
-  it("updates the rendered current dot after scans load and scroll", async () => {
+  it("updates the scan counter and selected thumbnail after scans load and scroll", async () => {
     const loaded = deferred<Letter>();
     getLetterByIdMock.mockReturnValue(loaded.promise);
     const { container } = renderLetterDetailPage();
@@ -177,9 +177,10 @@ describe("LetterDetailPage", () => {
     });
     carousel.scrollLeft = 220;
     fireEvent.scroll(carousel);
-    await waitFor(() => expect(screen.getByRole("button", { name: "Go to page 2" })).toHaveClass("active"));
-    expect(screen.getByRole("button", { name: "Go to page 2" })).toHaveAttribute("aria-current", "true");
-    expect(screen.getByRole("button", { name: "Go to page 1" })).not.toHaveClass("active");
+    await waitFor(() => expect(screen.getByRole("status", { name: "Scan page" })).toHaveTextContent("2 / 2"));
+    fireEvent.click(screen.getByRole("button", { name: "Pages" }));
+    expect(screen.getByRole("button", { name: "Go to scan 2: letter" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: "Go to scan 1: letter" })).not.toHaveAttribute("aria-current");
   });
 
   it("resets unknown and absent image parameters on same-letter navigation", async () => {

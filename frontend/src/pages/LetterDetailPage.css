@@ -135,26 +135,31 @@
   font-size: .8rem;
   color: var(--text-muted);
 }
-.scan-dots {
+.scan-navigation, .scan-navigation-pages {
   display: flex;
-  gap: .25rem;
-  flex-wrap: wrap;
-  justify-content: center;
+  align-items: center;
+  gap: 8px;
 }
-.scan-dot {
+.scan-navigation { justify-content: space-between; gap: 12px; }
+.scan-navigation-pages { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.scan-navigation-pages [role="status"] { min-width: 5.5ch; text-align: center; }
+.scan-navigation button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-width: 44px;
   min-height: 44px;
+  padding: 0 10px;
   border: 1px solid var(--border);
-  border-radius: 50%;
-  background: transparent;
+  border-radius: 8px;
   color: var(--text);
+  background: transparent;
   font: inherit;
-  cursor: pointer;
+  touch-action: manipulation;
 }
-.scan-dot.active {
-  background: var(--accent-strong);
-  color: white;
-  border-color: var(--accent-strong);
+.scan-navigation button[aria-expanded="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 .transcript-header-row, .supporting-header-row {
   display: flex;

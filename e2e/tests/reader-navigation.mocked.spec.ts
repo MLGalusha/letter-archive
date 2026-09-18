@@ -13,7 +13,8 @@ for (const width of [390, 1440]) test(`@mocked reader navigation stays mounted a
     if (path === '/settings/public') return route.fulfill({ json: {} });
     if (path === '/letters/summaries') return route.fulfill({ json: { total: 3, letters: ['a', 'b', 'c'].map(id => ({ id })) } });
     if (path.startsWith('/letters/')) {
-      const id = path.split('/')[2];
+      const requestedId = path.split('/')[2];
+      const id = requestedId === 'a-cover' ? 'a' : requestedId;
       if (id === 'b') await (path.endsWith('/adjacent') ? navigation : detail);
       if (id === 'c' && path.endsWith('/adjacent')) return route.fulfill({ json: { position: 1, total: 1, collectionCode: '002', prev: null, next: null } });
       if (path.endsWith('/adjacent')) return route.fulfill({ json: { position: id === 'a' ? 1 : 2, total: 3, collectionCode: '001', prev: { id: 'a' }, next: { id: 'b' } } });
@@ -24,7 +25,8 @@ for (const width of [390, 1440]) test(`@mocked reader navigation stays mounted a
     return route.fulfill({ status: 404, json: {} });
   });
   try {
-    await page.goto('/letter/a');
+    // A companion URL resolves to representative a, which is the catalogue ID.
+    await page.goto('/letter/a-cover');
     const slider = page.getByRole('slider');
     await expect(slider).toHaveAttribute('aria-disabled', 'false');
     await page.evaluate(() => document.fonts.ready);

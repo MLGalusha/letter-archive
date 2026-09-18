@@ -198,7 +198,11 @@ export default function LetterDetailPage() {
   }, [adjacent, displayedLetterIsCurrent, navigate, viewerOpen]);
 
   // Build scrubber props from adjacent data (hook must be at top level)
-  const scrubberProps = useLetterScrubber(navigationPresentation?.value ?? null, navigationPresentation?.ownerLetterId);
+  // Companion URLs resolve to a representative catalogue ID. Use that identity
+  // only for the matching presentation; a new detail may precede its adjacency.
+  const navigationLetterId = loadedLetter?.ownerLetterId === navigationPresentation?.ownerLetterId
+    ? letter?.id : navigationPresentation?.ownerLetterId;
+  const scrubberProps = useLetterScrubber(navigationPresentation?.value ?? null, navigationLetterId);
 
   const collectionCode = displayedLetterIsCurrent ? letter?.collectionCode ?? adjacent?.collectionCode
     : navigationPresentation?.value?.collectionCode;

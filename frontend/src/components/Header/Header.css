@@ -30,26 +30,30 @@
    The body-layout spacer (App.css) reserves content clearance.
    ────────────────────────────────────────────────────────── */
 .header {
+  --header-top-padding: calc(1rem + env(safe-area-inset-top, 0px));
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   z-index: 50;
-  padding: calc(1rem + env(safe-area-inset-top, 0px)) calc(1.25rem + env(safe-area-inset-right, 0px)) 0 calc(1.25rem + env(safe-area-inset-left, 0px));
+  padding: var(--header-top-padding) calc(1.25rem + env(safe-area-inset-right, 0px)) 0 calc(1.25rem + env(safe-area-inset-left, 0px));
   background: linear-gradient(to bottom, var(--bg, #f5ede1) calc(100% - 28px), transparent calc(100% - 28px));
-  /* Hide/reveal transform. Pages in transparent mode are meant to let
-     content scroll under the header, so we animate the inner card only. */
+  /* Move the card and its backdrop together on hide/reveal. */
   transition: transform 0.25s ease;
   will-change: transform;
 }
 
-/* Letter-detail: transparent so the hero photo extends under the header. */
-.header--transparent {
-  background: transparent;
+/* The letter reader retains a floating lower edge, but covers content above
+   the card's midpoint. Header height includes the top/safe-area inset, so add
+   half that inset to 50% to locate the card midpoint. This follows dock resizing
+   and the header transform without changing document scrolling or clearance.
+   Extra specificity preserves this backdrop under the mobile header rules. */
+.header.header--transparent {
+  --header-cover-edge: calc(50% + var(--header-top-padding) / 2);
+  background: linear-gradient(to bottom, var(--bg, #f5ede1) var(--header-cover-edge), transparent var(--header-cover-edge));
 }
 
-/* Hide: slide the whole bar up. On transparent pages we still hide the
-   inner card only so the blur/background remains consistent. */
+/* Hide: slide the whole bar and backdrop up. */
 .header--hidden {
   transform: translateY(calc(-100% - 1rem));
   pointer-events: none;
@@ -224,13 +228,9 @@
 /* ── Mobile ────────────────────────────────────────────── */
 @media (max-width: 900px) {
   .header {
-    padding: calc(0.8rem + env(safe-area-inset-top, 0px)) calc(0.65rem + env(safe-area-inset-right, 0px)) 0 calc(0.65rem + env(safe-area-inset-left, 0px));
+    --header-top-padding: calc(0.8rem + env(safe-area-inset-top, 0px));
+    padding: var(--header-top-padding) calc(0.65rem + env(safe-area-inset-right, 0px)) 0 calc(0.65rem + env(safe-area-inset-left, 0px));
     background: linear-gradient(to bottom, var(--bg, #f5ede1) calc(100% - 18px), transparent calc(100% - 18px));
-  }
-
-  /* Re-declare for transparent mode — equal specificity, source order wins. */
-  .header--transparent {
-    background: transparent;
   }
 
   .header-inner {

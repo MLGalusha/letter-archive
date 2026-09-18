@@ -82,10 +82,14 @@ describe('scan carousel lifecycle and position', () => {
     fireEvent.mouseDown(carousel, { clientX: 100 }); fireEvent.mouseUp(document);
     fireEvent.click(screen.getByTestId('slide-1')); expect(opened).toHaveBeenCalledWith(1);
   });
-  it('keeps smooth dot navigation on the mounted slide', () => {
-    render(<Harness />); const slide = screen.getByTestId('slide-2');
-    const scrollIntoView = vi.fn(); slide.scrollIntoView = scrollIntoView;
+  it.each([false, true])('pages only the carousel using viewport geometry (reduced motion=%s)', (reducedMotion) => {
+    vi.stubGlobal('matchMedia', () => ({ matches: reducedMotion }));
+    render(<Harness />); const carousel = geometry();
+    carousel.scrollLeft = 220;
+    const scrollTo = vi.fn(); carousel.scrollTo = scrollTo;
+    const scrollIntoView = vi.fn(); screen.getByTestId('slide-2').scrollIntoView = scrollIntoView;
     fireEvent.click(screen.getByText('Third'));
-    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    expect(scrollTo).toHaveBeenCalledWith({ left: 440, behavior: reducedMotion ? 'instant' : 'smooth' });
+    expect(scrollIntoView).not.toHaveBeenCalled();
   });
 });

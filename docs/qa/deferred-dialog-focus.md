@@ -25,3 +25,12 @@ unmount, existing admin regeneration flows, and fullscreen keyboard interactions
 in Chromium and WebKit. The deterministic test failed against the previous
 helper and passes with this change. CI outcomes remain separate evidence from
 the proposed explanation for the intermittent remote failure.
+
+## CI image-test follow-up
+
+Run 35303730675 passed the focus case but exposed a separate test race in
+`reader-renditions.mocked.spec.ts:64`: the image's new `src` was present before
+the test's asynchronous network route handler recorded its request. Wait for
+that recorded request using Playwright's polling assertion. This keeps the same
+required URL/version/rendition assertion without changing image-loading code or
+introducing a fixed delay.

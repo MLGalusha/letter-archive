@@ -61,7 +61,7 @@ test('@mocked reader hands off a versioned clear card preview while only its mea
     await expect(page.getByAltText('Reader scan')).toHaveAttribute('src', /w=480/);
     await page.evaluate(() => (window as any).renderReader({ imageUrl: '/fixture-images/scan?v=two' }));
     await expect(page.getByAltText('Reader scan')).toHaveAttribute('src', /v=two.*w=480/);
-    expect(urls.some(url => url.includes('v=two') && url.includes('w=480'))).toBe(true);
+    await expect.poll(() => urls.some(url => url.includes('v=two') && url.includes('w=480'))).toBe(true);
   } finally { release(); await context.close(); }
 });
 

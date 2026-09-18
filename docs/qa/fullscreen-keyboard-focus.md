@@ -10,8 +10,9 @@ buttons. They do not change the underlying letter. Escape and the close button
 restore the trigger and reading position. Pointer activation explicitly captures
 the trigger because Safari does not automatically focus clicked buttons.
 
-The shared dialog owns its full Tab sequence so Safari's default button-skipping
-preference cannot send focus to browser chrome. Existing inert attributes survive
+The viewer buttons have explicit tabindex=0 so Safari's default button-skipping
+preference cannot send focus to browser chrome. The shared hook retains native
+Tab order, including radio-group behavior in existing admin dialogs. Existing inert attributes survive
 cleanup. Portal placement and existing viewer rendering/gesture behavior remain.
 
 ## Research applied

@@ -114,17 +114,7 @@ export function useAccessibleDialog({
     }
     const focusable = () => Array.from(
       dialog?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? [],
-    ).filter(element => element.tabIndex >= 0
-      && !element.matches(':disabled')
-      && !element.closest('[hidden], [inert]')
-      && (() => {
-        // A control's own display value does not reveal a display:none ancestor.
-        for (let node: HTMLElement | null = element; node && node !== dialog; node = node.parentElement) {
-          const style = getComputedStyle(node);
-          if (style.display === 'none' || style.visibility === 'hidden') return false;
-        }
-        return true;
-      })());
+    );
     (focusable()[0] ?? dialog)?.focus({ preventScroll: true });
 
     const isTopmostDialog = () => {
@@ -151,14 +141,22 @@ export function useAccessibleDialog({
         return;
       }
 
-      // Own the whole modal tab sequence, including Safari configurations
-      // that otherwise skip buttons and move focus into browser chrome.
-      event.preventDefault();
-      const current = controls.indexOf(document.activeElement as HTMLElement);
-      const next = current < 0
-        ? (event.shiftKey ? controls.length - 1 : 0)
-        : (current + (event.shiftKey ? -1 : 1) + controls.length) % controls.length;
-      controls[next].focus();
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      const activeElement = document.activeElement;
+      if (
+        event.shiftKey
+        && (activeElement === first || !dialog?.contains(activeElement))
+      ) {
+        event.preventDefault();
+        last.focus();
+      } else if (
+        !event.shiftKey
+        && (activeElement === last || !dialog?.contains(activeElement))
+      ) {
+        event.preventDefault();
+        first.focus();
+      }
     };
 
     document.addEventListener('keydown', handleKeyDown);

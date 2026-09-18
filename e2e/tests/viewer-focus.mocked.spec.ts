@@ -88,3 +88,38 @@ test('@mocked pointer opening restores focus to its actual scan trigger', async 
   await dialog.getByRole('button', { name: 'Close viewer' }).click();
   await expect(opener).toBeFocused();
 });
+
+test('@mocked shared dialogs preserve native radio group tab stops', async ({ page }) => {
+  await page.route('**/__dialog-fixture', route => route.fulfill({ contentType: 'text/html', body: `
+    <div id="fixture"></div><script type="module">
+      import RefreshRuntime from '/@react-refresh';
+      RefreshRuntime.injectIntoGlobalHook(window);
+      window.$RefreshReg$=()=>{}; window.$RefreshSig$=()=>(type)=>type;
+      window.__vite_plugin_react_preamble_installed__=true;
+      const {default:React}=await import('/node_modules/.vite/deps/react.js');
+      const {default:{createRoot}}=await import('/node_modules/.vite/deps/react-dom_client.js');
+      const {Modal}=await import('/src/components/common/Modal.tsx');
+      const h=React.createElement;
+      const radio=(label,checked=false)=>h('input',{'aria-label':label,type:'radio',name:'entity',tabIndex:0,defaultChecked:checked});
+      createRoot(document.getElementById('fixture')).render(h(Modal,{isOpen:true,title:'Choose entity',onClose:()=>{}},
+        h('form',null,radio('First candidate'),radio('Selected candidate',true),radio('Last candidate')),
+        h('form',null,radio('Other form candidate',true)),h('input',{'aria-label':'Notes'})
+      ));
+    </script>` }));
+  await page.goto('/__dialog-fixture');
+  await expect(page.getByRole('button', { name: 'Close', exact: true })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(page.getByLabel('Selected candidate')).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(page.getByLabel('Other form candidate')).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(page.getByLabel('Notes')).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(page.getByLabel('Other form candidate')).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(page.getByLabel('Selected candidate')).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByLabel('Last candidate')).toBeChecked();
+  await page.keyboard.press('Tab');
+  await expect(page.getByLabel('Other form candidate')).toBeFocused();
+});

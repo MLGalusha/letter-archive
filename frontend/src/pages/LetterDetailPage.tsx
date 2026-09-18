@@ -887,6 +887,7 @@ export default function LetterDetailPage() {
             <button
               type="button"
               className="viewer-close"
+              tabIndex={0}
               onClick={() => setViewerOpen(false)}
               aria-label="Close viewer"
             >

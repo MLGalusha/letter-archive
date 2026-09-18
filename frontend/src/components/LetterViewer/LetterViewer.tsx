@@ -1013,6 +1013,7 @@ const LetterViewer = memo(function LetterViewer({
               <button
                 type="button"
                 className="viewer-nav viewer-nav--prev"
+                tabIndex={0}
                 onClick={prevImage}
                 aria-label="Previous page"
               >
@@ -1021,6 +1022,7 @@ const LetterViewer = memo(function LetterViewer({
               <button
                 type="button"
                 className="viewer-nav viewer-nav--next"
+                tabIndex={0}
                 onClick={nextImage}
                 aria-label="Next page"
               >

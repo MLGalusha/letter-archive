@@ -133,7 +133,7 @@ export default function LetterDetailPage() {
   useLayoutEffect(() => {
     if (!displayedLetterIsCurrent || !letter) return;
     const index = letter.images.findIndex(image => image.id === targetImageId);
-    if (targetImageId && index >= 0) scrollToSlide(index, 'instant');
+    scrollToSlide(Math.max(0, index), 'instant');
   }, [displayedLetterIsCurrent, letter, targetImageId, scrollToSlide]);
 
   useEffect(() => {

@@ -107,6 +107,9 @@ function renderLetterDetailPage(entry = "/letter/letter-1") {
   return render(
     <MemoryRouter initialEntries={[entry]}>
       <HeaderDockProvider>
+        <Link to="/letter/letter-1?image=img-2">Select second scan</Link>
+        <Link to="/letter/letter-1?image=unknown">Select unknown scan</Link>
+        <Link to="/letter/letter-1">Clear scan selection</Link>
         <Link to="/letter/letter-2">Go to letter 2</Link>
         <Link to="/letter/letter-3">Go to letter 3</Link>
         <Routes>
@@ -127,11 +130,14 @@ function deferred<T>() {
   return { promise, reject, resolve };
 }
 
+const originalElementScrollTo = HTMLElement.prototype.scrollTo;
 let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
 describe("LetterDetailPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    HTMLElement.prototype.scrollTo = vi.fn();
     consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     getLetterByIdMock.mockResolvedValue(createLetter());
@@ -150,6 +156,8 @@ describe("LetterDetailPage", () => {
 
   afterEach(() => {
     consoleErrorSpy.mockRestore();
+    HTMLElement.prototype.scrollTo = originalElementScrollTo;
+    vi.unstubAllGlobals();
   });
 
   it("updates the rendered current dot after scans load and scroll", async () => {
@@ -172,6 +180,32 @@ describe("LetterDetailPage", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Go to page 2" })).toHaveClass("active"));
     expect(screen.getByRole("button", { name: "Go to page 2" })).toHaveAttribute("aria-current", "true");
     expect(screen.getByRole("button", { name: "Go to page 1" })).not.toHaveClass("active");
+  });
+
+  it("resets unknown and absent image parameters on same-letter navigation", async () => {
+    const user = userEvent.setup();
+    getLetterByIdMock.mockResolvedValue(createLetter({ images: [
+      ...createLetter().images,
+      { id: "img-2", type: "letter", pageNumber: 2, imageUrl: "/images/two.jpg" },
+    ] }));
+    const { container } = renderLetterDetailPage();
+    await screen.findByRole("article");
+    const carousel = container.querySelector<HTMLDivElement>(".scan-carousel")!;
+    Object.defineProperty(carousel, "clientWidth", { value: 200 });
+    carousel.getBoundingClientRect = () => ({ left: 0, width: 200 }) as DOMRect;
+    Array.from(carousel.children).forEach((slide, index) => {
+      slide.getBoundingClientRect = () => ({ left: index * 220 - carousel.scrollLeft, width: 200 }) as DOMRect;
+    });
+    carousel.scrollTo = vi.fn();
+    await user.click(screen.getByRole("link", { name: "Select second scan" }));
+    expect(carousel.scrollTo).toHaveBeenLastCalledWith({ left: 220, behavior: "instant" });
+    carousel.scrollLeft = 220;
+    await user.click(screen.getByRole("link", { name: "Select unknown scan" }));
+    expect(carousel.scrollTo).toHaveBeenLastCalledWith({ left: 0, behavior: "instant" });
+    await user.click(screen.getByRole("link", { name: "Select second scan" }));
+    await user.click(screen.getByRole("link", { name: "Clear scan selection" }));
+    expect(carousel.scrollTo).toHaveBeenLastCalledWith({ left: 0, behavior: "instant" });
+    expect(getLetterByIdMock).toHaveBeenCalledTimes(1);
   });
 
   it("renders the editorial page with hero, summary, transcript, and nav", async () => {

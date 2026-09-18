@@ -391,8 +391,11 @@
 
 .viewer-backdrop {
   position: fixed;
+  /* The fixed viewport defines both edges. A separate 100dvh height can
+     disagree with those edges during iOS toolbar/standalone transitions. */
   inset: 0;
-  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
   z-index: 1000;
   background: #181a19;
   display: flex;

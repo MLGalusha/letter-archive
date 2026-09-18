@@ -6,6 +6,7 @@ import { useAccessibleDialog } from "../components/common/useAccessibleDialog";
 import SEO from "../components/SEO";
 
 import LetterViewer from "../components/LetterViewer/LetterViewer";
+import { InlineScanNavigation } from "../components/LetterViewer/InlineScanNavigation";
 import { getAdjacentLetters, getLetterById, type AdjacentLettersResponse } from "../api/letters";
 import type { LetterImage, LetterImageType, PublicLetter } from "../types/Letter";
 import { allowImageSpeculation } from "../services/imagePreloadService";
@@ -356,15 +357,10 @@ export default function LetterDetailPage() {
               })}
             </div>
 
-            <figcaption className="scan-caption">
-              <span>Scan {activeIndex + 1} of {carouselImages.length}</span>
+            <figcaption>
+              <InlineScanNavigation key={letter.id} images={carouselImages} selected={activeIndex}
+                onSelect={index => scrollToSlide(index, 'instant')} />
             </figcaption>
-            {carouselImages.length > 1 && <div className="scan-dots" aria-label="Choose a scan">
-              {carouselImages.map((_, i) => <button key={i} type="button"
-                className={`scan-dot${i === activeIndex ? " active" : ""}`}
-                onClick={() => scrollToSlide(i)} aria-label={`Go to page ${i + 1}`}
-                aria-current={i === activeIndex ? "true" : undefined}>{i + 1}</button>)}
-            </div>}
           </figure>
         )}
 

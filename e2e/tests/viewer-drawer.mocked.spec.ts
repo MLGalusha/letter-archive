@@ -184,7 +184,7 @@ test('@mocked opening Pages re-clamps an edge pan after the scan refits', async 
   await page.mouse.move(box.x + box.width - 2, box.y + box.height / 2);
   await page.mouse.up();
   const beforeWidth = (await page.locator('.viewer-transform').boundingBox())!.width;
-  await page.getByRole('button', { name: 'Pages', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Original scans' }).getByRole('button', { name: 'Pages', exact: true }).click();
   await expect.poll(async () => (await page.locator('.viewer-transform').boundingBox())!.width).toBeLessThan(beforeWidth - 50);
   await expect.poll(() => page.evaluate(() => {
     const scan = document.querySelector('.viewer-transform')!.getBoundingClientRect();
@@ -200,7 +200,7 @@ test('@mocked drawer loads only nearby thumbnails after opening', async ({ page 
   await openReader(page, Array.from({ length: 32 }, (_, i) => ({ id: `scan-${i + 1}`, type: 'letter', pageNumber: i + 1,
     imageUrl: `/images/${i + 1}.svg`, width: 600, height: 800 })));
   expect(requested.size).toBe(0);
-  await page.getByRole('button', { name: 'Pages', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Original scans' }).getByRole('button', { name: 'Pages', exact: true }).click();
   const drawer = page.getByRole('region', { name: 'Scan pages' });
   await expect.poll(() => requested.size).toBeGreaterThan(0);
   expect(requested.size).toBeLessThan(12);

@@ -135,13 +135,14 @@ for (const reducedData of [false, true]) {
         await expect.poll(() => urls.some(url => url.includes('scan-2?') && url.includes('w=800'))).toBe(true);
         expect(urls.some(url => url.includes('scan-4?'))).toBe(false);
       }
-      await page.getByRole('button', { name: 'Go to page 3', exact: true }).click();
+      await page.getByRole('button', { name: 'Pages', exact: true }).click();
+      await page.getByRole('button', { name: 'Go to scan 3: letter', exact: true }).click();
       await expect(page.getByAltText('Page 3 of letter')).toHaveAttribute('src', /w=800/);
       expect(urls.some(url => /w=(1200|1600)(?:&|$)/.test(url))).toBe(false);
-      await page.getByRole('button', { name: 'Go to page 1', exact: true }).click();
+      await page.getByRole('button', { name: 'Go to scan 1: letter', exact: true }).click();
       // A cached src is already present before the carousel returns to page 1.
       // Resize only once that page is actually active and horizontal motion ends.
-      await expect(page.getByRole('button', { name: 'Go to page 1', exact: true })).toHaveClass(/active/);
+      await expect(page.getByRole('button', { name: 'Go to scan 1: letter', exact: true })).toHaveAttribute('aria-current', 'page');
       await expect.poll(() => page.locator('.scan-carousel').evaluate(el => el.scrollLeft)).toBeCloseTo(0, 0);
       await expect(page.getByAltText('Page 1 of letter')).toHaveAttribute('src', /w=800/);
       const beforeResize = urls.length;

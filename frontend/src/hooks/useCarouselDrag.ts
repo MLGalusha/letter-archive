@@ -158,10 +158,18 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
     // starts a gesture; those events restore native touch/trackpad snapping.
     carousel.style.scrollSnapType = 'none';
     navigationTargetRef.current = targetLeft;
+    const resolvedBehavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : behavior;
     carousel.scrollTo({
       left: targetLeft,
-      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : behavior,
+      behavior: resolvedBehavior,
     });
+    if (resolvedBehavior === 'instant') {
+      // Direct selection need not traverse/admit the intervening scans. Update
+      // the control and image admission in the same click, then restore touch snap.
+      navigationTargetRef.current = null;
+      carousel.style.scrollSnapType = '';
+      setActiveIndex(index);
+    }
   }, []);
 
   return { carouselRef, attachCarousel, activeIndex, carouselDraggedRef, scrollToSlide };

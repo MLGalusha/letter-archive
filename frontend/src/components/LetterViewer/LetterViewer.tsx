@@ -875,7 +875,7 @@ const LetterViewer = memo(function LetterViewer({
       >
         <div className="viewer-carriage"
           style={{ transform: `translate3d(${swipe.offset}px, 0, 0)`,
-            transition: swipe.settling ? `transform ${swipe.duration}ms cubic-bezier(0.22, 0.61, 0.36, 1)` : 'none' }}
+            transition: swipe.settling ? `transform ${swipe.duration}ms ${swipe.easing}` : 'none' }}
           onTransitionEnd={(event) => {
             if (event.target === event.currentTarget && event.propertyName === 'transform') swipe.finish();
           }}

@@ -215,11 +215,11 @@ for (const previewFails of [false, true]) {
       if (previewFails) {
         await expect.poll(() => urls.filter(url => url.includes('w=480')).length).toBe(3);
         await expect(page.locator('.viewer-image-thumb')).not.toBeVisible();
-        await expect(page.getByRole('status')).toHaveText('Image unavailable');
+        await expect(page.getByRole('status', { name: '', exact: true })).toHaveText('Image unavailable');
       } else {
         await expect(page.locator('.viewer-image-thumb')).toBeVisible();
         await expect.poll(() => page.locator('.viewer-image-thumb').evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth)).toBe(480);
-        await expect(page.getByRole('status')).toHaveCount(0);
+        await expect(page.getByRole('status', { name: '', exact: true })).toHaveCount(0);
       }
     } finally { await context.close(); }
   });

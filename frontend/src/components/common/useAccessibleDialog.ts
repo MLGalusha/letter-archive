@@ -20,11 +20,13 @@ const canReceiveRestoredFocus = (
 interface AccessibleDialogOptions {
   isOpen: boolean;
   onClose: () => void;
+  isolateBackground?: boolean;
 }
 
 export function useAccessibleDialog({
   isOpen,
   onClose,
+  isolateBackground = false,
 }: AccessibleDialogOptions) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
@@ -50,9 +52,9 @@ export function useAccessibleDialog({
       return false;
     }
 
-    opener.focus();
+    opener.focus({ preventScroll: isolateBackground });
     return document.activeElement === opener;
-  }, []);
+  }, [isolateBackground]);
 
   const deferFocusRestore = useCallback(() => {
     deferRestoreRef.current = true;
@@ -94,10 +96,26 @@ export function useAccessibleDialog({
       : null;
 
     const dialog = dialogRef.current;
+    // Isolate siblings along the portal's ancestor path without making the
+    // dialog itself inert. Preserve pre-existing inert state on cleanup.
+    const isolated: Element[] = [];
+    if (isolateBackground && dialog) {
+      let branch: Element = dialog;
+      while (branch.parentElement) {
+        for (const sibling of branch.parentElement.children) {
+          if (sibling !== branch && !sibling.hasAttribute('inert')) {
+            sibling.setAttribute('inert', '');
+            isolated.push(sibling);
+          }
+        }
+        if (branch.parentElement === document.body) break;
+        branch = branch.parentElement;
+      }
+    }
     const focusable = () => Array.from(
       dialog?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? [],
     );
-    (focusable()[0] ?? dialog)?.focus();
+    (focusable()[0] ?? dialog)?.focus({ preventScroll: isolateBackground });
 
     const isTopmostDialog = () => {
       const dialogs = document.querySelectorAll<HTMLElement>(
@@ -144,11 +162,12 @@ export function useAccessibleDialog({
     document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
+      isolated.forEach(element => element.removeAttribute('inert'));
       if (!deferRestoreRef.current) {
         restoreFocus();
       }
     };
-  }, [isOpen, restoreFocus]);
+  }, [isOpen, isolateBackground, restoreFocus]);
 
   return {
     dialogRef,

@@ -79,7 +79,7 @@ describe('reader scan requests', () => {
     const url = first.getAttribute('src');
     fireEvent.error(first);
     expect(first).not.toBeVisible();
-    expect(screen.getByRole('status')).toHaveTextContent('Image unavailable');
+    expect(screen.getByRole('status', { name: '' })).toHaveTextContent('Image unavailable');
     act(() => vi.advanceTimersByTime(1000));
     const second = container.querySelector('.viewer-image')!;
     expect(second).not.toBe(first);
@@ -97,7 +97,7 @@ describe('reader scan requests', () => {
     expect(third).not.toBeVisible();
     fireEvent.load(third);
     expect(third).toBeVisible();
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByRole('status', { name: '' })).not.toBeInTheDocument();
     expect(originals()).toEqual([]);
   });
 

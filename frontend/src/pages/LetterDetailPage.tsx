@@ -499,6 +499,8 @@ export default function LetterDetailPage() {
         >
           <div className="viewer-modal" ref={viewerDialogRef}
             role="dialog" aria-modal="true" aria-label="Original scans" tabIndex={-1}>
+            <div className="viewer-modal-header">
+            <span>Original scans</span>
             <button
               type="button"
               className="viewer-close"
@@ -508,6 +510,7 @@ export default function LetterDetailPage() {
             >
               &times;
             </button>
+            </div>
             <LetterViewer
               key={viewerStartPage}
               images={allImages}

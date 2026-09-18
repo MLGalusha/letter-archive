@@ -6,7 +6,9 @@ import { imagePreloadService } from '../../services/imagePreloadService';
 import { useImageRetry } from '../../hooks/useImageRetry';
 
 /** Small card previews need one display-sized image, not several competing tiers. */
-export function PreviewImage({ src, alt, className }: { src: string; alt: string; className?: string }) {
+export function PreviewImage({ src, alt, className, preloadMargin = '1200px 0px', context = 'archive-card' }: {
+  src: string; alt: string; className?: string; preloadMargin?: string; context?: string;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [nearViewport, setNearViewport] = useState(() => typeof IntersectionObserver === 'undefined');
   const { attempt, failed, onError, onLoad } = useImageRetry(src);
@@ -22,10 +24,10 @@ export function PreviewImage({ src, alt, className }: { src: string; alt: string
       if (!entries.some((entry) => entry.isIntersecting)) return;
       setNearViewport(true);
       observer.disconnect();
-    }, { root: containerRef.current?.closest('[data-image-scroll-root]') ?? getAppScrollRootForIO(), rootMargin: '1200px 0px' });
+    }, { root: containerRef.current?.closest('[data-image-scroll-root]') ?? getAppScrollRootForIO(), rootMargin: preloadMargin });
     if (containerRef.current) observer.observe(containerRef.current);
     return () => observer.disconnect();
-  }, [nearViewport]);
+  }, [nearViewport, preloadMargin]);
 
   return (
     <div ref={containerRef} className={`preview-image ${className ?? ''}`}>
@@ -44,7 +46,7 @@ export function PreviewImage({ src, alt, className }: { src: string; alt: string
           // Keep measuring after a long session fills the Resource Timing buffer.
           recordImageLoad({
             url: src,
-            context: 'archive-card',
+            context,
             tier: 'full',
             durationMs: Math.max(0, performance.now() - loadStartedAt.current),
             cached: Boolean(timing && timing.transferSize === 0 && timing.decodedBodySize > 0),

@@ -1,6 +1,6 @@
 import { imagePreloadService } from "../../services/imagePreloadService";
 import { RetryingImage } from "../common/RetryingImage";
-import { memo, useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from "react";
+import { memo, useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo, useId } from "react";
 import type { LetterImage } from "../../types/Letter";
 import { getImageUrl } from "../../api/client";
 import { useProgressiveImage } from "../../hooks/useProgressiveImage";
@@ -9,7 +9,8 @@ import { Icon } from "../common";
 import "./LetterViewer.css";
 import { scanNeedsOriginal, scanVariantWidth } from "./scanResolution";
 import { useScanDisplayWidth } from "./useScanDisplayWidth";
-import { useViewerSwipe, VIEWER_SWIPE_MS } from "./useViewerSwipe";
+import { useViewerSwipe } from "./useViewerSwipe";
+import { ViewerPageDrawer } from "./ViewerPageDrawer";
 
 // ============================================================================
 // CONSTANTS
@@ -109,6 +110,11 @@ const LetterViewer = memo(function LetterViewer({
   variant = "panel",
   initialIndex = 0,
 }: LetterViewerProps) {
+  const isLightbox = variant === "lightbox";
+  const [pagesOpen, setPagesOpen] = useState(false);
+  const drawerId = useId();
+  const zoomTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const zoomAnimating = useRef(false);
   // Filter images if needed
   const displayImages = useMemo(() => showOnlyLetterPages
     ? images.filter((img) => img.type === "letter")
@@ -238,7 +244,7 @@ const LetterViewer = memo(function LetterViewer({
   // ============================================================================
 
   const saveCurrentImageState = useCallback(() => {
-    if (!letterIdRef.current) return;
+    if (isLightbox || !letterIdRef.current) return;
 
     const images = displayImagesRef.current;
     const index = currentImageIndexRef.current;
@@ -258,18 +264,20 @@ const LetterViewer = memo(function LetterViewer({
     };
 
     saveStoredState(newState);
-  }, []);
+  }, [isLightbox]);
 
   // Save state when scale or position changes (debounced via effect)
   useEffect(() => {
+    if (isLightbox) return;
     const timeoutId = setTimeout(() => {
       saveCurrentImageState();
     }, 300);
     return () => clearTimeout(timeoutId);
-  }, [scale, position, saveCurrentImageState]);
+  }, [scale, position, saveCurrentImageState, isLightbox]);
 
   // Handle letter change - clear storage if different letter
   useEffect(() => {
+    if (isLightbox) return;
     const stored = loadStoredState();
     if (stored && letterId && stored.letterId !== letterId) {
       // Different letter - clear old state and start fresh
@@ -278,7 +286,7 @@ const LetterViewer = memo(function LetterViewer({
       // No stored state - initialize for this letter
       saveStoredState({ letterId, images: {} });
     }
-  }, [letterId]);
+  }, [letterId, isLightbox]);
 
   // Load state when changing images within the same letter
   // Lightbox always resets to 1x; panel restores from localStorage
@@ -334,15 +342,49 @@ const LetterViewer = memo(function LetterViewer({
     };
   }, []);
 
+  useLayoutEffect(() => {
+    if (!isLightbox) return;
+    // Container observation can precede the fitted surface's new dimensions.
+    // Recheck after that render, including an intrinsic aspect-ratio discovery.
+    setPosition(previous => {
+      const next = clampPosition(previous, scaleRef.current);
+      return next.x === previous.x && next.y === previous.y ? previous : next;
+    });
+  }, [isLightbox, physicalWidth, aspectRatio, clampPosition]);
+
+  const animateZoom = useCallback(() => {
+    if (zoomTimer.current !== null) clearTimeout(zoomTimer.current);
+    const animate = !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    zoomAnimating.current = animate;
+    setIsAnimating(animate);
+    if (animate) zoomTimer.current = setTimeout(() => { zoomTimer.current = null; zoomAnimating.current = false; setIsAnimating(false); }, ZOOM_TRANSITION_MS);
+  }, []);
+  useEffect(() => () => { if (zoomTimer.current !== null) clearTimeout(zoomTimer.current); }, []);
+
+  const interruptZoom = useCallback(() => {
+    if (!zoomAnimating.current) return;
+    if (zoomTimer.current !== null) clearTimeout(zoomTimer.current);
+    zoomTimer.current = null;
+    zoomAnimating.current = false;
+    const surface = imageContainerRef.current?.querySelector('.viewer-transform');
+    // Direct manipulation starts from the visible in-flight zoom, not its target.
+    if (isLightbox && surface && typeof DOMMatrixReadOnly !== 'undefined') {
+      const matrix = new DOMMatrixReadOnly(getComputedStyle(surface).transform);
+      scaleRef.current = Math.max(MIN_SCALE, matrix.a);
+      positionRef.current = { x: matrix.m41, y: matrix.m42 };
+      setScale(scaleRef.current);
+      setPosition(positionRef.current);
+    }
+    setIsAnimating(false);
+  }, [isLightbox]);
+
   // Apply zoom while maintaining view center
   const applyZoom = useCallback((newScale: number, animate: boolean) => {
     cancelSwipe();
     const clampedScale = Math.min(Math.max(MIN_SCALE, newScale), MAX_SCALE);
 
-    if (animate) {
-      setIsAnimating(true);
-      setTimeout(() => setIsAnimating(false), ZOOM_TRANSITION_MS);
-    }
+    if (animate) animateZoom();
+    else interruptZoom();
 
     // Adjust position to maintain view center
     const oldScale = scaleRef.current;
@@ -354,13 +396,14 @@ const LetterViewer = memo(function LetterViewer({
       }, clampedScale));
     }
 
+    scaleRef.current = clampedScale;
     setScale(clampedScale);
 
     // Reset position if back to 1x
     if (clampedScale === 1) {
       setPosition({ x: 0, y: 0 });
     }
-  }, [clampPosition, cancelSwipe]);
+  }, [clampPosition, cancelSwipe, animateZoom, interruptZoom]);
 
   // ============================================================================
   // SLIDER HANDLERS
@@ -421,6 +464,7 @@ const LetterViewer = memo(function LetterViewer({
         e.preventDefault();
         e.stopPropagation();
 
+        interruptZoom();
         // Multiplicative zoom: speed increases proportionally with current scale
         const factor = Math.pow(1.01, -e.deltaY);
         const currentScale = scaleRef.current;
@@ -435,33 +479,32 @@ const LetterViewer = memo(function LetterViewer({
     return () => {
       container.removeEventListener("wheel", handleWheel);
     };
-  }, [applyZoom]);
+  }, [applyZoom, interruptZoom]);
 
   // ============================================================================
   // NAVIGATION
   // ============================================================================
 
-  const nextImage = useCallback(() => {
+  const selectImage = useCallback((index: number) => {
     cancelSwipe();
-    // Save current state before switching
     saveCurrentImageState();
-    // Reset before rendering the next page so the previous zoom cannot fetch its original.
+    scaleRef.current = 1;
+    positionRef.current = { x: 0, y: 0 };
+    if (zoomTimer.current !== null) clearTimeout(zoomTimer.current);
+    zoomTimer.current = null;
+    zoomAnimating.current = false;
+    setIsAnimating(false);
     setScale(1);
     setPosition({ x: 0, y: 0 });
-    setCurrentImageIndex((prev) => (prev + 1) % displayImages.length);
-  }, [displayImages.length, saveCurrentImageState, cancelSwipe]);
-
-  const prevImage = useCallback(() => {
-    cancelSwipe();
-    // Save current state before switching
-    saveCurrentImageState();
-    // Reset before rendering the next page so the previous zoom cannot fetch its original.
-    setScale(1);
-    setPosition({ x: 0, y: 0 });
-    setCurrentImageIndex(
-      (prev) => (prev - 1 + displayImages.length) % displayImages.length
-    );
-  }, [displayImages.length, saveCurrentImageState, cancelSwipe]);
+    currentImageIndexRef.current = index;
+    touchStateRef.current.swipeActive = false;
+    touchStateRef.current.panStart = null;
+    touchStateRef.current.isPinching = false;
+    touchStateRef.current.lastTapTime = 0;
+    setCurrentImageIndex(index);
+  }, [saveCurrentImageState, cancelSwipe]);
+  const nextImage = useCallback(() => selectImage((currentImageIndexRef.current + 1) % displayImages.length), [selectImage, displayImages.length]);
+  const prevImage = useCallback(() => selectImage((currentImageIndexRef.current - 1 + displayImages.length) % displayImages.length), [selectImage, displayImages.length]);
 
   useEffect(() => {
     if (variant !== "lightbox" || displayImages.length < 2) return;
@@ -471,7 +514,7 @@ const LetterViewer = memo(function LetterViewer({
       const dialogs = document.querySelectorAll('[aria-modal="true"]');
       if (!dialog || dialogs[dialogs.length - 1] !== dialog || !dialog.contains(event.target as Node)) return;
       if (event.target instanceof HTMLElement && (event.target.isContentEditable
-        || event.target.closest('input, textarea, select, [role="slider"]'))) return;
+        || event.target.closest('input, textarea, select, [role="slider"], .viewer-page-drawer'))) return;
       if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
       event.preventDefault();
       // Match the page buttons: wrap pages and reset zoom/pan to fit.
@@ -491,14 +534,15 @@ const LetterViewer = memo(function LetterViewer({
   // ============================================================================
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    interruptZoom();
     mouseDownPos.current = { x: e.clientX, y: e.clientY };
     mouseDownOnImage.current = (e.target as HTMLElement).tagName === 'IMG';
-    if (scale === 1) return;
+    if (scaleRef.current === 1) return;
 
     setIsDragging(true);
     setDragStart({
-      x: e.clientX - position.x,
-      y: e.clientY - position.y,
+      x: e.clientX - positionRef.current.x,
+      y: e.clientY - positionRef.current.y,
     });
   };
 
@@ -539,7 +583,7 @@ const LetterViewer = memo(function LetterViewer({
     // Pinch tracking
     initialDistance: number;
     initialScale: number;
-    initialMidpoint: { x: number; y: number };
+    previousMidpoint: { x: number; y: number };
     // Single-finger pan
     panStart: { x: number; y: number } | null;
     isPinching: boolean;
@@ -551,7 +595,7 @@ const LetterViewer = memo(function LetterViewer({
   }>({
     initialDistance: 0,
     initialScale: 1,
-    initialMidpoint: { x: 0, y: 0 },
+    previousMidpoint: { x: 0, y: 0 },
     panStart: null,
     isPinching: false,
     lastTapTime: 0,
@@ -572,6 +616,7 @@ const LetterViewer = memo(function LetterViewer({
     });
 
     const onTouchStart = (e: TouchEvent) => {
+      interruptZoom();
       const ts = touchStateRef.current;
 
       if (e.touches.length >= 2) {
@@ -583,11 +628,14 @@ const LetterViewer = memo(function LetterViewer({
         e.preventDefault();
         ts.isPinching = true;
         ts.panStart = null;
-        ts.initialDistance = getTouchDistance(e.touches[0], e.touches[1]);
+        ts.initialDistance = Math.max(1, getTouchDistance(e.touches[0], e.touches[1]));
         ts.initialScale = scaleRef.current;
-        ts.initialMidpoint = getTouchMidpoint(e.touches[0], e.touches[1]);
+        ts.previousMidpoint = getTouchMidpoint(e.touches[0], e.touches[1]);
       } else if (e.touches.length === 1) {
-        if (swipeSettlingRef.current) { e.preventDefault(); return; }
+        ts.panStart = null;
+        ts.isPinching = false;
+        ts.swipeActive = false;
+        if (swipeSettlingRef.current) ts.lastTapTime = 0;
         const now = Date.now();
         const touch = e.touches[0];
         const dt = now - ts.lastTapTime;
@@ -610,13 +658,13 @@ const LetterViewer = memo(function LetterViewer({
             const tapX = touch.clientX - rect.left - rect.width / 2;
             const tapY = touch.clientY - rect.top - rect.height / 2;
             const newScale = 2.5;
-            setIsAnimating(true);
-            setTimeout(() => setIsAnimating(false), ZOOM_TRANSITION_MS);
+            animateZoom();
+            scaleRef.current = newScale;
             setScale(newScale);
-            setPosition({
+            setPosition(clampPosition({
               x: tapX * (1 - newScale),
               y: tapY * (1 - newScale),
-            });
+            }, newScale));
           }
           return;
         }
@@ -658,14 +706,19 @@ const LetterViewer = memo(function LetterViewer({
         const cx = mid.x - rect.left - rect.width / 2;
         const cy = mid.y - rect.top - rect.height / 2;
 
-        // Position adjustment: keep the midpoint stationary
+        const previousX = ts.previousMidpoint.x - rect.left - rect.width / 2;
+        const previousY = ts.previousMidpoint.y - rect.top - rect.height / 2;
+        ts.previousMidpoint = mid;
+
+        // Keep the point between both fingers attached while they move and scale.
         const prevScale = scaleRef.current;
         const scaleChange = newScale / prevScale;
 
+        scaleRef.current = newScale;
         setScale(newScale);
         setPosition((prev) => clampPosition({
-          x: cx - scaleChange * (cx - prev.x),
-          y: cy - scaleChange * (cy - prev.y),
+          x: cx - scaleChange * (previousX - prev.x),
+          y: cy - scaleChange * (previousY - prev.y),
         }, newScale));
 
         if (newScale === 1) {
@@ -701,8 +754,7 @@ const LetterViewer = memo(function LetterViewer({
 
         // Snap to 1x if very close
         if (scaleRef.current < 1.05 && scaleRef.current > 0.95) {
-          setIsAnimating(true);
-          setTimeout(() => setIsAnimating(false), ZOOM_TRANSITION_MS);
+          animateZoom();
           setScale(1);
           setPosition({ x: 0, y: 0 });
         }
@@ -737,10 +789,29 @@ const LetterViewer = memo(function LetterViewer({
       container.removeEventListener('touchmove', onTouchMove);
       container.removeEventListener('touchend', onTouchEnd);
     };
-  }, [variant, applyZoom, clampPosition, beginSwipe, moveSwipe, releaseSwipe, cancelSwipe, swipeSettlingRef]);
+  }, [variant, applyZoom, clampPosition, beginSwipe, moveSwipe, releaseSwipe, cancelSwipe, swipeSettlingRef, animateZoom, interruptZoom]);
+
+  useEffect(() => {
+    const element = imageContainerRef.current;
+    if (!isLightbox || !element) return;
+    let width = element.clientWidth;
+    let height = element.clientHeight;
+    const observer = new ResizeObserver(() => {
+      if (width === element.clientWidth && height === element.clientHeight) return;
+      width = element.clientWidth;
+      height = element.clientHeight;
+      cancelSwipe();
+      touchStateRef.current.panStart = null;
+      touchStateRef.current.swipeActive = false;
+      touchStateRef.current.isPinching = false;
+      setPosition(previous => clampPosition(previous, scaleRef.current));
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [isLightbox, cancelSwipe, clampPosition]);
 
   // ============================================================================
-  // LIGHTBOX: DOUBLE-CLICK ZOOM + MINIMAP
+  // LIGHTBOX: DOUBLE-CLICK ZOOM
   // ============================================================================
 
   const handleDoubleClick = useCallback(
@@ -756,75 +827,16 @@ const LetterViewer = memo(function LetterViewer({
         const clickX = e.clientX - rect.left - rect.width / 2;
         const clickY = e.clientY - rect.top - rect.height / 2;
         const newScale = 2.5;
-        setIsAnimating(true);
-        setTimeout(() => setIsAnimating(false), ZOOM_TRANSITION_MS);
+        animateZoom();
+        scaleRef.current = newScale;
         setScale(newScale);
-        setPosition({
+        setPosition(clampPosition({
           x: clickX * (1 - newScale),
           y: clickY * (1 - newScale),
-        });
+        }, newScale));
       }
     },
-    [variant, applyZoom, cancelSwipe]
-  );
-
-  const minimapPan = useCallback(
-    (minimapEl: HTMLDivElement, clientX: number, clientY: number) => {
-      const img = imageRef.current;
-      if (!img) return;
-      const rect = minimapEl.getBoundingClientRect();
-      const nx = (clientX - rect.left) / rect.width;
-      const ny = (clientY - rect.top) / rect.height;
-      const dw = img.clientWidth;
-      const dh = img.clientHeight;
-      setPosition({
-        x: -scaleRef.current * (nx - 0.5) * dw,
-        y: -scaleRef.current * (ny - 0.5) * dh,
-      });
-    },
-    []
-  );
-
-  const handleMinimapMouseDown = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const minimapEl = e.currentTarget;
-
-      minimapPan(minimapEl, e.clientX, e.clientY);
-
-      const onMove = (me: MouseEvent) => minimapPan(minimapEl, me.clientX, me.clientY);
-      const onUp = () => {
-        document.removeEventListener("mousemove", onMove);
-        document.removeEventListener("mouseup", onUp);
-      };
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup", onUp);
-    },
-    [minimapPan]
-  );
-
-  const handleMinimapTouchStart = useCallback(
-    (e: React.TouchEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const minimapEl = e.currentTarget;
-      const touch = e.touches[0];
-
-      minimapPan(minimapEl, touch.clientX, touch.clientY);
-
-      const onMove = (te: TouchEvent) => {
-        te.preventDefault();
-        minimapPan(minimapEl, te.touches[0].clientX, te.touches[0].clientY);
-      };
-      const onEnd = () => {
-        document.removeEventListener("touchmove", onMove);
-        document.removeEventListener("touchend", onEnd);
-      };
-      document.addEventListener("touchmove", onMove, { passive: false });
-      document.addEventListener("touchend", onEnd);
-    },
-    [minimapPan]
+    [variant, applyZoom, cancelSwipe, animateZoom, clampPosition]
   );
 
   // ============================================================================
@@ -835,44 +847,17 @@ const LetterViewer = memo(function LetterViewer({
     return <div className="letter-viewer-empty">No images available</div>;
   }
 
-  const isLightbox = variant === "lightbox";
-
   // Panel mode: slider fill percentage
   const sliderPercent = ((scale - MIN_SCALE) / (MAX_SCALE - MIN_SCALE)) * 100;
 
-  // Lightbox mode: minimap viewport rect (percentage-based)
-  let minimapVp: {
-    left: number;
-    top: number;
-    width: number;
-    height: number;
-  } | null = null;
-  if (
-    isLightbox &&
-    scale > 1 &&
-    imageRef.current &&
-    imageContainerRef.current
-  ) {
-    const dw = imageRef.current.clientWidth;
-    const dh = imageRef.current.clientHeight;
-    const cw = imageContainerRef.current.clientWidth;
-    const ch = imageContainerRef.current.clientHeight;
-    if (dw > 0 && dh > 0) {
-      minimapVp = {
-        left:
-          Math.max(0, 0.5 - (cw / 2 + position.x) / (scale * dw)) * 100,
-        top:
-          Math.max(0, 0.5 - (ch / 2 + position.y) / (scale * dh)) * 100,
-        width: Math.min(100, (cw / (scale * dw)) * 100),
-        height: Math.min(100, (ch / (scale * dh)) * 100),
-      };
-    }
-  }
 
   return (
     <div
       className={`letter-viewer${isLightbox ? " letter-viewer--lightbox" : ""}`}
     >
+      <div className={`viewer-workspace${isLightbox && pagesOpen ? ' viewer-workspace--pages' : ''}`}>
+      {isLightbox && pagesOpen && <ViewerPageDrawer id={drawerId} images={displayImages}
+        selected={currentImageIndex} onSelect={selectImage} />}
       <div
         ref={imageContainerRef}
         className={`viewer-container ${isDragging ? "dragging" : ""}`}
@@ -884,7 +869,7 @@ const LetterViewer = memo(function LetterViewer({
       >
         <div className="viewer-carriage"
           style={{ transform: `translate3d(${swipe.offset}px, 0, 0)`,
-            transition: swipe.settling ? `transform ${VIEWER_SWIPE_MS}ms cubic-bezier(0.22, 0.61, 0.36, 1)` : 'none' }}
+            transition: swipe.settling ? `transform ${swipe.duration}ms cubic-bezier(0.22, 0.61, 0.36, 1)` : 'none' }}
           onTransitionEnd={(event) => {
             if (event.target === event.currentTarget && event.propertyName === 'transform') swipe.finish();
           }}
@@ -895,6 +880,11 @@ const LetterViewer = memo(function LetterViewer({
             <RetryingImage src={getImageUrl(adjacent.imageUrl, { width: adjacentWidth(adjacent) })} alt="" draggable={false} />
           </div>;
         })}
+        <div className={`viewer-transform${isAnimating ? ' animating' : ''}`} style={isLightbox ? {
+          width: physicalWidth / (window.devicePixelRatio || 1),
+          height: physicalWidth / (window.devicePixelRatio || 1) / aspectRatio,
+          transform: `translate3d(${position.x}px, ${position.y}px, 0) scale(${scale})`,
+        } : undefined}>
         {!fullLoaded && physicalWidth > 0 && (
           <img
             key={`placeholder:${placeholderSrc}:${placeholderRetry.attempt}`}
@@ -906,9 +896,7 @@ const LetterViewer = memo(function LetterViewer({
             style={{
               filter: midLoaded ? 'none' : undefined,
               visibility: placeholderRetry.failed ? 'hidden' : undefined,
-              transform: `scale(${scale}) translate(${position.x / scale}px, ${
-                position.y / scale
-              }px)`,
+              transform: isLightbox ? undefined : `scale(${scale}) translate(${position.x / scale}px, ${position.y / scale}px)`,
             }}
             draggable={false}
             aria-hidden
@@ -927,12 +915,8 @@ const LetterViewer = memo(function LetterViewer({
           }
           className={`viewer-image ${isAnimating ? "animating" : ""}`}
           style={{
-            transform: `scale(${scale}) translate(${position.x / scale}px, ${
-              position.y / scale
-            }px)`,
-            transition: [
-              !fullLoaded ? 'opacity 400ms ease-out' : undefined,
-            ].filter(Boolean).join(', ') || undefined,
+            transform: isLightbox ? undefined : `scale(${scale}) translate(${position.x / scale}px, ${position.y / scale}px)`,
+            transition: !isLightbox && !fullLoaded ? 'opacity 400ms ease-out' : undefined,
             cursor:
               scale > 1
                 ? isDragging
@@ -949,6 +933,7 @@ const LetterViewer = memo(function LetterViewer({
           draggable={false}
         />
 
+        </div>
         {((displayedRetry.failed || fullFailed) && (!midLoaded || placeholderRetry.failed)) && (
           <span className="viewer-image-error" role="status">Image unavailable</span>
         )}
@@ -1005,64 +990,27 @@ const LetterViewer = memo(function LetterViewer({
         )}
       </div>
 
-      {/* Lightbox mode: floating controls */}
-      {isLightbox && (
-        <>
-          {displayImages.length > 1 && (
-            <>
-              <button
-                type="button"
-                className="viewer-nav viewer-nav--prev"
-                tabIndex={0}
-                onClick={prevImage}
-                aria-label="Previous page"
-              >
-                <Icon name="arrow-left" size={20} />
-              </button>
-              <button
-                type="button"
-                className="viewer-nav viewer-nav--next"
-                tabIndex={0}
-                onClick={nextImage}
-                aria-label="Next page"
-              >
-                <Icon name="arrow-right" size={20} />
-              </button>
-              <div className="viewer-page-counter" role="status" aria-live="polite" aria-atomic="true" aria-label="Scan page">
-                {currentImageIndex + 1} / {displayImages.length}
-              </div>
-            </>
-          )}
+      </div>
+      {isLightbox && <div className="viewer-toolbar" aria-label="Scan controls">
+        <div className="viewer-page-controls">
+          <button type="button" tabIndex={0} className="viewer-nav viewer-nav--prev" disabled={displayImages.length < 2}
+            onClick={prevImage} aria-label="Previous page"><Icon name="arrow-left" size={20} /></button>
+          <span className="viewer-page-counter" role="status" aria-live="polite" aria-atomic="true" aria-label="Scan page">
+            {currentImageIndex + 1} / {displayImages.length}
+          </span>
+          <button type="button" tabIndex={0} className="viewer-nav viewer-nav--next" disabled={displayImages.length < 2}
+            onClick={nextImage} aria-label="Next page"><Icon name="arrow-right" size={20} /></button>
+        </div>
+        <div className="viewer-zoom-controls">
+          <button type="button" tabIndex={0} onClick={() => applyZoom(scaleRef.current / 1.4, true)} disabled={scale <= MIN_SCALE} aria-label="Zoom out">−</button>
+          <span className="viewer-zoom-badge" aria-label="Zoom level">{Math.round(scale * 100)}%</span>
+          <button type="button" tabIndex={0} onClick={() => applyZoom(scaleRef.current * 1.4, true)} disabled={scale >= MAX_SCALE} aria-label="Zoom in">+</button>
+          <button type="button" tabIndex={0} onClick={() => applyZoom(1, true)} aria-label="Fit scan">Fit</button>
+        </div>
+        {displayImages.length > 1 && <button className="viewer-pages-toggle" type="button" tabIndex={0} aria-expanded={pagesOpen} aria-controls={drawerId}
+          onClick={() => { cancelSwipe(); setPagesOpen(open => !open); }}>Pages</button>}
+      </div>}
 
-          <div className="viewer-zoom-badge">
-            {Math.round(scale * 100)}%
-          </div>
-
-          {minimapVp && (
-            <div
-              className="viewer-minimap"
-              onMouseDown={handleMinimapMouseDown}
-              onTouchStart={handleMinimapTouchStart}
-            >
-              <RetryingImage
-                src={getImageUrl(currentImage.imageUrl, { width: 200 })}
-                alt=""
-                className="minimap-thumb"
-                draggable={false}
-              />
-              <div
-                className="minimap-viewport"
-                style={{
-                  left: `${minimapVp.left}%`,
-                  top: `${minimapVp.top}%`,
-                  width: `${minimapVp.width}%`,
-                  height: `${minimapVp.height}%`,
-                }}
-              />
-            </div>
-          )}
-        </>
-      )}
     </div>
   );
 });

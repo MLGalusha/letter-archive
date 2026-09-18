@@ -27,8 +27,8 @@ export default function ReaderTranscript({ letter, onViewSource }: Props) {
       ) : pages.length ? pages.map(page => {
         const imageIndex = letter.images.findIndex(image => image.type === 'letter' && image.pageNumber === page.pageNumber);
         return <div className="transcript-page-region" key={page.pageNumber}>
-          {pages.length > 1 && <div className="transcript-page-heading">
-            <span>Page {page.pageNumber}</span>
+          {(pages.length > 1 || imageIndex >= 0) && <div className="transcript-page-heading">
+            {pages.length > 1 && <span>Page {page.pageNumber}</span>}
             {imageIndex >= 0 && <button type="button" className="reader-source-link"
               onClick={event => onViewSource(imageIndex, event.currentTarget)}
               aria-label={`View page ${page.pageNumber} on scan`}>View on scan ↗</button>}

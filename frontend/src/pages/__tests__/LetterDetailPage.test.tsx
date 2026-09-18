@@ -20,7 +20,7 @@ vi.mock("../../api/letters", () => ({
 
 // Mock LetterViewer since it requires complex DOM setup
 vi.mock("../../components/LetterViewer/LetterViewer", () => ({
-  default: () => <div>LetterViewer</div>,
+  default: ({ initialIndex }: { initialIndex: number }) => <div data-index={initialIndex}>LetterViewer</div>,
 }));
 
 // Keep this regression touch-capable if a page gesture is accidentally restored.
@@ -296,6 +296,17 @@ describe("LetterDetailPage", () => {
     renderLetterDetailPage();
     expect(await screen.findByText(/A saved paragraph/)).toHaveTextContent("P.S. Please write soon.");
     expect(screen.getByText("Original scans are not available.")).toBeInTheDocument();
+  });
+
+  it("opens the mapped source for a single transcript page among extra images", async () => {
+    const user = userEvent.setup();
+    getLetterByIdMock.mockResolvedValue(createLetter({ images: [
+      { id: 'card-first', type: 'card', imageUrl: '/images/card.jpg' },
+      ...createLetter().images,
+    ] }));
+    renderLetterDetailPage();
+    await user.click(await screen.findByRole('button', { name: 'View page 1 on scan' }));
+    expect(await screen.findByText('LetterViewer')).toHaveAttribute('data-index', '1');
   });
 
   it("keeps extra documents separate and links every associated source", async () => {

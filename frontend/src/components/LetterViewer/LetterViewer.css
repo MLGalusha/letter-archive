@@ -319,14 +319,28 @@
   grid-template-rows: minmax(0, 1fr) auto;
   color: #f4eee4;
 }
-.letter-viewer--with-header { grid-template-rows: auto minmax(0, 1fr) auto; }
+.letter-viewer--with-header {
+  --viewer-header-height: 44px;
+  /* The fixed header paints the viewport edge; this row reserves its controls. */
+  grid-template-rows: var(--viewer-header-height) minmax(0, 1fr) auto;
+}
+.letter-viewer--with-header .viewer-workspace { grid-row: 2; }
+.letter-viewer--with-header .viewer-toolbar { grid-row: 3; }
 .viewer-modal-header {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 1;
+  box-sizing: border-box;
+  height: calc(var(--viewer-header-height) + 8px + env(safe-area-inset-top, 0px));
+  background: var(--viewer-surface, #181a19);
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex: none;
   gap: 16px;
-  padding-left: 12px;
+  padding: calc(8px + env(safe-area-inset-top, 0px))
+    calc(8px + env(safe-area-inset-right, 0px)) 0
+    calc(20px + env(safe-area-inset-left, 0px));
   min-height: 44px;
   font-size: .85rem;
   font-weight: 600;

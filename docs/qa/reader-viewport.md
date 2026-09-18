@@ -88,3 +88,30 @@ Keep #172 open until the following are checked on the phone after release:
 If a strip remains, record screen pixels together with innerHeight, clientHeight,
 visualViewport height/offset, safe-area values, and overlay/control rectangles.
 Do not declare it fixed from a recolored screenshot or desktop geometry alone.
+
+## First-open Safari follow-up
+
+After dda8799a shipped, the user confirmed the bottom gap is gone on the iPhone
+13. Safari still shows a light notch region on the first fullscreen opening after
+refresh; closing/reopening corrects it, and another refresh restores the failure.
+No claim is made yet about outside-image scrolling or the other browser modes.
+
+Current WebKit source provides a concrete lead: viewport-sized fixed containers
+can prefer an already cached edge color. See [LocalFrameView.cpp, pinned source](https://github.com/WebKit/WebKit/blob/341509d79270e1d863943d4c512e19d059328d91/Source/WebCore/page/LocalFrameView.cpp#L2684)
+and [Page.cpp sampling gates](https://github.com/WebKit/WebKit/blob/341509d79270e1d863943d4c512e19d059328d91/Source/WebCore/page/Page.cpp#L5613).
+This is current engine source, not proof of the exact code shipped in reported
+iOS 26.6.2; retain that distinction when interpreting device results.
+
+The candidate correction gives the existing viewer header an opaque full-width
+fixed edge. It is shorter than the viewport, avoiding the viewport-sized
+candidate rule, and uses the same surface color as the backdrop. The grid
+reserves its 44px controls while safe-area values keep their former positions.
+There is no new visual control, fake status strip, model-specific offset,
+repaint timer or replacement of native browser chrome.
+
+Focused Chromium/WebKit coverage passes 44 cases with two intentional CDP skips,
+including repeated entry/exit, viewport resizing, simulated safe-area rotation,
+focus restoration and gestures. New assertions verify header edge attachment,
+opaque color and no stage overlap. Build and lint regression checks pass.
+Physical Safari refresh -> first open -> close -> reopen remains the deciding
+acceptance check; desktop assertions do not certify the native notch color.

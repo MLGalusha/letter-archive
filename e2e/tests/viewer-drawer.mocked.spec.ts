@@ -179,32 +179,36 @@ test('@mocked synthetic swipe takeover, zoomed pan and pinch keep their gesture 
 test('@mocked a touch takes over the visible zoom before its target arrives', async ({ page }) => {
   await openReader(page);
   await expect(page.locator('.viewer-image')).toHaveCSS('opacity', '1');
+  // Freeze JS cleanup timers, then seek the real CSS transition explicitly.
+  // Sampling a naturally running 150ms transition races a busy CI renderer.
+  const now = new Date();
+  await page.clock.install({ time: now });
+  await page.clock.pauseAt(now);
   const values = await page.evaluate(async () => {
     const surface = document.querySelector('.viewer-transform')!;
     const read = () => new DOMMatrixReadOnly(getComputedStyle(surface).transform).a;
-    // Observe a real animation frame, then touch in that same browser task.
-    const target = 1.4;
+    const paused = new Promise<void>(resolve => {
+      surface.addEventListener('transitionrun', async () => {
+        const animation = surface.getAnimations().find(animation =>
+          animation instanceof CSSTransition && animation.transitionProperty === 'transform')!;
+        animation.pause();
+        animation.currentTime = Number(animation.effect!.getTiming().duration) / 2;
+        await animation.ready;
+        resolve();
+      }, { once: true });
+    });
     document.querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!.click();
-    let before = 1;
-    for (let frame = 0; frame < 10 && before === 1; frame++) {
-      await new Promise(requestAnimationFrame);
-      before = read();
-    }
-    const animations = surface.getAnimations();
-    animations.forEach(animation => animation.pause());
-    await Promise.all(animations.map(animation => animation.ready));
-    before = read();
+    await paused;
+    const before = read();
     const event = new Event('touchstart', { bubbles: true, cancelable: true });
     Object.defineProperty(event, 'touches', { value: [{ clientX: 260, clientY: 250 }] });
     document.querySelector('.viewer-container')!.dispatchEvent(event);
-    await new Promise(requestAnimationFrame); await new Promise(requestAnimationFrame);
-    const after = read();
-    document.querySelector('.viewer-container')!.dispatchEvent(new Event('touchcancel', { bubbles: true }));
-    return { before, after, target };
+    return { before, target: 1.4 };
   });
   expect(values.before).toBeGreaterThan(1);
   expect(values.before).toBeLessThan(values.target);
-  expect(values.after).toBeCloseTo(values.before, 3);
+  await expect.poll(() => page.locator('.viewer-transform').evaluate(el =>
+    new DOMMatrixReadOnly(getComputedStyle(el).transform).a)).toBeCloseTo(values.before, 3);
 });
 
 test('@mocked reduced motion removes zoom interpolation', async ({ page }) => {

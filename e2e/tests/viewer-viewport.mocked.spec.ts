@@ -18,7 +18,7 @@ test('@mocked fullscreen paints document edges and restores them on repeated clo
         return Math.max(Math.abs(rect.top), Math.abs(rect.bottom - innerHeight));
       })).toBeLessThan(1);
       const close = await page.getByRole('button', { name: 'Close viewer' }).boundingBox();
-      const pages = await page.getByRole('button', { name: 'Pages', exact: true }).boundingBox();
+      const pages = await page.getByRole('dialog', { name: 'Original scans' }).getByRole('button', { name: 'Pages', exact: true }).boundingBox();
       expect(close!.y).toBeGreaterThanOrEqual(0);
       expect(pages!.y + pages!.height).toBeLessThanOrEqual(height);
     }
@@ -46,7 +46,7 @@ test('@mocked fullscreen blocks chrome gestures while preserving drawer scrollin
   });
   await opener.focus();
   await opener.press('Enter');
-  await page.getByRole('button', { name: 'Pages', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Original scans' }).getByRole('button', { name: 'Pages', exact: true }).click();
   const gestures = await page.evaluate(() => {
     const dispatch = (selector: string, type: string) => {
       const event = new Event(type, { bubbles: true, cancelable: true });

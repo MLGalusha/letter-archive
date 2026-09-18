@@ -243,20 +243,29 @@ export default function CollectionDetailPage() {
   const collectionNotes = collection?.description || '';
   const hasExploreContent = correspondents.length > 0 || highlights.length > 0 || gallery.length > 0 || collectionNotes.length > 0;
 
+  const headerDock = <HeaderDock collectionsLink={collectionsLinkOverride}>
+    {collectionScrubberProps && <HeaderScrubber {...collectionScrubberProps} disabled={loading || collectionScrubberProps.disabled} />}
+  </HeaderDock>;
+
   /* ---- Loading / error states ---- */
   if (loading) {
     return (
+      <>
+      {headerDock}
       <div className="body-layout">
         <div className="collection-detail-public">
           <p className="loading-message">Loading collection...</p>
         </div>
       </div>
+      </>
     );
   }
 
   if (!collection || error) {
     const notFoundSeo = buildNotFoundSeo();
     return (
+      <>
+      {headerDock}
       <div className="body-layout">
         <SEO title={notFoundSeo.title} description={notFoundSeo.description} robots={notFoundSeo.robots} />
         <div className="collection-detail-public">
@@ -270,6 +279,7 @@ export default function CollectionDetailPage() {
         </div>
         <Footer />
       </div>
+      </>
     );
   }
 
@@ -286,11 +296,7 @@ export default function CollectionDetailPage() {
 
   return (
     <>
-      <HeaderDock collectionsLink={collectionsLinkOverride}>
-        {collectionScrubberProps && (
-          <HeaderScrubber {...collectionScrubberProps} />
-        )}
-      </HeaderDock>
+      {headerDock}
     <div className="body-layout" ref={swipeRef} style={swipeStyle}>
       <SEO
         title={seo.title}

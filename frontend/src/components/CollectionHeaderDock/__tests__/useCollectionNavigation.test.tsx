@@ -73,7 +73,7 @@ describe("useCollectionNavigation", () => {
     rerender({ collectionCode: "010" });
 
     expect(result.current.adjacent).toEqual({ prev: null, next: null });
-    expect(result.current.scrubberProps).toBeNull();
+    expect(result.current.scrubberProps).toMatchObject({ position: 2, total: 3, disabled: true });
     expect(listCollectionsMock).toHaveBeenCalledTimes(2);
 
     await act(async () => {
@@ -115,7 +115,7 @@ describe("useCollectionNavigation", () => {
     rerender({ collectionCode: "009" });
 
     expect(result.current.adjacent).toEqual({ prev: null, next: null });
-    expect(result.current.scrubberProps).toBeNull();
+    expect(result.current.scrubberProps).toMatchObject({ position: 2, total: 3, disabled: true });
     expect(listCollectionsMock).toHaveBeenCalledTimes(3);
 
     await act(async () => {

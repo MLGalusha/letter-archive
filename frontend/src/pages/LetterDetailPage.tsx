@@ -109,6 +109,21 @@ export default function LetterDetailPage() {
     ? loadedAdjacent.value
     : null;
 
+  // Keep the last committed navigation presentation while its replacement loads.
+  // It is never an active source of destinations while retained.
+  const [settledNavigation, setSettledNavigation] = useState<{
+    ownerLetterId: string; value: AdjacentLettersResponse | null;
+  } | null>(null);
+  const navigationResolved = !error && displayedLetterIsCurrent && loadedAdjacent?.ownerLetterId === letterId;
+  if (navigationResolved && settledNavigation !== loadedAdjacent) setSettledNavigation(loadedAdjacent);
+  if (error && settledNavigation) setSettledNavigation(null);
+  const canRetainNavigation = !error && settledNavigation?.value && (
+    loadedLetter?.ownerLetterId === settledNavigation.ownerLetterId
+    || letter?.collectionCode === settledNavigation.value.collectionCode
+  );
+  const navigationPresentation = navigationResolved ? loadedAdjacent : canRetainNavigation ? settledNavigation : null;
+  const navigationPending = !!navigationPresentation && !navigationResolved;
+
   // Image viewer modal
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerStartPage, setViewerStartPage] = useState(0);
@@ -183,14 +198,13 @@ export default function LetterDetailPage() {
   }, [adjacent, displayedLetterIsCurrent, navigate, viewerOpen]);
 
   // Build scrubber props from adjacent data (hook must be at top level)
-  const scrubberProps = useLetterScrubber(adjacent, letterId);
+  const scrubberProps = useLetterScrubber(navigationPresentation?.value ?? null, navigationPresentation?.ownerLetterId);
 
+  const collectionCode = displayedLetterIsCurrent ? letter?.collectionCode ?? adjacent?.collectionCode
+    : navigationPresentation?.value?.collectionCode;
   const collectionsLink = useMemo(
-    () =>
-      adjacent
-        ? { label: "Collection", to: `/collections/${adjacent.collectionCode}` }
-        : undefined,
-    [adjacent],
+    () => collectionCode ? { label: "Collection", to: `/collections/${collectionCode}` } : undefined,
+    [collectionCode],
   );
 
   const seo = useMemo(() => (letter ? buildLetterSeo(letter, siteName) : null), [letter, siteName]);
@@ -276,7 +290,7 @@ export default function LetterDetailPage() {
   return (
     <>
       <HeaderDock transparent collectionsLink={collectionsLink}>
-        {scrubberProps && <HeaderScrubber {...scrubberProps} />}
+        {scrubberProps && <HeaderScrubber {...scrubberProps} disabled={navigationPending} />}
       </HeaderDock>
       {pending && <div className="letter-navigation-status" role="status"><span className="sr-only">Loading letter...</span></div>}
       <article className="letter-article" aria-busy={pending} inert={pending}>

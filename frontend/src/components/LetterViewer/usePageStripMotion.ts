@@ -137,6 +137,9 @@ export function usePageStripMotion(selected: number,
     });
     resize.observe(list);
     const selectedEvent = () => {
+      // Main-image completion must not steal a held strip or its release coast.
+      // Explicit selection can still clear idle wheel ownership.
+      if (drag || (browsing && motion?.get() != null)) return;
       if (!following) {
         browsing = false; drag = null;
         settle(current.current.selected, false);

@@ -190,3 +190,42 @@ for (const deltaX of [0, -150]) test(`@mocked wheel without strip movement does 
     return Math.abs(selected.left + selected.width / 2 - box.left - box.width / 2);
   })).toBeLessThan(1);
 });
+
+test('@mocked grabbing thumbnails keeps ownership when the main swipe commits', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const now = new Date('2026-09-18T12:00:00Z');
+  await page.clock.install({ time: now });
+  await openReader(page);
+  await page.clock.pauseAt(new Date(now.getTime() + 60_000));
+  await page.locator('.viewer-container').evaluate(stage => {
+    for (const [type, x] of [['touchstart', 280], ['touchmove', 160]] as const) {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'touches', { value: [{ clientX: x, clientY: 250 }] }); stage.dispatchEvent(event);
+    }
+  });
+  await page.clock.runFor(16);
+  await expect(page.locator('.viewer-carriage')).toHaveCSS('transform', 'matrix(1, 0, 0, 1, -120, 0)');
+  await page.evaluate(() => {
+    const stage = document.querySelector('.viewer-container')!, carriage = document.querySelector('.viewer-carriage')!;
+    carriage.addEventListener('transitionrun', () => { carriage.getAnimations()[0].pause(); carriage.setAttribute('data-test-paused', 'yes'); }, { once: true });
+    const event = new Event('touchend', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'touches', { value: [] }); stage.dispatchEvent(event);
+  });
+  await page.clock.runFor(16);
+  await expect(page.locator('.viewer-carriage')).toHaveAttribute('data-test-paused', 'yes');
+  const strip = page.getByRole('dialog').locator('.viewer-page-drawer');
+  const box = (await strip.boundingBox())!, y = box.y + box.height / 2;
+  await page.mouse.move(250, y); await page.mouse.down();
+  await page.mouse.move(220, y, { steps: 3 });
+  await page.clock.runFor(400); // Exercise the same commit through its guarded fallback.
+  await expect(page.locator('.viewer-page-counter')).toHaveText('2 / 3');
+  const before = await strip.evaluate(el => el.scrollLeft);
+  await page.mouse.move(180, y, { steps: 4 });
+  expect(await strip.evaluate(el => el.scrollLeft)).toBeGreaterThan(before + 30);
+  await page.mouse.up();
+  await page.clock.runFor(1000);
+  await expect.poll(() => strip.evaluate(el => {
+    const box = el.getBoundingClientRect(), active = el.querySelector('[aria-current="page"]')!.getBoundingClientRect();
+    return Math.abs(active.left + active.width / 2 - box.left - box.width / 2);
+  })).toBeLessThan(1);
+});

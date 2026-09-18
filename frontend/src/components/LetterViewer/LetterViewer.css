@@ -460,7 +460,18 @@
   outline-offset: 2px;
 }
 .viewer-toolbar button[aria-expanded="true"] { border-color: #9dd4d1; background: #255356; }
-.viewer-page-counter { min-width: 5.5ch; text-align: center; font-size: .9rem; font-variant-numeric: tabular-nums; }
+/* The standalone viewer also owns the styling of its hidden announcement. */
+.viewer-page-counter {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 .viewer-zoom-badge { min-width: 6ch; text-align: center; font-size: .85rem; font-variant-numeric: tabular-nums; }
 /* Phones use direct pinch/double-tap zoom. Keep navigation in one bottom row
    and the readout beside Close; mouse/keyboard layouts retain explicit zoom. */

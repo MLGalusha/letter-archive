@@ -184,22 +184,29 @@ test('@mocked a touch takes over the visible zoom before its target arrives', as
   const now = new Date();
   await page.clock.install({ time: now });
   await page.clock.pauseAt(now);
-  const values = await page.evaluate(async () => {
+  await page.evaluate(() => {
     const surface = document.querySelector('.viewer-transform')!;
-    const read = () => new DOMMatrixReadOnly(getComputedStyle(surface).transform).a;
-    const paused = new Promise<void>(resolve => {
-      surface.addEventListener('transitionrun', async () => {
+    (window as typeof window & { zoomPaused: Promise<void> }).zoomPaused = new Promise<void>((resolve, reject) => {
+      surface.addEventListener('transitionrun', () => {
         const animation = surface.getAnimations().find(animation =>
-          animation instanceof CSSTransition && animation.transitionProperty === 'transform')!;
+          animation instanceof CSSTransition && animation.transitionProperty === 'transform');
+        if (!animation) { reject(new Error('Transform transition is missing')); return; }
         animation.pause();
         animation.currentTime = Number(animation.effect!.getTiming().duration) / 2;
-        await animation.ready;
         resolve();
       }, { once: true });
     });
+    // Establish the initial computed style before starting a CSS transition.
+    surface.getBoundingClientRect();
     document.querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!.click();
-    await paused;
-    const before = read();
+  });
+  // React may schedule the programmatic click's commit with a zero-delay task.
+  // Advance it while keeping the 150ms application cleanup timer pending.
+  await page.clock.runFor(32);
+  const values = await page.evaluate(async () => {
+    await (window as typeof window & { zoomPaused: Promise<void> }).zoomPaused;
+    const surface = document.querySelector('.viewer-transform')!;
+    const before = new DOMMatrixReadOnly(getComputedStyle(surface).transform).a;
     const event = new Event('touchstart', { bubbles: true, cancelable: true });
     Object.defineProperty(event, 'touches', { value: [{ clientX: 260, clientY: 250 }] });
     document.querySelector('.viewer-container')!.dispatchEvent(event);

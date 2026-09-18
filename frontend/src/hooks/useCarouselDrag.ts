@@ -129,7 +129,15 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
     if (!carousel) return;
     const slide = carousel.children[index] as HTMLElement | undefined;
     if (!slide) return;
-    slide.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    const bounds = carousel.getBoundingClientRect();
+    const slideBounds = slide.getBoundingClientRect();
+    const center = bounds.left + carousel.clientLeft + carousel.clientWidth / 2;
+    const slideCenter = slideBounds.left + slideBounds.width / 2;
+    // Scroll only this horizontal owner; scrollIntoView also moves the document.
+    carousel.scrollTo({
+      left: carousel.scrollLeft + slideCenter - center,
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
+    });
   }, []);
 
   return { carouselRef, attachCarousel, activeIndex, carouselDraggedRef, scrollToSlide };

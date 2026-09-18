@@ -113,17 +113,19 @@ for (const mode of ['inline', 'fullscreen']) test(`@mocked centered ${mode} film
 
 for (const mode of ['inline', 'fullscreen']) test(`@mocked ${mode} thumbnails track partial main-image progress before selection`, async ({ page, browserName }) => {
   await page.setViewportSize({ width: 390, height: 844 });
+  test.skip(mode === 'inline' && browserName !== 'chromium', 'Native held-touch progress uses CDP; fullscreen progress also runs in WebKit.');
+  const cdp = mode === 'inline' ? await page.context().newCDPSession(page) : null;
+  await cdp?.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 2 });
   await openReader(page);
   if (mode === 'inline') await page.getByRole('button', { name: 'Close viewer' }).click();
   const strip = page.locator(mode === 'inline' ? '.viewer-page-drawer--inline' : '[role="dialog"] .viewer-page-drawer');
   if (mode === 'inline') {
-    test.skip(browserName !== 'chromium', 'Native held-touch progress uses CDP; fullscreen progress also runs in WebKit.');
-    const cdp = await page.context().newCDPSession(page);
-    await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 2 });
+    await expect(page.locator('.scan-carousel')).toBeVisible();
+    await page.locator('.scan-carousel').scrollIntoViewIfNeeded();
     const box = (await page.locator('.scan-carousel').boundingBox())!;
     const y = box.y + Math.min(160, box.height / 2);
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 290, y, id: 1 }] });
-    for (const x of [270, 250, 230, 210, 190]) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y, id: 1 }] });
+    await cdp!.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 290, y, id: 1 }] });
+    for (const x of [270, 250, 230, 210, 190]) await cdp!.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y, id: 1 }] });
   }
   else await page.locator('.viewer-container').evaluate(stage => {
     for (const [type, x] of [['touchstart', 280], ['touchmove', 180]] as const) {
@@ -172,4 +174,19 @@ for (const mode of ['inline', 'fullscreen']) test(`@mocked ${mode} thumbnail coa
   const settled = await strip.evaluate(el => el.scrollLeft);
   await page.waitForTimeout(300);
   expect(await strip.evaluate(el => el.scrollLeft)).toBeCloseTo(settled, 0);
+});
+
+for (const deltaX of [0, -150]) test(`@mocked wheel without strip movement does not block main keyboard paging (${deltaX})`, async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openReader(page);
+  const strip = page.getByRole('dialog').locator('.viewer-page-drawer');
+  await strip.hover();
+  await page.mouse.wheel(deltaX, deltaX ? 0 : 150);
+  await page.getByRole('button', { name: 'Close viewer' }).focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('.viewer-page-counter')).toHaveText('2 / 3');
+  await expect.poll(() => strip.evaluate(el => {
+    const box = el.getBoundingClientRect(), selected = el.querySelector('[aria-current="page"]')!.getBoundingClientRect();
+    return Math.abs(selected.left + selected.width / 2 - box.left - box.width / 2);
+  })).toBeLessThan(1);
 });

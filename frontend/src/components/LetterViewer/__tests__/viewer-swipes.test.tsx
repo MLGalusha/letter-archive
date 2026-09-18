@@ -88,6 +88,22 @@ describe('fullscreen fit-view swipes', () => {
     expect(carriage).toHaveStyle({ transform: 'translate3d(0px, 0, 0)' });
     expect(screen.getByText('1 / 3')).toBeInTheDocument();
   });
+  it('accumulates pinch translation before a frame and cancels pending paint on page selection', () => {
+    const { target, container } = setup();
+    fireEvent.doubleClick(target);
+    act(() => vi.advanceTimersByTime(200));
+    touch(target, 'touchStart', [[100, 250], [200, 250]]);
+    touch(target, 'touchMove', [[120, 250], [220, 250]]);
+    touch(target, 'touchMove', [[160, 250], [260, 250]]);
+    frame();
+    expect(container.querySelector('.viewer-transform')?.getAttribute('style')).toContain('translate3d(60px');
+    touch(target, 'touchMove', [[180, 250], [300, 250]]);
+    fireEvent.click(screen.getByRole('button', { name: 'Go to scan 2: letter' }));
+    frame();
+    expect(container.querySelector('.viewer-transform')?.getAttribute('style')).toContain('scale(1)');
+    expect(screen.getByText('2 / 3')).toBeInTheDocument();
+  });
+
   it('keeps the scan under a translating two-finger midpoint', () => {
     const { target, container } = setup();
     fireEvent.doubleClick(target);

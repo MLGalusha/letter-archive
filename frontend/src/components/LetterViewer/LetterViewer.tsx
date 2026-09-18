@@ -842,8 +842,7 @@ const LetterViewer = memo(function LetterViewer({
       width = element.clientWidth;
       height = element.clientHeight;
       cancelSwipe();
-      if (gestureFrame.current !== null) cancelAnimationFrame(gestureFrame.current);
-      gestureFrame.current = null;
+      flushGesture();
       setPinchResolutionScale(null);
       touchStateRef.current.panStart = null;
       touchStateRef.current.swipeActive = false;
@@ -852,7 +851,7 @@ const LetterViewer = memo(function LetterViewer({
     });
     observer.observe(element);
     return () => observer.disconnect();
-  }, [isLightbox, cancelSwipe, clampPosition]);
+  }, [isLightbox, cancelSwipe, clampPosition, flushGesture]);
 
   // ============================================================================
   // LIGHTBOX: DOUBLE-CLICK ZOOM

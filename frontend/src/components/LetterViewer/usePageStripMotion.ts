@@ -100,13 +100,20 @@ export function usePageStripMotion(selected: number,
       if (active.axis === 'horizontal' && event.type !== 'pointercancel') coast(performance.now() - active.time > 80 ? 0 : active.velocity);
       else settle(nearest(list.scrollLeft), true);
     };
-    const wheel = () => { stop(); following = false; browsing = true; list.style.scrollSnapType = ''; };
+    const wheel = (event: WheelEvent) => {
+      if (!event.shiftKey && Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return;
+      stop(); following = false; browsing = true; list.style.scrollSnapType = '';
+      // An outward wheel at an endpoint has no scroll/scrollend event.
+      idle = setTimeout(nativeEnd, 160);
+    };
     const nativeEnd = () => { if (browsing && !drag && !frame) settle(nearest(list.scrollLeft), true); };
     const scroll = () => {
       if (browsing && !drag && !frame) { clearTimeout(idle); idle = setTimeout(nativeEnd, 160); }
     };
     measure(); finish(current.current.selected, false);
     const unsubscribe = motion?.subscribe(position => {
+      // A hand on the strip owns it, even if the main image is still settling.
+      if (browsing) return;
       if (position === null) {
         if (following) {
           following = false;
@@ -130,7 +137,10 @@ export function usePageStripMotion(selected: number,
     });
     resize.observe(list);
     const selectedEvent = () => {
-      if (!following && !browsing) settle(current.current.selected, false);
+      if (!following) {
+        browsing = false; drag = null;
+        settle(current.current.selected, false);
+      }
     };
     selectionChanged.current = selectedEvent;
     list.addEventListener('pointerdown', down);

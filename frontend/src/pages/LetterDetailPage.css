@@ -237,8 +237,10 @@
 }
 @media (max-width: 900px) {
   .letter-article {
+    --reader-inset-left: calc(12px + env(safe-area-inset-left, 0px));
+    --reader-inset-right: calc(12px + env(safe-area-inset-right, 0px));
     padding-top: calc(var(--header-height, 6rem) + 1rem);
-    padding-inline: calc(12px + env(safe-area-inset-left, 0px)) calc(12px + env(safe-area-inset-right, 0px));
+    padding-inline: var(--reader-inset-left) var(--reader-inset-right);
   }
   .letter-reader {
     grid-template-columns: minmax(0, 1fr);
@@ -251,6 +253,14 @@
     --scan-height: calc(100cqw / var(--active-scan-ratio, .75));
     width: 100%;
     justify-self: center;
+  }
+  .scan-carousel {
+    /* Extend only the scroll window: the figure still owns image dimensions.
+       Symmetric padding preserves native/explicit centering even when one
+       safe-area inset is larger. The page shell clips excess at screen edges. */
+    --scan-edge-inset: max(var(--reader-inset-left), var(--reader-inset-right));
+    margin-inline: calc(-1 * var(--scan-edge-inset));
+    padding-inline: var(--scan-edge-inset);
   }
   .letter-reading-column {
     grid-row: auto;

@@ -72,12 +72,14 @@ html, body {
 }
 
 .body-layout {
+  --page-inset-left: calc(1.5rem + env(safe-area-inset-left, 0px));
+  --page-inset-right: calc(1.5rem + env(safe-area-inset-right, 0px));
   width: min(100%, 1180px);
   margin: 0 auto;
   padding-top: calc(1.8rem + var(--header-height));
-  padding-right: calc(1.5rem + env(safe-area-inset-right, 0px));
+  padding-right: var(--page-inset-right);
   padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
-  padding-left: calc(1.5rem + env(safe-area-inset-left, 0px));
+  padding-left: var(--page-inset-left);
   display: flex;
   flex-direction: column;
   gap: 2.5rem;
@@ -147,10 +149,10 @@ html, body {
 
 @media (max-width: 720px) {
   .body-layout {
+    --page-inset-left: calc(1rem + env(safe-area-inset-left, 0px));
+    --page-inset-right: calc(1rem + env(safe-area-inset-right, 0px));
     padding-top: calc(1.2rem + var(--header-height));
-    padding-right: calc(1rem + env(safe-area-inset-right, 0px));
     padding-bottom: calc(3rem + env(safe-area-inset-bottom, 0px));
-    padding-left: calc(1rem + env(safe-area-inset-left, 0px));
     gap: 1.6rem;
   }
 

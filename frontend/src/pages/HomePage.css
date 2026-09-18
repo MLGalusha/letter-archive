@@ -448,6 +448,11 @@
 }
 
 .hero-carousel-viewport {
+  /* Keep the wrapper's original width for gesture thresholds and dot placement.
+     Equal extension preserves the content center with asymmetric safe areas;
+     the page shell clips any excess at the physical screen edge. */
+  --hero-edge-inset: max(var(--page-inset-left), var(--page-inset-right));
+  margin-inline: calc(-1 * var(--hero-edge-inset));
   overflow: hidden;
 }
 
@@ -464,6 +469,7 @@
 
 .hero-carousel-slide {
   flex: 0 0 100%;
+  padding-inline: var(--hero-edge-inset);
   min-width: 0;
   display: flex;
 }

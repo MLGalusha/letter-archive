@@ -395,6 +395,7 @@
 }
 
 .viewer-backdrop {
+  --viewer-surface: #181a19;
   position: fixed;
   /* The fixed viewport defines both edges. A separate 100dvh height can
      disagree with those edges during iOS toolbar/standalone transitions. */
@@ -402,11 +403,12 @@
   overflow: hidden;
   overscroll-behavior: none;
   z-index: 1000;
-  background: #181a19;
+  background: var(--viewer-surface);
   display: flex;
 }
 
-/* One safe-area owner covers Close, the stage, drawer and bottom controls. */
+/* Reserve the same safe-area inset as the fixed header, then keep the stage,
+   drawer and footer inside the remaining padded viewport. */
 .viewer-modal {
   box-sizing: border-box;
   width: 100%;

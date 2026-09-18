@@ -18,6 +18,16 @@ test('@mocked fullscreen paints document edges and restores them on repeated clo
         return Math.max(Math.abs(rect.top), Math.abs(rect.bottom - innerHeight));
       })).toBeLessThan(1);
       const close = await page.getByRole('button', { name: 'Close viewer' }).boundingBox();
+      const header = page.locator('.viewer-modal-header');
+      await expect(header).toHaveCSS('position', 'fixed');
+      await expect(header).toHaveCSS('background-color', color);
+      const headerBox = (await header.boundingBox())!;
+      expect(headerBox.x).toBe(0);
+      expect(headerBox.y).toBe(0);
+      expect(headerBox.width).toBe(390);
+      expect(headerBox.height).toBeLessThan(height / 2);
+      const stageBox = (await page.locator('.viewer-container').boundingBox())!;
+      expect(stageBox.y).toBeGreaterThanOrEqual(headerBox.y + headerBox.height);
       const pages = await page.getByRole('dialog', { name: 'Original scans' }).getByRole('button', { name: 'Pages', exact: true }).boundingBox();
       expect(close!.y).toBeGreaterThanOrEqual(0);
       expect(pages!.y + pages!.height).toBeLessThanOrEqual(height);

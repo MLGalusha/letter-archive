@@ -52,6 +52,10 @@ scrolling, with reduced-motion support; the viewer owns zoom and fullscreen.
 - Browser regression fixtures exercise 320/390/900/901/1440, source selection,
   long notes, summary, complete portrait geometry, header clearance, no overflow,
   no forced entry scrolling, and source-view return in Chromium and WebKit.
+- Final CI reproduced a safe-area regression: adding 47px of header padding
+  moved the header but not content clearance. Observing the header border box
+  instead of its content box fixes padding-only changes; the unchanged inset
+  and rotation test passed 3/3 bounded local runs without retries.
 - Existing viewer focus, local scan paging, rendition/preview scheduling, failure
   fallback and history tests are retained. The smaller preview now measures its
   own contained width, bounded by its parent: phone DPR3 requests 800px instead

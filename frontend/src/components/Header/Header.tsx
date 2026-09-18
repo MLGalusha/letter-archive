@@ -32,8 +32,7 @@ export default memo(function Header() {
 
   // Publish the header's real height to --header-height on the closest site shell
   // so body-layout top padding matches when a dock (e.g. the collection scrubber)
-  // is expanded. --header-height is registered as a <length> and has a CSS
-  // transition, so consumers animate smoothly when it changes.
+  // is expanded, including safe-area padding around the header.
   //
   // Growth-only per page: once we've measured the fully-expanded height while at
   // top, we keep it. This prevents the scroll-to-top grid-row transition from
@@ -63,7 +62,8 @@ export default memo(function Header() {
     update();
     if (typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver(update);
-    ro.observe(el);
+    // Safe-area changes can alter padding without resizing the content box.
+    ro.observe(el, { box: "border-box" });
     return () => ro.disconnect();
   }, [atTop, state.hasContent]);
 

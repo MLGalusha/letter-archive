@@ -210,6 +210,9 @@ describe("HomePage archive browsing", () => {
       value: 240,
     });
 
+    vi.spyOn(document.documentElement, 'scrollHeight', 'get').mockReturnValue(5000);
+    vi.spyOn(document.documentElement, 'clientHeight', 'get').mockReturnValue(800);
+
     const header = document.createElement("div");
     header.className = "header";
     Object.defineProperty(header, "offsetHeight", {

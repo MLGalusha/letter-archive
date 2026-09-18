@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { useLocation, useNavigationType } from 'react-router-dom';
+import { cancelSmoothScroll } from '../utils/smoothScrollTo';
 import { addAppScrollListener, appScrollTo, getAppScrollY } from '../utils/appScroll';
 
 /** One owner for SPA history restoration, including pages that load asynchronously. */
@@ -36,6 +37,7 @@ export default function ScrollToTop() {
       return;
     }
 
+    cancelSmoothScroll();
     const target = navType === 'POP' ? positionsRef.current.get(location.key) ?? 0 : 0;
     restoringRef.current = true;
     const stop = () => {

@@ -23,6 +23,8 @@ describe("BackToSearch", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     mockMatchMedia();
+    vi.spyOn(document.documentElement, 'scrollHeight', 'get').mockReturnValue(5000);
+    vi.spyOn(document.documentElement, 'clientHeight', 'get').mockReturnValue(800);
     // The component uses a RAF-driven smooth scroll. Make RAF fire synchronously
     // with a timestamp far past the animation duration so the easing loop
     // terminates on the first tick and lands exactly on the destination.
@@ -85,6 +87,47 @@ describe("BackToSearch", () => {
     expect(scrollToMock).toHaveBeenLastCalledWith(0, 752);
 
     await vi.advanceTimersByTimeAsync(160);
+    expect(input).toHaveFocus();
+  });
+
+  it.each(['wheel', 'unmount'])('does not focus search after %s interrupts the animation', interruption => {
+    let frame: FrameRequestCallback | undefined;
+    vi.mocked(window.requestAnimationFrame).mockImplementation(cb => { frame = cb; return 1; });
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => { frame = undefined; });
+    vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 2000 });
+    const target = document.createElement('div');
+    const input = document.createElement('input');
+    input.type = 'search';
+    target.appendChild(input);
+    document.body.appendChild(target);
+    vi.spyOn(target, 'getBoundingClientRect').mockReturnValue({ top: -1500 } as DOMRect);
+    const { unmount } = render(<BackToSearch visible targetRef={{ current: target }} />);
+    fireEvent.keyDown(window, { key: '/' });
+    expect(input).not.toHaveFocus();
+    if (interruption === 'unmount') unmount();
+    else fireEvent.wheel(window);
+    frame?.(performance.now() + 10000);
+    vi.advanceTimersByTime(10000);
+    expect(input).not.toHaveFocus();
+  });
+
+  it('focuses only on arrival, not on a separate timer', () => {
+    let frame: FrameRequestCallback | undefined;
+    vi.mocked(window.requestAnimationFrame).mockImplementation(cb => { frame = cb; return 1; });
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => { frame = undefined; });
+    vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 2000 });
+    const target = document.createElement('div');
+    const input = document.createElement('input');
+    target.appendChild(input);
+    document.body.appendChild(target);
+    vi.spyOn(target, 'getBoundingClientRect').mockReturnValue({ top: -1500 } as DOMRect);
+    render(<BackToSearch visible targetRef={{ current: target }} />);
+    fireEvent.keyDown(window, { key: '/' });
+    vi.advanceTimersByTime(200);
+    expect(input).not.toHaveFocus();
+    frame?.(performance.now() + 10000);
     expect(input).toHaveFocus();
   });
 

@@ -342,6 +342,16 @@ const LetterViewer = memo(function LetterViewer({
     };
   }, []);
 
+  useLayoutEffect(() => {
+    if (!isLightbox) return;
+    // Container observation can precede the fitted surface's new dimensions.
+    // Recheck after that render, including an intrinsic aspect-ratio discovery.
+    setPosition(previous => {
+      const next = clampPosition(previous, scaleRef.current);
+      return next.x === previous.x && next.y === previous.y ? previous : next;
+    });
+  }, [isLightbox, physicalWidth, aspectRatio, clampPosition]);
+
   const animateZoom = useCallback(() => {
     if (zoomTimer.current !== null) clearTimeout(zoomTimer.current);
     const animate = !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;

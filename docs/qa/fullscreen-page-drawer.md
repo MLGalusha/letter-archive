@@ -57,6 +57,11 @@ Tests additionally cover mixed portrait/envelope ratios, narrow and short screen
 local/bounded drawer loading, rapid swipe takeover, pan/pinch isolation, reduced
 motion, focus/scroll restoration, and panel image request behavior.
 
+Review reproduced a persistent 61.625px blank strip after opening Pages at an
+edge pan: the initial resize observer clamped before the fitted surface shrank.
+A layout effect now rechecks bounds after fitted width/aspect updates; the browser
+regression covers the actual drawer transition in both engines.
+
 Exact commands/results, review, final CI and release revision belong in the PR.
 Screenshots/probes are local under `output/playwright/fullscreen-page-drawer/`.
 

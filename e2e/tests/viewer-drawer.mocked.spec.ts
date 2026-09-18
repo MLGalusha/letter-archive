@@ -59,6 +59,28 @@ for (const width of [320, 844, 1440]) test(`@mocked drawer reserves scan space a
   await expect(toggle).toBeFocused();
 });
 
+test('@mocked opening Pages re-clamps an edge pan after the scan refits', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 600 });
+  await openReader(page);
+  await expect(page.locator('.viewer-image')).toHaveCSS('opacity', '1');
+  const stage = page.locator('.viewer-container');
+  await stage.dblclick();
+  await expect.poll(() => page.locator('.viewer-transform').evaluate(el => new DOMMatrixReadOnly(getComputedStyle(el).transform).a)).toBe(2.5);
+  const box = (await stage.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width - 2, box.y + box.height / 2);
+  await page.mouse.up();
+  const beforeWidth = (await page.locator('.viewer-transform').boundingBox())!.width;
+  await page.getByRole('button', { name: 'Pages', exact: true }).click();
+  await expect.poll(async () => (await page.locator('.viewer-transform').boundingBox())!.width).toBeLessThan(beforeWidth - 50);
+  await expect.poll(() => page.evaluate(() => {
+    const scan = document.querySelector('.viewer-transform')!.getBoundingClientRect();
+    const stage = document.querySelector('.viewer-container')!.getBoundingClientRect();
+    return Math.max(scan.left - stage.left, stage.right - scan.right);
+  })).toBeLessThanOrEqual(1);
+});
+
 test('@mocked drawer loads only nearby thumbnails after opening', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const requested = new Set<string>();

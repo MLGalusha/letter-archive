@@ -41,6 +41,11 @@ for (const width of [320, 390, 1440]) test(`@mocked 24 scan previews stay compac
   await page.getByRole('button', { name: 'Next scan', exact: true }).click();
   await expect(nav.getByRole('status')).toHaveText('1 / 24');
   await drawer.hover();
+  console.log('Inline scroll geometry:', await drawer.evaluate(el => ({
+    width: el.clientWidth, height: el.clientHeight, scrollHeight: el.scrollHeight,
+    overflowY: getComputedStyle(el).overflowY, overscroll: getComputedStyle(el).overscrollBehavior,
+    documentHeight: document.documentElement.scrollHeight, viewportHeight: innerHeight,
+  })));
   const beforeReadingScroll = await page.evaluate(() => scrollY);
   await page.mouse.wheel(0, 300);
   await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(beforeReadingScroll + 150);

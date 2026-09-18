@@ -42,8 +42,18 @@ represented in these desktop screenshots.
 
 A manual wheel probe caught inherited fullscreen scroll containment trapping
 vertical reading over inline thumbnails (scrollY stayed 0 after a 350px wheel).
-The inline variant now overrides only vertical overscroll containment. The new
+The inline variant now uses normal scroll chaining and hides vertical overflow;
+only its horizontal axis is a user scroll surface. The new
 regression failed before that correction. Thirteen of fourteen targeted checks
 passed initially; desktop WebKit closed during newContext before one test ran.
 That one check passed in an isolated worker. This is recorded as environment
 recovery, not a repaired application failure or evidence of zero flakiness.
+
+CI run 35376909819 exposed vertical wheel trapping in Linux WebKit at all three
+widths despite the earlier per-axis override passing on macOS. The inline strip
+now removes fullscreen containment entirely. The wheel assertion remains intact;
+geometry is logged to distinguish overflow from document readiness. Local
+Chromium/WebKit repetitions passed 24/24 without retries after this adjustment.
+The paused-swipe measurement now waits for the rendered drag offset before its
+intentional pause, instead of assuming the animation frame ran within 120ms.
+Linux CI must pass before release; these local repetitions do not replace it.

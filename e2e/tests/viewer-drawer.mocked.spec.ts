@@ -5,6 +5,16 @@ test('@mocked releasing a paused swipe starts gently and reaches the next page c
   await page.setViewportSize({ width: 390, height: 844 });
   await openReader(page);
   await expect(page.locator('.viewer-image')).toHaveCSS('opacity', '1');
+  // Observe the rendered drag before measuring release: a fixed delay can end
+  // before React's animation-frame update on a loaded CI worker.
+  await page.locator('.viewer-container').evaluate(stage => {
+    for (const [type, x] of [['touchstart', 300], ['touchmove', 180]] as const) {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'touches', { value: [{ clientX: x, clientY: 250 }] });
+      stage.dispatchEvent(event);
+    }
+  });
+  await expect(page.locator('.viewer-carriage')).toHaveCSS('transform', 'matrix(1, 0, 0, 1, -120, 0)');
   const measured = await page.evaluate(async () => {
     const stage = document.querySelector('.viewer-container')!;
     const carriage = document.querySelector('.viewer-carriage')!;
@@ -14,7 +24,6 @@ test('@mocked releasing a paused swipe starts gently and reaches the next page c
       stage.dispatchEvent(event);
     };
     const read = () => new DOMMatrixReadOnly(getComputedStyle(carriage).transform).m41;
-    touch('touchstart', 300); touch('touchmove', 180);
     await new Promise(resolve => setTimeout(resolve, 120)); // Release from rest, not a flick.
     const start = read();
     const animationReady = new Promise<Animation>(resolve => {

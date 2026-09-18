@@ -158,7 +158,7 @@ test('@mocked archive previews use one size, defer distant cards, and stay loade
   expect(requests.filter((url) => url === lastUrl)).toHaveLength(1);
 });
 
-test('@mocked reader renders detail before adjacency and acknowledges pending navigation', async ({ page }) => {
+test('@mocked reader renders detail before adjacency and announces pending navigation without a visible bar', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   let releaseDetail!: () => void;
   let releaseAdjacent!: () => void;
@@ -198,14 +198,16 @@ test('@mocked reader renders detail before adjacency and acknowledges pending na
     await expect(page.getByText('First fixture letter', { exact: true })).toBeVisible();
     await page.locator('a.teaser-next').click();
     await expect(page).toHaveURL(/reader-b$/);
-    const status = page.locator('.letter-navigation-status[role="status"]');
+    const status = page.getByRole('status').filter({ hasText: 'Loading letter...' });
     await expect(status).toHaveText('Loading letter...');
-    await expect(status).toBeInViewport();
+    await expect(status).toHaveCSS('clip', 'rect(0px, 0px, 0px, 0px)');
+    expect(await status.evaluate(element => element.closest('[inert]'))).toBeNull();
+    await expect(page.locator('article')).toHaveCSS('opacity', '1');
     await expect(page.locator('article')).toHaveAttribute('inert', '');
     await expect.poll(() => status.evaluate((element) => {
       const r = element.getBoundingClientRect();
       return element.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
-    })).toBe(true);
+    })).toBe(false);
     releaseDetail();
     await expect(page.getByText('Second fixture letter', { exact: true })).toBeVisible();
     await expect(page.locator('article')).not.toHaveAttribute('inert');

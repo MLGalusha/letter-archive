@@ -16,40 +16,42 @@ export default function useLetterScrubber(
     [letters, letterId],
   );
 
-  // Use letters array for position/total when loaded, fall back to adjacent API
-  const total = letters ? letters.length : (adjacent?.total ?? 0);
-  const pos = currentIdx >= 0 ? currentIdx + 1 : (adjacent?.position ?? 1);
+  // Fresh adjacency owns counts. A cached list is usable for seeking only when
+  // it agrees and contains this letter; it must not revive a removed sibling.
+  const total = adjacent?.total ?? 0;
+  const hasCurrentList = !!letters && letters.length === total && currentIdx >= 0;
+  const pos = hasCurrentList ? currentIdx + 1 : (adjacent?.position ?? 1);
 
   const handleNavigate = useCallback(
     (targetPos: number) => {
-      if (!letters || targetPos === pos) return;
+      if (!hasCurrentList || !letters || targetPos === pos) return;
       const targetIdx = targetPos - 1;
       if (targetIdx >= 0 && targetIdx < letters.length) {
         navigate(`/letter/${letters[targetIdx].id}`);
       }
     },
-    [letters, pos, navigate],
+    [letters, hasCurrentList, pos, navigate],
   );
 
   const handlePrev = useCallback(() => {
     if (total <= 1) return;
-    if (letters && currentIdx >= 0) {
+    if (hasCurrentList && letters) {
       const prevIdx = currentIdx === 0 ? letters.length - 1 : currentIdx - 1;
       navigate(`/letter/${letters[prevIdx].id}`);
     } else if (adjacent?.prev) {
       navigate(`/letter/${adjacent.prev.id}`);
     }
-  }, [letters, currentIdx, total, adjacent?.prev, navigate]);
+  }, [letters, hasCurrentList, currentIdx, total, adjacent?.prev, navigate]);
 
   const handleNext = useCallback(() => {
     if (total <= 1) return;
-    if (letters && currentIdx >= 0) {
+    if (hasCurrentList && letters) {
       const nextIdx = currentIdx === letters.length - 1 ? 0 : currentIdx + 1;
       navigate(`/letter/${letters[nextIdx].id}`);
     } else if (adjacent?.next) {
       navigate(`/letter/${adjacent.next.id}`);
     }
-  }, [letters, currentIdx, total, adjacent?.next, navigate]);
+  }, [letters, hasCurrentList, currentIdx, total, adjacent?.next, navigate]);
 
   return useMemo(() => {
     if (!adjacent || total <= 1) return null;
@@ -60,7 +62,8 @@ export default function useLetterScrubber(
       onPrev: handlePrev,
       onNext: handleNext,
       wrap: true,
+      seekEnabled: hasCurrentList,
       ariaLabel: `Letter ${pos} of ${total}`,
     };
-  }, [adjacent, pos, total, handleNavigate, handlePrev, handleNext]);
+  }, [adjacent, pos, total, handleNavigate, handlePrev, handleNext, hasCurrentList]);
 }

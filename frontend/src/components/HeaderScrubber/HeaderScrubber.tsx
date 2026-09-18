@@ -23,6 +23,8 @@ export interface HeaderScrubberProps {
   onPrev: () => void;
   onNext: () => void;
   wrap?: boolean;       // true = prev/next always enabled (wrap around)
+  disabled?: boolean; // retained presentation while a destination is pending
+  seekEnabled?: boolean; // the full item list is ready for arbitrary positions
   ariaLabel?: string;   // e.g. "Letter 3 of 27" or "Collection 9 of 12"
 }
 
@@ -34,6 +36,8 @@ export default function HeaderScrubber({
   onNext,
   wrap = false,
   ariaLabel,
+  disabled = false,
+  seekEnabled = true,
 }: HeaderScrubberProps) {
   const needsWindow = total > WINDOW_SIZE;
 
@@ -48,12 +52,12 @@ export default function HeaderScrubber({
 
   const navigateToPos = useCallback(
     (targetPos: number) => {
-      if (targetPos === pos) return;
+      if (disabled || !seekEnabled || targetPos === pos) return;
       if (targetPos >= 1 && targetPos <= total) {
         onNavigate(targetPos);
       }
     },
-    [pos, total, onNavigate],
+    [pos, total, onNavigate, disabled, seekEnabled],
   );
 
   // ── DOM refs for direct manipulation during drag ────────────────
@@ -161,6 +165,7 @@ export default function HeaderScrubber({
   // ── Pointer handlers ────────────────────────────────────────────
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
+      if (disabled || !seekEnabled) return;
       e.preventDefault();
       trackElRef.current?.setPointerCapture(e.pointerId);
 
@@ -176,7 +181,7 @@ export default function HeaderScrubber({
 
       paintVisuals(d.pos, d.ws);
     },
-    [windowStart, posFromClientX, paintVisuals],
+    [windowStart, posFromClientX, paintVisuals, disabled, seekEnabled],
   );
 
   const handlePointerMove = useCallback(
@@ -241,6 +246,10 @@ export default function HeaderScrubber({
     paintVisuals(pos, ws);
   }, [pos, total, stopEdgeScroll, paintVisuals]);
 
+  useEffect(() => {
+    if (disabled || !seekEnabled) cancelDrag();
+  }, [disabled, seekEnabled, cancelDrag]);
+
   const handlePointerCancel = useCallback(() => cancelDrag(), [cancelDrag]);
   const handleDockPointerLeave = useCallback(() => {
     // Don't cancel during an active drag — pointer capture on the track
@@ -267,10 +276,10 @@ export default function HeaderScrubber({
   useEffect(() => {
     const el = trackElRef.current;
     if (!el) return;
-    const onTouchStart = (e: TouchEvent) => { e.preventDefault(); };
+    const onTouchStart = (e: TouchEvent) => { if (!disabled && seekEnabled) e.preventDefault(); };
     el.addEventListener('touchstart', onTouchStart, { passive: false });
     return () => el.removeEventListener('touchstart', onTouchStart);
-  }, []);
+  }, [disabled, seekEnabled]);
 
   useEffect(() => () => {
     if (drag.current.edgeRafId) cancelAnimationFrame(drag.current.edgeRafId);
@@ -294,7 +303,8 @@ export default function HeaderScrubber({
         <button
           type="button"
           className="dock-strip-arrow"
-          onClick={onPrev}
+          onClick={event => { if (!disabled) { event.currentTarget.focus({ preventScroll: true }); onPrev(); } }}
+          aria-disabled={disabled || !hasPrev}
           disabled={!hasPrev}
           aria-label="Previous"
         >
@@ -316,7 +326,19 @@ export default function HeaderScrubber({
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerCancel}
+            onKeyDown={(event) => {
+              if (event.altKey || event.ctrlKey || event.metaKey) return;
+              const target = event.key === "Home" ? 1 : event.key === "End" ? total
+                : event.key === "ArrowRight" || event.key === "ArrowUp" ? Math.min(total, pos + 1)
+                : event.key === "ArrowLeft" || event.key === "ArrowDown" ? Math.max(1, pos - 1) : null;
+              if (target === null) return;
+              event.preventDefault();
+              event.stopPropagation();
+              navigateToPos(target);
+            }}
             role="slider"
+            aria-disabled={disabled || !seekEnabled}
+            aria-valuetext={disabled ? `Loading navigation; previous position ${pos} of ${total}` : `${pos} of ${total}`}
             aria-valuenow={pos}
             aria-valuemin={1}
             aria-valuemax={total}
@@ -369,7 +391,8 @@ export default function HeaderScrubber({
         <button
           type="button"
           className="dock-strip-arrow"
-          onClick={onNext}
+          onClick={event => { if (!disabled) { event.currentTarget.focus({ preventScroll: true }); onNext(); } }}
+          aria-disabled={disabled || !hasNext}
           disabled={!hasNext}
           aria-label="Next"
         >

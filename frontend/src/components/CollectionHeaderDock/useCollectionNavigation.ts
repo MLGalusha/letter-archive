@@ -42,7 +42,7 @@ export default function useCollectionNavigation(
   const [loaded, setLoaded] = useState<{
     collectionCode: string;
     generation: number;
-    collections: CollectionInfo[];
+    collections: CollectionInfo[] | null;
   } | null>(null);
 
   useEffect(() => {
@@ -60,19 +60,23 @@ export default function useCollectionNavigation(
           });
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setLoaded({ collectionCode: requestedCollectionCode, generation: routeRequest.generation, collections: null });
+      });
 
     return () => {
       cancelled = true;
     };
   }, [routeRequest]);
 
-  const collections = loaded !== null
+  const resolved = loaded !== null
     && loaded.collectionCode === collectionCode
     && routeRequest.collectionCode === collectionCode
-    && loaded.generation === routeRequest.generation
-    ? loaded.collections
-    : null;
+    && loaded.generation === routeRequest.generation;
+  const collections = resolved ? loaded.collections : null;
+  const presentation = resolved ? collections : loaded?.collections;
+  const presentationCode = resolved ? collectionCode : loaded?.collectionCode;
+  const presentationIndex = presentation?.findIndex(item => item.collectionCode === presentationCode) ?? -1;
 
   const currentIdx = useMemo(
     () => (collections && collectionCode
@@ -81,7 +85,6 @@ export default function useCollectionNavigation(
     [collections, collectionCode],
   );
   const total = collections?.length ?? 0;
-  const position = currentIdx + 1;
 
   const navigateToIndex = useCallback((index: number) => {
     if (!collections || index < 0 || index >= collections.length) return;
@@ -114,18 +117,19 @@ export default function useCollectionNavigation(
   }, [collections, currentIdx, total]);
 
   const scrubberProps = useMemo<HeaderScrubberProps | null>(() => {
-    if (!collections || currentIdx === -1 || total <= 1) return null;
+    if (!presentation || presentationIndex < 0 || presentation.length <= 1) return null;
 
     return {
-      position,
-      total,
+      position: presentationIndex + 1,
+      total: presentation.length,
+      disabled: !resolved,
       onNavigate: handleNavigate,
       onPrev: handlePrev,
       onNext: handleNext,
       wrap: true,
-      ariaLabel: `Collection ${position} of ${total}`,
+      ariaLabel: `Collection ${presentationIndex + 1} of ${presentation.length}`,
     };
-  }, [collections, currentIdx, handleNavigate, handleNext, handlePrev, position, total]);
+  }, [presentation, presentationIndex, resolved, handleNavigate, handleNext, handlePrev]);
 
   return useMemo(() => ({ scrubberProps, adjacent }), [adjacent, scrubberProps]);
 }

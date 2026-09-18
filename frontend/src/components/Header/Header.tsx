@@ -3,6 +3,7 @@ import { useSiteSettings } from "../../hooks/useSiteSettings";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useHeaderDock } from "../../contexts/HeaderDockContext";
+import useIsMobile from "../../hooks/useIsMobile";
 import useHeaderScroll from "../../hooks/useHeaderScroll";
 
 function preloadCollectionsRoute() {
@@ -22,6 +23,7 @@ export default memo(function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const { state, registerSlot } = useHeaderDock();
   const { visible, atTop } = useHeaderScroll();
+  const isMobile = useIsMobile(900);
   const location = useLocation();
 
   const headerRef = useRef<HTMLElement>(null);
@@ -125,7 +127,7 @@ export default memo(function Header() {
   ].filter(Boolean).join(" ");
 
   return (
-    <header ref={headerRef} className={headerClass}>
+    <header ref={headerRef} className={headerClass} inert={hidden}>
       <a href="#main-content" className="skip-link">Skip to content</a>
       <div className="header-inner">
         <div className={`header-brand-slot${state.hasContent ? " has-active-dock" : ""}`}>
@@ -133,7 +135,7 @@ export default memo(function Header() {
             <span className="main-title-label">A Letter Archive</span>
             <span className="main-title-name">{settings?.site_title?.trim() || "Voices That Remain"}</span>
           </Link>
-          <div className="header-dock-region">
+          <div className="header-dock-region" inert={isMobile && dockCollapsed}>
             <div ref={registerSlot} className="header-dock-slot" />
           </div>
         </div>

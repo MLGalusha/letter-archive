@@ -22,7 +22,7 @@ export default function ReaderTranscript({ letter, onViewSource }: Props) {
           {original ? 'Reading view' : 'Original formatting'}
         </button>}
       </div>
-      {!original && letter.readingText ? (
+      {!original && letter.readingText?.trim() ? (
         <div className="transcript-text transcript-reading-saved">{letter.readingText}</div>
       ) : pages.length ? pages.map(page => {
         const imageIndex = letter.images.findIndex(image => image.type === 'letter' && image.pageNumber === page.pageNumber);

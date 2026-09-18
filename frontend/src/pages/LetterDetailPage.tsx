@@ -12,7 +12,7 @@ import { allowImageSpeculation } from "../services/imagePreloadService";
 import { ReaderScanImage } from "../components/LetterViewer/ReaderScanImage";
 import { buildLetterSeo } from "../utils/seo";
 import {
-  shouldShowPublicTranscript,
+  hasPrimaryTranscriptContent,
   shouldShowPhotoDescriptionWorkflow,
 } from "../utils/letterContent";
 import ReaderTranscript from "../components/LetterViewer/ReaderTranscript";
@@ -241,7 +241,8 @@ export default function LetterDetailPage() {
       byline: correspondentLine(m),
       carouselImages: letter.images,
       allImages: letter.images,
-      hasTranscript: shouldShowPublicTranscript(letter) || !!letter.readingText?.trim() || (!letter.images.length && !!(letter.transcript.fullText.trim() || letter.transcript.pages.some(page => page.text.trim()))),
+      hasTranscript: (hasPrimaryTranscriptContent(letter) || !letter.images.length)
+        && !!(letter.readingText?.trim() || letter.transcript.fullText.trim() || letter.transcript.pages.some(page => page.text.trim())),
       extraContentItems,
       hasExtraContent: extraContentItems.length > 0 || !!letter.extraContentTranscript,
       isPhotoRecord: shouldShowPhotoDescriptionWorkflow(letter),

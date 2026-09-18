@@ -291,6 +291,24 @@ describe("LetterDetailPage", () => {
     expect(screen.queryByRole("button", { name: "View full size" })).not.toBeInTheDocument();
   });
 
+  it.each([false, true])('keeps photo-primary records in the photo workflow (mixed=%s)', async mixed => {
+    getLetterByIdMock.mockResolvedValue(createLetter({
+      images: [{ id: 'photo', type: 'photo', imageUrl: '/images/photo.jpg' }, ...(mixed ? createLetter().images : [])],
+      readingText: 'Published reading text from an older workflow.',
+      photoDescription: 'A family in the garden.',
+    }));
+    renderLetterDetailPage();
+    await screen.findByText('A family in the garden.');
+    expect(screen.queryByRole('heading', { name: 'Transcript', exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByText('Published reading text from an older workflow.')).not.toBeInTheDocument();
+  });
+
+  it('falls back to page text when saved reading text is only whitespace', async () => {
+    getLetterByIdMock.mockResolvedValue(createLetter({ readingText: '  \n  ' }));
+    renderLetterDetailPage();
+    expect(await screen.findByText('My dearest friend...')).toBeVisible();
+  });
+
   it("keeps published text readable when scans are absent", async () => {
     getLetterByIdMock.mockResolvedValue(createLetter({ images: [], readingText: "A saved paragraph.\n\nP.S. Please write soon." }));
     renderLetterDetailPage();

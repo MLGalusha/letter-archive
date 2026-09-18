@@ -185,7 +185,7 @@ test('@mocked reader renders detail before adjacency and acknowledges pending na
         id, title: id, collectionCode: '003', images: [{
           id: 'reader-fixture', imageUrl: '/images/reader-fixture', type: 'letter', pageNumber: 1, width: 480, height: 640,
         }],
-        metadata: { hook: id === 'reader-a' ? 'First fixture letter' : 'Second fixture letter', verified: true },
+        metadata: { date: id === 'reader-a' ? 'First fixture letter' : 'Second fixture letter', verified: true },
         transcript: { pages: [], fullText: '', verified: true },
         status: 'published', visibility: 'PUBLISHED', transcriptPublished: true, metadataPublished: true,
         transcriptStatus: 'VERIFIED', metadataContentStatus: 'VERIFIED', extraContentStatus: 'EMPTY',

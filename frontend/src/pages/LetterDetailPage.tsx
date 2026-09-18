@@ -1,6 +1,5 @@
-import { RetryingImage } from "../components/common/RetryingImage";
 import { useSiteSettings } from '../hooks/useSiteSettings';
-import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useCallback, Fragment } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useAccessibleDialog } from "../components/common/useAccessibleDialog";
@@ -9,7 +8,6 @@ import SEO from "../components/SEO";
 import LetterViewer from "../components/LetterViewer/LetterViewer";
 import { getAdjacentLetters, getLetterById, type AdjacentLettersResponse } from "../api/letters";
 import type { LetterImage, LetterImageType, PublicLetter } from "../types/Letter";
-import { getImageUrl } from "../api/client";
 import { allowImageSpeculation } from "../services/imagePreloadService";
 import { ReaderScanImage } from "../components/LetterViewer/ReaderScanImage";
 import { buildLetterSeo } from "../utils/seo";
@@ -17,12 +15,11 @@ import {
   shouldShowPublicTranscript,
   shouldShowPhotoDescriptionWorkflow,
 } from "../utils/letterContent";
-import { reflowTranscript, renderTranscriptLines, computeReferenceWidth } from "../utils/transcriptRendering";
+import ReaderTranscript from "../components/LetterViewer/ReaderTranscript";
 import HeaderDock from "../components/Header/HeaderDock";
 import HeaderScrubber from "../components/HeaderScrubber/HeaderScrubber";
 import useLetterScrubber from "../components/LetterHeaderDock/useLetterScrubber";
 import useCarouselDrag from "../hooks/useCarouselDrag";
-import useThumbParallax from "../hooks/useThumbParallax";
 import BackToTop from "../components/BackToTop";
 import { appScrollTo, getAppScrollY } from "../utils/appScroll";
 import "./LetterDetailPage.css";
@@ -125,91 +122,19 @@ export default function LetterDetailPage() {
 
 
   // Scan carousel (extracted hook)
-  const { carouselRef, attachCarousel, activeIndex, carouselDraggedRef, scrollToSlide } = useCarouselDrag();
+  const { attachCarousel, activeIndex, carouselDraggedRef, scrollToSlide } = useCarouselDrag();
 
   const [readyScan, setReadyScan] = useState<string | null>(null);
   const activeScanKey = `${letter?.id}:${letter?.images[activeIndex]?.imageUrl ?? activeIndex}`;
 
-  // Transcript view mode: "reading" (reflowed) or "original" (1:1 line match)
-  const [transcriptMode, setTranscriptMode] = useState<"reading" | "original">("reading");
-
-  const initialImageIdRef = useRef(searchParams.get("image"));
-  const fromHighlightRef = useRef(searchParams.get("from") === "highlight");
-
-  // Strip highlight params from URL so refresh doesn't re-trigger auto-scroll
-  useEffect(() => {
-    const hasFrom = searchParams.has("from");
-    const hasImage = searchParams.has("image");
-    if (hasFrom || hasImage) {
-      const clean = new URLSearchParams(searchParams);
-      clean.delete("from");
-      clean.delete("image");
-      const qs = clean.toString();
-      window.history.replaceState(window.history.state, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (carouselRef.current) carouselRef.current.scrollLeft = 0;
-    // Vertical position belongs to ScrollToTop, including history restoration.
-  }, [carouselRef, letterId]);
-
-  // Auto-scroll to a specific image when navigated with ?image= param
-  useEffect(() => {
-    const targetImageId = initialImageIdRef.current;
-    if (!targetImageId || !letter) return;
-    const idx = letter.images.findIndex((img) => img.id === targetImageId);
-    if (idx > 0) {
-      // Delay to let carousel render and settle
-      const timer = setTimeout(() => scrollToSlide(idx), 150);
-      return () => clearTimeout(timer);
-    }
-  }, [letter, scrollToSlide]);
-
-  // When navigating from a highlight card, scroll to the summary belt area
-  useEffect(() => {
-    if (!fromHighlightRef.current || !letter) return;
-    fromHighlightRef.current = false;
-
-    const timer = setTimeout(() => {
-      // Target the summary section, fall back to the scan figure
-      const target = (
-        document.querySelector(".letter-summary-section") ||
-        document.querySelector(".letter-scan-figure")
-      ) as HTMLElement | null;
-      if (!target) return;
-
-      const idealTarget = getAppScrollY() + target.getBoundingClientRect().top;
-
-      // Cap: bottom of carousel should never scroll above bottom of viewport
-      const carousel = document.querySelector(".letter-scan-figure") as HTMLElement | null;
-      const maxScroll = carousel
-        ? getAppScrollY() + carousel.getBoundingClientRect().bottom - window.innerHeight
-        : Infinity;
-      const scrollTarget = Math.min(idealTarget, Math.max(0, maxScroll));
-
-      appScrollTo(0);
-
-      requestAnimationFrame(() => {
-        const distance = scrollTarget;
-        if (distance < 2) return;
-
-        const duration = Math.min(1000, Math.max(600, distance * 0.5));
-        const startTime = performance.now();
-
-        function animate(now: number) {
-          const elapsed = now - startTime;
-          const t = Math.min(1, elapsed / duration);
-          const ease = 1 - Math.pow(1 - t, 3);
-          appScrollTo(distance * ease);
-          if (t < 1) requestAnimationFrame(animate);
-        }
-        requestAnimationFrame(animate);
-      });
-    }, 80);
-
-    return () => clearTimeout(timer);
-  }, [letter]);
+  // A link may select a source image; it never owns vertical reading position.
+  // Keep the URL parameter so Back/Forward and reload select the same source.
+  const targetImageId = searchParams.get("image");
+  useLayoutEffect(() => {
+    if (!displayedLetterIsCurrent || !letter) return;
+    const index = letter.images.findIndex(image => image.id === targetImageId);
+    if (targetImageId && index >= 0) scrollToSlide(index, 'instant');
+  }, [displayedLetterIsCurrent, letter, targetImageId, scrollToSlide]);
 
   useEffect(() => {
     if (!letterId) return;
@@ -268,36 +193,6 @@ export default function LetterDetailPage() {
     [adjacent],
   );
 
-  const transcriptSectionRef = useRef<HTMLElement>(null);
-
-  // Scroll-driven parallax for side thumbnails (extracted hook)
-  useThumbParallax(!!letter);
-
-  // Reference width for proportional spacing: max line length in the original text
-  const referenceWidth = useMemo(() => {
-    if (!letter?.transcript?.fullText && !letter?.transcript?.pages?.length) return 78;
-    const rawText = letter.transcript.fullText
-      || letter.transcript.pages.map((p) => p.text).join("\n");
-    return computeReferenceWidth(rawText);
-  }, [letter]);
-
-  // Large handwriting → short lines → scale up font size
-  const isShortLineText = referenceWidth < 40;
-  const shortLineClass = isShortLineText ? " transcript-short-lines" : "";
-
-  // Combined reading view: merge all pages into one continuous text flow
-  const readingSegments = useMemo(() => {
-    if (!letter?.transcript?.pages?.length || letter.transcript.pages.length <= 1) return null;
-
-    // Reflow each page independently so segment boundaries match actual pages
-    return letter.transcript.pages.map((page, idx) => ({
-      pageIndex: idx,
-      pageNumber: page.pageNumber,
-      text: reflowTranscript(page.text),
-    }));
-  }, [letter]);
-
-
   const seo = useMemo(() => (letter ? buildLetterSeo(letter, siteName) : null), [letter, siteName]);
 
 
@@ -340,30 +235,17 @@ export default function LetterDetailPage() {
   const derived = useMemo(() => {
     if (!letter) return null;
     const m = letter.metadata;
-    const letterTypeImages = letter.images.filter((img) => img.type === "letter");
     const extraContentItems = letter.extraContentItems ?? [];
-    // Pre-compute verification CSS class fragments (used repeatedly in JSX)
-    const transcriptVerifClass = letter.transcriptStatus === "VERIFIED" ? " verified" : letter.transcriptStatus !== "EMPTY" ? " unverified" : "";
-    const transcriptSectionClass = letter.transcriptStatus === "VERIFIED" ? " transcript-verified" : letter.transcriptStatus !== "EMPTY" ? " transcript-unverified" : "";
-    const extraVerifClass = letter.extraContentStatus === "VERIFIED" ? " verified" : letter.extraContentStatus !== "EMPTY" ? " unverified" : "";
-    const extraSectionClass = letter.extraContentStatus === "VERIFIED" ? " transcript-verified" : letter.extraContentStatus !== "EMPTY" ? " transcript-unverified" : "";
-
     return {
       m,
       byline: correspondentLine(m),
-      dateline: [m.date, m.location].filter(Boolean).join(" \u2014 "),
-      letterTypeImages,
       carouselImages: letter.images,
       allImages: letter.images,
-      hasTranscript: shouldShowPublicTranscript(letter),
+      hasTranscript: shouldShowPublicTranscript(letter) || !!letter.readingText?.trim() || (!letter.images.length && !!(letter.transcript.fullText.trim() || letter.transcript.pages.some(page => page.text.trim()))),
       extraContentItems,
       hasExtraContent: extraContentItems.length > 0 || !!letter.extraContentTranscript,
       isPhotoRecord: shouldShowPhotoDescriptionWorkflow(letter),
-      heroHook: m.hook || letter.photoDescription || undefined,
-      transcriptVerifClass,
-      transcriptSectionClass,
-      extraVerifClass,
-      extraSectionClass,
+      heroHook: m.hook,
     };
   }, [letter]);
 
@@ -385,10 +267,9 @@ export default function LetterDetailPage() {
   }
 
   const {
-    m, byline, dateline, letterTypeImages, carouselImages, allImages,
+    m, byline, carouselImages, allImages,
     hasTranscript, extraContentItems, hasExtraContent,
     isPhotoRecord, heroHook,
-    transcriptVerifClass, transcriptSectionClass, extraVerifClass, extraSectionClass,
   } = derived;
 
   return (
@@ -396,7 +277,7 @@ export default function LetterDetailPage() {
       <HeaderDock transparent collectionsLink={collectionsLink}>
         {scrubberProps && <HeaderScrubber {...scrubberProps} />}
       </HeaderDock>
-      {pending && <p className="letter-navigation-status" role="status">Loading letter...</p>}
+      {pending && <div className="letter-navigation-status" role="status"><span className="sr-only">Loading letter...</span></div>}
       <article className="letter-article" aria-busy={pending} inert={pending}>
         {seo && (
           <SEO
@@ -411,45 +292,17 @@ export default function LetterDetailPage() {
           />
         )}
 
-        {/* ── 1. Hero ──────────────────────────────────────── */}
         <header className="letter-hero-section">
-          <h1 className="sr-only">
-            {m.sender && m.recipient
-              ? `Letter from ${m.sender} to ${m.recipient}${m.date ? `, ${m.date}` : ""}`
-              : m.sender
-                ? `Letter from ${m.sender}${m.date ? `, ${m.date}` : ""}`
-                : m.recipient
-                  ? `Letter to ${m.recipient}${m.date ? `, ${m.date}` : ""}`
-                  : dateline || "Letter"}
-          </h1>
-          {heroHook && (
-            <div className="letter-headline-hook">
-              <p>{heroHook}</p>
-            </div>
-          )}
-
+          <h1>{formatDateText(m.date || (m.sender ? `Letter from ${m.sender}` : m.recipient ? `Letter to ${m.recipient}` : isPhotoRecord ? "Photograph" : "Letter"))}</h1>
           {byline && <p className="letter-byline">{byline}</p>}
-
-          {dateline && (
-            <p className="letter-dateline">{formatDateText(dateline)}</p>
-          )}
-
-          {(hasTranscript || carouselImages.length > 0) && (
-            <nav className="letter-content-links" aria-label="On this page">
-              {hasTranscript && <a href="#letter-transcript">Read transcript</a>}
-              {carouselImages.length > 0 && <a href="#letter-scans">View original scans</a>}
-            </nav>
-          )}
+          {m.location && <p className="letter-dateline">{m.location}</p>}
+          {(heroHook || m.description) && <details className="letter-summary-section">
+            <summary>About This Letter</summary>
+            {heroHook && <p className="letter-headline-hook">{heroHook}</p>}
+            {m.description && <p className="letter-summary-text">{m.description}</p>}
+          </details>}
         </header>
-
-        {/* ── 2. Summary ───────────────────────────────────── */}
-        {m.description && (
-          <section className="letter-summary-section">
-            <div className="letter-summary-label">About This Letter</div>
-            <p className="letter-summary-text">{m.description}</p>
-          </section>
-        )}
-
+        <div className={`letter-reader${carouselImages.length ? "" : " letter-reader--text-only"}`}>
         {/* ── 3. Scan Image Carousel ──────────────────────── */}
         {carouselImages.length > 0 && (
           <figure id="letter-scans" className="letter-scan-figure" tabIndex={-1}>
@@ -488,7 +341,9 @@ export default function LetterDetailPage() {
                       imgClassName="scan-slide-img-inner"
                       objectFit="contain"
                       draggable={false}
-                      loading={idx === 0 ? "eager" : "lazy"}
+                      // The enabled gate admits only the active scan and ready neighbors.
+                      // A second native lazy gate would stall wholly clipped neighbors.
+                      loading="eager"
                       decoding="async"
                       context="carousel"
                       aspectRatio={img.width && img.height ? img.width / img.height : undefined}
@@ -501,305 +356,46 @@ export default function LetterDetailPage() {
               })}
             </div>
 
-            {carouselImages.length > 1 && (
-              <div className="scan-dots">
-                {carouselImages.map((_, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    className={`scan-dot${i === activeIndex ? " active" : ""}`}
-                    onClick={() => scrollToSlide(i)}
-                    aria-label={`Go to page ${i + 1}`}
-                    aria-current={i === activeIndex ? "true" : undefined}
-                  />
-                ))}
-              </div>
-            )}
+            <figcaption className="scan-caption">
+              <span>Scan {activeIndex + 1} of {carouselImages.length}</span>
+              <button type="button" className="reader-source-link" onClick={e => openViewer(activeIndex, e.currentTarget)}>Expand scan ↗</button>
+            </figcaption>
+            {carouselImages.length > 1 && <div className="scan-dots" aria-label="Choose a scan">
+              {carouselImages.map((_, i) => <button key={i} type="button"
+                className={`scan-dot${i === activeIndex ? " active" : ""}`}
+                onClick={() => scrollToSlide(i)} aria-label={`Go to page ${i + 1}`}
+                aria-current={i === activeIndex ? "true" : undefined}>{i + 1}</button>)}
+            </div>}
           </figure>
         )}
 
-        {/* ── 4. Transcript ────────────────────────────────── */}
-        {hasTranscript && (
-          <section id="letter-transcript" tabIndex={-1} className={`letter-transcript-section${transcriptSectionClass}${transcriptMode === "original" ? " transcript-original-mode" : ""}`} ref={transcriptSectionRef}>
-            <div className="transcript-header-row">
-              <div className="transcript-label">Transcript</div>
-              {letter.transcriptStatus === "VERIFIED" ? (
-                <span className="transcript-status verified">Verified</span>
-              ) : letter.transcriptStatus !== "EMPTY" ? (
-                <span className="transcript-status unverified">Unverified</span>
-              ) : null}
-              <button
-                type="button"
-                className="transcript-mode-toggle"
-                onClick={() => setTranscriptMode((m) => m === "reading" ? "original" : "reading")}
-                title={transcriptMode === "reading" ? "Show original line breaks" : "Show reading view"}
-              >
-                {transcriptMode === "reading" ? "Original formatting" : "Reading view"}
-              </button>
-            </div>
-
-            {transcriptMode === "reading" && letter.readingText ? (
-              /* ── Saved reading text — render exactly as admin set it ── */
-              <div className="transcript-pages-combined">
-                <div className="transcript-page-region">
-                  <div className="transcript-page-body">
-                    {letterTypeImages.length > 0 && letterTypeImages.map((pageImage, idx) => {
-                      const side = idx % 2 === 0 ? "left" : "right";
-                      return (
-                        <button
-                          key={pageImage.id}
-                          type="button"
-                          className={`page-thumb page-thumb-${side}${transcriptVerifClass}`}
-                          onClick={(e) => openViewer(Math.max(0, allImages.indexOf(pageImage)), e.currentTarget)}
-                          aria-label={`View page ${pageImage.pageNumber ?? idx + 1}`}
-                          style={idx > 0 ? { top: `${idx * 14}rem` } : undefined}
-                        >
-                          <span className="page-thumb-inner">
-                            <RetryingImage
-                              src={getImageUrl(pageImage.imageUrl, { width: 300 })}
-                              alt={`Page ${pageImage.pageNumber ?? idx + 1}`}
-                              className="page-thumb-img"
-                              loading="lazy"
-                            />
-                            <span className="page-thumb-label">Page {pageImage.pageNumber ?? idx + 1}</span>
-                          </span>
-                        </button>
-                      );
-                    })}
-                    <div className={`transcript-text transcript-reading-saved${shortLineClass}`}>
-                      {letter.readingText}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : letter.transcript.pages.length > 0 ? (
-              transcriptMode === "reading" && readingSegments ? (
-                /* ── Combined reading view — seamless across pages ── */
-                <div className="transcript-pages-combined">
-                  {readingSegments.map((segment, idx) => {
-                    const pageImage = letterTypeImages.find((img) => img.pageNumber === segment.pageNumber);
-                    const side = segment.pageIndex % 2 === 0 ? "left" : "right";
-                    return (
-                      <div key={segment.pageNumber} className="transcript-page-region">
-                        {idx > 0 && <div className="page-boundary-mark" />}
-                        <div className="transcript-page-body">
-                          {pageImage && (
-                            <button
-                              type="button"
-                              className={`page-thumb page-thumb-${side}${transcriptVerifClass}`}
-                              onClick={(e) => openViewer(Math.max(0, allImages.indexOf(pageImage)), e.currentTarget)}
-                              aria-label={`View page ${segment.pageNumber}`}
-                            >
-                              <span className="page-thumb-inner">
-                                <RetryingImage
-                                  src={getImageUrl(pageImage.imageUrl, { width: 300 })}
-                                  alt={`Page ${segment.pageNumber}`}
-                                  className="page-thumb-img"
-                                  loading="lazy"
-                                />
-                                <span className="page-thumb-label">Page {segment.pageNumber}</span>
-                              </span>
-                            </button>
-                          )}
-                          <div className={`transcript-text${shortLineClass}`}>
-                            {renderTranscriptLines(segment.text, referenceWidth)}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                /* ── Original view OR single-page reading view ── */
-                transcriptMode === "original" ? (
-                  /* ── Original split layout: image + transcript side by side ── */
-                  <div className="original-split-pages">
-                    {letter.transcript.pages.map((page, idx) => {
-                      const pageImage = letterTypeImages.find((img) => img.pageNumber === page.pageNumber);
-                      return (
-                        <div key={page.pageNumber} className="original-split-row" data-page={page.pageNumber}>
-                          {pageImage && (
-                            <button
-                              type="button"
-                              className="original-split-image"
-                              onClick={(e) => openViewer(Math.max(0, allImages.indexOf(pageImage)), e.currentTarget)}
-                              aria-label={`View page ${page.pageNumber} full size`}
-                            >
-                              <ReaderScanImage
-                                imageUrl={pageImage.imageUrl}
-                                alt={`Page ${page.pageNumber}`}
-                                className="original-split-img-wrap"
-                                imgClassName="original-split-img"
-                                objectFit="contain"
-                                loading={idx === 0 ? "eager" : "lazy"}
-                                decoding="async"
-                                context="carousel"
-                                aspectRatio={pageImage.width && pageImage.height ? pageImage.width / pageImage.height : undefined}
-                              />
-                              {letter.transcript.pages.length > 1 && (
-                                <span className="original-split-page-label">Page {page.pageNumber}</span>
-                              )}
-                            </button>
-                          )}
-                          <div className="original-split-text">
-                            {letter.transcript.pages.length > 1 && !pageImage && (
-                              <div className="page-marker">Page {page.pageNumber}</div>
-                            )}
-                            <pre className={`transcript-text transcript-original${shortLineClass}`}>{page.text}</pre>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                <div className="transcript-pages">
-                  {letter.transcript.pages.map((page, idx) => {
-                    const pageImage = letterTypeImages.find((img) => img.pageNumber === page.pageNumber);
-                    const side = idx % 2 === 0 ? "left" : "right";
-                    return (
-                      <div key={page.pageNumber} className="transcript-page" data-page={page.pageNumber}>
-                        {pageImage && (
-                          <button
-                            type="button"
-                            className={`page-thumb page-thumb-${side}${transcriptVerifClass}`}
-                            onClick={(e) => openViewer(Math.max(0, allImages.indexOf(pageImage)), e.currentTarget)}
-                            aria-label={`View page ${page.pageNumber}`}
-                          >
-                            <span className="page-thumb-inner">
-                              <RetryingImage
-                                src={getImageUrl(pageImage.imageUrl, { width: 300 })}
-                                alt={`Page ${page.pageNumber}`}
-                                className="page-thumb-img"
-                                loading="lazy"
-                              />
-                              <span className="page-thumb-label">Page {page.pageNumber}</span>
-                            </span>
-                          </button>
-                        )}
-                        {letter.transcript.pages.length > 1 && (
-                          <div className="page-marker">Page {page.pageNumber}</div>
-                        )}
-                        <div className={`transcript-text${shortLineClass}`}>
-                          {renderTranscriptLines(reflowTranscript(page.text), referenceWidth)}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ))
-            ) : transcriptMode === "original" ? (
-              <pre className={`transcript-text transcript-original${shortLineClass}`}>
-                {letter.transcript.fullText}
-              </pre>
-            ) : (
-              <div className={`transcript-text${shortLineClass}`}>
-                {renderTranscriptLines(reflowTranscript(letter.transcript.fullText), referenceWidth)}
-              </div>
-            )}
-          </section>
-        )}
-
-        {/* ── 5. Photo Description / Extra Content ─────────── */}
-        {isPhotoRecord && letter.photoDescription && m.hook && (
-          <section className="letter-supporting-section">
-            <div className="supporting-label">Photo Description</div>
+        <div className="letter-reading-column">
+          {hasTranscript ? <ReaderTranscript key={letter.id} letter={letter} onViewSource={openViewer} />
+            : !isPhotoRecord && <p className="reader-empty">A transcript is not available for this letter.</p>}
+          {!carouselImages.length && <p className="reader-empty">Original scans are not available.</p>}
+          {isPhotoRecord && letter.photoDescription && <section className="letter-supporting-section">
+            <h2 className="supporting-label">Photo Description</h2>
             <p className="supporting-text">{letter.photoDescription}</p>
-          </section>
-        )}
-
-        {hasExtraContent && extraContentItems.length > 0 ? (
-          extraContentItems.map((item, idx) => {
-            const itemImage = item.imageIds.length > 0
-              ? allImages.find((img) => item.imageIds.includes(img.id))
-              : null;
-            // Continue alternating sides from where the transcript left off
-            const thumbIdx = letter.transcript.pages.length + idx;
-            const side = thumbIdx % 2 === 0 ? "left" : "right";
-            return (
-              <Fragment key={`extra-${idx}`}>
-                {(hasTranscript || idx > 0) && (
-                  <div className="content-type-divider">
-                    <div className="divider-rule" />
-                    <span className="divider-type-label">{item.label}</span>
-                    <div className="divider-rule" />
-                  </div>
-                )}
-                <section className={`letter-supporting-section supporting-with-thumb${extraSectionClass}`}>
-                  {itemImage && (
-                    <button
-                      type="button"
-                      className={`page-thumb page-thumb-${side}${extraVerifClass}`}
-                      onClick={(e) => openViewer(Math.max(0, allImages.indexOf(itemImage)), e.currentTarget)}
-                      aria-label={`View ${item.label.toLowerCase()}`}
-                    >
-                      <span className="page-thumb-inner">
-                        <RetryingImage
-                          src={getImageUrl(itemImage.imageUrl, { width: 300 })}
-                          alt={item.label}
-                          className="page-thumb-img"
-                          loading="lazy"
-                        />
-                      </span>
-                    </button>
-                  )}
-                  <div className="supporting-header-row">
-                    <div className="supporting-label">{item.label}</div>
-                    {idx === 0 && letter.extraContentStatus === "VERIFIED" && (
-                      <span className="transcript-status verified">Verified</span>
-                    )}
-                    {idx === 0 && letter.extraContentStatus !== "VERIFIED" && letter.extraContentStatus !== "EMPTY" && (
-                      <span className="transcript-status unverified">Unverified</span>
-                    )}
-                  </div>
-                  <p className="supporting-text">{item.transcript}</p>
-                </section>
-              </Fragment>
-            );
-          })
-        ) : hasExtraContent && letter.extraContentTranscript ? (() => {
-          const extraImages = allImages.filter((img) => EXTRA_CONTENT_TYPES.includes(img.type));
-          const fallbackLabel = getExtraContentLabel(letter.images);
-          const fallbackSide = letter.transcript.pages.length % 2 === 0 ? "left" : "right";
-          return (
-            <>
-              {hasTranscript && (
-                <div className="content-type-divider">
-                  <div className="divider-rule" />
-                  <span className="divider-type-label">{fallbackLabel}</span>
-                  <div className="divider-rule" />
-                </div>
-              )}
-              <section className={`letter-supporting-section supporting-with-thumb${extraSectionClass}`}>
-                {extraImages[0] && (
-                  <button
-                    type="button"
-                    className={`page-thumb page-thumb-${fallbackSide}${extraVerifClass}`}
-                    onClick={(e) => openViewer(Math.max(0, allImages.indexOf(extraImages[0])), e.currentTarget)}
-                    aria-label={`View ${fallbackLabel.toLowerCase()}`}
-                  >
-                    <span className="page-thumb-inner">
-                      <RetryingImage
-                        src={getImageUrl(extraImages[0].imageUrl, { width: 300 })}
-                        alt={fallbackLabel}
-                        className="page-thumb-img"
-                        loading="lazy"
-                      />
-                    </span>
-                  </button>
-                )}
-                <div className="supporting-header-row">
-                  <div className="supporting-label">{fallbackLabel}</div>
-                  {letter.extraContentStatus === "VERIFIED" ? (
-                    <span className="transcript-status verified">Verified</span>
-                  ) : letter.extraContentStatus !== "EMPTY" ? (
-                    <span className="transcript-status unverified">Unverified</span>
-                  ) : null}
-                </div>
-                <p className="supporting-text">{letter.extraContentTranscript}</p>
-              </section>
-            </>
-          );
-        })() : null}
+          </section>}
+          {hasExtraContent && (extraContentItems.length ? extraContentItems : [{
+            label: getExtraContentLabel(allImages), transcript: letter.extraContentTranscript!,
+            imageIds: allImages.filter(img => EXTRA_CONTENT_TYPES.includes(img.type)).map(img => img.id),
+          }]).map((item, idx) => <section className="letter-supporting-section" key={`${letter.id}-extra-${idx}`}>
+            <div className="supporting-header-row">
+              <h2 className="supporting-label">{item.label}</h2>
+              <span className="transcript-status">{letter.extraContentStatus === "VERIFIED" ? "Verified" : "Unverified"}</span>
+            </div>
+            <p className="supporting-text">{item.transcript}</p>
+            <div className="reader-source-links">
+              {allImages.map((img, imageIndex) => item.imageIds.includes(img.id) && <button
+                key={img.id} type="button" className="reader-source-link"
+                onClick={e => openViewer(imageIndex, e.currentTarget)}>
+                View on scan {imageIndex + 1} ↗
+              </button>)}
+            </div>
+          </section>)}
+        </div>
+        </div>
 
         {/* ── 6. Collection Footer Nav ───────────────────────── */}
         {adjacent && adjacent.total > 1 && (

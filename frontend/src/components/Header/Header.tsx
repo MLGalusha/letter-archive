@@ -39,23 +39,17 @@ export default memo(function Header() {
   // top, we keep it. This prevents the scroll-to-top grid-row transition from
   // stepping the value through intermediate sizes (which would restart the
   // CSS transition on every tick and cause visible snap). Reset when the dock
-  // content is removed (navigation to a page with no dock).
+  // content changes. Headers without a dock are measured too.
   useLayoutEffect(() => {
     const el = headerRef.current;
     if (!el) return;
     const shell = el.closest<HTMLElement>(".public-site-shell, .public-letter-shell");
     if (!shell) return;
 
-    if (!state.hasContent) {
-      maxHeaderHeightRef.current = 0;
-      shell.style.removeProperty("--header-height");
-      return;
-    }
-
     const update = () => {
       if (!atTop) return;
       // Reset for width/safe-area changes, but not height-only dock animations.
-      const geometry = `${el.clientWidth}:${getComputedStyle(el).paddingTop}`;
+      const geometry = `${el.clientWidth}:${getComputedStyle(el).paddingTop}:${state.hasContent}`;
       if (geometry !== headerGeometryRef.current) {
         headerGeometryRef.current = geometry;
         maxHeaderHeightRef.current = 0;

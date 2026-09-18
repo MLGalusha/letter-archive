@@ -103,9 +103,9 @@ function createLetter(overrides: Partial<Letter> = {}): Letter {
   };
 }
 
-function renderLetterDetailPage() {
+function renderLetterDetailPage(entry = "/letter/letter-1") {
   return render(
-    <MemoryRouter initialEntries={["/letter/letter-1"]}>
+    <MemoryRouter initialEntries={[entry]}>
       <HeaderDockProvider>
         <Link to="/letter/letter-2">Go to letter 2</Link>
         <Link to="/letter/letter-3">Go to letter 3</Link>
@@ -184,7 +184,8 @@ describe("LetterDetailPage", () => {
     expect(screen.getByText("Written by Alice Smith to Bob Baker")).toBeInTheDocument();
 
     // Hero: dateline
-    expect(screen.getByText(/August 10, 1947 — Vienna/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "August 10, 1947" })).toBeInTheDocument();
+    expect(screen.getByText("Vienna")).toBeInTheDocument();
 
     // Summary
     expect(screen.getByText("About This Letter")).toBeInTheDocument();
@@ -256,6 +257,28 @@ describe("LetterDetailPage", () => {
     expect(screen.queryByRole("button", { name: "View full size" })).not.toBeInTheDocument();
   });
 
+  it("keeps published text readable when scans are absent", async () => {
+    getLetterByIdMock.mockResolvedValue(createLetter({ images: [], readingText: "A saved paragraph.\n\nP.S. Please write soon." }));
+    renderLetterDetailPage();
+    expect(await screen.findByText(/A saved paragraph/)).toHaveTextContent("P.S. Please write soon.");
+    expect(screen.getByText("Original scans are not available.")).toBeInTheDocument();
+  });
+
+  it("keeps extra documents separate and links every associated source", async () => {
+    getLetterByIdMock.mockResolvedValue(createLetter({
+      readingText: "The published letter.\n\nWith love, Alice.",
+      extraContentStatus: "VERIFIED",
+      extraContentItems: [{ type: "card", label: "Enclosed card", transcript: "A separate message.\nSecond line.", imageIds: ["card-1", "card-2"] }],
+      images: [...createLetter().images, ...[1, 2].map(n => ({ id: `card-${n}`, type: "card" as const, imageUrl: `/images/card-${n}.jpg` }))],
+    }));
+    renderLetterDetailPage();
+    const extra = (await screen.findByRole("heading", { name: "Enclosed card" })).closest("section");
+    expect(extra).toHaveTextContent("A separate message.");
+    expect(extra).not.toHaveTextContent("The published letter.");
+    expect(extra?.querySelectorAll("button")).toHaveLength(2);
+    expect(document.querySelector(".transcript-reading-saved")?.textContent).toBe("The published letter.\n\nWith love, Alice.");
+  });
+
   it("does not render entity chips on the public letter page", async () => {
     renderLetterDetailPage();
 
@@ -264,14 +287,14 @@ describe("LetterDetailPage", () => {
     expect(screen.queryByText("People & Places")).not.toBeInTheDocument();
   });
 
-  it("renders an sr-only h1 with sender/recipient info", async () => {
+  it("renders a visible date heading with correspondent information", async () => {
     renderLetterDetailPage();
 
     await screen.findByText(/A bright dispatch from Vienna/);
 
-    const h1 = screen.getByRole("heading", { level: 1, name: /Letter from Alice Smith to Bob Baker/ });
+    const h1 = screen.getByRole("heading", { level: 1, name: "August 10, 1947" });
     expect(h1).toBeInTheDocument();
-    expect(h1).toHaveClass("sr-only");
+    expect(h1).not.toHaveClass("sr-only");
   });
 
   it("sets noindex meta on error state", async () => {

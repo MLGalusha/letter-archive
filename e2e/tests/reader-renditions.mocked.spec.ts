@@ -119,31 +119,35 @@ for (const reducedData of [false, true]) {
     const held = new Promise<void>(resolve => { release = resolve; });
     await page.route('**/fixture-images/**', async route => {
       const url = route.request().url(); urls.push(url);
-      if (url.includes('scan-1?') && url.includes('w=1200')) await held;
+      if (url.includes('scan-1?') && url.includes('w=800')) await held;
       await route.fulfill({ contentType: 'image/png', path: png });
     });
     try {
       await page.goto('/letter/reader-renditions');
-      await expect.poll(() => urls.some(url => url.includes('w=1200'))).toBe(true);
+      await expect.poll(() => urls.some(url => url.includes('w=800'))).toBe(true);
       expect(urls.every(url => url.includes('scan-1?'))).toBe(true);
       release();
-      await expect(page.getByAltText('Page 1 of letter')).toHaveAttribute('src', /w=1200/);
+      await expect(page.getByAltText('Page 1 of letter')).toHaveAttribute('src', /w=800/);
       if (reducedData) {
         await page.waitForTimeout(150);
         expect(urls.every(url => url.includes('scan-1?'))).toBe(true);
       } else {
-        await expect.poll(() => urls.some(url => url.includes('scan-2?') && url.includes('w=1200'))).toBe(true);
+        await expect.poll(() => urls.some(url => url.includes('scan-2?') && url.includes('w=800'))).toBe(true);
         expect(urls.some(url => url.includes('scan-4?'))).toBe(false);
       }
       await page.getByRole('button', { name: 'Go to page 3', exact: true }).click();
-      await expect(page.getByAltText('Page 3 of letter')).toHaveAttribute('src', /w=1200/);
-      expect(urls.some(url => /w=800(?:&|$)/.test(url))).toBe(false);
+      await expect(page.getByAltText('Page 3 of letter')).toHaveAttribute('src', /w=800/);
+      expect(urls.some(url => /w=(1200|1600)(?:&|$)/.test(url))).toBe(false);
       await page.getByRole('button', { name: 'Go to page 1', exact: true }).click();
-      await expect(page.getByAltText('Page 1 of letter')).toHaveAttribute('src', /w=1200/);
+      // A cached src is already present before the carousel returns to page 1.
+      // Resize only once that page is actually active and horizontal motion ends.
+      await expect(page.getByRole('button', { name: 'Go to page 1', exact: true })).toHaveClass(/active/);
+      await expect.poll(() => page.locator('.scan-carousel').evaluate(el => el.scrollLeft)).toBeCloseTo(0, 0);
+      await expect(page.getByAltText('Page 1 of letter')).toHaveAttribute('src', /w=800/);
       const beforeResize = urls.length;
-      await page.setViewportSize({ width: 700, height: 844 });
-      await expect(page.getByAltText('Page 1 of letter')).toHaveAttribute('src', /w=1600/);
-      expect(urls.slice(beforeResize).some(url => /scan-(3|4)\?/.test(url) && url.includes('w=1600'))).toBe(false);
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      await expect(page.getByAltText('Page 1 of letter')).toHaveAttribute('src', /w=1200/);
+      expect(urls.slice(beforeResize).some(url => /scan-(3|4)\?/.test(url) && url.includes('w=1200'))).toBe(false);
     } finally { release(); await context.close(); }
   });
 }

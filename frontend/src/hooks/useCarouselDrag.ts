@@ -8,7 +8,7 @@ export interface UseCarouselDragReturn {
   /** True when a drag gesture occurred (suppresses click handler) */
   carouselDraggedRef: RefObject<boolean>;
   /** Smoothly scroll to a slide by index */
-  scrollToSlide: (index: number) => void;
+  scrollToSlide: (index: number, behavior?: ScrollBehavior) => void;
 }
 
 /**
@@ -19,10 +19,12 @@ export interface UseCarouselDragReturn {
 export default function useCarouselDrag(): UseCarouselDragReturn {
   const carouselRef = useRef<HTMLDivElement>(null);
   const carouselDraggedRef = useRef(false);
+  const navigationTargetRef = useRef<number | null>(null);
   const [carousel, setCarousel] = useState<HTMLDivElement | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const attachCarousel = useCallback((node: HTMLDivElement | null) => {
     carouselRef.current = node;
+    navigationTargetRef.current = null;
     carouselDraggedRef.current = false;
     setCarousel(node);
     setActiveIndex(0);
@@ -63,6 +65,19 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
       if (rafId == null) rafId = requestAnimationFrame(updateActiveDot);
     };
 
+    const restoreSnap = () => {
+      navigationTargetRef.current = null;
+      carousel.style.scrollSnapType = '';
+    };
+    const onScrollEnd = () => {
+      // An interrupted animation can emit its own late scrollend. It must not
+      // restore snapping over a newer target that has not arrived yet.
+      const target = navigationTargetRef.current;
+      if (target === null || Math.abs(carousel.scrollLeft - target) <= 1) restoreSnap();
+    };
+    carousel.addEventListener('scrollend', onScrollEnd);
+    carousel.addEventListener('touchstart', restoreSnap, { passive: true });
+    carousel.addEventListener('wheel', restoreSnap, { passive: true });
     carousel.addEventListener('scroll', onScroll, { passive: true });
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(onScroll);
     observer?.observe(carousel);
@@ -72,6 +87,10 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
 
     return () => {
       carousel.removeEventListener('scroll', onScroll);
+      carousel.removeEventListener('scrollend', onScrollEnd);
+      carousel.removeEventListener('touchstart', restoreSnap);
+      carousel.removeEventListener('wheel', restoreSnap);
+      restoreSnap();
       window.removeEventListener('resize', onScroll);
       observer?.disconnect();
       if (rafId != null) cancelAnimationFrame(rafId);
@@ -124,7 +143,7 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
     };
   }, [carousel]);
 
-  const scrollToSlide = useCallback((index: number) => {
+  const scrollToSlide = useCallback((index: number, behavior: ScrollBehavior = 'smooth') => {
     const carousel = carouselRef.current;
     if (!carousel) return;
     const slide = carousel.children[index] as HTMLElement | undefined;
@@ -133,10 +152,15 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
     const slideBounds = slide.getBoundingClientRect();
     const center = bounds.left + carousel.clientLeft + carousel.clientWidth / 2;
     const slideCenter = slideBounds.left + slideBounds.width / 2;
-    // Scroll only this horizontal owner; scrollIntoView also moves the document.
+    const targetLeft = carousel.scrollLeft + slideCenter - center;
+    // Native snapping can retain its previous target during a rapid reversal
+    // in WebKit. Explicit paging owns the target until it settles or the user
+    // starts a gesture; those events restore native touch/trackpad snapping.
+    carousel.style.scrollSnapType = 'none';
+    navigationTargetRef.current = targetLeft;
     carousel.scrollTo({
-      left: carousel.scrollLeft + slideCenter - center,
-      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
+      left: targetLeft,
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : behavior,
     });
   }, []);
 

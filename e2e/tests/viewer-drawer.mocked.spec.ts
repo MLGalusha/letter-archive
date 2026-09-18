@@ -214,6 +214,8 @@ test('@mocked a touch takes over the visible zoom before its target arrives', as
   });
   expect(values.before).toBeGreaterThan(1);
   expect(values.before).toBeLessThan(values.target);
+  await page.clock.runFor(32);
+  await expect(page.locator('.viewer-transform')).not.toHaveClass(/animating/);
   await expect.poll(() => page.locator('.viewer-transform').evaluate(el =>
     new DOMMatrixReadOnly(getComputedStyle(el).transform).a)).toBeCloseTo(values.before, 3);
 });

@@ -12,7 +12,11 @@ export function useScanDisplayWidth(
     const element = measureParent ? ref.current?.parentElement : ref.current;
     if (!element) return;
     const measure = () => {
-      let cssWidth = element.clientWidth;
+      // A contained preview can be narrower than its carousel slide. Its own
+      // reserved box is measurable before the network request starts.
+      let cssWidth = measureParent
+        ? Math.min(element.clientWidth, ref.current?.clientWidth ?? element.clientWidth)
+        : element.clientWidth;
       if (fitHeight && aspectRatio && element.clientHeight > 0) {
         cssWidth = Math.min(cssWidth, element.clientHeight * aspectRatio);
       }
@@ -21,6 +25,7 @@ export function useScanDisplayWidth(
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(element);
+    if (measureParent && ref.current) observer.observe(ref.current);
     window.addEventListener('resize', measure);
     return () => {
       observer.disconnect();

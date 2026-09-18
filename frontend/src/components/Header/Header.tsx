@@ -32,30 +32,23 @@ export default memo(function Header() {
 
   // Publish the header's real height to --header-height on the closest site shell
   // so body-layout top padding matches when a dock (e.g. the collection scrubber)
-  // is expanded. --header-height is registered as a <length> and has a CSS
-  // transition, so consumers animate smoothly when it changes.
+  // is expanded, including safe-area padding around the header.
   //
   // Growth-only per page: once we've measured the fully-expanded height while at
   // top, we keep it. This prevents the scroll-to-top grid-row transition from
   // stepping the value through intermediate sizes (which would restart the
   // CSS transition on every tick and cause visible snap). Reset when the dock
-  // content is removed (navigation to a page with no dock).
+  // content changes. Headers without a dock are measured too.
   useLayoutEffect(() => {
     const el = headerRef.current;
     if (!el) return;
     const shell = el.closest<HTMLElement>(".public-site-shell, .public-letter-shell");
     if (!shell) return;
 
-    if (!state.hasContent) {
-      maxHeaderHeightRef.current = 0;
-      shell.style.removeProperty("--header-height");
-      return;
-    }
-
     const update = () => {
       if (!atTop) return;
       // Reset for width/safe-area changes, but not height-only dock animations.
-      const geometry = `${el.clientWidth}:${getComputedStyle(el).paddingTop}`;
+      const geometry = `${el.clientWidth}:${getComputedStyle(el).paddingTop}:${state.hasContent}`;
       if (geometry !== headerGeometryRef.current) {
         headerGeometryRef.current = geometry;
         maxHeaderHeightRef.current = 0;
@@ -69,7 +62,8 @@ export default memo(function Header() {
     update();
     if (typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver(update);
-    ro.observe(el);
+    // Safe-area changes can alter padding without resizing the content box.
+    ro.observe(el, { box: "border-box" });
     return () => ro.disconnect();
   }, [atTop, state.hasContent]);
 

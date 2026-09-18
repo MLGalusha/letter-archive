@@ -4,7 +4,7 @@ import { API_BASE_URL } from './utils/test-helpers';
 
 const facets = { formats: [], collections: [], correspondents: [], places: [], years: [], topics: [], tones: [], relationships: [] };
 
-for (const viewport of [{ name: 'phone', width: 390, height: 844, deviceScaleFactor: 3 }, { name: 'desktop', width: 1440, height: 1000, deviceScaleFactor: 1 }]) {
+for (const viewport of [{ name: 'phone', width: 390, height: 844, deviceScaleFactor: 3 }, { name: 'desktop', width: 1440, height: 1000, deviceScaleFactor: 2 }]) {
   for (const scenario of ['card handoff', 'direct entry', 'failed full image', 'landscape handoff'] as const) {
     test(`@mocked real reader reserves visible preview space: ${viewport.name}, ${scenario}`, async ({ browser }, testInfo) => {
       const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height },

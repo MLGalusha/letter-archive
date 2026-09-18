@@ -20,7 +20,7 @@ vi.mock("../../api/letters", () => ({
 
 // Mock LetterViewer since it requires complex DOM setup
 vi.mock("../../components/LetterViewer/LetterViewer", () => ({
-  default: () => <div>LetterViewer</div>,
+  default: ({ initialIndex }: { initialIndex: number }) => <div data-index={initialIndex}>LetterViewer</div>,
 }));
 
 // Keep this regression touch-capable if a page gesture is accidentally restored.
@@ -103,10 +103,13 @@ function createLetter(overrides: Partial<Letter> = {}): Letter {
   };
 }
 
-function renderLetterDetailPage() {
+function renderLetterDetailPage(entry = "/letter/letter-1") {
   return render(
-    <MemoryRouter initialEntries={["/letter/letter-1"]}>
+    <MemoryRouter initialEntries={[entry]}>
       <HeaderDockProvider>
+        <Link to="/letter/letter-1?image=img-2">Select second scan</Link>
+        <Link to="/letter/letter-1?image=unknown">Select unknown scan</Link>
+        <Link to="/letter/letter-1">Clear scan selection</Link>
         <Link to="/letter/letter-2">Go to letter 2</Link>
         <Link to="/letter/letter-3">Go to letter 3</Link>
         <Routes>
@@ -127,11 +130,14 @@ function deferred<T>() {
   return { promise, reject, resolve };
 }
 
+const originalElementScrollTo = HTMLElement.prototype.scrollTo;
 let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
 describe("LetterDetailPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    HTMLElement.prototype.scrollTo = vi.fn();
     consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     getLetterByIdMock.mockResolvedValue(createLetter());
@@ -150,6 +156,8 @@ describe("LetterDetailPage", () => {
 
   afterEach(() => {
     consoleErrorSpy.mockRestore();
+    HTMLElement.prototype.scrollTo = originalElementScrollTo;
+    vi.unstubAllGlobals();
   });
 
   it("updates the rendered current dot after scans load and scroll", async () => {
@@ -174,6 +182,32 @@ describe("LetterDetailPage", () => {
     expect(screen.getByRole("button", { name: "Go to page 1" })).not.toHaveClass("active");
   });
 
+  it("resets unknown and absent image parameters on same-letter navigation", async () => {
+    const user = userEvent.setup();
+    getLetterByIdMock.mockResolvedValue(createLetter({ images: [
+      ...createLetter().images,
+      { id: "img-2", type: "letter", pageNumber: 2, imageUrl: "/images/two.jpg" },
+    ] }));
+    const { container } = renderLetterDetailPage();
+    await screen.findByRole("article");
+    const carousel = container.querySelector<HTMLDivElement>(".scan-carousel")!;
+    Object.defineProperty(carousel, "clientWidth", { value: 200 });
+    carousel.getBoundingClientRect = () => ({ left: 0, width: 200 }) as DOMRect;
+    Array.from(carousel.children).forEach((slide, index) => {
+      slide.getBoundingClientRect = () => ({ left: index * 220 - carousel.scrollLeft, width: 200 }) as DOMRect;
+    });
+    carousel.scrollTo = vi.fn();
+    await user.click(screen.getByRole("link", { name: "Select second scan" }));
+    expect(carousel.scrollTo).toHaveBeenLastCalledWith({ left: 220, behavior: "instant" });
+    carousel.scrollLeft = 220;
+    await user.click(screen.getByRole("link", { name: "Select unknown scan" }));
+    expect(carousel.scrollTo).toHaveBeenLastCalledWith({ left: 0, behavior: "instant" });
+    await user.click(screen.getByRole("link", { name: "Select second scan" }));
+    await user.click(screen.getByRole("link", { name: "Clear scan selection" }));
+    expect(carousel.scrollTo).toHaveBeenLastCalledWith({ left: 0, behavior: "instant" });
+    expect(getLetterByIdMock).toHaveBeenCalledTimes(1);
+  });
+
   it("renders the editorial page with hero, summary, transcript, and nav", async () => {
     renderLetterDetailPage();
 
@@ -184,7 +218,8 @@ describe("LetterDetailPage", () => {
     expect(screen.getByText("Written by Alice Smith to Bob Baker")).toBeInTheDocument();
 
     // Hero: dateline
-    expect(screen.getByText(/August 10, 1947 — Vienna/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "August 10, 1947" })).toBeInTheDocument();
+    expect(screen.getByText("Vienna")).toBeInTheDocument();
 
     // Summary
     expect(screen.getByText("About This Letter")).toBeInTheDocument();
@@ -256,6 +291,57 @@ describe("LetterDetailPage", () => {
     expect(screen.queryByRole("button", { name: "View full size" })).not.toBeInTheDocument();
   });
 
+  it.each([false, true])('keeps photo-primary records in the photo workflow (mixed=%s)', async mixed => {
+    getLetterByIdMock.mockResolvedValue(createLetter({
+      images: [{ id: 'photo', type: 'photo', imageUrl: '/images/photo.jpg' }, ...(mixed ? createLetter().images : [])],
+      readingText: 'Published reading text from an older workflow.',
+      photoDescription: 'A family in the garden.',
+    }));
+    renderLetterDetailPage();
+    await screen.findByText('A family in the garden.');
+    expect(screen.queryByRole('heading', { name: 'Transcript' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Published reading text from an older workflow.')).not.toBeInTheDocument();
+  });
+
+  it('falls back to page text when saved reading text is only whitespace', async () => {
+    getLetterByIdMock.mockResolvedValue(createLetter({ readingText: '  \n  ' }));
+    renderLetterDetailPage();
+    expect(await screen.findByText('My dearest friend...')).toBeVisible();
+  });
+
+  it("keeps published text readable when scans are absent", async () => {
+    getLetterByIdMock.mockResolvedValue(createLetter({ images: [], readingText: "A saved paragraph.\n\nP.S. Please write soon." }));
+    renderLetterDetailPage();
+    expect(await screen.findByText(/A saved paragraph/)).toHaveTextContent("P.S. Please write soon.");
+    expect(screen.getByText("Original scans are not available.")).toBeInTheDocument();
+  });
+
+  it("opens the mapped source for a single transcript page among extra images", async () => {
+    const user = userEvent.setup();
+    getLetterByIdMock.mockResolvedValue(createLetter({ images: [
+      { id: 'card-first', type: 'card', imageUrl: '/images/card.jpg' },
+      ...createLetter().images,
+    ] }));
+    renderLetterDetailPage();
+    await user.click(await screen.findByRole('button', { name: 'View page 1 on scan' }));
+    expect(await screen.findByText('LetterViewer')).toHaveAttribute('data-index', '1');
+  });
+
+  it("keeps extra documents separate and links every associated source", async () => {
+    getLetterByIdMock.mockResolvedValue(createLetter({
+      readingText: "The published letter.\n\nWith love, Alice.",
+      extraContentStatus: "VERIFIED",
+      extraContentItems: [{ type: "card", label: "Enclosed card", transcript: "A separate message.\nSecond line.", imageIds: ["card-1", "card-2"] }],
+      images: [...createLetter().images, ...[1, 2].map(n => ({ id: `card-${n}`, type: "card" as const, imageUrl: `/images/card-${n}.jpg` }))],
+    }));
+    renderLetterDetailPage();
+    const extra = (await screen.findByRole("heading", { name: "Enclosed card" })).closest("section");
+    expect(extra).toHaveTextContent("A separate message.");
+    expect(extra).not.toHaveTextContent("The published letter.");
+    expect(extra?.querySelectorAll("button")).toHaveLength(2);
+    expect(document.querySelector(".transcript-reading-saved")?.textContent).toBe("The published letter.\n\nWith love, Alice.");
+  });
+
   it("does not render entity chips on the public letter page", async () => {
     renderLetterDetailPage();
 
@@ -264,14 +350,14 @@ describe("LetterDetailPage", () => {
     expect(screen.queryByText("People & Places")).not.toBeInTheDocument();
   });
 
-  it("renders an sr-only h1 with sender/recipient info", async () => {
+  it("renders a visible date heading with correspondent information", async () => {
     renderLetterDetailPage();
 
     await screen.findByText(/A bright dispatch from Vienna/);
 
-    const h1 = screen.getByRole("heading", { level: 1, name: /Letter from Alice Smith to Bob Baker/ });
+    const h1 = screen.getByRole("heading", { level: 1, name: "August 10, 1947" });
     expect(h1).toBeInTheDocument();
-    expect(h1).toHaveClass("sr-only");
+    expect(h1).not.toHaveClass("sr-only");
   });
 
   it("sets noindex meta on error state", async () => {

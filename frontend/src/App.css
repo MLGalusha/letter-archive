@@ -21,13 +21,7 @@ html, body {
 
 .public-site-shell,
 .public-letter-shell {
-  /* Fixed-header clearance. Pages that use .body-layout pad their top
-     content by this amount; pages that deliberately scroll under the
-     header (letter detail) ignore it. Mobile is tuned for the shorter
-     header card; desktop has a taller one with the brand text.
-     Header.tsx dynamically overrides this with the real measured height
-     once the dock content is present, so pages with a scrubber reserve
-     enough space for the fully-expanded header. */
+  /* Shared fixed-header clearance, replaced by Header's measured expanded height. */
   --header-height: calc(5.5rem + env(safe-area-inset-top, 0px));
   --bg-dark: #eee2cf;
   --bg: #f5ede1;

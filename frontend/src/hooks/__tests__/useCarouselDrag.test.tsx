@@ -82,6 +82,21 @@ describe('scan carousel lifecycle and position', () => {
     fireEvent.mouseDown(carousel, { clientX: 100 }); fireEvent.mouseUp(document);
     fireEvent.click(screen.getByTestId('slide-1')); expect(opened).toHaveBeenCalledWith(1);
   });
+  it('does not let a stale scrollend steal the requested target and returns snapping to gestures', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: false }));
+    render(<Harness />); const carousel = geometry();
+    carousel.scrollTo = vi.fn();
+    fireEvent.click(screen.getByText('Third'));
+    expect(carousel.style.scrollSnapType).toBe('none');
+    fireEvent(carousel, new Event('scrollend'));
+    expect(carousel.style.scrollSnapType).toBe('none');
+    carousel.scrollLeft = 440;
+    fireEvent(carousel, new Event('scrollend'));
+    expect(carousel.style.scrollSnapType).toBe('');
+    fireEvent.click(screen.getByText('Third'));
+    fireEvent.touchStart(carousel);
+    expect(carousel.style.scrollSnapType).toBe('');
+  });
   it.each([false, true])('pages only the carousel using viewport geometry (reduced motion=%s)', (reducedMotion) => {
     vi.stubGlobal('matchMedia', () => ({ matches: reducedMotion }));
     render(<Harness />); const carousel = geometry();

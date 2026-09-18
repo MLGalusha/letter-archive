@@ -9,7 +9,7 @@ export function useViewerSwipe(
   onCommit: (direction: -1 | 1) => void,
   contentKey: string,
 ) {
-  const [view, setView] = useState({ offset: 0, settling: false, duration: VIEWER_SWIPE_MS });
+  const [view, setView] = useState({ offset: 0, settling: false, duration: VIEWER_SWIPE_MS, easing: 'ease-in-out' });
   const gesture = useRef<{
     x: number; y: number; axis: GestureAxis; offset: number;
     samples: Array<{ x: number; time: number }>;
@@ -44,7 +44,7 @@ export function useViewerSwipe(
     settling.current = false;
     direction.current = 0;
     destination.current = 0;
-    setView({ offset: 0, settling: false, duration: VIEWER_SWIPE_MS });
+    setView({ offset: 0, settling: false, duration: VIEWER_SWIPE_MS, easing: 'ease-in-out' });
   }, [clearWork]);
 
   const finish = useCallback((fallback = false) => {
@@ -64,7 +64,7 @@ export function useViewerSwipe(
     direction.current = 0;
     gesture.current = { x: x - offset, y, axis: offset ? 'horizontal' : 'undecided', offset,
       samples: [{ x, time: performance.now() }] };
-    setView({ offset, settling: false, duration: VIEWER_SWIPE_MS });
+    setView({ offset, settling: false, duration: VIEWER_SWIPE_MS, easing: 'ease-in-out' });
     return true;
   }, [clearWork, readOffset]);
 
@@ -80,7 +80,7 @@ export function useViewerSwipe(
     active.samples = [...active.samples.filter(sample => time - sample.time <= 80), { x, time }];
     if (frame.current === null) frame.current = requestAnimationFrame(() => {
       frame.current = null;
-      if (gesture.current) setView({ offset: gesture.current.offset, settling: false, duration: VIEWER_SWIPE_MS });
+      if (gesture.current) setView({ offset: gesture.current.offset, settling: false, duration: VIEWER_SWIPE_MS, easing: 'ease-in-out' });
     });
     return true;
   }, [containerRef]);
@@ -109,10 +109,17 @@ export function useViewerSwipe(
     }
     const duration = Math.round(Math.max(120, Math.min(VIEWER_SWIPE_MS,
       Math.abs(destination.current - active.offset) / width * VIEWER_SWIPE_MS)));
-    setView({ offset: active.offset, settling: false, duration });
+    const distance = destination.current - active.offset;
+    // Linear time control points make the initial slope 3*y1. Preserve recent
+    // finger speed toward the destination; a paused/reversed release starts at
+    // rest instead of jumping into the old steep ease-out curve. Bound the slope
+    // near the destination so the carriage never overshoots a page boundary.
+    const initialSlope = distance ? Math.max(0, Math.min(3, velocity * duration / distance)) : 0;
+    const easing = `cubic-bezier(0.333333, ${initialSlope / 3}, 0.666667, 1)`;
+    setView({ offset: active.offset, settling: false, duration, easing });
     frame.current = requestAnimationFrame(() => {
       frame.current = null;
-      setView({ offset: destination.current, settling: true, duration });
+      setView({ offset: destination.current, settling: true, duration, easing });
       timer.current = setTimeout(() => finish(true), duration + 80);
     });
   }, [cancel, clearWork, containerRef, finish]);

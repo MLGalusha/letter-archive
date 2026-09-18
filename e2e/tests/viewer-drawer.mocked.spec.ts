@@ -1,6 +1,47 @@
 import { expect, test } from '@playwright/test';
 import { openReader } from './utils/reader-viewer-fixture';
 
+test('@mocked releasing a paused swipe starts gently and reaches the next page continuously', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openReader(page);
+  await expect(page.locator('.viewer-image')).toHaveCSS('opacity', '1');
+  const measured = await page.evaluate(async () => {
+    const stage = document.querySelector('.viewer-container')!;
+    const carriage = document.querySelector('.viewer-carriage')!;
+    const touch = (type: string, x?: number) => {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'touches', { value: x === undefined ? [] : [{ clientX: x, clientY: 250 }] });
+      stage.dispatchEvent(event);
+    };
+    const read = () => new DOMMatrixReadOnly(getComputedStyle(carriage).transform).m41;
+    touch('touchstart', 300); touch('touchmove', 180);
+    await new Promise(resolve => setTimeout(resolve, 120)); // Release from rest, not a flick.
+    const start = read();
+    const animationReady = new Promise<Animation>(resolve => {
+      carriage.addEventListener('transitionrun', () => {
+        const animation = carriage.getAnimations()[0];
+        animation.pause(); resolve(animation);
+      }, { once: true });
+    });
+    touch('touchend');
+    const animation = await animationReady;
+    await animation.ready;
+    animation.currentTime = 16;
+    const firstFrame = read();
+    animation.currentTime = Number(animation.effect!.getTiming().duration) - 0.1;
+    const end = read();
+    animation.play();
+    return { start, firstFrame, end, width: stage.clientWidth };
+  });
+  console.log('Paused release measured CSS pixels:', JSON.stringify(measured));
+  expect(measured.start).toBeCloseTo(-120, 0);
+  expect(Math.abs(measured.firstFrame - measured.start)).toBeLessThan(12);
+  expect(measured.firstFrame).toBeLessThan(measured.start);
+  expect(measured.end).toBeCloseTo(-measured.width, 0);
+  await expect(page.locator('.viewer-page-counter')).toHaveText('2 / 3');
+  await expect(page.locator('.viewer-carriage')).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 0)');
+});
+
 test.describe('touch toolbar', () => {
   test.use({ hasTouch: true, deviceScaleFactor: 3 });
   test('@mocked a native pinch survives both image rendition replacements', async ({ page, browserName }) => {

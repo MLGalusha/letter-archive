@@ -43,6 +43,23 @@ beforeEach(() => {
 afterEach(() => { HTMLElement.prototype.scrollTo = originalScrollTo; vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe('fullscreen fit-view swipes', () => {
+  it.each([0.25, 1.5])('carries a %s px/ms release speed into the page transition', (speed) => {
+    const { target, carriage } = setup();
+    touch(target, 'touchStart', [[300, 300]]);
+    for (let step = 1; step <= 6; step++) {
+      act(() => vi.advanceTimersByTime(20));
+      touch(target, 'touchMove', [[300 - speed * 20 * step, 300]]); frame();
+    }
+    touch(target, 'touchEnd', []); frame();
+    const transition = (carriage as HTMLElement).style.transition;
+    const duration = Number(transition.match(/transform ([\d.]+)ms/)![1]);
+    const [x1, y1] = transition.match(/cubic-bezier\(([^)]+)\)/)![1].split(',').map(Number);
+    const remaining = 390 - speed * 120;
+    expect(y1 / x1 * remaining / duration).toBeCloseTo(speed, 3);
+    finish(carriage);
+    expect(screen.getByText('2 / 3')).toBeInTheDocument();
+  });
+
   it('animates a responsive fit swipe and commits only when its carriage finishes', () => {
     const { target, carriage, image, container } = setup();
     swipe(target, 60); // 15% of390px, below the former78px threshold.

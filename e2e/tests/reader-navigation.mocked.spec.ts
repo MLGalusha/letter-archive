@@ -38,6 +38,19 @@ for (const width of [390, 1440]) test(`@mocked reader navigation stays mounted a
     await expect(page).toHaveURL(/\/letter\/b$/);
     await expect(next).toHaveAttribute('aria-disabled', 'true');
     await expect(next).toBeFocused();
+    const article = page.locator('article');
+    await expect(article).toHaveAttribute('aria-busy', 'true');
+    await expect(article).toHaveAttribute('inert');
+    await expect(article).toHaveCSS('opacity', '1');
+    await expect(next).toHaveCSS('opacity', '1');
+    await expect(slider).toHaveCSS('opacity', '1');
+    const loadingStatus = page.getByRole('status').filter({ hasText: 'Loading letter...' });
+    await expect(loadingStatus).toHaveCount(1);
+    // Announce loading outside the inert content without painting a header bar.
+    expect(await loadingStatus.evaluate(el => el.closest('[inert]'))).toBeNull();
+    await expect(loadingStatus).toHaveCSS('clip', 'rect(0px, 0px, 0px, 0px)');
+    await expect(loadingStatus).toHaveCSS('width', '1px');
+    await expect(loadingStatus).toHaveCSS('height', '1px');
     await expect(page.locator('header.header').getByRole('link', { name: 'Collection', exact: true })).toHaveAttribute('href', '/collections/001');
     expect(await original!.evaluate(el => el.isConnected)).toBe(true);
     const pending = await page.locator('.letter-hero-section').boundingBox();
@@ -49,6 +62,10 @@ for (const width of [390, 1440]) test(`@mocked reader navigation stays mounted a
     await expect(page.locator('article')).not.toHaveAttribute('inert');
     expect(await original!.evaluate(el => el.isConnected)).toBe(true);
     await expect(next).toHaveAttribute('aria-disabled', 'true');
+    await expect(article).toHaveCSS('opacity', '1');
+    await expect(next).toHaveCSS('opacity', '1');
+    await expect(slider).toHaveCSS('opacity', '1');
+    await expect(loadingStatus).toHaveCount(0);
     releaseNavigation();
     await expect(slider).toHaveAttribute('aria-valuenow', '2');
     await expect(next).toHaveAttribute('aria-disabled', 'false');

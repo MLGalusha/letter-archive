@@ -199,6 +199,45 @@ test.describe('@mocked Public mobile layout', () => {
     await expect(page.locator('.header')).not.toHaveClass(/header--hidden/);
   });
 
+  test('search return stops on input and route changes; desktop focus waits for arrival', async ({ page, isMobile }) => {
+    await mockPublic(page);
+    await home(page);
+    await scroll(page, 2400);
+    await page.keyboard.press('/');
+    await expect.poll(() => page.evaluate(() => scrollY)).toBeLessThan(2350);
+    await page.evaluate(() => window.dispatchEvent(new WheelEvent('wheel', { deltaY: 100 })));
+    const stopped = await page.evaluate(() => scrollY);
+    // Sample beyond the original maximum animation duration: it must stay stopped.
+    await page.waitForTimeout(750);
+    expect(await page.evaluate(() => scrollY)).toBeCloseTo(stopped, 0);
+    const input = page.getByRole('searchbox', { name: 'Search the archive' });
+    await expect(input).not.toBeFocused();
+
+    await page.keyboard.press('/');
+    if (!isMobile) {
+      const focusY = await input.evaluate(el => new Promise<number>(resolve => {
+        if (document.activeElement === el) resolve(scrollY);
+        else el.addEventListener('focus', () => resolve(scrollY), { once: true });
+      }));
+      const destination = await page.evaluate(() => Math.max(0,
+        scrollY + document.querySelector('.home-search-panel')!.getBoundingClientRect().top
+        - (document.querySelector('.header') as HTMLElement).offsetHeight - 12));
+      expect(focusY).toBeCloseTo(destination, 0);
+      await input.blur();
+    } else {
+      await page.waitForTimeout(750);
+      await expect(input).not.toBeFocused();
+    }
+    await scroll(page, 2400);
+    await page.keyboard.press('/');
+    await expect.poll(() => page.evaluate(() => scrollY)).toBeLessThan(2350);
+    // Programmatic SPA navigation deliberately avoids pointer cancellation.
+    await page.locator('.page-selector[href="/about"]').evaluate((el: HTMLAnchorElement) => el.click());
+    await expect(page).toHaveURL(/\/about$/);
+    await page.waitForTimeout(750);
+    expect(await page.evaluate(() => scrollY)).toBe(0);
+  });
+
   test('horizontal page swipes do not widen or offset the document', async ({ page, isMobile }) => {
     test.skip(!isMobile, 'Page swipes are enabled only for touch devices.');
     await mockPublic(page);

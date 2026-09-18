@@ -22,7 +22,7 @@ import useIsMobile from "../hooks/useIsMobile";
 import InfiniteCarousel from '../components/InfiniteCarousel';
 import { formatDate } from "../utils/dateFormatting";
 import { getAppScrollY } from "../utils/appScroll";
-import { smoothScrollToY } from "../utils/smoothScrollTo";
+import useSmoothScroll from "../hooks/useSmoothScroll";
 import "./HomePage.css";
 
 function formatDateParts(yearText: string, monthText: string, dayText: string): string | null {
@@ -325,6 +325,7 @@ export default function HomePage() {
     navigate(`/letter/${letterId}?${params.toString()}`);
   }, [navigate]);
 
+  const scrollTo = useSmoothScroll();
   const handleScrollToArchiveSearch = useCallback((event: ReactMouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
 
@@ -335,8 +336,8 @@ export default function HomePage() {
     const headerHeight = header?.offsetHeight ?? 0;
     const targetTop = getAppScrollY() + target.getBoundingClientRect().top - headerHeight - HOME_SEARCH_SCROLL_GAP;
 
-    smoothScrollToY(Math.max(0, targetTop));
-  }, []);
+    scrollTo(targetTop);
+  }, [scrollTo]);
 
   const isMobile = useIsMobile();
 

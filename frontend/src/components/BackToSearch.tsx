@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { smoothScrollToY } from "../utils/smoothScrollTo";
+import useSmoothScroll from "../hooks/useSmoothScroll";
 import { addAppScrollListener, getAppScrollY } from "../utils/appScroll";
 import "./BackToSearch.css";
 import useTouchScrollAction from "../hooks/useTouchScrollAction";
@@ -29,6 +29,7 @@ export default function BackToSearch({
   const [scrollingUp, setScrollingUp] = useState(false);
   const lastScrollYRef = useRef(0);
   const programmaticScrollRef = useRef(false);
+  const scrollTo = useSmoothScroll();
 
   useEffect(() => {
     if (!visible) {
@@ -61,27 +62,18 @@ export default function BackToSearch({
     const header = document.querySelector(".header") as HTMLElement | null;
     const headerHeight = header?.offsetHeight ?? 0;
     const targetTop = getAppScrollY() + target.getBoundingClientRect().top - headerHeight - SCROLL_GAP;
-    const prefersReducedMotion =
-      typeof window.matchMedia === "function" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-    programmaticScrollRef.current = true;
-    smoothScrollToY(targetTop, {
-      onFinish: () => {
+    const input = target.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+      'input[type="search"], input[type="text"], input:not([type]), textarea',
+    );
+    // Cancel the previous action before it can reset this action's suppression.
+    scrollTo(targetTop, {
+      onStep: () => { programmaticScrollRef.current = true; },
+      onFinish: (cancelled) => {
         programmaticScrollRef.current = false;
+        if (!cancelled && !isTouch && input?.isConnected) input.focus({ preventScroll: true });
       },
     });
-
-    // Desktop: also focus the input after the scroll so typing can continue.
-    if (!isTouch) {
-      const input = target.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-        'input[type="search"], input[type="text"], input:not([type]), textarea',
-      );
-      window.setTimeout(() => {
-        input?.focus({ preventScroll: true });
-      }, prefersReducedMotion ? 0 : 160);
-    }
-  }, [targetRef]);
+  }, [targetRef, scrollTo]);
 
   // Desktop keyboard shortcut: `/` jumps to search (unless user is already typing).
   useEffect(() => {

@@ -414,35 +414,6 @@
   color: #f4eee4;
 }
 .viewer-modal > .letter-viewer { flex: 1; min-height: 0; height: auto; }
-.viewer-modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex: none;
-  gap: 16px;
-  padding-left: 12px;
-  min-height: 44px;
-  font-size: .85rem;
-  font-weight: 600;
-}
-.viewer-close {
-  flex: none;
-  appearance: none;
-  border: 1px solid #ffffff30;
-  border-radius: 8px;
-  background: #ffffff0d;
-  color: #f4eee4;
-  font-size: 1.6rem;
-  width: 44px;
-  height: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-.viewer-close:hover { background: #ffffff1c; }
-.viewer-close:focus-visible { outline: 2px solid #a0d5d4; outline-offset: 2px; }
 
 /* ──────────────────────────────────────────────────────────── */
 /* Shared                                                      */

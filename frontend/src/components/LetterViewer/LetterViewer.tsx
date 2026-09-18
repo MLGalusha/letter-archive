@@ -45,6 +45,7 @@ interface LetterViewerProps {
   getImageAlt?: (image: LetterImage) => string;
   variant?: "panel" | "lightbox";
   initialIndex?: number;
+  onClose?: () => void;
 }
 
 // ============================================================================
@@ -109,6 +110,7 @@ const LetterViewer = memo(function LetterViewer({
   getImageAlt,
   variant = "panel",
   initialIndex = 0,
+  onClose,
 }: LetterViewerProps) {
   const isLightbox = variant === "lightbox";
   const [pagesOpen, setPagesOpen] = useState(false);
@@ -853,8 +855,12 @@ const LetterViewer = memo(function LetterViewer({
 
   return (
     <div
-      className={`letter-viewer${isLightbox ? " letter-viewer--lightbox" : ""}`}
+      className={`letter-viewer${isLightbox ? " letter-viewer--lightbox" : ""}${isLightbox && onClose ? " letter-viewer--with-header" : ""}`}
     >
+      {isLightbox && onClose && <div className="viewer-modal-header">
+        <span className="viewer-mobile-zoom" aria-label="Zoom level">{Math.round(scale * 100)}%</span>
+        <button type="button" className="viewer-close" tabIndex={0} onClick={onClose} aria-label="Close viewer">&times;</button>
+      </div>}
       <div className={`viewer-workspace${isLightbox && pagesOpen ? ' viewer-workspace--pages' : ''}`}>
       {isLightbox && pagesOpen && <ViewerPageDrawer id={drawerId} images={displayImages}
         selected={currentImageIndex} onSelect={selectImage} />}
@@ -881,6 +887,7 @@ const LetterViewer = memo(function LetterViewer({
           </div>;
         })}
         <div className={`viewer-transform${isAnimating ? ' animating' : ''}`} style={isLightbox ? {
+          cursor: scale > 1 ? (isDragging ? 'grabbing' : 'grab') : 'zoom-in',
           width: physicalWidth / (window.devicePixelRatio || 1),
           height: physicalWidth / (window.devicePixelRatio || 1) / aspectRatio,
           transform: `translate3d(${position.x}px, ${position.y}px, 0) scale(${scale})`,

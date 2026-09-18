@@ -319,6 +319,38 @@
   grid-template-rows: minmax(0, 1fr) auto;
   color: #f4eee4;
 }
+.letter-viewer--with-header { grid-template-rows: auto minmax(0, 1fr) auto; }
+.viewer-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: none;
+  gap: 16px;
+  padding-left: 12px;
+  min-height: 44px;
+  font-size: .85rem;
+  font-weight: 600;
+}
+.viewer-close {
+  margin-left: auto;
+  flex: none;
+  appearance: none;
+  border: 1px solid #ffffff30;
+  border-radius: 8px;
+  background: #ffffff0d;
+  color: #f4eee4;
+  font-size: 1.6rem;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.viewer-close:hover { background: #ffffff1c; }
+.viewer-close:focus-visible { outline: 2px solid #a0d5d4; outline-offset: 2px; }
+.viewer-mobile-zoom { display: none; font-variant-numeric: tabular-nums; font-weight: 400; }
 .letter-viewer--lightbox .viewer-workspace {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -362,6 +394,10 @@
   max-height: none;
   transition: none;
   will-change: auto;
+  /* Rendition/retry images remount. Keep native touch targets on their stable
+     surface so a sharper image cannot sever an in-progress pinch or pan. */
+  pointer-events: none;
+  border-radius: 6px;
 }
 .viewer-swipe-neighbor { pointer-events: none; }
 .viewer-swipe-neighbor img {
@@ -371,6 +407,7 @@
   height: auto;
   object-fit: contain;
   user-select: none;
+  border-radius: 6px;
 }
 .viewer-toolbar {
   display: flex;
@@ -458,6 +495,15 @@
   .viewer-page-drawer { flex-direction: row; grid-row: 2; padding-block: 4px; }
   .viewer-page-choice { width: 72px; padding: 4px; }
   .viewer-page-choice .preview-image { height: 56px; }
+}
+/* Phones use direct pinch/double-tap zoom. Keep navigation in one bottom row
+   and the readout beside Close; mouse/keyboard layouts retain explicit zoom. */
+@media (pointer: coarse) and (max-width: 1023px) {
+  .viewer-toolbar { display: flex; flex-wrap: nowrap; justify-content: space-between; gap: 6px; }
+  .viewer-page-controls, .viewer-zoom-controls { flex: none; }
+  .viewer-page-counter { white-space: nowrap; }
+  .viewer-zoom-controls { display: none; }
+  .viewer-mobile-zoom { display: inline; }
 }
 @media (prefers-reduced-motion: reduce) {
   .letter-viewer .animating { transition: none !important; }

@@ -117,8 +117,14 @@ export function useAccessibleDialog({
     ).filter(element => element.tabIndex >= 0
       && !element.matches(':disabled')
       && !element.closest('[hidden], [inert]')
-      && getComputedStyle(element).display !== 'none'
-      && getComputedStyle(element).visibility !== 'hidden');
+      && (() => {
+        // A control's own display value does not reveal a display:none ancestor.
+        for (let node: HTMLElement | null = element; node && node !== dialog; node = node.parentElement) {
+          const style = getComputedStyle(node);
+          if (style.display === 'none' || style.visibility === 'hidden') return false;
+        }
+        return true;
+      })());
     (focusable()[0] ?? dialog)?.focus({ preventScroll: true });
 
     const isTopmostDialog = () => {

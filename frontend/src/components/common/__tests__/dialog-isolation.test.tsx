@@ -15,6 +15,9 @@ function Fixture() {
   const [child, setChild] = useState(false);
   return <><button onClick={() => setParent(true)}>Open viewer</button>
     {parent && <Dialog name="viewer" onClose={() => setParent(false)}>
+      <div style={{ display: 'none' }}><button>Hidden control</button></div>
+      <button tabIndex={-1}>Programmatic only</button>
+      <button disabled>Disabled control</button>
       <button onClick={() => setChild(true)}>Open details</button>
     </Dialog>}
     {child && <Dialog name="details" onClose={() => setChild(false)} />}
@@ -28,7 +31,10 @@ describe('opt-in modal background isolation', () => {
     const view = render(<Fixture />);
     const opener = screen.getByText('Open viewer'); opener.focus(); fireEvent.click(opener);
     expect(view.container).toHaveAttribute('inert');
-    const nestedOpener = screen.getByText('Open details'); nestedOpener.focus(); fireEvent.click(nestedOpener);
+    const nestedOpener = screen.getByText('Open details');
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(nestedOpener).toHaveFocus();
+    fireEvent.click(nestedOpener);
     expect(screen.getByRole('dialog', { name: 'viewer', hidden: true })).toHaveAttribute('inert');
     expect(screen.getByText('Close details')).toHaveFocus();
     fireEvent.keyDown(document, { key: 'Escape' });

@@ -178,7 +178,6 @@ describe("LetterDetailPage", () => {
     carousel.scrollLeft = 220;
     fireEvent.scroll(carousel);
     await waitFor(() => expect(screen.getByRole("status", { name: "Scan page" })).toHaveTextContent("2 / 2"));
-    fireEvent.click(screen.getByRole("button", { name: "Pages" }));
     expect(screen.getByRole("button", { name: "Go to scan 2: letter" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("button", { name: "Go to scan 1: letter" })).not.toHaveAttribute("aria-current");
   });
@@ -449,7 +448,7 @@ describe("LetterDetailPage", () => {
     });
 
     expect(screen.getByText(/A bright dispatch from Vienna/)).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("Loading letter...");
+    expect(screen.getByText("Loading letter...")).toBeInTheDocument();
     expect(document.querySelector("article")).toHaveAttribute("inert");
     expect(document.querySelector(".letter-nav-section")).toBeNull();
     fireEvent.keyDown(window, { key: "ArrowRight" });
@@ -467,7 +466,7 @@ describe("LetterDetailPage", () => {
       }));
     });
     expect(await screen.findByText("A second dispatch")).toBeInTheDocument();
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.queryByText("Loading letter...")).not.toBeInTheDocument();
     expect(document.querySelector("article")).not.toHaveAttribute("inert");
     expect(document.querySelector(".letter-nav-section")).toBeNull();
 
@@ -496,7 +495,7 @@ describe("LetterDetailPage", () => {
     getAdjacentLettersMock.mockReturnValueOnce(adjacency.promise);
     renderLetterDetailPage();
     expect(await screen.findByText(/A bright dispatch/)).toBeInTheDocument();
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.queryByText("Loading letter...")).not.toBeInTheDocument();
     await act(async () => adjacency.reject(new Error("optional lookup failed")));
     expect(screen.getByText(/My dearest friend/)).toBeInTheDocument();
   });

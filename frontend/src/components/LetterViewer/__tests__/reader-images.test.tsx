@@ -65,10 +65,10 @@ describe('reader scan requests', () => {
     expect(originals()).toEqual([]);
     fireEvent.wheel(viewer, { ctrlKey: true, deltaY: -100 });
     await waitFor(() => expect(container.querySelector('.viewer-image')?.getAttribute('src')).not.toContain('w='));
-    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    fireEvent.click(screen.getByRole('button', { name: variant === 'panel' ? 'Next page' : 'Go to scan 2: letter' }));
     expect(widths('scan-2')).not.toContain(null);
     expect(container.querySelector('.viewer-image')?.getAttribute('src')).toContain('/images/scan-2');
-    fireEvent.click(screen.getByRole('button', { name: 'Previous page' }));
+    fireEvent.click(screen.getByRole('button', { name: variant === 'panel' ? 'Previous page' : 'Go to scan 1: letter' }));
     expect(container.querySelector('.viewer-image')?.getAttribute('src')).toContain('/images/scan-1');
   });
 

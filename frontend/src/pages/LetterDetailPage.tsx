@@ -272,6 +272,8 @@ export default function LetterDetailPage() {
     hasTranscript, extraContentItems, hasExtraContent,
     isPhotoRecord, heroHook,
   } = derived;
+  const activeScan = carouselImages[activeIndex];
+  const activeScanRatio = activeScan?.width && activeScan?.height ? activeScan.width / activeScan.height : .75;
 
   return (
     <>
@@ -293,20 +295,10 @@ export default function LetterDetailPage() {
           />
         )}
 
-        <header className="letter-hero-section">
-          <h1>{formatDateText(m.date || (m.sender ? `Letter from ${m.sender}` : m.recipient ? `Letter to ${m.recipient}` : isPhotoRecord ? "Photograph" : "Letter"))}</h1>
-          {byline && <p className="letter-byline">{byline}</p>}
-          {m.location && <p className="letter-dateline">{m.location}</p>}
-          {(heroHook || m.description) && <details className="letter-summary-section">
-            <summary>About This Letter</summary>
-            {heroHook && <p className="letter-headline-hook">{heroHook}</p>}
-            {m.description && <p className="letter-summary-text">{m.description}</p>}
-          </details>}
-        </header>
         <div className={`letter-reader${carouselImages.length ? "" : " letter-reader--text-only"}`}>
         {/* ── 3. Scan Image Carousel ──────────────────────── */}
         {carouselImages.length > 0 && (
-          <figure id="letter-scans" className="letter-scan-figure" tabIndex={-1}>
+          <figure id="letter-scans" className="letter-scan-figure" tabIndex={-1} style={{ "--active-scan-ratio": activeScanRatio } as React.CSSProperties}>
             <div key={letter.id} className="scan-carousel" ref={attachCarousel} data-swipe-ignore data-image-scroll-root>
               {carouselImages.map((img, idx) => {
                 const isLetter = img.type === "letter";
@@ -364,6 +356,16 @@ export default function LetterDetailPage() {
           </figure>
         )}
 
+        <header className="letter-hero-section">
+          <h1>{formatDateText(m.date || (m.sender ? `Letter from ${m.sender}` : m.recipient ? `Letter to ${m.recipient}` : isPhotoRecord ? "Photograph" : "Letter"))}</h1>
+          {byline && <p className="letter-byline">{byline}</p>}
+          {m.location && <p className="letter-dateline">{m.location}</p>}
+          {(heroHook || m.description) && <details className="letter-summary-section">
+            <summary>About This Letter</summary>
+            {heroHook && <p className="letter-headline-hook">{heroHook}</p>}
+            {m.description && <p className="letter-summary-text">{m.description}</p>}
+          </details>}
+        </header>
         <div className="letter-reading-column">
           {hasTranscript ? <ReaderTranscript key={letter.id} letter={letter} onViewSource={openViewer} />
             : !isPhotoRecord && <p className="reader-empty">A transcript is not available for this letter.</p>}

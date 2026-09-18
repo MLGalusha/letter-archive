@@ -10,7 +10,6 @@ for (const width of [320, 390, 1440]) test(`@mocked vertical reading scroll pass
     id: `scan-${i}`, type: 'letter', pageNumber: i + 1, imageUrl: `/images/${i}.svg`, width: 600, height: 800,
   })));
   await page.getByRole('button', { name: 'Close viewer' }).click();
-  await page.getByRole('button', { name: 'Pages', exact: true }).click();
   await page.getByRole('region', { name: 'Scan pages' }).hover();
   const before = await page.evaluate(() => scrollY);
   await page.mouse.wheel(0, 300);

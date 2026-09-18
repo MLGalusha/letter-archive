@@ -82,7 +82,7 @@ test('@mocked viewer waits for the active measured rendition before bounded matc
   let release!: () => void;
   const held = new Promise<void>(resolve => { release = resolve; });
   await page.route('**/fixture-images/**', async route => {
-    const url = route.request().url(); urls.push(url);
+    const url = route.request().url(); if (!url.includes('w=200')) urls.push(url);
     if (url.includes('/one?') && url.includes('w=1200')) await held;
     await route.fulfill({ contentType: 'image/png', path: png });
   });
@@ -93,7 +93,7 @@ test('@mocked viewer waits for the active measured rendition before bounded matc
     release();
     await expect.poll(() => urls.filter(url => /\/(two|three)\?/.test(url)).length).toBe(2);
     expect(urls.every(url => /w=(32|1200)(?:&|$)/.test(url))).toBe(true);
-    await page.getByRole('button', { name: 'Next page', exact: true }).click();
+    await page.getByRole('button', { name: 'Go to scan 2: letter', exact: true }).click();
     await expect(page.locator('.viewer-image')).toHaveAttribute('src', /\/two\?.*w=1200/);
     expect(urls.some(url => /w=800(?:&|$)/.test(url))).toBe(false);
   } finally { release(); await context.close(); }
@@ -118,33 +118,32 @@ for (const reducedData of [false, true]) {
     let release!: () => void;
     const held = new Promise<void>(resolve => { release = resolve; });
     await page.route('**/fixture-images/**', async route => {
-      const url = route.request().url(); urls.push(url);
-      if (url.includes('scan-1?') && url.includes('w=800')) await held;
+      const url = route.request().url(); if (!url.includes('w=200')) urls.push(url);
+      if (url.includes('scan-1?') && url.includes('w=1200')) await held;
       await route.fulfill({ contentType: 'image/png', path: png });
     });
     try {
       await page.goto('/letter/reader-renditions');
-      await expect.poll(() => urls.some(url => url.includes('w=800'))).toBe(true);
+      await expect.poll(() => urls.some(url => url.includes('w=1200'))).toBe(true);
       expect(urls.every(url => url.includes('scan-1?'))).toBe(true);
       release();
-      await expect(page.getByAltText('Page 1 of letter')).toHaveAttribute('src', /w=800/);
+      await expect(page.getByAltText('Page 1 of letter')).toHaveAttribute('src', /w=1200/);
       if (reducedData) {
         await page.waitForTimeout(150);
         expect(urls.every(url => url.includes('scan-1?'))).toBe(true);
       } else {
-        await expect.poll(() => urls.some(url => url.includes('scan-2?') && url.includes('w=800'))).toBe(true);
+        await expect.poll(() => urls.some(url => url.includes('scan-2?') && url.includes('w=1200'))).toBe(true);
         expect(urls.some(url => url.includes('scan-4?'))).toBe(false);
       }
-      await page.getByRole('button', { name: 'Pages', exact: true }).click();
       await page.getByRole('button', { name: 'Go to scan 3: letter', exact: true }).click();
-      await expect(page.getByAltText('Page 3 of letter')).toHaveAttribute('src', /w=800/);
-      expect(urls.some(url => /w=(1200|1600)(?:&|$)/.test(url))).toBe(false);
+      await expect(page.getByAltText('Page 3 of letter')).toHaveAttribute('src', /w=1200/);
+      expect(urls.some(url => /w=1600(?:&|$)/.test(url))).toBe(false);
       await page.getByRole('button', { name: 'Go to scan 1: letter', exact: true }).click();
       // A cached src is already present before the carousel returns to page 1.
       // Resize only once that page is actually active and horizontal motion ends.
       await expect(page.getByRole('button', { name: 'Go to scan 1: letter', exact: true })).toHaveAttribute('aria-current', 'page');
       await expect.poll(() => page.locator('.scan-carousel').evaluate(el => el.scrollLeft)).toBeCloseTo(0, 0);
-      await expect(page.getByAltText('Page 1 of letter')).toHaveAttribute('src', /w=800/);
+      await expect(page.getByAltText('Page 1 of letter')).toHaveAttribute('src', /w=1200/);
       const beforeResize = urls.length;
       await page.setViewportSize({ width: 1440, height: 1000 });
       await expect(page.getByAltText('Page 1 of letter')).toHaveAttribute('src', /w=1200/);
@@ -183,7 +182,7 @@ for (const cacheControl of ['no-store', 'max-age=0']) {
     const held = new Promise<void>(resolve => { release = resolve; });
     await page.addInitScript(() => Object.defineProperty(navigator, 'connection', { configurable: true, value: { saveData: true } }));
     await page.route('**/fixture-images/**', async route => {
-      const url = route.request().url(); urls.push(url);
+      const url = route.request().url(); if (!url.includes('w=200')) urls.push(url);
       if (url.includes('w=1200')) await held;
       await route.fulfill({ contentType: 'image/png', headers: { 'cache-control': cacheControl }, path: png });
     });
@@ -208,7 +207,7 @@ for (const previewFails of [false, true]) {
     const page = await context.newPage(); const urls: string[] = [];
     await page.addInitScript(() => Object.defineProperty(navigator, 'connection', { configurable: true, value: { saveData: true } }));
     await page.route('**/fixture-images/**', async route => {
-      const url = route.request().url(); urls.push(url);
+      const url = route.request().url(); if (!url.includes('w=200')) urls.push(url);
       if (url.includes('w=1200') || previewFails) return route.fulfill({ status: 503, body: 'Temporarily unavailable' });
       return route.fulfill({ contentType: 'image/png', path: png });
     });

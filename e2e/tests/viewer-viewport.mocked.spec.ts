@@ -28,7 +28,7 @@ test('@mocked fullscreen paints document edges and restores them on repeated clo
       expect(headerBox.height).toBeLessThan(height / 2);
       const stageBox = (await page.locator('.viewer-container').boundingBox())!;
       expect(stageBox.y).toBeGreaterThanOrEqual(headerBox.y + headerBox.height);
-      const pages = await page.getByRole('dialog', { name: 'Original scans' }).getByRole('button', { name: 'Pages', exact: true }).boundingBox();
+      const pages = await page.getByRole('dialog', { name: 'Original scans' }).locator('.viewer-page-drawer').boundingBox();
       expect(close!.y).toBeGreaterThanOrEqual(0);
       expect(pages!.y + pages!.height).toBeLessThanOrEqual(height);
     }
@@ -56,7 +56,6 @@ test('@mocked fullscreen blocks chrome gestures while preserving drawer scrollin
   });
   await opener.focus();
   await opener.press('Enter');
-  await page.getByRole('dialog', { name: 'Original scans' }).getByRole('button', { name: 'Pages', exact: true }).click();
   const gestures = await page.evaluate(() => {
     const dispatch = (selector: string, type: string) => {
       const event = new Event(type, { bubbles: true, cancelable: true });
@@ -66,8 +65,8 @@ test('@mocked fullscreen blocks chrome gestures while preserving drawer scrollin
     return {
       chromeTouch: dispatch('.viewer-modal-header', 'touchmove'),
       chromeWheel: dispatch('.viewer-toolbar', 'wheel'),
-      drawerTouch: dispatch('.viewer-page-drawer', 'touchmove'),
-      drawerWheel: dispatch('.viewer-page-drawer', 'wheel'),
+      drawerTouch: dispatch('.viewer-modal .viewer-page-drawer', 'touchmove'),
+      drawerWheel: dispatch('.viewer-modal .viewer-page-drawer', 'wheel'),
     };
   });
   expect(gestures).toEqual({ chromeTouch: true, chromeWheel: true, drawerTouch: false, drawerWheel: false });

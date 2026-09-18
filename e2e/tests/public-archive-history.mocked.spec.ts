@@ -198,7 +198,7 @@ test('@mocked reader renders detail before adjacency and acknowledges pending na
     await expect(page.getByText('First fixture letter', { exact: true })).toBeVisible();
     await page.locator('a.teaser-next').click();
     await expect(page).toHaveURL(/reader-b$/);
-    const status = page.getByRole('status');
+    const status = page.locator('.letter-navigation-status[role="status"]');
     await expect(status).toHaveText('Loading letter...');
     await expect(status).toBeInViewport();
     await expect(page.locator('article')).toHaveAttribute('inert', '');

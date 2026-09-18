@@ -1,6 +1,77 @@
 import { expect, test } from '@playwright/test';
 import { openReader } from './utils/reader-viewer-fixture';
 
+test.describe('touch toolbar', () => {
+  test.use({ hasTouch: true, deviceScaleFactor: 3 });
+  test('@mocked a native pinch survives both image rendition replacements', async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'Trusted multi-touch dispatch uses CDP; not physical iOS validation.');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openReader(page);
+    await expect(page.locator('.viewer-image')).toHaveCSS('opacity', '1');
+    const image = page.locator('.viewer-image');
+    await expect(image).toHaveAttribute('src', /w=1200/);
+    const box = (await image.boundingBox())!;
+    const x = box.x + box.width / 2, y = box.y + box.height / 2;
+    const points = (distance: number) => [
+      { x: x - distance / 2, y, id: 1 }, { x: x + distance / 2, y, id: 2 },
+    ];
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: points(100) });
+    for (const distance of [110, 120, 140, 150, 170, 200]) {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: points(distance) });
+      await expect(page.locator('.viewer-mobile-zoom')).toHaveText(`${distance}%`);
+      if (distance === 120) await expect(image).toHaveAttribute('src', /w=1600/);
+      if (distance === 150) await expect(image).not.toHaveAttribute('src', /[?&]w=/);
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await expect(page.locator('.viewer-page-counter')).toHaveText('1 / 3');
+    await page.getByRole('button', { name: 'Next page' }).tap();
+    await expect(page.locator('.viewer-mobile-zoom')).toHaveText('100%');
+  });
+  for (const width of [320, 390, 844]) test(`@mocked phone controls share one row at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: width === 844 ? 390 : 844 });
+    await openReader(page);
+    const toolbar = page.locator('.viewer-toolbar');
+    for (const name of ['Zoom in', 'Zoom out', 'Fit scan']) {
+      await expect(toolbar.getByRole('button', { name, includeHidden: true })).toBeHidden();
+    }
+    await expect(page.locator('.viewer-mobile-zoom')).toHaveText('100%');
+    await expect(page.locator('.viewer-mobile-zoom')).toBeVisible();
+    await expect(page.locator('.viewer-zoom-controls')).toBeHidden();
+    const geometry = await toolbar.evaluate(el => {
+      const elements = [...el.querySelectorAll('.viewer-nav, .viewer-page-counter, .viewer-pages-toggle')];
+      return { toolbar: el.getBoundingClientRect().toJSON(), controls: elements.map(el => el.getBoundingClientRect().toJSON()) };
+    });
+    for (const box of geometry.controls) {
+      expect(box.y + box.height / 2).toBeCloseTo(geometry.controls[0].y + geometry.controls[0].height / 2, 0);
+      expect(box.left).toBeGreaterThanOrEqual(geometry.toolbar.left);
+      expect(box.right).toBeLessThanOrEqual(geometry.toolbar.right);
+    }
+    for (const button of await toolbar.getByRole('button').all()) {
+      const box = (await button.boundingBox())!;
+      expect(box.width).toBeGreaterThanOrEqual(44);
+      expect(box.height).toBeGreaterThanOrEqual(44);
+    }
+    expect(geometry.toolbar.height).toBeLessThan(65);
+    await toolbar.getByRole('button', { name: 'Next page' }).tap();
+    await expect(page.locator('.viewer-page-counter')).toHaveText('2 / 3');
+    await toolbar.getByRole('button', { name: 'Pages', exact: true }).tap();
+    await expect(page.getByRole('region', { name: 'Scan pages' })).toBeVisible();
+    await page.getByRole('button', { name: 'Go to scan 3: letter' }).tap();
+    await expect(page.locator('.viewer-page-counter')).toHaveText('3 / 3');
+  });
+});
+
+test('@mocked a narrow mouse layout keeps explicit zoom controls', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openReader(page);
+  for (const name of ['Zoom in', 'Zoom out', 'Fit scan']) await expect(page.getByRole('button', { name })).toBeVisible();
+  await page.getByRole('button', { name: 'Zoom in' }).click();
+  await expect(page.locator('.viewer-zoom-badge')).toHaveText('140%');
+  await page.getByRole('button', { name: 'Fit scan' }).click();
+  await expect(page.locator('.viewer-zoom-badge')).toHaveText('100%');
+});
+
 test('@mocked fullscreen Close clears simulated phone safe areas and remains clickable', async ({ page, browserName }) => {
   test.skip(browserName !== 'chromium', 'CDP inset override is Chromium-only, not physical iOS validation.');
   await page.setViewportSize({ width: 390, height: 844 });

@@ -8,7 +8,7 @@ N1/N2 end-of-letter navigation is outside this change.
 ## Ownership and invariants
 
 The public modal owns all four safe-area insets and its dynamic viewport height.
-Its title/Close row is normal flow. The viewer owns a grid with one image stage,
+The viewer owns its normal-flow zoom/Close row and a grid with one image stage,
 an optional page drawer, and a reserved toolbar. Drawer scroll is native and local:
 horizontal below the image on phones, vertical beside it at 760px and above.
 Opening Pages resizes the image stage; it never covers text in the scan. Controls
@@ -31,7 +31,7 @@ and 200px renditions, mounted only after the drawer opens. No new image queue.
   and cancels the old completion. Remaining travel determines settling duration.
 - Zoomed: single-finger movement pans, never pages. Pinch takes ownership from a
   partial swipe. Double-tap/click zooms; direct manipulation interrupts a running
-  zoom at its visible transform. Explicit +/- and Fit provide alternatives.
+  zoom at its visible transform. Explicit +/- and Fit remain on desktop.
 - Page selection by arrows, keyboard, drawer or swipe resets to Fit. Buttons wrap
   consistently with the existing reader. Drawer buttons keep native Tab/Enter;
   its scroll keys do not also run global scan navigation.
@@ -39,6 +39,30 @@ and 200px renditions, mounted only after the drawer opens. No new image queue.
   unmount cancel gesture work. Reduced motion removes settle/zoom interpolation.
 
 ## Before/after evidence
+
+The user's September 18 phone screenshot showed two crowded toolbar rows. After
+reviewing generated variations, they selected A: zoom percentage beside Close
+at the top; Previous, page count, Next and Pages together in one bottom row.
+On coarse-primary-pointer viewports up to 1023px (including phone landscape),
+hide +/- and Fit; touch zoom remains on the scan itself.
+Fine-pointer layouts retain explicit zoom, even in a narrow desktop window.
+The viewer owns the readout directly from its zoom state, avoiding a page rerender
+on every pinch move. The accessible dialog name remains while the visible title
+and redundant Expand scan link are removed. The scan keeps its existing clickable,
+keyboard-accessible trigger. Fullscreen scans get subtle 6px corners.
+Browser checks cover 320px/390px portrait, 844px landscape, tap targets, row
+alignment, page/drawer taps and preservation of narrow desktop zoom controls.
+
+A native CDP pinch on a real 390px/DPR3 scan stopped at 115% when the 1200px
+rendition was replaced with 1600px; further input through 220% had no effect.
+The touch target was the removed image, so moves no longer bubbled to the viewer.
+Excluding transient images from hit testing keeps the stable transform surface
+as the target. The same gesture then tracked 105–220%, including the second
+upgrade to original resolution. A browser regression uses real hit testing and
+CDP contacts over the scan, crossing both rendition changes; restoring image hit
+testing reproduces a stall at 120%. Earlier synthetic events dispatched directly
+to the container could not detect this failure. Physical iOS smoothness remains
+pending even though the native browser regression passes.
 
 A Chromium CDP inset regression reproduced Close at y=12 despite a 59px top safe
 inset; expected y>=59. This is CSS geometry injection, not an iPhone simulation.
@@ -66,6 +90,17 @@ Exact commands/results, review, final CI and release revision belong in the PR.
 Screenshots/probes are local under `output/playwright/fullscreen-page-drawer/`.
 
 ## Primary-source research
+
+- [MDN Touch.target](https://developer.mozilla.org/en-US/docs/Web/API/Touch/target):
+  touch targets stay attached to the starting element after removal, so events
+  can stop bubbling to its former ancestors. This matches the measured failure.
+- [MDN pointer-events](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/pointer-events):
+  excluding a visual layer from hit testing lets the stable surface handle input.
+
+- [MDN pointer media feature](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/At-rules/@media/pointer):
+  describes the primary input's precision. Combined with available width, it
+  lets touch layouts simplify without removing controls from narrow mouse layouts.
+  The 1023px cutoff is our layout choice, not a browser-defined phone detector.
 
 - [WebKit: designing for safe areas](https://webkit.org/blog/7929/designing-websites-for-iphone-x/):
   viewport-fit cover requires important controls to respect inset values. Apply

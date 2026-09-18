@@ -377,7 +377,6 @@ export default function LetterDetailPage() {
 
             <figcaption className="scan-caption">
               <span>Scan {activeIndex + 1} of {carouselImages.length}</span>
-              <button type="button" className="reader-source-link" onClick={e => openViewer(activeIndex, e.currentTarget)}>Expand scan ↗</button>
             </figcaption>
             {carouselImages.length > 1 && <div className="scan-dots" aria-label="Choose a scan">
               {carouselImages.map((_, i) => <button key={i} type="button"
@@ -499,18 +498,6 @@ export default function LetterDetailPage() {
         >
           <div className="viewer-modal" ref={viewerDialogRef}
             role="dialog" aria-modal="true" aria-label="Original scans" tabIndex={-1}>
-            <div className="viewer-modal-header">
-            <span>Original scans</span>
-            <button
-              type="button"
-              className="viewer-close"
-              tabIndex={0}
-              onClick={() => setViewerOpen(false)}
-              aria-label="Close viewer"
-            >
-              &times;
-            </button>
-            </div>
             <LetterViewer
               key={viewerStartPage}
               images={allImages}
@@ -518,6 +505,7 @@ export default function LetterDetailPage() {
               showOnlyLetterPages={false}
               variant="lightbox"
               initialIndex={viewerStartPage}
+              onClose={() => setViewerOpen(false)}
             />
           </div>
         </div>,

@@ -23,7 +23,7 @@ it('does not let a stale cached count revive a single-item scrubber or stale des
   const adjacent = { collectionCode: '009', total: 1, position: 1, prev: null, next: null } as AdjacentLettersResponse;
   const { result, rerender } = renderHook(({ data }) => useLetterScrubber(data, 'current'), { initialProps: { data: adjacent } });
   expect(result.current).toBeNull();
-  rerender({ data: { ...adjacent, total: 2, next: { id: 'fresh' } } });
+  rerender({ data: { ...adjacent, total: 2, next: { id: 'fresh', dateRaw: '19440311' } } });
   expect(result.current?.seekEnabled).toBe(false);
   navigate.mockClear();
   result.current?.onNavigate(2);

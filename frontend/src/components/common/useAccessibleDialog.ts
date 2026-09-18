@@ -52,9 +52,9 @@ export function useAccessibleDialog({
       return false;
     }
 
-    opener.focus({ preventScroll: true });
+    opener.focus({ preventScroll: isolateBackground });
     return document.activeElement === opener;
-  }, []);
+  }, [isolateBackground]);
 
   const deferFocusRestore = useCallback(() => {
     deferRestoreRef.current = true;
@@ -115,7 +115,7 @@ export function useAccessibleDialog({
     const focusable = () => Array.from(
       dialog?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? [],
     );
-    (focusable()[0] ?? dialog)?.focus({ preventScroll: true });
+    (focusable()[0] ?? dialog)?.focus({ preventScroll: isolateBackground });
 
     const isTopmostDialog = () => {
       const dialogs = document.querySelectorAll<HTMLElement>(

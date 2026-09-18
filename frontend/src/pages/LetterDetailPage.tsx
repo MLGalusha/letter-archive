@@ -3,6 +3,7 @@ import { useSiteSettings } from '../hooks/useSiteSettings';
 import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
+import { useAccessibleDialog } from "../components/common/useAccessibleDialog";
 import SEO from "../components/SEO";
 
 import LetterViewer from "../components/LetterViewer/LetterViewer";
@@ -244,11 +245,9 @@ export default function LetterDetailPage() {
   // Keyboard nav
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && viewerOpen) {
-        setViewerOpen(false);
-        return;
-      }
-      if (!displayedLetterIsCurrent || !adjacent) return;
+      if (viewerOpen || e.defaultPrevented || document.querySelector('[aria-modal="true"]')) return;
+      if (!displayedLetterIsCurrent || !adjacent || e.altKey || e.ctrlKey || e.metaKey) return;
+      if (e.target instanceof HTMLElement && e.target.isContentEditable) return;
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       if (e.key === "ArrowLeft" && adjacent.prev) navigate(`/letter/${adjacent.prev.id}`);
@@ -302,15 +301,19 @@ export default function LetterDetailPage() {
   const seo = useMemo(() => (letter ? buildLetterSeo(letter, siteName) : null), [letter, siteName]);
 
 
-  const openViewer = useCallback((pageIndex: number) => {
+  const openViewer = useCallback((pageIndex: number, opener: HTMLElement) => {
+    // Safari does not focus mouse-clicked buttons; capture the actual trigger.
+    opener.focus({ preventScroll: true });
     setViewerStartPage(pageIndex);
     setViewerOpen(true);
   }, []);
 
+  const viewerIsActive = viewerOpen && displayedLetterIsCurrent;
+
   // Lock background touch scrolling only while the viewer is open, then
   // restore the exact body styles and reading position.
   useEffect(() => {
-    if (viewerOpen) {
+    if (viewerIsActive) {
       const savedY = getAppScrollY();
       const openedPath = window.location.pathname;
       const body = document.body;
@@ -325,7 +328,13 @@ export default function LetterDetailPage() {
         if (window.location.pathname === openedPath) appScrollTo(savedY);
       };
     }
-  }, [viewerOpen]);
+  }, [viewerIsActive]);
+
+  const { dialogRef: viewerDialogRef } = useAccessibleDialog({
+    isOpen: viewerIsActive,
+    onClose: () => setViewerOpen(false),
+    isolateBackground: true,
+  });
 
   // Memoize all derived values — must be before conditional returns (Rules of Hooks)
   const derived = useMemo(() => {
@@ -457,8 +466,8 @@ export default function LetterDetailPage() {
                     data-index={idx}
                     role="button"
                     tabIndex={0}
-                    onClick={() => { if (!carouselDraggedRef.current) openViewer(idx); }}
-                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openViewer(idx); } }}
+                    onClick={(e) => { if (!carouselDraggedRef.current) openViewer(idx, e.currentTarget); }}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openViewer(idx, e.currentTarget); } }}
                     aria-label={
                       isLetter
                         ? `View page ${img.pageNumber ?? idx + 1} full size`
@@ -541,7 +550,7 @@ export default function LetterDetailPage() {
                           key={pageImage.id}
                           type="button"
                           className={`page-thumb page-thumb-${side}${transcriptVerifClass}`}
-                          onClick={() => openViewer(Math.max(0, allImages.indexOf(pageImage)))}
+                          onClick={(e) => openViewer(Math.max(0, allImages.indexOf(pageImage)), e.currentTarget)}
                           aria-label={`View page ${pageImage.pageNumber ?? idx + 1}`}
                           style={idx > 0 ? { top: `${idx * 14}rem` } : undefined}
                         >
@@ -578,7 +587,7 @@ export default function LetterDetailPage() {
                             <button
                               type="button"
                               className={`page-thumb page-thumb-${side}${transcriptVerifClass}`}
-                              onClick={() => openViewer(Math.max(0, allImages.indexOf(pageImage)))}
+                              onClick={(e) => openViewer(Math.max(0, allImages.indexOf(pageImage)), e.currentTarget)}
                               aria-label={`View page ${segment.pageNumber}`}
                             >
                               <span className="page-thumb-inner">
@@ -613,7 +622,7 @@ export default function LetterDetailPage() {
                             <button
                               type="button"
                               className="original-split-image"
-                              onClick={() => openViewer(Math.max(0, allImages.indexOf(pageImage)))}
+                              onClick={(e) => openViewer(Math.max(0, allImages.indexOf(pageImage)), e.currentTarget)}
                               aria-label={`View page ${page.pageNumber} full size`}
                             >
                               <ReaderScanImage
@@ -653,7 +662,7 @@ export default function LetterDetailPage() {
                           <button
                             type="button"
                             className={`page-thumb page-thumb-${side}${transcriptVerifClass}`}
-                            onClick={() => openViewer(Math.max(0, allImages.indexOf(pageImage)))}
+                            onClick={(e) => openViewer(Math.max(0, allImages.indexOf(pageImage)), e.currentTarget)}
                             aria-label={`View page ${page.pageNumber}`}
                           >
                             <span className="page-thumb-inner">
@@ -720,7 +729,7 @@ export default function LetterDetailPage() {
                     <button
                       type="button"
                       className={`page-thumb page-thumb-${side}${extraVerifClass}`}
-                      onClick={() => openViewer(Math.max(0, allImages.indexOf(itemImage)))}
+                      onClick={(e) => openViewer(Math.max(0, allImages.indexOf(itemImage)), e.currentTarget)}
                       aria-label={`View ${item.label.toLowerCase()}`}
                     >
                       <span className="page-thumb-inner">
@@ -765,7 +774,7 @@ export default function LetterDetailPage() {
                   <button
                     type="button"
                     className={`page-thumb page-thumb-${fallbackSide}${extraVerifClass}`}
-                    onClick={() => openViewer(Math.max(0, allImages.indexOf(extraImages[0])))}
+                    onClick={(e) => openViewer(Math.max(0, allImages.indexOf(extraImages[0])), e.currentTarget)}
                     aria-label={`View ${fallbackLabel.toLowerCase()}`}
                   >
                     <span className="page-thumb-inner">
@@ -855,7 +864,7 @@ export default function LetterDetailPage() {
       </article>
 
       {/* ── Image Viewer Modal ─────────────────────────────── */}
-      {viewerOpen && displayedLetterIsCurrent && createPortal(
+      {viewerIsActive && createPortal(
         // Portal escapes page transforms and covers the fixed header.
         <div
           className="viewer-backdrop"
@@ -873,7 +882,8 @@ export default function LetterDetailPage() {
             delete el.dataset.backdropMousedown;
           }}
         >
-          <div className="viewer-modal">
+          <div className="viewer-modal" ref={viewerDialogRef}
+            role="dialog" aria-modal="true" aria-label="Original scans" tabIndex={-1}>
             <button
               type="button"
               className="viewer-close"

@@ -20,11 +20,13 @@ const canReceiveRestoredFocus = (
 interface AccessibleDialogOptions {
   isOpen: boolean;
   onClose: () => void;
+  isolateBackground?: boolean;
 }
 
 export function useAccessibleDialog({
   isOpen,
   onClose,
+  isolateBackground = false,
 }: AccessibleDialogOptions) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
@@ -50,7 +52,7 @@ export function useAccessibleDialog({
       return false;
     }
 
-    opener.focus();
+    opener.focus({ preventScroll: true });
     return document.activeElement === opener;
   }, []);
 
@@ -94,10 +96,30 @@ export function useAccessibleDialog({
       : null;
 
     const dialog = dialogRef.current;
+    // Isolate siblings along the portal's ancestor path without making the
+    // dialog itself inert. Preserve pre-existing inert state on cleanup.
+    const isolated: Element[] = [];
+    if (isolateBackground && dialog) {
+      let branch: Element = dialog;
+      while (branch.parentElement) {
+        for (const sibling of branch.parentElement.children) {
+          if (sibling !== branch && !sibling.hasAttribute('inert')) {
+            sibling.setAttribute('inert', '');
+            isolated.push(sibling);
+          }
+        }
+        if (branch.parentElement === document.body) break;
+        branch = branch.parentElement;
+      }
+    }
     const focusable = () => Array.from(
       dialog?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? [],
-    );
-    (focusable()[0] ?? dialog)?.focus();
+    ).filter(element => element.tabIndex >= 0
+      && !element.matches(':disabled')
+      && !element.closest('[hidden], [inert]')
+      && getComputedStyle(element).display !== 'none'
+      && getComputedStyle(element).visibility !== 'hidden');
+    (focusable()[0] ?? dialog)?.focus({ preventScroll: true });
 
     const isTopmostDialog = () => {
       const dialogs = document.querySelectorAll<HTMLElement>(
@@ -123,32 +145,25 @@ export function useAccessibleDialog({
         return;
       }
 
-      const first = controls[0];
-      const last = controls[controls.length - 1];
-      const activeElement = document.activeElement;
-      if (
-        event.shiftKey
-        && (activeElement === first || !dialog?.contains(activeElement))
-      ) {
-        event.preventDefault();
-        last.focus();
-      } else if (
-        !event.shiftKey
-        && (activeElement === last || !dialog?.contains(activeElement))
-      ) {
-        event.preventDefault();
-        first.focus();
-      }
+      // Own the whole modal tab sequence, including Safari configurations
+      // that otherwise skip buttons and move focus into browser chrome.
+      event.preventDefault();
+      const current = controls.indexOf(document.activeElement as HTMLElement);
+      const next = current < 0
+        ? (event.shiftKey ? controls.length - 1 : 0)
+        : (current + (event.shiftKey ? -1 : 1) + controls.length) % controls.length;
+      controls[next].focus();
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
+      isolated.forEach(element => element.removeAttribute('inert'));
       if (!deferRestoreRef.current) {
         restoreFocus();
       }
     };
-  }, [isOpen, restoreFocus]);
+  }, [isOpen, isolateBackground, restoreFocus]);
 
   return {
     dialogRef,

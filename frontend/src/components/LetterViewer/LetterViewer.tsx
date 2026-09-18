@@ -464,6 +464,25 @@ const LetterViewer = memo(function LetterViewer({
   }, [displayImages.length, saveCurrentImageState, cancelSwipe]);
 
   useEffect(() => {
+    if (variant !== "lightbox" || displayImages.length < 2) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+      const dialog = imageContainerRef.current?.closest('[aria-modal="true"]');
+      const dialogs = document.querySelectorAll('[aria-modal="true"]');
+      if (!dialog || dialogs[dialogs.length - 1] !== dialog || !dialog.contains(event.target as Node)) return;
+      if (event.target instanceof HTMLElement && (event.target.isContentEditable
+        || event.target.closest('input, textarea, select, [role="slider"]'))) return;
+      if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+      event.preventDefault();
+      // Match the page buttons: wrap pages and reset zoom/pan to fit.
+      if (event.key === "ArrowRight") nextImage();
+      else prevImage();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [variant, displayImages.length, nextImage, prevImage]);
+
+  useEffect(() => {
     swipeCommitRef.current = (direction) => direction > 0 ? nextImage() : prevImage();
   }, [nextImage, prevImage]);
 
@@ -1007,7 +1026,7 @@ const LetterViewer = memo(function LetterViewer({
               >
                 <Icon name="arrow-right" size={20} />
               </button>
-              <div className="viewer-page-counter">
+              <div className="viewer-page-counter" role="status" aria-live="polite" aria-atomic="true" aria-label="Scan page">
                 {currentImageIndex + 1} / {displayImages.length}
               </div>
             </>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useReducer, useRef } from 'react';
 
 const FOCUSABLE_SELECTOR = [
   'button:not([disabled])',
@@ -32,6 +32,8 @@ export function useAccessibleDialog({
   const openerRef = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
   const deferRestoreRef = useRef(false);
+  const pendingRestoreRef = useRef(false);
+  const [, requestRestoreCommit] = useReducer((value: number) => value + 1, 0);
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -61,35 +63,32 @@ export function useAccessibleDialog({
   }, []);
 
   const restoreFocusAfterUpdate = useCallback(() => {
-    const attemptRestore = () => {
-      const activeElement = document.activeElement;
-      const documentOwnsFocus = (
-        !activeElement
-        || activeElement === document.body
-        || activeElement === document.documentElement
-        || activeElement === dialogRef.current
-      );
-      const anotherModalOwnsFocus = Array.from(
-        document.querySelectorAll<HTMLElement>('[aria-modal="true"]'),
-      ).some((dialog) => dialog !== dialogRef.current);
-      if (!documentOwnsFocus || anotherModalOwnsFocus) return true;
+    pendingRestoreRef.current = true;
+    requestRestoreCommit();
+  }, []);
 
-      return restoreFocus();
-    };
-
-    queueMicrotask(() => {
-      if (
-        !attemptRestore()
-        && typeof requestAnimationFrame === 'function'
-      ) {
-        requestAnimationFrame(attemptRestore);
-      }
-    });
-  }, [restoreFocus]);
+  // Retry on React commits rather than assuming a disabled opener becomes
+  // available within one animation frame. No timer survives an unmount.
+  useEffect(() => {
+    if (!pendingRestoreRef.current || isOpen) return;
+    const activeElement = document.activeElement;
+    const documentOwnsFocus = (
+      !activeElement
+      || activeElement === document.body
+      || activeElement === document.documentElement
+    );
+    const anotherModalOwnsFocus = Boolean(
+      document.querySelector('[aria-modal="true"]'),
+    );
+    if (!documentOwnsFocus || anotherModalOwnsFocus || restoreFocus()) {
+      pendingRestoreRef.current = false;
+    }
+  });
 
   useEffect(() => {
     if (!isOpen) return;
 
+    pendingRestoreRef.current = false;
     deferRestoreRef.current = false;
     openerRef.current = document.activeElement instanceof HTMLElement
       ? document.activeElement

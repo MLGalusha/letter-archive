@@ -37,14 +37,16 @@ for (const width of [320, 390, 900, 901, 1440]) {
     expect(boxes.heading.top - boxes.header.bottom).toBeGreaterThanOrEqual(15);
     expect(boxes.docWidth).toBeLessThanOrEqual(boxes.viewport);
     expect(boxes.image.width / boxes.image.height).toBeCloseTo(.75, 2);
-    if (width > 900) expect(boxes.image.height).toBeLessThanOrEqual(513);
     if (width <= 900) {
       expect(boxes.text.top).toBeGreaterThan(boxes.scan.bottom);
       expect(boxes.image.width).toBeCloseTo(width - 24, 0);
       expect(boxes.heading.top).toBeGreaterThanOrEqual(boxes.scan.bottom);
     } else {
-      expect(boxes.text.width).toBeGreaterThan(boxes.scan.width * 1.8);
-      expect(boxes.text.right).toBeLessThan(boxes.scan.left);
+      expect(boxes.image.height).toBeGreaterThan(513);
+      expect(boxes.scan.bottom).toBeLessThanOrEqual(900);
+      expect(boxes.image.left + boxes.image.width / 2).toBeCloseTo(width / 2, 0);
+      expect(boxes.heading.top).toBeGreaterThanOrEqual(boxes.scan.bottom);
+      expect(boxes.text.top).toBeGreaterThan(boxes.heading.bottom);
     }
     await testInfo.attach('A3 geometry', { body: JSON.stringify(boxes), contentType: 'application/json' });
     await testInfo.attach('A3 reader', { body: await page.screenshot(), contentType: 'image/png' });

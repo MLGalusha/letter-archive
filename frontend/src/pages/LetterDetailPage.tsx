@@ -1,7 +1,7 @@
 import { useSiteSettings } from '../hooks/useSiteSettings';
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, Fragment } from "react";
 import { createPortal } from "react-dom";
-import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useAccessibleDialog } from "../components/common/useAccessibleDialog";
 import SEO from "../components/SEO";
 
@@ -367,7 +367,7 @@ export default function LetterDetailPage() {
           </details>}
         </header>
         <div className="letter-reading-column">
-          {hasTranscript ? <ReaderTranscript key={letter.id} letter={letter} onViewSource={openViewer} />
+          {hasTranscript ? <ReaderTranscript key={letter.id} letter={letter} />
             : !isPhotoRecord && <p className="reader-empty">A transcript is not available for this letter.</p>}
           {!carouselImages.length && <p className="reader-empty">Original scans are not available.</p>}
           {isPhotoRecord && letter.photoDescription && <section className="letter-supporting-section">
@@ -393,66 +393,6 @@ export default function LetterDetailPage() {
           </section>)}
         </div>
         </div>
-
-        {/* ── 6. Collection Footer Nav ───────────────────────── */}
-        {adjacent && adjacent.total > 1 && (
-          <nav className="letter-nav-section">
-            {adjacent.position != null && (
-              <div className="nav-position-label">
-                Letter {adjacent.position} of {adjacent.total}
-              </div>
-            )}
-
-            {(adjacent.prev || adjacent.next) && (
-              <div className="adjacent-teasers">
-                {adjacent.prev ? (
-                  <Link to={`/letter/${adjacent.prev.id}`} className={`teaser-card${adjacent.prevWraps ? " teaser-wraps" : ""}`}>
-                    <span className="teaser-direction">
-                      {adjacent.prevWraps ? "\u2190 Last in Collection" : "\u2190 Previous"}
-                    </span>
-                    <div className="teaser-body">
-                      {adjacent.prev.date && <span className="teaser-date">{adjacent.prev.date}</span>}
-                      {(adjacent.prev.sender || adjacent.prev.recipient) && (
-                        <span className="teaser-people">
-                          {[adjacent.prev.sender, adjacent.prev.recipient].filter(Boolean).join(" \u2192 ")}
-                        </span>
-                      )}
-                      {adjacent.prev.hook ? (
-                        <p className="teaser-hook">{adjacent.prev.hook}</p>
-                      ) : adjacent.prev.contentLabels && (
-                        <span className="teaser-content-labels">
-                          {adjacent.prev.contentLabels.join(" \u00B7 ")}
-                        </span>
-                      )}
-                    </div>
-                  </Link>
-                ) : <div className="teaser-placeholder" />}
-                {adjacent.next ? (
-                  <Link to={`/letter/${adjacent.next.id}`} className={`teaser-card teaser-next${adjacent.nextWraps ? " teaser-wraps" : ""}`}>
-                    <span className="teaser-direction">
-                      {adjacent.nextWraps ? "First in Collection \u2192" : "Next \u2192"}
-                    </span>
-                    <div className="teaser-body">
-                      {adjacent.next.date && <span className="teaser-date">{adjacent.next.date}</span>}
-                      {(adjacent.next.sender || adjacent.next.recipient) && (
-                        <span className="teaser-people">
-                          {[adjacent.next.sender, adjacent.next.recipient].filter(Boolean).join(" \u2192 ")}
-                        </span>
-                      )}
-                      {adjacent.next.hook ? (
-                        <p className="teaser-hook">{adjacent.next.hook}</p>
-                      ) : adjacent.next.contentLabels && (
-                        <span className="teaser-content-labels">
-                          {adjacent.next.contentLabels.join(" \u00B7 ")}
-                        </span>
-                      )}
-                    </div>
-                  </Link>
-                ) : <div className="teaser-placeholder" />}
-              </div>
-            )}
-          </nav>
-        )}
 
       </article>
 

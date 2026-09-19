@@ -208,7 +208,7 @@ describe("LetterDetailPage", () => {
     expect(getLetterByIdMock).toHaveBeenCalledTimes(1);
   });
 
-  it("renders the editorial page with hero, summary, transcript, and nav", async () => {
+  it("renders the editorial page with hero, summary, and transcript", async () => {
     renderLetterDetailPage();
 
     // Hero: hook as headline
@@ -228,24 +228,9 @@ describe("LetterDetailPage", () => {
     // Transcript
     expect(screen.getByText(/My dearest friend/)).toBeInTheDocument();
 
-    // Position label
-    expect(screen.getByText("Letter 2 of 3")).toBeInTheDocument();
-
-    // Teaser cards
-    expect(screen.getByText(/Previous/)).toBeInTheDocument();
-    expect(screen.getByText(/Next/)).toBeInTheDocument();
-  });
-
-  it("renders teaser cards with correct links", async () => {
-    renderLetterDetailPage();
-
-    await screen.findByText(/A bright dispatch/);
-
-    const prevLink = screen.getByText(/Previous/).closest("a");
-    expect(prevLink).toHaveAttribute("href", "/letter/letter-0");
-
-    const nextLink = screen.getByText(/Next/).closest("a");
-    expect(nextLink).toHaveAttribute("href", "/letter/letter-2");
+    // Collection navigation lives in the header, not below the letter.
+    expect(screen.queryByText("Letter 2 of 3")).not.toBeInTheDocument();
+    expect(document.querySelector(".letter-nav-section")).toBeNull();
   });
 
   it("keeps the page usable when adjacent letter lookup fails", async () => {
@@ -312,18 +297,21 @@ describe("LetterDetailPage", () => {
   it("keeps published text readable when scans are absent", async () => {
     getLetterByIdMock.mockResolvedValue(createLetter({ images: [], readingText: "A saved paragraph.\n\nP.S. Please write soon." }));
     renderLetterDetailPage();
-    expect(await screen.findByText(/A saved paragraph/)).toHaveTextContent("P.S. Please write soon.");
+    await screen.findByText(/A saved paragraph/);
+    expect(document.querySelector('.transcript-reading-saved')?.textContent).toBe("A saved paragraph.\n\nP.S. Please write soon.");
     expect(screen.getByText("Original scans are not available.")).toBeInTheDocument();
   });
 
-  it("opens the mapped source for a single transcript page among extra images", async () => {
+  it("opens the main scan among extra images without transcript scan buttons", async () => {
     const user = userEvent.setup();
     getLetterByIdMock.mockResolvedValue(createLetter({ images: [
       { id: 'card-first', type: 'card', imageUrl: '/images/card.jpg' },
       ...createLetter().images,
     ] }));
     renderLetterDetailPage();
-    await user.click(await screen.findByRole('button', { name: 'View page 1 on scan' }));
+    await user.click(await screen.findByRole('button', { name: 'Original formatting' }));
+    expect(screen.queryByRole('button', { name: /View page .* on scan/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'View page 1 full size' }));
     expect(await screen.findByText('LetterViewer')).toHaveAttribute('data-index', '1');
   });
 
@@ -395,12 +383,10 @@ describe("LetterDetailPage", () => {
     } finally { vi.useRealTimers(); }
   });
 
-  it("keeps explicit bottom navigation links active", async () => {
-    const user = userEvent.setup();
+  it("keeps keyboard letter navigation active", async () => {
     renderLetterDetailPage();
-    const next = await screen.findByRole("link", { name: /Next.*August 11, 1947/ });
-    expect(next).toHaveAttribute("href", "/letter/letter-2");
-    await user.click(next);
+    await screen.findByText(/A bright dispatch/);
+    fireEvent.keyDown(window, { key: "ArrowRight" });
     await waitFor(() => expect(getLetterByIdMock).toHaveBeenCalledWith("letter-2", expect.any(AbortSignal)));
   });
 
@@ -485,7 +471,7 @@ describe("LetterDetailPage", () => {
     });
 
     expect(await screen.findByText("A second dispatch")).toBeInTheDocument();
-    expect(document.querySelector(".letter-nav-section")).not.toBeNull();
+    expect(document.querySelector(".letter-nav-section")).toBeNull();
     fireEvent.keyDown(window, { key: "ArrowRight" });
     expect(mockNavigate).toHaveBeenCalledWith("/letter/letter-3");
   });

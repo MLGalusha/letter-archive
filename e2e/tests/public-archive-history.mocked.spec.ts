@@ -196,7 +196,7 @@ test('@mocked reader renders detail before adjacency and announces pending navig
   try {
     await page.goto('/letter/reader-a');
     await expect(page.getByText('First fixture letter', { exact: true })).toBeVisible();
-    await page.locator('a.teaser-next').click();
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
     await expect(page).toHaveURL(/reader-b$/);
     const status = page.getByRole('status').filter({ hasText: 'Loading letter...' });
     await expect(status).toHaveText('Loading letter...');
@@ -214,7 +214,7 @@ test('@mocked reader renders detail before adjacency and announces pending navig
     await expect(status).toHaveCount(0);
     await expect(page.locator('.letter-nav-section')).toHaveCount(0);
     releaseAdjacent();
-    await expect(page.locator('.letter-nav-section')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Next', exact: true })).toBeEnabled();
     await page.goBack();
     await expect(page.getByText('First fixture letter', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'View page 1 full size', exact: true }).click();

@@ -416,6 +416,63 @@ for (const width of [390, 1440]) test(`@mocked tiny wheel steps cross the docume
   }
 });
 
+for (const width of [390, 1440]) for (const reducedMotion of ['reduce', 'no-preference'] as const) {
+  test(`@mocked zoom chrome completes mode animations independently of the gesture at ${width}px with ${reducedMotion}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.emulateMedia({ reducedMotion });
+    await mockReader(page);
+    await page.goto('/letter/current');
+    await page.locator('.letter-scan-figure .viewer-page-choice').nth(1).click();
+    await expect.poll(() => page.locator('.scan-slide').nth(1).evaluate(el => {
+      const r = el.getBoundingClientRect(); return Math.abs(r.left + r.width / 2 - innerWidth / 2);
+    })).toBeLessThan(2);
+    const measure = () => page.evaluate(() => ({
+      header: document.querySelector('.header')!.getBoundingClientRect().bottom,
+      left: document.querySelectorAll('.scan-slide-img')[0].getBoundingClientRect().right,
+      right: document.querySelectorAll('.scan-slide-img')[2].getBoundingClientRect().left,
+    }));
+    const before = await measure();
+    const wheel = (deltaY: number) => page.evaluate(deltaY => {
+      const target = document.querySelector('.reader-focus .viewer-container') ?? document.querySelector('.scan-slide[aria-pressed="true"]')!;
+      target.dispatchEvent(new WheelEvent('wheel', { deltaY, ctrlKey: true, bubbles: true, cancelable: true }));
+    }, deltaY);
+    await wheel(-1);
+    await expect.poll(async () => (await measure()).header).toBeLessThan(0);
+    expect((await measure()).left).toBeLessThanOrEqual(0);
+    expect((await measure()).right).toBeGreaterThanOrEqual(width);
+    await expect(page.locator('.letter-viewer--focus')).toHaveAttribute('data-zoom', '1.01');
+    // Oscillating above document size must not bring any chrome back.
+    await wheel(-1); await wheel(1);
+    expect((await measure()).header).toBeLessThan(0);
+    await wheel(1);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.locator('#root')).not.toHaveAttribute('inert');
+    if (reducedMotion === 'no-preference') {
+      await page.evaluate(() => {
+        for (const animation of document.getAnimations()) { animation.pause(); animation.currentTime = 150; }
+      });
+      const returning = await measure();
+      expect(returning.header).toBeGreaterThan(0);
+      expect(returning.header).toBeLessThan(before.header - 1);
+      // Re-enter while the return is incomplete; it reverses from here.
+      await wheel(-1);
+      await expect.poll(async () => (await measure()).header).toBeLessThan(0);
+      expect((await measure()).left).toBeLessThanOrEqual(0);
+      expect((await measure()).right).toBeGreaterThanOrEqual(width);
+      await wheel(1);
+    }
+    await expect.poll(async () => (await measure()).header).toBeCloseTo(before.header, 0);
+    await expect.poll(async () => Math.abs((await measure()).left - before.left)).toBeLessThan(2);
+    await expect.poll(async () => Math.abs((await measure()).right - before.right)).toBeLessThan(2);
+    await expect(page.locator('.scan-slide').first()).toHaveCSS('transform', 'none');
+    // The returned header really receives pointer hits again.
+    expect(await page.locator('.header .page-selector').first().evaluate(el => {
+      const r = el.getBoundingClientRect();
+      return el.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+    })).toBe(true);
+  });
+}
+
 test('@mocked native pinch starts on the inline scan and continues through focus entry', async ({ page, browserName }) => {
   test.skip(browserName !== 'chromium', 'Native multitouch uses CDP.');
   await page.setViewportSize({ width: 390, height: 844 });

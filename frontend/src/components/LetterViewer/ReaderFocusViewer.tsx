@@ -5,6 +5,7 @@ import { useReaderViewerSurface } from '../../hooks/useReaderViewerSurface';
 import LetterViewer from './LetterViewer';
 import { createScanReturnPainter, createScanReturnSnapshot } from './drawScanReturn';
 import { focusZoomProgress } from './focusZoomProgress';
+import { animateFocusChrome } from './animateFocusChrome';
 import './ReaderFocusViewer.css';
 
 const DURATION = 420;
@@ -34,6 +35,16 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
   const pendingSelection = useRef(initialIndex);
   const stripOffset = useRef<{ width: number; height: number; x: number; y: number } | null>(null);
   const closing = useRef(false);
+  const chromeReady = useRef(false);
+  const chromeHidden = useRef<boolean | null>(null);
+  const currentScale = useRef(entryZoom);
+  const setChromeHidden = useCallback((hidden: boolean, duration?: number) => {
+    if (!directZoom || chromeHidden.current === hidden) return;
+    const shell = document.querySelector<HTMLElement>('.public-site-shell');
+    if (!shell) return;
+    chromeHidden.current = hidden;
+    animateFocusChrome(shell, hidden, duration);
+  }, [directZoom]);
   const flightRef = useRef<HTMLImageElement>(null);
   const returnCanvasRef = useRef<HTMLCanvasElement>(null);
   const returnSnapshot = useRef<{ key: string; canvas: HTMLCanvasElement } | null>(null);
@@ -51,13 +62,14 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
     if (closing.current) return;
     closing.current = true;
     if (history.state?.readerFocus === historyToken) history.back();
+    setChromeHidden(false);
     closeCallback.current(pendingSelection.current);
-  }, [historyToken]);
+  }, [historyToken, setChromeHidden]);
   const followScale = useCallback((scale: number) => {
     if (!directZoom || closing.current) return;
     const progress = focusZoomProgress(scale);
-    const shell = document.querySelector<HTMLElement>('.public-site-shell');
-    shell?.style.setProperty('--reader-focus-progress', String(progress));
+    currentScale.current = scale;
+    if (chromeReady.current) setChromeHidden(scale > 1);
     const strip = document.querySelector<HTMLElement>('.reader-focus-strip');
     if (strip && origin.strip) {
       // Measure once per viewport, not once per wheel/pinch update.
@@ -69,7 +81,7 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
       }
       strip.style.translate = `${stripOffset.current.x * (1 - progress)}px ${stripOffset.current.y * (1 - progress)}px`;
     }
-  }, [directZoom, origin]);
+  }, [directZoom, origin, setChromeHidden]);
   const { dialogRef } = useAccessibleDialog({ isOpen: true, onClose: requestClose, isolateBackground: true, restoreFocusTo: origin.opener });
   useReaderViewerSurface(true, dialogRef, '#f5ede1');
 
@@ -135,9 +147,10 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
     }
 
     return () => {
+      chromeReady.current = false;
+      if (directZoom) setChromeHidden(false);
       delete shell.dataset.readerFocus;
       delete shell.dataset.readerDirectZoom;
-      shell.style.removeProperty('--reader-focus-progress');
       shell.style.removeProperty('--reader-focus-duration');
       shell.querySelectorAll<HTMLElement>('[data-focus-side]').forEach(el => {
         delete el.dataset.focusSide;
@@ -149,15 +162,21 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
         returnSnapshot.current = null;
       }
     };
-  }, [origin, dialogRef, directZoom]);
+  }, [origin, dialogRef, directZoom, setChromeHidden]);
 
   useLayoutEffect(() => {
     document.querySelectorAll<HTMLElement>('.scan-slide').forEach((el, i) => {
       // Travel only the visible distance to the viewport edge during entry.
       // A full viewport jump makes narrow side previews disappear in one frame.
       const rect = el.querySelector('.scan-slide-img')?.getBoundingClientRect();
-      if (rect && i !== index) el.style.setProperty('--reader-focus-exit-x',
-        `${i < index ? -Math.max(0, rect.right) - 1 : Math.max(0, innerWidth - rect.left) + 1}px`);
+      if (rect && i !== index) {
+        // A new zoom may interrupt the previous return. Measure the resting
+        // edge, not the still-animated neighbor's intermediate position.
+        const transform = getComputedStyle(el).transform;
+        const offset = transform === 'none' ? 0 : new DOMMatrixReadOnly(transform).m41;
+        el.style.setProperty('--reader-focus-exit-x',
+          `${i < index ? -Math.max(0, rect.right - offset) - 1 : Math.max(0, innerWidth - rect.left + offset) + 1}px`);
+      }
       el.dataset.focusSide = i < index ? 'left' : i > index ? 'right' : 'selected';
     });
     onPageChange(index);
@@ -195,9 +214,12 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
         image.style.visibility = '';
         strip.style.visibility = 'visible';
         shell.dataset.readerFocus = 'focused';
+        chromeReady.current = true;
+        setChromeHidden(currentScale.current > 1);
         setPhase('focused');
         return;
       }
+      if (exiting && directZoom) setChromeHidden(false, duration);
       const currentStripRect = strip.getBoundingClientRect();
       strip.style.translate = 'none';
       const target = scanElement(index);
@@ -296,7 +318,7 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
       // Release the backing store as soon as the temporary surface is finished.
       returnCanvas.width = 0; returnCanvas.height = 0;
     };
-  }, [exiting, dialogRef, origin, prepareReturnImage, index, directZoom]);
+  }, [exiting, dialogRef, origin, prepareReturnImage, index, directZoom, setChromeHidden]);
 
   return <div className="reader-focus-backdrop viewer-backdrop" data-phase={phase} data-direct-zoom={directZoom}>
     <div ref={dialogRef} className="reader-focus viewer-modal" role="dialog" aria-modal="true" aria-label="Original scans" tabIndex={-1}>

@@ -317,3 +317,34 @@ for (const mode of ['inline', 'fullscreen']) test(`@mocked ${mode} thumbnail tap
   await page.clock.runFor(200);
   expect(await strip.evaluate(el => el.scrollLeft)).toBeCloseTo(64, 0);
 });
+
+for (const mode of ['inline', 'fullscreen']) for (const gesture of ['hold', 'vertical']) test(`@mocked ${mode} holding a thumbnail animation does not change selection (${gesture})`, async ({ page }) => {
+  const now = new Date('2026-09-18T12:00:00Z');
+  await page.clock.install({ time: now });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openReader(page);
+  if (mode === 'inline') await page.getByRole('button', { name: 'Close viewer' }).click();
+  const strip = page.locator(mode === 'inline' ? '.viewer-page-drawer--inline' : '[role="dialog"] .viewer-page-drawer');
+  await page.clock.pauseAt(new Date(now.getTime() + 60_000));
+  await strip.getByRole('button').nth(2).evaluate(el => el.click());
+  await expect(strip.getByRole('button').nth(2)).toHaveAttribute('aria-current', 'page');
+  await page.clock.runFor(16);
+  expect(await strip.evaluate(el => el.scrollLeft)).toBeLessThan(64);
+  await strip.evaluate(el => {
+    const event = new Event('touchstart', { bubbles: true });
+    Object.defineProperty(event, 'touches', { value: [{ clientX: 195, clientY: 700 }] });
+    el.dispatchEvent(event);
+  });
+  if (gesture === 'vertical') await strip.evaluate(el => {
+    const event = new Event('touchmove', { bubbles: true });
+    Object.defineProperty(event, 'touches', { value: [{ clientX: 198, clientY: 760 }] }); el.dispatchEvent(event);
+  });
+  await page.clock.runFor(300);
+  await strip.evaluate(el => {
+    const event = new Event('touchend', { bubbles: true });
+    Object.defineProperty(event, 'touches', { value: [] }); el.dispatchEvent(event);
+  });
+  await page.clock.runFor(500);
+  await expect(strip.getByRole('button').nth(2)).toHaveAttribute('aria-current', 'page');
+  expect(await strip.evaluate(el => el.scrollLeft)).toBeCloseTo(128, 0);
+});

@@ -16,6 +16,7 @@ export function usePageStripMotion(selected: number,
     if (!list) return;
     let frame = 0, idle: ReturnType<typeof setTimeout> | undefined;
     let points: number[] = [], following = false, browsing = false, touching = false;
+    let resumeSelection = false, touchOrigin: { x: number; y: number } | null = null;
     let drag: { id: number; x: number; start: number } | null = null;
     const measure = () => {
       const box = list.getBoundingClientRect();
@@ -51,7 +52,7 @@ export function usePageStripMotion(selected: number,
       frame = requestAnimationFrame(tick);
     };
     choose.current = index => {
-      stop(); following = false; browsing = false; drag = null;
+      stop(); following = false; browsing = false; drag = null; resumeSelection = false;
       current.current.onSelect(index);
       settle(index, false);
     };
@@ -62,6 +63,11 @@ export function usePageStripMotion(selected: number,
     const nativeEnd = () => {
       if (!browsing || touching || drag || frame) return;
       clearTimeout(idle);
+      if (resumeSelection) {
+        resumeSelection = false; browsing = false;
+        settle(current.current.selected, false);
+        return;
+      }
       // Native momentum and CSS snapping have finished. Do not write scrollLeft
       // or run a second settling animation over the browser's result.
       browsing = false;
@@ -69,10 +75,25 @@ export function usePageStripMotion(selected: number,
       if (index !== current.current.selected) current.current.onSelect(index);
     };
     const scheduleEnd = () => { clearTimeout(idle); idle = setTimeout(nativeEnd, 180); };
-    const touchStart = () => { touching = true; suppressClick.current = false; beginBrowsing(); };
+    const touchStart = (event: TouchEvent) => {
+      // Holding or vertically scrolling over an interrupted explicit animation
+      // must not select the thumbnail it happened to pass on the way.
+      resumeSelection ||= !!frame && !browsing;
+      const touch = event.touches[0];
+      touchOrigin = touch ? { x: touch.clientX, y: touch.clientY } : null;
+      touching = true; suppressClick.current = false; beginBrowsing();
+    };
+    const touchMove = (event: TouchEvent) => {
+      const touch = event.touches[0];
+      if (!touchOrigin || !touch) return;
+      const dx = Math.abs(touch.clientX - touchOrigin.x), dy = Math.abs(touch.clientY - touchOrigin.y);
+      // This only abandons the interrupted target. It never gates native input
+      // or freezes a direction decision after the first small movement.
+      if (dx > 8 && dx > dy) resumeSelection = false;
+    };
     const touchEnd = (event: TouchEvent) => {
       touching = event.touches.length > 0;
-      if (!touching) scheduleEnd();
+      if (!touching) { touchOrigin = null; scheduleEnd(); }
     };
     // Touch stays entirely native. Pointer cancellation means the browser took
     // ownership, not that it should be interrupted by our centering code.
@@ -97,7 +118,7 @@ export function usePageStripMotion(selected: number,
     };
     const wheel = (event: WheelEvent) => {
       if (!event.shiftKey && event.deltaX === 0) return;
-      beginBrowsing(); scheduleEnd();
+      resumeSelection = false; beginBrowsing(); scheduleEnd();
     };
     const scroll = () => {
       if (browsing && touching) suppressClick.current = true;
@@ -119,7 +140,7 @@ export function usePageStripMotion(selected: number,
     let width = list.clientWidth;
     const resize = new ResizeObserver(() => {
       if (list.clientWidth === width) return;
-      width = list.clientWidth; stop(); drag = null; following = false; touching = false;
+      width = list.clientWidth; stop(); drag = null; following = false; touching = false; resumeSelection = false;
       measure(); finish(current.current.selected, false);
     });
     resize.observe(list);
@@ -132,6 +153,7 @@ export function usePageStripMotion(selected: number,
     window.addEventListener('pointerup', up);
     window.addEventListener('pointercancel', up);
     list.addEventListener('touchstart', touchStart, { passive: true });
+    list.addEventListener('touchmove', touchMove, { passive: true });
     window.addEventListener('touchend', touchEnd, { passive: true });
     window.addEventListener('touchcancel', touchEnd, { passive: true });
     list.addEventListener('wheel', wheel, { passive: true });
@@ -141,7 +163,7 @@ export function usePageStripMotion(selected: number,
       stop(); resize.disconnect(); unsubscribe?.();
       list.removeEventListener('pointerdown', down); list.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
-      list.removeEventListener('touchstart', touchStart);
+      list.removeEventListener('touchstart', touchStart); list.removeEventListener('touchmove', touchMove);
       window.removeEventListener('touchend', touchEnd); window.removeEventListener('touchcancel', touchEnd);
       list.removeEventListener('wheel', wheel); list.removeEventListener('scroll', scroll); list.removeEventListener('scrollend', nativeEnd);
     };

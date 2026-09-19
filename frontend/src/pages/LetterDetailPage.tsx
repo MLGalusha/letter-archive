@@ -138,7 +138,7 @@ export default function LetterDetailPage() {
 
 
   // Scan carousel (extracted hook)
-  const { attachCarousel, activeIndex, pageMotion, carouselDraggedRef, scrollToSlide } = useCarouselDrag();
+  const { attachCarousel, activeIndex, transitionFromIndex, pageMotion, carouselDraggedRef, scrollToSlide } = useCarouselDrag();
 
   const [readyScan, setReadyScan] = useState<string | null>(null);
   const activeScanKey = `${letter?.id}:${letter?.images[activeIndex]?.imageUrl ?? activeIndex}`;
@@ -322,7 +322,7 @@ export default function LetterDetailPage() {
                   >
                     <ReaderScanImage
                       imageUrl={img.imageUrl}
-                      enabled={idx === activeIndex || (Math.abs(idx - activeIndex) === 1 && readyScan === activeScanKey && allowImageSpeculation())}
+                      enabled={idx === activeIndex || idx === transitionFromIndex || (Math.abs(idx - activeIndex) === 1 && readyScan === activeScanKey && allowImageSpeculation())}
                       fetchPriority={idx === activeIndex ? 'high' : 'low'}
                       onReadyChange={(ready) => { if (idx === activeIndex) setReadyScan(ready ? activeScanKey : null); }}
                       alt={
@@ -351,7 +351,8 @@ export default function LetterDetailPage() {
 
             <figcaption>
               <InlineScanNavigation key={letter.id} images={carouselImages} selected={activeIndex} motion={pageMotion}
-                onSelect={index => scrollToSlide(index, 'instant')} />
+                onSelect={index => scrollToSlide(index,
+                  window.matchMedia('(min-width: 901px)').matches ? 'smooth' : 'instant')} />
             </figcaption>
           </figure>
         )}

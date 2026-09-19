@@ -107,4 +107,17 @@ describe('scan carousel lifecycle and position', () => {
     expect(scrollTo).toHaveBeenCalledWith({ left: 440, behavior: reducedMotion ? 'instant' : 'smooth' });
     expect(scrollIntoView).not.toHaveBeenCalled();
   });
+  it('keeps the clicked page selected during smooth travel and yields to a new gesture', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: false }));
+    render(<Harness />); const carousel = geometry(); flush();
+    carousel.scrollTo = vi.fn();
+    fireEvent.click(screen.getByText('Third'));
+    expect(screen.getByTestId('active')).toHaveTextContent('2');
+    carousel.scrollLeft = 220;
+    fireEvent.scroll(carousel); flush();
+    expect(screen.getByTestId('active')).toHaveTextContent('2');
+    fireEvent.touchStart(carousel);
+    fireEvent.scroll(carousel); flush();
+    expect(screen.getByTestId('active')).toHaveTextContent('1');
+  });
 });

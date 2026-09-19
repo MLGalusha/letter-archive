@@ -4,6 +4,8 @@ import { openReader } from './utils/reader-viewer-fixture';
 
 for (const width of [320, 390, 1440]) test(`@mocked 24 scan previews stay compact and direct selection arrives without traversing other pages at ${width}px`, async ({ page }) => {
   await page.setViewportSize({ width, height: 900 });
+  // Desktop animates thumbnail selection unless reduced motion is requested.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await openReader(page, Array.from({ length: 24 }, (_, i) => ({
     id: `scan-${i}`, type: 'letter', pageNumber: i + 1, imageUrl: `/images/${i}.svg`, width: 600, height: 800,
   })));
@@ -39,6 +41,43 @@ for (const width of [320, 390, 1440]) test(`@mocked 24 scan previews stay compac
   await drawer.getByRole('button', { name: 'Go to scan 1: letter', exact: true }).evaluate(el => el.click());
   await expect(nav.getByRole('status')).toHaveText('1 / 24');
   await expect(drawer).toBeVisible();
+});
+
+for (const width of [1440, 1920]) test(`@mocked desktop thumbnail clicks animate the main scan without changing the chosen page at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 900 });
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await openReader(page);
+  await page.getByRole('button', { name: 'Close viewer' }).click();
+  const carousel = page.locator('.scan-carousel');
+  await expect(carousel.locator('.progressive-image__full').first()).toHaveJSProperty('complete', true);
+  const samples = await page.evaluate(async () => {
+    const carousel = document.querySelector('.scan-carousel')!;
+    const drawer = document.querySelector('.viewer-page-drawer--inline')!;
+    const targetSlide = carousel.children[2].getBoundingClientRect();
+    const frame = carousel.getBoundingClientRect();
+    const target = carousel.scrollLeft + targetSlide.left + targetSlide.width / 2 - frame.left - frame.width / 2;
+    (drawer.children[2] as HTMLElement).click();
+    const samples: { x: number; counter: string | null; outgoingLoaded: boolean }[] = [];
+    const start = performance.now();
+    do {
+      await new Promise(requestAnimationFrame);
+      const outgoing = carousel.children[0].querySelector<HTMLImageElement>('.progressive-image__full')!;
+      samples.push({ x: carousel.scrollLeft, counter: document.querySelector('.scan-navigation [role="status"]')!.textContent,
+        outgoingLoaded: !!outgoing.getAttribute('src') && outgoing.complete && outgoing.naturalWidth > 0 });
+    } while (Math.abs(carousel.scrollLeft - target) > 0.1 && performance.now() - start < 2000);
+    return { samples, target };
+  });
+  expect(samples.samples.filter(sample => sample.x > 1 && sample.x < samples.target - 1).length).toBeGreaterThan(2);
+  expect(samples.samples.filter(sample => sample.x > 1 && sample.x < samples.target - 1).every(sample => sample.outgoingLoaded)).toBe(true);
+  expect(samples.samples.slice(1).every(sample => sample.counter === '3 / 3')).toBe(true);
+  expect(samples.samples.at(-1)!.x).toBeCloseTo(samples.target, 0);
+
+  // Reverse an in-flight click without leaving a stale selection or snap target.
+  await page.getByRole('button', { name: 'Go to scan 1: letter', exact: true }).evaluate(el => el.click());
+  await expect.poll(() => carousel.evaluate(el => el.scrollLeft)).toBeLessThan(samples.target - 10);
+  await page.getByRole('button', { name: 'Go to scan 3: letter', exact: true }).evaluate(el => el.click());
+  await expect.poll(() => carousel.evaluate(el => el.scrollLeft)).toBeCloseTo(samples.target, 0);
+  await expect(page.locator('.scan-navigation [role="status"]')).toHaveText('3 / 3');
 });
 
 for (const width of [390, 1440]) for (const reducedMotion of ['reduce', 'no-preference'] as const) {

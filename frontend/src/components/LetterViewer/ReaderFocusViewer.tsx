@@ -33,6 +33,7 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
   const [phase, setPhase] = useState<'preparing' | 'entering' | 'focused' | 'exiting'>('preparing');
   const [index] = useState(initialIndex);
   const pendingSelection = useRef(initialIndex);
+  const surfaceReady = useRef(false);
   const stripOffset = useRef<{ width: number; height: number; x: number; y: number } | null>(null);
   const closing = useRef(false);
   const chromeReady = useRef(false);
@@ -71,7 +72,7 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
     currentScale.current = scale;
     if (chromeReady.current) setChromeHidden(scale > 1);
     const strip = document.querySelector<HTMLElement>('.reader-focus-strip');
-    if (strip && origin.strip) {
+    if (surfaceReady.current && strip && origin.strip) {
       // Measure once per viewport, not once per wheel/pinch update.
       if (!stripOffset.current || stripOffset.current.width !== innerWidth || stripOffset.current.height !== innerHeight) {
         strip.style.translate = 'none';
@@ -79,7 +80,7 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
         stripOffset.current = { width: innerWidth, height: innerHeight,
           x: origin.strip.left + origin.strip.width / 2 - rect.left - rect.width / 2, y: origin.strip.top - rect.top };
       }
-      strip.style.translate = `${stripOffset.current.x * (1 - progress)}px ${stripOffset.current.y * (1 - progress)}px`;
+      strip.style.translate = `${stripOffset.current.x}px ${stripOffset.current.y * (1 - progress)}px`;
     }
   }, [directZoom, origin, setChromeHidden]);
   const { dialogRef } = useAccessibleDialog({ isOpen: true, onClose: requestClose, isolateBackground: true, restoreFocusTo: origin.opener });
@@ -138,6 +139,10 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
     if (!shell) return;
     shell.dataset.readerFocus = 'preparing';
     if (directZoom) shell.dataset.readerDirectZoom = 'true';
+    // The scroll-lock layout effect has now removed any desktop scrollbar.
+    // Child layout effects run earlier and would cache the old viewport center.
+    surfaceReady.current = true;
+    followScale(currentScale.current);
     // The thumbnail controls are hidden during entry; focus the dialog itself.
     dialogRef.current?.focus({ preventScroll: true });
     const flight = flightRef.current;
@@ -147,6 +152,8 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
     }
 
     return () => {
+      surfaceReady.current = false;
+      stripOffset.current = null;
       chromeReady.current = false;
       if (directZoom) setChromeHidden(false);
       delete shell.dataset.readerFocus;
@@ -162,7 +169,7 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
         returnSnapshot.current = null;
       }
     };
-  }, [origin, dialogRef, directZoom, setChromeHidden]);
+  }, [origin, dialogRef, directZoom, setChromeHidden, followScale]);
 
   useLayoutEffect(() => {
     document.querySelectorAll<HTMLElement>('.scan-slide').forEach((el, i) => {

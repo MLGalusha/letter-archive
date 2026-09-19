@@ -32,6 +32,48 @@ async function recordReturnPaints(page: Page) {
   await page.evaluate(record);
 }
 
+for (const width of [390, 1440]) for (const [count, selected] of [[2, 0], [2, 1], [7, 3], [7, 6]]) {
+  test(`@mocked zoom preserves thumbnail horizontal positions for scan ${selected + 1} of ${count} at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 920 });
+    const images = Array.from({ length: count }, (_, i) => ({ ...viewerImages[0], id: `scan-${i + 1}`,
+      pageNumber: i + 1, imageUrl: `/images/${i + 1}.svg` }));
+    await mockReader(page, images);
+    await page.goto('/letter/current');
+    // Model a classic scrollbar disappearing on scroll lock, even in headless
+    // browsers with overlay scrollbars. Also run this test headed on desktop.
+    await page.addStyleTag({ content: 'html { scrollbar-gutter: stable; } html[style*="overflow-y: hidden"] { scrollbar-gutter: auto; }' });
+    await page.locator('.letter-scan-figure .viewer-page-choice').nth(selected).click();
+    await expect.poll(() => page.locator('.scan-slide').nth(selected).evaluate(el => {
+      const r = el.getBoundingClientRect();
+      const carousel = document.querySelector('.scan-carousel')!.getBoundingClientRect();
+      return Math.abs(r.left + r.width / 2 - carousel.left - carousel.width / 2);
+    })).toBeLessThan(20);
+    await page.evaluate(() => document.fonts.ready);
+    // Wait for the native thumbnail centering to settle before measuring entry.
+    await page.waitForTimeout(500);
+    const samples = await page.evaluate(async () => {
+      const read = () => [...document.querySelectorAll(document.querySelector('.reader-focus-strip')
+        ? '.reader-focus-strip .viewer-page-choice' : '.letter-scan-figure .viewer-page-choice')].map(el => {
+        const r = el.getBoundingClientRect(); return { x: r.x, y: r.y };
+      });
+      const samples = [read()];
+      for (let i = 0; i < 30; i++) {
+        const target = document.querySelector('.reader-focus .viewer-container') ?? document.querySelector('.scan-slide[aria-pressed="true"]')!;
+        target.dispatchEvent(new WheelEvent('wheel', { deltaY: -1, ctrlKey: true, bubbles: true, cancelable: true }));
+        await new Promise(requestAnimationFrame); await new Promise(requestAnimationFrame);
+        samples.push(read());
+      }
+      return samples;
+    });
+    const travel = samples.at(-1)![selected].y - samples[0][selected].y;
+    for (let frame = 1; frame < samples.length; frame++) {
+      for (let i = 0; i < count; i++) expect(Math.abs(samples[frame][i].x - samples[0][i].x)).toBeLessThan(1);
+      expect(samples[frame][selected].y).toBeGreaterThanOrEqual(samples[frame - 1][selected].y - .1);
+      expect(samples[frame][selected].y - samples[frame - 1][selected].y).toBeLessThan(travel * .12 + 3);
+    }
+  });
+}
+
 for (const width of [390, 1440]) for (const reducedMotion of ['reduce', 'no-preference'] as const) {
   test(`@mocked scan clicks select and return to the top without zoom at ${width}px with ${reducedMotion}`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });

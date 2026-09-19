@@ -36,8 +36,8 @@
 }
 .viewer-page-choice[aria-current="page"] { border-color: var(--page-selection); }
 .viewer-page-choice:focus-visible { outline: 2px solid var(--page-selection); outline-offset: 1px; }
-.viewer-page-choice .preview-image { height: 100%; border-radius: 2px; background: #ffffff0a; }
-.viewer-page-choice .preview-image__image { object-fit: contain; }
+.viewer-page-choice .preview-image { height: 100%; border-radius: inherit; background: #ffffff0a; }
+.viewer-page-choice .preview-image__image { object-fit: contain; border-radius: inherit; }
 .viewer-page-choice .preview-image__error { font-size: .6rem; color: var(--page-ink); }
 .viewer-page-notch {
   position: absolute;

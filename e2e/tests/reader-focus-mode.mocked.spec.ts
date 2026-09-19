@@ -142,42 +142,21 @@ test('@mocked native pinch starts on the inline scan and continues through focus
   await closeReader(page);
 });
 
-for (const width of [390, 1440]) test(`@mocked thumbnail frost blurs actual backdrop pixels within the selection border at ${width}px`, async ({ page, browserName }) => {
-  test.skip(browserName !== 'chromium', 'This WebKit renderer does not paint backdrop blur, including in an isolated striped control.');
+for (const width of [390, 1440]) test(`@mocked solid thumbnail surfaces match their number notches at ${width}px`, async ({ page }) => {
   await page.setViewportSize({ width, height: 844 });
   await openReader(page);
   const strip = page.locator('.reader-focus-strip');
   const thumbnail = strip.locator('.viewer-page-choice').first();
   const before = (await thumbnail.boundingBox())!;
-  expect((await thumbnail.locator('.viewer-page-notch').boundingBox())!.y + 18).toBe(before.y + before.height);
+  const notch = thumbnail.locator('.viewer-page-notch');
+  const color = await notch.evaluate(el => getComputedStyle(el).backgroundColor);
+  await expect(thumbnail).toHaveCSS('background-color', color);
+  await expect(thumbnail).toHaveCSS('backdrop-filter', 'none');
   await expect(strip).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-  await expect(strip).toHaveCSS('backdrop-filter', 'none');
-  await expect(thumbnail).toHaveCSS('background-clip', 'border-box');
-  await expect(thumbnail).toHaveCSS('box-shadow', 'none');
-  // A computed blur value alone did not prove the effect was visible. Expose a
-  // high-contrast backdrop and compare real painted pixels with blur disabled.
-  await page.addStyleTag({ content: `
-    .reader-focus .viewer-container { background: repeating-linear-gradient(90deg, #000 0 4px, #fff 4px 8px) !important; }
-    .reader-focus .viewer-transform, .reader-focus-strip .preview-image { visibility: hidden !important; }
-  ` });
-  const contrast = async () => {
-    const png = await page.screenshot({ clip: { x: before.x + 6, y: before.y + 8, width: 44, height: 8 } });
-    return page.evaluate(async base64 => {
-      const image = new Image(); image.src = `data:image/png;base64,${base64}`; await image.decode();
-      const canvas = document.createElement('canvas'); canvas.width = image.width; canvas.height = image.height;
-      const context = canvas.getContext('2d')!; context.drawImage(image, 0, 0);
-      const pixels = context.getImageData(0, 0, image.width, image.height).data;
-      const values = Array.from({ length: pixels.length / 4 }, (_, i) => pixels[i * 4]);
-      return Math.max(...values) - Math.min(...values);
-    }, png.toString('base64'));
-  };
-  const frosted = await contrast();
-  const disabled = await page.addStyleTag({ content: '.reader-focus-strip .viewer-page-choice { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }' });
-  const sharp = await contrast();
-  expect(sharp).toBeGreaterThan(60);
-  expect(frosted).toBeLessThan(sharp / 4);
-  await disabled.evaluate(el => el.remove());
+  const radius = await thumbnail.evaluate(el => getComputedStyle(el).borderRadius);
+  await expect(thumbnail.locator('.preview-image')).toHaveCSS('border-radius', radius);
+  expect((await notch.boundingBox())!.y + 18).toBe(before.y + before.height);
   await page.keyboard.press('+');
-  await expect(thumbnail).toHaveCSS('backdrop-filter', 'blur(24px)');
+  await expect(thumbnail).toHaveCSS('background-color', color);
   expect(await thumbnail.boundingBox()).toEqual(before);
 });

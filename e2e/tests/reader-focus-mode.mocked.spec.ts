@@ -1,6 +1,33 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { join } from 'node:path';
-import { openReader, closeReader, mockReader } from './utils/reader-viewer-fixture';
+import { openReader, closeReader, mockReader, viewerImages } from './utils/reader-viewer-fixture';
+
+// Record actual canvas paints, including their source crop and backing-store size.
+async function recordReturnPaints(page: Page) {
+  const record = () => {
+    (window as any).returnPaints = [];
+    const draw = CanvasRenderingContext2D.prototype.drawImage;
+    const round = CanvasRenderingContext2D.prototype.roundRect;
+    const sources = new WeakMap<HTMLCanvasElement, string>();
+    let radiusRatio = 0;
+    CanvasRenderingContext2D.prototype.roundRect = function (...args) {
+      if (this.canvas.classList.contains('reader-focus-return')) radiusRatio = Number(args[4]) / args[2];
+      return round.apply(this, args);
+    };
+    CanvasRenderingContext2D.prototype.drawImage = function (...args: any[]) {
+      if (args[0] instanceof HTMLImageElement) sources.set(this.canvas, args[0].currentSrc);
+      if (this.canvas.classList.contains('reader-focus-return')) {
+        const [image, sx, sy, sw, sh, dx, dy, dw, dh] = args;
+        (window as any).returnPaints.push({ source: sources.get(image), naturalWidth: image.width,
+          sx, sy, sw, sh, dx, dy, dw, dh, radiusRatio,
+          backingWidth: this.canvas.width, backingHeight: this.canvas.height });
+      }
+      return (draw as Function).apply(this, args);
+    };
+  };
+  await page.addInitScript(record);
+  await page.evaluate(record);
+}
 
 for (const width of [390, 1440]) for (const reducedMotion of ['reduce', 'no-preference'] as const) {
   test(`@mocked scan clicks select and return to the top without zoom at ${width}px with ${reducedMotion}`, async ({ page }) => {
@@ -58,21 +85,36 @@ test('@mocked dragging the main scan does not trigger click-to-top', async ({ pa
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
-for (const width of [390, 1440]) for (const selected of [1, 2]) {
-  test(`@mocked thumbnail ${selected} exits directly from zoom to regular mode at ${width}px`, async ({ page }) => {
+for (const width of [390, 1440]) for (const selected of [1, 2]) for (const zoomSteps of [2, 12]) {
+  test(`@mocked thumbnail ${selected} exits directly from zoom to regular mode at ${width}px after ${zoomSteps} zoom steps`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
+    await recordReturnPaints(page);
     await openReader(page);
-    await page.keyboard.press('+');
-    await page.keyboard.press('+');
+    for (let step = 0; step < zoomSteps; step++) await page.keyboard.press('+');
     await expect.poll(() => page.locator('.viewer-transform').evaluate(el => el.getAnimations().length)).toBe(0);
+    // Include a panned return: it must start at the current view, not at fit.
+    await page.mouse.move(width / 2, 350);
+    await page.mouse.down();
+    await page.mouse.move(width / 2 + 80, 430, { steps: 5 });
+    await page.mouse.up();
     const zoomed = (await page.locator('.viewer-transform').boundingBox())!;
     await page.locator('.reader-focus-strip').getByRole('button', { name: `Go to scan ${selected}: letter`, exact: true }).click();
-    const flight = page.locator('.reader-focus-flight');
-    await expect(flight).toHaveCSS('visibility', 'visible');
-    // The return flight starts at the zoomed size, with no intermediate fit reset.
-    expect(await flight.evaluate(el => parseFloat(el.style.width))).toBeCloseTo(zoomed.width, 0);
-    await expect(flight).toHaveAttribute('src', new RegExp(`/images/${selected}\\.svg`));
     await expect(page.getByRole('dialog')).toHaveCount(0);
+    const paints = await page.evaluate(() => (window as any).returnPaints as any[]);
+    expect(paints.length).toBeGreaterThan(3);
+    expect(paints[0].naturalWidth * paints[0].dw / paints[0].sw).toBeCloseTo(zoomed.width, 0);
+    expect(new Set(paints.map(paint => paint.source)).size).toBe(1);
+    expect(paints[0].source).toMatch(new RegExp(`/images/${selected}\\.svg`));
+    for (const paint of paints) {
+      expect(paint.dw).toBeLessThanOrEqual(width);
+      expect(paint.dh).toBeLessThanOrEqual(844);
+      expect(paint.backingWidth).toBeLessThanOrEqual(width * 2);
+      expect(paint.backingHeight).toBeLessThanOrEqual(844 * 2);
+    }
+    // The ending frame reveals the entire image rather than a shrunken crop.
+    expect(paints.at(-1).sx).toBeCloseTo(0);
+    expect(paints.at(-1).sy).toBeCloseTo(0);
+    expect(paints.at(-1).sw).toBeCloseTo(paints.at(-1).naturalWidth);
     await expect(page.locator('.scan-navigation [role="status"]')).toHaveText(`${selected} / 3`);
     await expect.poll(() => page.evaluate(() => history.state?.readerFocus ?? null)).toBeNull();
     const scan = page.locator('.scan-slide').nth(selected - 1);
@@ -83,6 +125,29 @@ for (const width of [390, 1440]) for (const selected of [1, 2]) {
     await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'focused');
     await expect(page.locator('.letter-viewer--focus')).toHaveAttribute('data-zoom', '1.4');
     await closeReader(page);
+  });
+}
+
+for (const width of [390, 1440]) for (const selected of [1, 2]) {
+  test(`@mocked zoom return to scan ${selected} uses a complete preview while original is pending at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await recordReturnPaints(page);
+    await openReader(page, [viewerImages[0], { ...viewerImages[1], width: 1000, height: 500 }]);
+    let release!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    await page.route(/\/images\/[12]\.svg$/, async route => { await held; await route.fallback(); });
+    try {
+      for (let step = 0; step < 12; step++) await page.keyboard.press('+');
+      await expect(page.locator('.reader-focus .viewer-image-thumb')).toBeVisible();
+      await page.locator('.reader-focus-strip button').nth(selected - 1).click();
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      const paints = await page.evaluate(() => (window as any).returnPaints as any[]);
+      expect(paints.length).toBeGreaterThan(3);
+      expect(new Set(paints.map(paint => paint.source)).size).toBe(1);
+      expect(paints[0].source).toMatch(new RegExp(`/images/${selected}\\.svg\\?`));
+      expect(paints.at(-1).sw).toBeCloseTo(paints.at(-1).naturalWidth);
+      await expect(page.locator('.scan-navigation [role="status"]')).toHaveText(`${selected} / 2`);
+    } finally { release(); }
   });
 }
 
@@ -321,12 +386,12 @@ for (const width of [390, 1440]) test(`@mocked scan corners keep the regular ima
   await page.setViewportSize({ width: width === 390 ? 1440 : 390, height: 844 });
   await expect.poll(async () => Math.abs(await ratio('.reader-focus .viewer-image') - await ratio('.scan-slide-img'))).toBeLessThan(.00001);
   await expect.poll(async () => Math.abs(await ratio('.reader-focus .preview-image') - await ratio('.scan-slide-img'))).toBeLessThan(.00001);
+  await recordReturnPaints(page);
   await page.keyboard.press('Escape');
-  await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'exiting');
-  // The exit phase is set before its next-frame flight geometry is installed.
-  await expect(page.locator('.reader-focus-flight')).toHaveCSS('visibility', 'visible');
-  expect(await ratio('.reader-focus-flight')).toBeCloseTo(await ratio('.scan-slide-img'), 5);
   await expect(page.getByRole('dialog')).toHaveCount(0);
+  const returnRatios = await page.evaluate(() => (window as any).returnPaints.map((paint: any) => paint.radiusRatio) as number[]);
+  expect(returnRatios.length).toBeGreaterThan(0);
+  for (const value of returnRatios) expect(value).toBeCloseTo(await ratio('.scan-slide-img'), 5);
 });
 
 

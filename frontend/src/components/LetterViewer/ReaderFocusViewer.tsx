@@ -3,15 +3,17 @@ import type { LetterImage } from '../../types/Letter';
 import { useAccessibleDialog } from '../common/useAccessibleDialog';
 import { useReaderViewerSurface } from '../../hooks/useReaderViewerSurface';
 import LetterViewer from './LetterViewer';
+import { createScanReturnPainter, createScanReturnSnapshot } from './drawScanReturn';
 import './ReaderFocusViewer.css';
 
 const DURATION = 420;
 const EASING = 'cubic-bezier(.22,.75,.2,1)';
 const scanElement = (index: number) => document.querySelector<HTMLElement>(`.scan-slide[data-scan-index="${index}"] .scan-slide-img`);
-const visibleSource = (element: Element | null) => {
+const visibleImage = (element: Element | null) => {
   const images = Array.from(element?.querySelectorAll<HTMLImageElement>('img') ?? []);
-  return images.find(image => image.complete && image.naturalWidth > 0 && getComputedStyle(image).opacity !== '0')?.currentSrc ?? '';
+  return images.find(image => image.complete && image.naturalWidth > 0 && getComputedStyle(image).opacity !== '0');
 };
+const visibleSource = (element: Element | null) => visibleImage(element)?.currentSrc ?? '';
 
 /** Owns the reversible trip between the document scan and the viewport stage. */
 export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onPageChange, cornerRatios, entryZoom = 1 }: {
@@ -30,6 +32,8 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
   const indexRef = useRef(index);
   const closing = useRef(false);
   const flightRef = useRef<HTMLImageElement>(null);
+  const returnCanvasRef = useRef<HTMLCanvasElement>(null);
+  const returnSnapshot = useRef<{ key: string; canvas: HTMLCanvasElement } | null>(null);
   const animations = useRef<Animation[]>([]);
   const historyToken = useId();
   const closeCallback = useRef(onClose);
@@ -42,6 +46,44 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
   }, [historyToken]);
   const { dialogRef } = useAccessibleDialog({ isOpen: true, onClose: requestClose, isolateBackground: true, restoreFocusTo: origin.opener });
   useReaderViewerSurface(true, dialogRef, '#f5ede1');
+
+  const prepareReturnImage = useCallback((source: HTMLImageElement) => {
+    const viewport = returnCanvasRef.current?.getBoundingClientRect();
+    if (!viewport) return null;
+    const key = `${source.currentSrc}:${source.naturalWidth}:${source.naturalHeight}:${viewport.width}:${viewport.height}`;
+    if (returnSnapshot.current?.key === key) return returnSnapshot.current.canvas;
+    const canvas = createScanReturnSnapshot(source, viewport);
+    if (!canvas) return null;
+    if (returnSnapshot.current) {
+      returnSnapshot.current.canvas.width = 0; returnSnapshot.current.canvas.height = 0;
+    }
+    returnSnapshot.current = { key, canvas };
+    return canvas;
+  }, []);
+
+  useLayoutEffect(() => {
+    if (phase !== 'focused' || !dialogRef.current) return;
+    // Prepare once after a rendition loads, away from the thumbnail click. This
+    // avoids decoding/resampling a large original on the first return frame.
+    let idle = 0;
+    const prepare = () => {
+      const source = visibleImage(dialogRef.current?.querySelector('.viewer-transform') ?? null);
+      if (source) prepareReturnImage(source);
+    };
+    const schedule = () => {
+      if (window.cancelIdleCallback) window.cancelIdleCallback(idle); else clearTimeout(idle);
+      idle = window.requestIdleCallback ? window.requestIdleCallback(prepare, { timeout: 200 }) : window.setTimeout(prepare, 0);
+    };
+    const dialog = dialogRef.current;
+    const observer = new MutationObserver(schedule);
+    observer.observe(dialog, { childList: true, subtree: true });
+    dialog.addEventListener('load', schedule, true);
+    schedule();
+    return () => {
+      observer.disconnect(); dialog.removeEventListener('load', schedule, true);
+      if (window.cancelIdleCallback) window.cancelIdleCallback(idle); else clearTimeout(idle);
+    };
+  }, [phase, dialogRef, prepareReturnImage]);
 
   useLayoutEffect(() => {
     // StrictMode replays effects; the same focus session owns one history entry.
@@ -69,6 +111,10 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
       delete shell.dataset.readerFocus;
       shell.querySelectorAll<HTMLElement>('[data-focus-side]').forEach(el => delete el.dataset.focusSide);
       animations.current.forEach(animation => animation.cancel());
+      if (returnSnapshot.current) {
+        returnSnapshot.current.canvas.width = 0; returnSnapshot.current.canvas.height = 0;
+        returnSnapshot.current = null;
+      }
     };
   }, [origin, dialogRef]);
 
@@ -88,8 +134,9 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
   useLayoutEffect(() => {
     const dialog = dialogRef.current;
     const flight = flightRef.current;
+    const returnCanvas = returnCanvasRef.current;
     const shell = document.querySelector<HTMLElement>('.main-page-layout.public-site-shell');
-    if (!dialog || !flight || !shell) return;
+    if (!dialog || !flight || !returnCanvas || !shell) return;
     const duration = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : DURATION;
     let cancelled = false;
     let frame = 0;
@@ -109,42 +156,59 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
       const to = entering ? image.getBoundingClientRect() : target?.getBoundingClientRect();
       const cornerRatio = entering || !target?.getBoundingClientRect().width ? origin.cornerRatio
         : parseFloat(getComputedStyle(target).borderTopLeftRadius) / target.getBoundingClientRect().width;
-      const source = entering ? origin.src : visibleSource(image) || visibleSource(target) || flight.src;
+      const source = origin.src;
+      const returnImage = flight.style.visibility === 'visible' && flight.complete && flight.naturalWidth
+        ? flight : visibleImage(image) || visibleImage(target);
       // Capture the displayed frame before cancelling a partially completed trip.
       animations.current.forEach(animation => animation.cancel());
       animations.current = [];
       shell.dataset.readerFocus = entering ? 'entering' : 'exiting';
       image.style.visibility = 'hidden';
       let liveFlight: Promise<void> | undefined;
-      if (from && to && from.width && to.width && source) {
+      if (entering && from && to && from.width && to.width && source) {
         flight.src = source;
         Object.assign(flight.style, { visibility: 'visible', left: `${from.left}px`, top: `${from.top}px`,
           width: `${from.width}px`, height: `${from.height}px`, borderRadius: `${from.width * cornerRatio}px` });
-        if (entering) {
-          // The destination stays live: wheel/pinch updates during entry must
-          // enlarge the visible scan now, not jump when the flight finishes.
-          const clock = flight.animate([{ opacity: 1 }, { opacity: 1 }], { duration, easing: EASING, fill: 'both' });
+        // The destination stays live: wheel/pinch updates during entry must
+        // enlarge the visible scan now, not jump when the flight finishes.
+        const clock = flight.animate([{ opacity: 1 }, { opacity: 1 }], { duration, easing: EASING, fill: 'both' });
+        animations.current.push(clock);
+        liveFlight = new Promise(resolve => {
+          const draw = () => {
+            if (cancelled) { resolve(); return; }
+            const progress = clock.effect?.getComputedTiming().progress ?? 0;
+            const destination = image.getBoundingClientRect();
+            const mix = (a: number, b: number) => a + (b - a) * progress;
+            Object.assign(flight.style, { left: `${mix(from.left, destination.left)}px`, top: `${mix(from.top, destination.top)}px`,
+              width: `${mix(from.width, destination.width)}px`, height: `${mix(from.height, destination.height)}px`,
+              borderRadius: `${mix(from.width, destination.width) * cornerRatio}px` });
+            if (progress === 1) resolve();
+            else flightFrame = requestAnimationFrame(draw);
+          };
+          draw();
+        });
+      } else if (!entering && from && to && returnImage) {
+        const snapshot = prepareReturnImage(returnImage);
+        const paint = snapshot && createScanReturnPainter(returnCanvas, snapshot);
+        if (paint) {
+          paint(from, cornerRatio);
+          returnCanvas.style.visibility = 'visible';
+          const clock = returnCanvas.animate([{ opacity: 1 }, { opacity: 1 }], { duration, easing: EASING, fill: 'both' });
           animations.current.push(clock);
           liveFlight = new Promise(resolve => {
             const draw = () => {
               if (cancelled) { resolve(); return; }
               const progress = clock.effect?.getComputedTiming().progress ?? 0;
-              const destination = image.getBoundingClientRect();
               const mix = (a: number, b: number) => a + (b - a) * progress;
-              Object.assign(flight.style, { left: `${mix(from.left, destination.left)}px`, top: `${mix(from.top, destination.top)}px`,
-                width: `${mix(from.width, destination.width)}px`, height: `${mix(from.height, destination.height)}px`,
-                borderRadius: `${mix(from.width, destination.width) * cornerRatio}px` });
+              paint({ left: mix(from.left, to.left), top: mix(from.top, to.top),
+                width: mix(from.width, to.width), height: mix(from.height, to.height) }, cornerRatio);
               if (progress === 1) resolve();
               else flightFrame = requestAnimationFrame(draw);
             };
             draw();
           });
-        } else {
-          animations.current.push(flight.animate([
-            { transform: 'none' },
-            { transform: `translate(${to.left - from.left}px, ${to.top - from.top}px) scale(${to.width / from.width}, ${to.height / from.height})` },
-          ], { duration, easing: EASING, fill: 'both' }));
         }
+        flight.style.visibility = 'hidden';
       }
       const stripRect = strip.getBoundingClientRect();
       const documentStrip = document.querySelector('.letter-scan-figure .scan-navigation')?.getBoundingClientRect();
@@ -178,8 +242,12 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
       });
     };
     frame = requestAnimationFrame(run);
-    return () => { cancelled = true; cancelAnimationFrame(frame); cancelAnimationFrame(flightFrame); };
-  }, [exiting, dialogRef, origin]);
+    return () => {
+      cancelled = true; cancelAnimationFrame(frame); cancelAnimationFrame(flightFrame);
+      // Release the backing store as soon as the temporary surface is finished.
+      returnCanvas.width = 0; returnCanvas.height = 0;
+    };
+  }, [exiting, dialogRef, origin, prepareReturnImage]);
 
   return <div className="reader-focus-backdrop viewer-backdrop" data-phase={phase}>
     <div ref={dialogRef} className="reader-focus viewer-modal" role="dialog" aria-modal="true" aria-label="Original scans" tabIndex={-1}>
@@ -188,5 +256,6 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
         fallbackSrc={origin.src} onClose={requestClose} onPageChange={selectPage} />
     </div>
     <img ref={flightRef} className="reader-focus-flight" src={origin.src || undefined} alt="" aria-hidden draggable={false} />
+    <canvas ref={returnCanvasRef} className="reader-focus-return" aria-hidden />
   </div>;
 }

@@ -17,20 +17,11 @@ test('@mocked fullscreen paints document edges and restores them on repeated clo
         const rect = el.getBoundingClientRect();
         return Math.max(Math.abs(rect.top), Math.abs(rect.bottom - innerHeight));
       })).toBeLessThan(1);
-      const close = await page.getByRole('button', { name: 'Close viewer' }).boundingBox();
-      const header = page.locator('.viewer-modal-header');
-      await expect(header).toHaveCSS('position', 'fixed');
-      await expect(header).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-      const headerBox = (await header.boundingBox())!;
-      expect(headerBox.x).toBe(0);
-      expect(headerBox.y).toBe(0);
-      expect(headerBox.width).toBe(390);
-      expect(headerBox.height).toBeLessThan(height / 2);
+      await expect(page.locator('.viewer-modal-header')).toHaveCount(0);
       const stageBox = (await page.locator('.viewer-container').boundingBox())!;
       expect(stageBox.y).toBe(0);
       expect(stageBox.height).toBe(height);
       const pages = await page.getByRole('dialog', { name: 'Original scans' }).locator('.viewer-page-drawer').boundingBox();
-      expect(close!.y).toBeGreaterThanOrEqual(0);
       expect(pages!.y + pages!.height).toBeLessThanOrEqual(height);
     }
     await closeReader(page);
@@ -68,8 +59,8 @@ test('@mocked fullscreen blocks chrome gestures while preserving drawer scrollin
       return event.defaultPrevented;
     };
     return {
-      chromeTouch: dispatch('.viewer-modal-header', 'touchmove'),
-      chromeWheel: dispatch('.viewer-modal-header', 'wheel'),
+      chromeTouch: dispatch('.reader-focus', 'touchmove'),
+      chromeWheel: dispatch('.reader-focus', 'wheel'),
       drawerTouch: dispatch('.viewer-modal .viewer-page-drawer', 'touchmove'),
       drawerWheel: dispatch('.viewer-modal .viewer-page-drawer', 'wheel'),
     };

@@ -57,6 +57,8 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
     const shell = document.querySelector<HTMLElement>('.main-page-layout.public-site-shell');
     if (!shell) return;
     shell.dataset.readerFocus = 'preparing';
+    // The thumbnail controls are hidden during entry; focus the dialog itself.
+    dialogRef.current?.focus({ preventScroll: true });
     const flight = flightRef.current;
     if (flight && origin.image && origin.src) {
       Object.assign(flight.style, { visibility: 'visible', left: `${origin.image.left}px`, top: `${origin.image.top}px`,
@@ -68,7 +70,7 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
       shell.querySelectorAll<HTMLElement>('[data-focus-side]').forEach(el => delete el.dataset.focusSide);
       animations.current.forEach(animation => animation.cancel());
     };
-  }, [origin]);
+  }, [origin, dialogRef]);
 
   useLayoutEffect(() => {
     indexRef.current = index;

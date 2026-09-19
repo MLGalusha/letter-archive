@@ -6,6 +6,7 @@ for (const width of [390, 1440]) test(`@mocked focus mode zooms edge to edge and
   await page.setViewportSize({ width, height: 844 });
   const { y, opener } = await openReader(page);
   const dialog = page.getByRole('dialog', { name: 'Original scans' });
+  await expect(dialog.getByRole('button', { name: 'Close viewer' })).toHaveCount(0);
   const stage = dialog.locator('.viewer-container');
   const strip = dialog.locator('.viewer-page-drawer');
   const stripBefore = (await strip.boundingBox())!;

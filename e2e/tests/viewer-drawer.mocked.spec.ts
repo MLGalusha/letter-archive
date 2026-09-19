@@ -91,21 +91,19 @@ test('@mocked narrow mouse focus mode supports keyboard zoom without a toolbar',
   await expect(page.locator('.letter-viewer')).toHaveAttribute('data-zoom', '1');
 });
 
-test('@mocked fullscreen Close clears simulated phone safe areas and remains clickable', async ({ page, browserName }) => {
+test('@mocked fullscreen thumbnails respect simulated phone safe areas after rotation', async ({ page, browserName }) => {
   test.skip(browserName !== 'chromium', 'CDP inset override is Chromium-only, not physical iOS validation.');
   await page.setViewportSize({ width: 390, height: 844 });
   const { opener } = await openReader(page);
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { top: 59, bottom: 34, left: 0, right: 0 } });
-  const close = page.getByRole('button', { name: 'Close viewer' });
-  await expect.poll(async () => (await close.boundingBox())!.y).toBeGreaterThanOrEqual(59);
-  expect((await close.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await expect(page.getByRole('button', { name: 'Close viewer' })).toHaveCount(0);
   const toolbar = page.getByRole('dialog').locator('.viewer-page-drawer');
   expect((await toolbar.boundingBox())!.y + (await toolbar.boundingBox())!.height).toBeLessThanOrEqual(844 - 34);
   await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { top: 0, bottom: 21, left: 47, right: 47 } });
   await page.setViewportSize({ width: 844, height: 390 });
-  await expect.poll(async () => (await close.boundingBox())!.x + (await close.boundingBox())!.width).toBeLessThanOrEqual(844 - 47);
-  await close.click();
+  await expect.poll(async () => (await toolbar.boundingBox())!.y + (await toolbar.boundingBox())!.height).toBeLessThanOrEqual(390 - 21);
+  await closeReader(page);
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(opener).toBeFocused();
   // Rotation may clamp the document's old position; focus and unlocking must survive.
@@ -127,7 +125,7 @@ for (const width of [320, 844, 1440]) test(`@mocked drawer reserves scan space a
   const boxes = await dialog.evaluate(el => {
     const box = (s: string) => el.querySelector(s)!.getBoundingClientRect().toJSON();
     return { stage: box('.viewer-container'), drawer: box('.viewer-page-drawer'), image: box('.viewer-image'),
-      close: box('.viewer-close'), overflow: document.documentElement.scrollWidth > innerWidth,
+      overflow: document.documentElement.scrollWidth > innerWidth,
       controls: [...el.querySelectorAll('.viewer-toolbar button')].map(button => button.getBoundingClientRect().toJSON()) };
   });
   expect(boxes.overflow).toBe(false);
@@ -135,7 +133,6 @@ for (const width of [320, 844, 1440]) test(`@mocked drawer reserves scan space a
   expect(boxes.image.top).toBeGreaterThanOrEqual(boxes.stage.top - 1);
   expect(boxes.image.bottom).toBeLessThanOrEqual(boxes.stage.bottom + 1);
   expect(boxes.image.bottom).toBeLessThanOrEqual(boxes.drawer.top);
-  expect(boxes.close.top).toBeGreaterThanOrEqual(boxes.stage.top);
   expect(boxes.drawer.bottom).toBeLessThanOrEqual(boxes.stage.bottom);
   for (const box of boxes.controls) {
     expect(box.width).toBeGreaterThanOrEqual(44); expect(box.height).toBeGreaterThanOrEqual(44);
@@ -266,7 +263,7 @@ test('@mocked a touch takes over the visible zoom before its target arrives', as
     });
     // Establish the initial computed style before starting a CSS transition.
     surface.getBoundingClientRect();
-    document.querySelector('.viewer-close')!.dispatchEvent(new KeyboardEvent('keydown', { key: '+', bubbles: true }));
+    document.querySelector('.reader-focus')!.dispatchEvent(new KeyboardEvent('keydown', { key: '+', bubbles: true }));
   });
   // React may schedule the programmatic click's commit with a zero-delay task.
   // Advance it while keeping the 150ms application cleanup timer pending.

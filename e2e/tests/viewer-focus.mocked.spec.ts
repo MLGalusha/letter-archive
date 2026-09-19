@@ -8,7 +8,8 @@ for (const width of [390, 1440]) {
     const { opener, y, styles } = await openReader(page);
     const dialog = page.getByRole('dialog', { name: 'Original scans' });
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole('button', { name: 'Close viewer' })).toBeFocused();
+    expect(await dialog.evaluate(el => el.contains(document.activeElement))).toBe(true);
+    await expect(dialog.getByRole('button', { name: 'Close viewer' })).toHaveCount(0);
     await expect(page.locator('#root')).toHaveAttribute('inert', '');
     for (let i = 0; i < 16; i++) {
       await page.keyboard.press(i < 8 ? 'Tab' : 'Shift+Tab');
@@ -16,7 +17,7 @@ for (const width of [390, 1440]) {
     }
     await opener.evaluate(el => (el as HTMLElement).focus());
     expect(await dialog.evaluate(el => el.contains(document.activeElement))).toBe(true);
-    await dialog.getByRole('button', { name: 'Close viewer' }).focus();
+    await dialog.focus();
     await page.keyboard.press('ArrowRight');
     await expect(dialog.locator('.viewer-page-counter')).toHaveText('1 / 3');
     await expect(page).toHaveURL(/\/letter\/current$/);
@@ -60,7 +61,8 @@ test('@mocked pointer opening restores focus to its actual scan trigger', async 
   await page.locator('body').click({ position: { x: 1, y: 1 } });
   await opener.click();
   const dialog = page.getByRole('dialog', { name: 'Original scans' });
-  await expect(dialog.getByRole('button', { name: 'Close viewer' })).toBeFocused();
+  expect(await dialog.evaluate(el => el.contains(document.activeElement))).toBe(true);
+  await expect(dialog.getByRole('button', { name: 'Close viewer' })).toHaveCount(0);
   await closeReader(page);
   await expect(opener).toBeFocused();
 });

@@ -953,9 +953,9 @@ const LetterViewer = memo(function LetterViewer({
     <div
       style={focusMode ? { '--scan-image-corner-radius': `${physicalWidth / (window.devicePixelRatio || 1) * (cornerRatios?.[currentImageIndex] ?? .01)}px` } as CSSProperties : undefined}
       data-zoom={scale}
-      className={`letter-viewer${focusMode ? " letter-viewer--focus" : ""}${focusMode && scale > 1.01 ? " letter-viewer--zoomed" : ""}${isLightbox ? " letter-viewer--lightbox" : ""}${isLightbox && onClose ? " letter-viewer--with-header" : ""}`}
+      className={`letter-viewer${focusMode ? " letter-viewer--focus" : ""}${focusMode && scale > 1.01 ? " letter-viewer--zoomed" : ""}${isLightbox ? " letter-viewer--lightbox" : ""}${isLightbox && onClose && !focusMode ? " letter-viewer--with-header" : ""}`}
     >
-      {isLightbox && onClose && <div className="viewer-modal-header">
+      {isLightbox && onClose && !focusMode && <div className="viewer-modal-header">
         <span className="viewer-mobile-zoom" aria-label="Zoom level">{Math.round(scale * 100)}%</span>
         <button type="button" className="viewer-close" tabIndex={0} onClick={onClose} aria-label="Close viewer"><Icon name="close" size={24} /></button>
       </div>}

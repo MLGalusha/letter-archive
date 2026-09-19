@@ -41,6 +41,6 @@ export async function openReader(page: Page, images = viewerImages) {
 
 
 export async function closeReader(page: Page) {
-  await page.getByRole('button', { name: 'Close viewer' }).click();
+  await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog', { name: 'Original scans' })).toHaveCount(0);
 }

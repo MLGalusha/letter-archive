@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { openReader } from './utils/reader-viewer-fixture';
+import { openReader, closeReader } from './utils/reader-viewer-fixture';
 
 // Chromium runs this in Linux CI; native WebKit wheel coverage runs on macOS.
 // The bundled Linux WebKit blocks wheels on even a bare document with root
@@ -9,7 +9,7 @@ for (const width of [320, 390, 1440]) test(`@mocked vertical reading scroll pass
   await openReader(page, Array.from({ length: 24 }, (_, i) => ({
     id: `scan-${i}`, type: 'letter', pageNumber: i + 1, imageUrl: `/images/${i}.svg`, width: 600, height: 800,
   })));
-  await page.getByRole('button', { name: 'Close viewer' }).click();
+  await closeReader(page);
   await page.getByRole('region', { name: 'Scan pages' }).hover();
   const before = await page.evaluate(() => scrollY);
   await page.mouse.wheel(0, 300);

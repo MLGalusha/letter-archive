@@ -175,7 +175,7 @@ for (const width of [320, 390, 430, 844, 901, 1280, 1440, 1920]) {
     sameGeometry(await boxes(page, selectors), resting);
     await noDocumentOverflow(page);
     await page.locator('.scan-slide').first().click();
-    await expect(page.getByRole('button', { name: 'Close viewer' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Original scans' })).toBeVisible();
   });
 }
 

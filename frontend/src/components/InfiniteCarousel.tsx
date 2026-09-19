@@ -279,7 +279,11 @@ function RotatingCarousel({
     children[0],
   ];
 
-  const translateX = -(pos * 100) + (dragOffset / (containerRef.current?.offsetWidth || 1)) * 100;
+  // Slide travel follows the track width; dragging follows the finger in pixels.
+  // A full-bleed viewport can be wider than the inset gesture-threshold wrapper.
+  const translateX = dragOffset === 0
+    ? `${-pos * 100}%`
+    : `calc(${-pos * 100}% + ${dragOffset}px)`;
 
   return (
     <div className={`${classPrefix}-wrap${className ? ` ${className}` : ''}`} ref={containerRef} data-swipe-ignore>
@@ -287,7 +291,7 @@ function RotatingCarousel({
         <div
           ref={trackRef}
           className={`${classPrefix}-track${animated ? ` ${classPrefix}-track--animated` : ''}`}
-          style={{ transform: `translateX(${translateX}%)`, touchAction: 'pan-y pinch-zoom' }}
+          style={{ transform: `translateX(${translateX})`, touchAction: 'pan-y pinch-zoom' }}
           onTransitionEnd={handleTransitionEnd}
           onClickCapture={handleClickCapture}
           onMouseDown={handleMouseDown}

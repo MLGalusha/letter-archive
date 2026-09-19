@@ -137,7 +137,7 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
     const returnCanvas = returnCanvasRef.current;
     const shell = document.querySelector<HTMLElement>('.main-page-layout.public-site-shell');
     if (!dialog || !flight || !returnCanvas || !shell) return;
-    // Different-page choices share a ~500ms budget: 260ms return, 240ms slide.
+    // Keep the return brief; subsequent paging uses the regular carousel animation.
     const duration = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0
       : exiting && pendingSelection.current !== index ? 260 : DURATION;
     let cancelled = false;

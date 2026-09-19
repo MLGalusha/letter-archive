@@ -411,7 +411,7 @@ export default function LetterDetailPage() {
         <ReaderFocusViewer cornerRatios={cornerRatios} entryZoom={entryZoom} images={allImages} letterId={letter.id} initialIndex={viewerStartPage}
           onPageChange={syncViewerPage} onClose={index => {
             setViewerOpen(false);
-            if (index !== activeIndex) scrollToSlide(index, 'smooth', 240);
+            if (index !== activeIndex) scrollToSlide(index);
           }} />,
         document.body,
       )}

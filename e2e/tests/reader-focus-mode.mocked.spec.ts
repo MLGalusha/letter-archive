@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
-import { openReader, closeReader } from './utils/reader-viewer-fixture';
+import { join } from 'node:path';
+import { openReader, closeReader, mockReader } from './utils/reader-viewer-fixture';
 
 for (const width of [390, 1440]) test(`@mocked focus mode zooms edge to edge and restores the page at ${width}px`, async ({ page }) => {
   await page.setViewportSize({ width, height: 844 });
@@ -210,6 +211,64 @@ for (const width of [390, 1440]) test(`@mocked scan corners keep the regular ima
   await expect.poll(async () => Math.abs(await ratio('.reader-focus .preview-image') - await ratio('.scan-slide-img'))).toBeLessThan(.00001);
   await page.keyboard.press('Escape');
   await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'exiting');
+  // The exit phase is set before its next-frame flight geometry is installed.
+  await expect(page.locator('.reader-focus-flight')).toHaveCSS('visibility', 'visible');
   expect(await ratio('.reader-focus-flight')).toBeCloseTo(await ratio('.scan-slide-img'), 5);
   await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+
+for (const width of [390, 1440]) test(`@mocked fresh scans use full rendition proportions before navigation at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 844 });
+  await mockReader(page, Array.from({ length: 7 }, (_, i) => ({
+    id: `scan-${i + 1}`, type: 'letter', pageNumber: i + 1,
+    imageUrl: `/images/${i + 1}.svg`, width: 3024, height: 4032,
+  })));
+  await page.route('**/images/**', async route => {
+    // Real image renditions round to whole pixels: 32x43 and 800x1067
+    // have different proportions. Identically sized mocks hid this regression.
+    const renditionWidth = Number(new URL(route.request().url()).searchParams.get('w')) || 800;
+    if (renditionWidth > 32) await new Promise(resolve => setTimeout(resolve, 100));
+    await route.fulfill({ contentType: 'image/png', path: join(__dirname, 'fixtures',
+      renditionWidth === 32 ? 'reader-preview-32x43.png' : 'reader-scan-800x1067.png') });
+  });
+  await page.goto('/letter/current');
+  const choices = page.locator('.letter-scan-figure .viewer-page-choice');
+  const assertNoLetterboxing = async (index: number) => {
+    const photo = page.locator('.scan-slide-img').nth(index);
+    await expect.poll(() => photo.locator('.progressive-image__full').evaluate((img: HTMLImageElement) =>
+      img.complete && img.naturalWidth > 32 && !img.classList.contains('progressive-image__full--loading'))).toBe(true);
+    await expect.poll(() => photo.evaluate(el => {
+      const img = el.querySelector<HTMLImageElement>('.progressive-image__full')!;
+      const box = el.getBoundingClientRect();
+      return Math.abs(box.height - box.width * img.naturalHeight / img.naturalWidth);
+    })).toBeLessThan(.1);
+  };
+  for (let index = 0; index < 7; index++) {
+    if (index) await choices.nth(index).click();
+    await assertNoLetterboxing(index);
+    // Ready neighbors must also fit, before ever being selected.
+    if (index < 6) await assertNoLetterboxing(index + 1);
+  }
+  await choices.first().click();
+  await assertNoLetterboxing(0);
+  await page.reload();
+  await assertNoLetterboxing(0);
+});
+
+test('@mocked keyboard focus stays on the scan instead of outlining the empty slide', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 844 });
+  const { opener } = await openReader(page);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(opener).toBeFocused();
+  await expect(opener).toHaveCSS('outline-style', 'none');
+  await expect(opener.locator('.scan-slide-img')).toHaveCSS('outline-style', 'none');
+  expect(await opener.locator('.scan-slide-img').evaluate(el => getComputedStyle(el, '::after').content)).toBe('"Open full size"');
+  // Retain keyboard access after restoring focus.
+  await opener.press('Enter');
+  await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'focused');
+  await closeReader(page);
+  await page.locator('.letter-scan-figure .viewer-page-choice').nth(1).click();
+  expect(await opener.locator('.scan-slide-img').evaluate(el => getComputedStyle(el, '::after').content)).toBe('none');
 });

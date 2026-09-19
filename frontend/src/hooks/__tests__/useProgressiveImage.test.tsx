@@ -7,6 +7,44 @@ vi.mock('../../services/imagePreloadService', () => ({ imagePreloadService: { is
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe('progressive image recovery', () => {
+  for (const fullLoadMode of ['dom', 'background'] as const) {
+    it.each([
+      ['thumb', 'mid', 'full'],
+      ['mid', 'thumb', 'full'],
+      ['full', 'mid', 'thumb'],
+    ])(`keeps dimensions of the best loaded tier (${fullLoadMode}): %s, %s, %s`, (...order) => {
+      const images = new Map<string, HTMLImageElement>();
+      const dimensions = { thumb: [32, 43], mid: [480, 640], full: [800, 1067] };
+      vi.stubGlobal('Image', class {
+        complete = false; naturalWidth = 0; naturalHeight = 0;
+        onload: (() => void) | null = null; onerror: (() => void) | null = null;
+        removeAttribute() {}
+        set src(value: string) {
+          [this.naturalWidth, this.naturalHeight] = dimensions[value as keyof typeof dimensions];
+          images.set(value, this as unknown as HTMLImageElement);
+        }
+      });
+      const { result } = renderHook(() => useProgressiveImage({
+        thumbSrc: 'thumb', midSrc: 'mid', fullSrc: 'full', fullLoadMode,
+      }));
+      let bestTier = -1;
+      for (const tier of order) {
+        act(() => {
+          if (tier === 'full' && fullLoadMode === 'dom') {
+            result.current.onFullLoad({ naturalWidth: 800, naturalHeight: 1067 } as HTMLImageElement);
+          } else {
+            const image = images.get(tier)!;
+            image.onload?.call(image, new Event('load'));
+          }
+        });
+        bestTier = Math.max(bestTier, ['thumb', 'mid', 'full'].indexOf(tier));
+        const [naturalWidth, naturalHeight] = Object.values(dimensions)[bestTier];
+        expect(result.current).toMatchObject({ naturalWidth, naturalHeight });
+      }
+      expect(result.current).toMatchObject({ fullLoaded: true, currentSrc: 'full' });
+    });
+  }
+
   it('retries failed tiers twice at their original width, stops, and cancels on replacement/unmount', () => {
     vi.useFakeTimers();
     const requested: string[] = [];

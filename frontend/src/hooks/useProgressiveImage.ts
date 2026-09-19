@@ -28,9 +28,9 @@ export interface UseProgressiveImageResult {
   onFullError: () => void;
   /** Best available src (full > mid > thumb > '') */
   currentSrc: string;
-  /** Natural width from the first loaded tier (for aspect ratio) */
+  /** Natural width from the highest-quality loaded tier (for aspect ratio) */
   naturalWidth: number | null;
-  /** Natural height from the first loaded tier (for aspect ratio) */
+  /** Natural height from the highest-quality loaded tier (for aspect ratio) */
   naturalHeight: number | null;
 }
 
@@ -136,6 +136,7 @@ export function useProgressiveImage(
   const initial = {
     sourceKey, thumbLoaded: false, midLoaded: cachedMid, fullLoaded: fullLoadMode === 'background' && preloaded, fullFailed: false,
     fullAdmitted: fullLoadMode === 'background' && preloaded,
+    dimensionTier: preloadedDims ? (preloaded ? 3 : 2) : 0,
     naturalWidth: preloadedDims?.width ?? null, naturalHeight: preloadedDims?.height ?? null,
   };
   const [state, setState] = useState(initial);
@@ -150,8 +151,8 @@ export function useProgressiveImage(
       : alreadyMid && midSrc ? imagePreloadService.getDimensions(midSrc) : null;
     fullTiming.current = { sourceKey, start: performance.now() };
     setState({ sourceKey, thumbLoaded: false, midLoaded: alreadyMid, fullLoaded: fullLoadMode === 'background' && alreadyPreloaded,
-      fullAdmitted: alreadyPreloaded, fullFailed: false, naturalWidth: dims?.width ?? null, naturalHeight: dims?.height ?? null });
-    let dimsSet = !!dims;
+      fullAdmitted: alreadyPreloaded, fullFailed: false, dimensionTier: dims ? (alreadyPreloaded ? 3 : 2) : 0,
+      naturalWidth: dims?.width ?? null, naturalHeight: dims?.height ?? null });
     let idle: number | null = null;
     let delay: ReturnType<typeof setTimeout> | null = null;
     const cancelled = { current: false };
@@ -159,24 +160,27 @@ export function useProgressiveImage(
     ownedImages.current = imgs;
     const cleanups: Array<() => void> = [];
 
-    const captureDims = (img: HTMLImageElement) => {
-      if (!dimsSet && img.naturalWidth && img.naturalHeight) {
-        dimsSet = true;
-        setState((value) => ({ ...value, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight }));
+    const captureDims = (img: HTMLImageElement, dimensionTier: number) => {
+      if (img.naturalWidth && img.naturalHeight) {
+        // Tiny renditions round their dimensions. Upgrade to the displayed tier's
+        // ratio, and never let a late preview overwrite full-image dimensions.
+        setState((value) => value.sourceKey !== sourceKey || value.dimensionTier >= dimensionTier ? value : ({
+          ...value, dimensionTier, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight,
+        }));
       }
     };
 
     // 1. Load thumbnail immediately (even for deferred images — it's tiny)
     if (!alreadyMid && (!alreadyPreloaded || fullLoadMode === 'dom') && (fullLoadMode !== 'dom' || thumbSrc !== fullSrc)) loadImage(thumbSrc, 'thumb', context, cancelled, (img) => {
       setState((value) => ({ ...value, thumbLoaded: true }));
-      captureDims(img);
+      captureDims(img, 1);
     }, imgs, cleanups, priority);
 
     // 2. Load mid-quality immediately (if provided)
     if (midSrc && !alreadyMid && !alreadyPreloaded && (fullLoadMode !== 'dom' || midSrc !== fullSrc)) {
       loadImage(midSrc, 'mid', context, cancelled, (img) => {
         setState((value) => ({ ...value, midLoaded: true }));
-        captureDims(img);
+        captureDims(img, 2);
       }, imgs, cleanups, priority);
     }
 
@@ -191,7 +195,7 @@ export function useProgressiveImage(
         }
         loadImage(fullSrc, 'full', context, cancelled, (img) => {
           setState((value) => ({ ...value, fullLoaded: true }));
-          captureDims(img);
+          captureDims(img, 3);
         }, imgs, cleanups, priority, () => setState((value) => ({ ...value, fullFailed: true })));
       };
 
@@ -234,8 +238,9 @@ export function useProgressiveImage(
     }
     setState((value) => value.sourceKey !== sourceKey || value.fullLoaded ? value : ({ ...value,
       fullLoaded: true, fullFailed: false,
-      naturalWidth: value.naturalWidth ?? image.naturalWidth,
-      naturalHeight: value.naturalHeight ?? image.naturalHeight,
+      dimensionTier: 3,
+      naturalWidth: image.naturalWidth,
+      naturalHeight: image.naturalHeight,
     }));
   };
   const onFullError = () => {

@@ -224,7 +224,7 @@ export default function LetterDetailPage() {
     setViewerOpen(true);
   }, []);
 
-  const { entryZoom } = useScanFocusEntry(openViewer, letterId);
+  const { entryZoom, directZoom } = useScanFocusEntry(openViewer, letterId);
 
   const selectScan = useCallback((index: number) => {
     if (index !== activeIndex) scrollToSlide(index);
@@ -408,7 +408,7 @@ export default function LetterDetailPage() {
 
       {/* ── Image Viewer Modal ─────────────────────────────── */}
       {viewerIsActive && createPortal(
-        <ReaderFocusViewer cornerRatios={cornerRatios} entryZoom={entryZoom} images={allImages} letterId={letter.id} initialIndex={viewerStartPage}
+        <ReaderFocusViewer cornerRatios={cornerRatios} entryZoom={entryZoom} directZoom={directZoom} images={allImages} letterId={letter.id} initialIndex={viewerStartPage}
           onPageChange={syncViewerPage} onClose={index => {
             setViewerOpen(false);
             if (index !== activeIndex) scrollToSlide(index);

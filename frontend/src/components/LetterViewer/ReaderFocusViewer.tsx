@@ -4,6 +4,7 @@ import { useAccessibleDialog } from '../common/useAccessibleDialog';
 import { useReaderViewerSurface } from '../../hooks/useReaderViewerSurface';
 import LetterViewer from './LetterViewer';
 import { createScanReturnPainter, createScanReturnSnapshot } from './drawScanReturn';
+import { focusZoomProgress } from './focusZoomProgress';
 import './ReaderFocusViewer.css';
 
 const DURATION = 420;
@@ -16,9 +17,10 @@ const visibleImage = (element: Element | null) => {
 const visibleSource = (element: Element | null) => visibleImage(element)?.currentSrc ?? '';
 
 /** Owns the reversible trip between the document scan and the viewport stage. */
-export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onPageChange, cornerRatios, entryZoom = 1 }: {
+export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onPageChange, cornerRatios, entryZoom = 1, directZoom = false }: {
   images: LetterImage[]; letterId: string; initialIndex: number; cornerRatios: number[]; entryZoom?: number;
   onClose: (selectedIndex: number) => void; onPageChange: (index: number) => void;
+  directZoom?: boolean;
 }) {
   const [origin] = useState(() => {
     const image = scanElement(initialIndex);
@@ -30,6 +32,7 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
   const [phase, setPhase] = useState<'preparing' | 'entering' | 'focused' | 'exiting'>('preparing');
   const [index] = useState(initialIndex);
   const pendingSelection = useRef(initialIndex);
+  const stripOffset = useRef<{ width: number; height: number; x: number; y: number } | null>(null);
   const closing = useRef(false);
   const flightRef = useRef<HTMLImageElement>(null);
   const returnCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -44,6 +47,29 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
     setPhase('exiting');
     if (history.state?.readerFocus === historyToken) history.back();
   }, [historyToken]);
+  const finishZoomOut = useCallback(() => {
+    if (closing.current) return;
+    closing.current = true;
+    if (history.state?.readerFocus === historyToken) history.back();
+    closeCallback.current(pendingSelection.current);
+  }, [historyToken]);
+  const followScale = useCallback((scale: number) => {
+    if (!directZoom || closing.current) return;
+    const progress = focusZoomProgress(scale);
+    const shell = document.querySelector<HTMLElement>('.public-site-shell');
+    shell?.style.setProperty('--reader-focus-progress', String(progress));
+    const strip = document.querySelector<HTMLElement>('.reader-focus-strip');
+    if (strip && origin.strip) {
+      // Measure once per viewport, not once per wheel/pinch update.
+      if (!stripOffset.current || stripOffset.current.width !== innerWidth || stripOffset.current.height !== innerHeight) {
+        strip.style.translate = 'none';
+        const rect = strip.getBoundingClientRect();
+        stripOffset.current = { width: innerWidth, height: innerHeight,
+          x: origin.strip.left + origin.strip.width / 2 - rect.left - rect.width / 2, y: origin.strip.top - rect.top };
+      }
+      strip.style.translate = `${stripOffset.current.x * (1 - progress)}px ${stripOffset.current.y * (1 - progress)}px`;
+    }
+  }, [directZoom, origin]);
   const { dialogRef } = useAccessibleDialog({ isOpen: true, onClose: requestClose, isolateBackground: true, restoreFocusTo: origin.opener });
   useReaderViewerSurface(true, dialogRef, '#f5ede1');
 
@@ -99,16 +125,19 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
     const shell = document.querySelector<HTMLElement>('.main-page-layout.public-site-shell');
     if (!shell) return;
     shell.dataset.readerFocus = 'preparing';
+    if (directZoom) shell.dataset.readerDirectZoom = 'true';
     // The thumbnail controls are hidden during entry; focus the dialog itself.
     dialogRef.current?.focus({ preventScroll: true });
     const flight = flightRef.current;
-    if (flight && origin.image && origin.src) {
+    if (!directZoom && flight && origin.image && origin.src) {
       Object.assign(flight.style, { visibility: 'visible', left: `${origin.image.left}px`, top: `${origin.image.top}px`,
         width: `${origin.image.width}px`, height: `${origin.image.height}px`, borderRadius: `${origin.image.width * origin.cornerRatio}px` });
     }
 
     return () => {
       delete shell.dataset.readerFocus;
+      delete shell.dataset.readerDirectZoom;
+      shell.style.removeProperty('--reader-focus-progress');
       shell.style.removeProperty('--reader-focus-duration');
       shell.querySelectorAll<HTMLElement>('[data-focus-side]').forEach(el => {
         delete el.dataset.focusSide;
@@ -120,7 +149,7 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
         returnSnapshot.current = null;
       }
     };
-  }, [origin, dialogRef]);
+  }, [origin, dialogRef, directZoom]);
 
   useLayoutEffect(() => {
     document.querySelectorAll<HTMLElement>('.scan-slide').forEach((el, i) => {
@@ -160,6 +189,17 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
         return;
       }
       const entering = !exiting;
+      if (entering && directZoom) {
+        // The actual scan follows the gesture from its document geometry;
+        // there is no timed flight image to catch up or swap out afterward.
+        image.style.visibility = '';
+        strip.style.visibility = 'visible';
+        shell.dataset.readerFocus = 'focused';
+        setPhase('focused');
+        return;
+      }
+      const currentStripRect = strip.getBoundingClientRect();
+      strip.style.translate = 'none';
       const target = scanElement(index);
       const from = entering ? origin.image : flight.style.visibility === 'visible'
         ? flight.getBoundingClientRect() : image.getBoundingClientRect();
@@ -223,14 +263,12 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
       }
       const stripRect = strip.getBoundingClientRect();
       const documentStrip = document.querySelector('.letter-scan-figure .scan-navigation')?.getBoundingClientRect();
-      const sourceStrip = entering ? origin.strip : stripRect;
+      const sourceStrip = entering ? origin.strip : currentStripRect;
       const targetStrip = entering ? stripRect : documentStrip;
       if (sourceStrip && targetStrip) {
-        const dx = sourceStrip.left + sourceStrip.width / 2 - targetStrip.left - targetStrip.width / 2;
-        const dy = sourceStrip.top - targetStrip.top;
-        animations.current.push(strip.animate(entering
-          ? [{ translate: `${dx}px ${dy}px` }, { translate: '0px 0px' }]
-          : [{ translate: '0px 0px' }, { translate: `${-dx}px ${-dy}px` }],
+        const offset = (rect: DOMRect) => `${rect.left + rect.width / 2 - stripRect.left - stripRect.width / 2}px ${rect.top - stripRect.top}px`;
+        animations.current.push(strip.animate(
+          [{ translate: offset(sourceStrip) }, { translate: offset(targetStrip) }],
         { duration, easing: EASING, fill: 'both' }));
       }
       strip.style.visibility = 'visible';
@@ -258,11 +296,12 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
       // Release the backing store as soon as the temporary surface is finished.
       returnCanvas.width = 0; returnCanvas.height = 0;
     };
-  }, [exiting, dialogRef, origin, prepareReturnImage, index]);
+  }, [exiting, dialogRef, origin, prepareReturnImage, index, directZoom]);
 
-  return <div className="reader-focus-backdrop viewer-backdrop" data-phase={phase}>
+  return <div className="reader-focus-backdrop viewer-backdrop" data-phase={phase} data-direct-zoom={directZoom}>
     <div ref={dialogRef} className="reader-focus viewer-modal" role="dialog" aria-modal="true" aria-label="Original scans" tabIndex={-1}>
       <LetterViewer images={images} letterId={letterId} variant="lightbox" focusMode cornerRatios={cornerRatios} entryZoom={entryZoom}
+        focusOrigin={directZoom ? origin.image : undefined} onFocusScale={followScale} onZoomExit={directZoom ? finishZoomOut : requestClose}
         initialIndex={initialIndex} initialAspectRatio={origin.image ? origin.image.width / origin.image.height : undefined}
         fallbackSrc={origin.src} onClose={requestClose} onPageChange={selectPage} />
     </div>

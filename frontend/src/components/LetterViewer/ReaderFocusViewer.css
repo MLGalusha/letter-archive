@@ -100,5 +100,24 @@
 /* The departing/returning header stays in front until it clears the viewport. */
 .public-site-shell[data-reader-focus] .header { z-index: 1100; }
 
+/* Pinch/trackpad input owns every intermediate frame, including the boundary
+   with the regular page. Automatic thumbnail/keyboard returns still animate. */
+.reader-focus-backdrop[data-direct-zoom='true'] { background: transparent; }
+.reader-focus-backdrop[data-direct-zoom='true'][data-phase='preparing'] .viewer-transform { visibility: visible; }
+.reader-focus-backdrop[data-direct-zoom='true'] .reader-focus-strip { visibility: visible; }
+.public-site-shell[data-reader-direct-zoom]:not([data-reader-focus='exiting']) :is(.header, .header-reader-cover, .scan-slide, .letter-hero-section, .letter-reading-column) {
+  transition: none;
+}
+.public-site-shell[data-reader-direct-zoom]:not([data-reader-focus='exiting']) :is(.header, .header-reader-cover) {
+  transform: translateY(calc(-120% * var(--reader-focus-progress, 0)));
+}
+.public-site-shell[data-reader-direct-zoom]:not([data-reader-focus='exiting']) .scan-slide:not([data-focus-side='selected']) {
+  transform: translateX(calc(var(--reader-focus-exit-x, 0px) * var(--reader-focus-progress, 0)));
+}
+.public-site-shell[data-reader-direct-zoom]:not([data-reader-focus='exiting']) :is(.letter-hero-section, .letter-reading-column) {
+  transform: translateY(calc(100vh * var(--reader-focus-progress, 0)));
+  opacity: calc(1 - var(--reader-focus-progress, 0));
+}
+
 /* Allow document scrolling, while reserving scan pinch gestures for focus mode. */
 .scan-slide { touch-action: pan-x pan-y; }

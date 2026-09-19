@@ -93,6 +93,14 @@ for (const width of [390, 1440]) for (const selected of [1, 2]) for (const zoomS
     await page.setViewportSize({ width, height: 844 });
     await recordReturnPaints(page);
     await openReader(page);
+    if (zoomSteps === 12) {
+      await closeReader(page);
+      await page.evaluate(() => { (window as any).returnPaints = []; });
+      await page.locator('.scan-slide').first().evaluate(el => el.dispatchEvent(new WheelEvent('wheel', {
+        bubbles: true, cancelable: true, ctrlKey: true, deltaY: -1,
+      })));
+      await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-direct-zoom', 'true');
+    }
     for (let step = 0; step < zoomSteps; step++) await page.keyboard.press('+');
     await expect.poll(() => page.locator('.viewer-transform').evaluate(el => el.getAnimations().length)).toBe(0);
     // Include a panned return: it must start at the current view, not at fit.
@@ -358,24 +366,54 @@ for (const width of [390, 1440]) test(`@mocked inline zoom enters focus without 
   await openReader(page);
   await closeReader(page);
   const scan = page.locator('.scan-slide').first();
+  const original = (await page.locator('.scan-slide-img').first().boundingBox())!;
   await scan.evaluate(el => el.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, ctrlKey: true, deltaY: -30 })));
-  await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'entering');
+  await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'focused');
   await expect(page.locator('.reader-focus-backdrop')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   await expect(page.locator('.reader-focus-backdrop')).toHaveCSS('--viewer-surface', '#f5ede1');
   await page.locator('.viewer-container').evaluate(el => el.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, ctrlKey: true, deltaY: -40 })));
   await expect.poll(() => page.locator('.letter-viewer--focus').getAttribute('data-zoom').then(Number)).toBeCloseTo(Math.pow(1.01, 70), 2);
-  const geometry = await page.evaluate(async () => {
-    await new Promise(resolve => setTimeout(resolve, 150));
-    const flight = document.querySelector('.reader-focus-flight')!.getBoundingClientRect();
-    const image = document.querySelector('.viewer-transform')!.getBoundingClientRect();
-    return { flight: flight.width, image: image.width };
-  });
-  expect(geometry.flight).toBeGreaterThan(geometry.image * .65);
+  const geometry = (await page.locator('.viewer-transform').boundingBox())!;
+  expect(geometry.width).toBeCloseTo(original.width * Math.pow(1.01, 70), 0);
+  await expect(page.locator('.reader-focus-flight')).toHaveCSS('visibility', 'hidden');
   await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'focused');
   await page.keyboard.press('Escape');
   await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'exiting');
   await expect(page.locator('.reader-focus-backdrop')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+for (const width of [390, 1440]) test(`@mocked tiny wheel steps cross the document zoom boundary without a dead zone at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 844 });
+  await mockReader(page);
+  await page.goto('/letter/current');
+  await expect(page.locator('.scan-slide-img').first()).toBeVisible();
+  const samples = await page.evaluate(async () => {
+    const read = () => {
+      const image = document.querySelector('.viewer-transform') ?? document.querySelector('.scan-slide-img')!;
+      const r = image.getBoundingClientRect();
+      return { width: r.width, top: r.top, left: r.left, focus: Boolean(document.querySelector('.reader-focus-backdrop')) };
+    };
+    const samples = [read()];
+    for (let i = 0; i < 3; i++) {
+      for (const deltaY of [-1, -1, 1, 1]) {
+        const target = document.querySelector('.reader-focus .viewer-container') ?? document.querySelector('.scan-slide')!;
+        target.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, ctrlKey: true, deltaY }));
+        await new Promise(requestAnimationFrame); await new Promise(requestAnimationFrame);
+        samples.push(read());
+      }
+    }
+    return samples;
+  });
+  for (let i = 1; i < samples.length; i++) {
+    const step = (i - 1) % 4;
+    expect(samples[i].width).toBeCloseTo(samples[0].width * 1.01 ** [1, 2, 1, 0][step], 0);
+    expect(samples[i].focus).toBe(step !== 3);
+    if (step === 3) {
+      expect(samples[i].top).toBeCloseTo(samples[0].top, 0);
+      expect(samples[i].left).toBeCloseTo(samples[0].left, 0);
+    }
+  }
 });
 
 test('@mocked native pinch starts on the inline scan and continues through focus entry', async ({ page, browserName }) => {
@@ -397,9 +435,30 @@ test('@mocked native pinch starts on the inline scan and continues through focus
   await expect.poll(() => page.locator('.letter-viewer--focus').getAttribute('data-zoom').then(Number)).toBeCloseTo(2, 2);
   expect(await page.evaluate(() => visualViewport!.scale)).toBe(1);
   await expect(page.locator('.viewer-page-counter')).toHaveText('1 / 3');
+  // A new pinch can cross back to the document and re-enter without lifting.
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: points(200) });
+  for (const distance of [180, 150, 120, 101, 100]) {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: points(distance) });
+  }
+  await expect(page.locator('.letter-viewer--focus')).toHaveAttribute('data-zoom', '1');
+  expect((await page.locator('.viewer-transform').boundingBox())!.width).toBeCloseTo(scan.width, 0);
+  for (const distance of [105, 120, 160]) {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: points(distance) });
+  }
+  await expect.poll(() => page.locator('.letter-viewer--focus').getAttribute('data-zoom').then(Number)).toBeCloseTo(1.6, 2);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   await page.locator('.reader-focus-strip').getByRole('button', { name: 'Go to scan 2: letter', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.locator('.scan-navigation [role="status"]')).toHaveText('2 / 3');
+  // On release at document size, the temporary touch surface is removed.
+  const second = (await page.locator('.scan-slide-img').nth(1).boundingBox())!;
+  const secondPoints = (distance: number) => [{ x: 195 - distance / 2, y: second.y + second.height / 2, id: 1 },
+    { x: 195 + distance / 2, y: second.y + second.height / 2, id: 2 }];
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: secondPoints(100) });
+  for (const distance of [120, 150, 120, 100]) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: secondPoints(distance) });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect((await page.locator('.scan-slide-img').nth(1).boundingBox())!.width).toBeCloseTo(second.width, 0);
 });
 
 for (const width of [390, 1440]) test(`@mocked solid thumbnail surfaces match their number notches at ${width}px`, async ({ page }) => {
@@ -525,7 +584,7 @@ test('@mocked keyboard focus stays on the scan instead of outlining the empty sl
   await expect(opener).toBeFocused();
   await expect(opener).toHaveCSS('outline-style', 'none');
   await expect(opener.locator('.scan-slide-img')).toHaveCSS('outline-style', 'none');
-  expect(await opener.locator('.scan-slide-img').evaluate(el => getComputedStyle(el, '::after').content)).toBe('"Select image · + to zoom"');
+  expect(await opener.locator('.scan-slide-img').evaluate(el => getComputedStyle(el, '::after').content)).toBe('none');
   // Retain keyboard access after restoring focus.
   await opener.press('+');
   await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'focused');

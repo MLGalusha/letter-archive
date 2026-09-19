@@ -233,18 +233,6 @@
   /* The slide includes empty carousel space; never draw a box around it. */
   outline: none;
 }
-.scan-slide:focus-visible .scan-slide-img::after {
-  /* Keep keyboard focus discoverable without adding a border to the scan. */
-  content: "Select image · + to zoom";
-  position: absolute;
-  right: .5rem;
-  bottom: .5rem;
-  padding: .3rem .5rem;
-  border-radius: 4px;
-  background: var(--accent-strong);
-  color: var(--bg-light);
-  font: 600 .75rem/1.4 "Instrument Sans", sans-serif;
-}
 #letter-transcript, #letter-scans {
   scroll-margin-top: calc(var(--header-height, 6rem) + 1rem);
 }

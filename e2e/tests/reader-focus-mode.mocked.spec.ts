@@ -173,4 +173,14 @@ for (const width of [390, 1440]) test(`@mocked solid thumbnail surfaces match th
   await page.keyboard.press('+');
   await expect(thumbnail).toHaveCSS('background-color', color);
   expect(await thumbnail.boundingBox()).toEqual(before);
+  const next = strip.locator('.viewer-page-choice').nth(1);
+  const restingColor = await next.evaluate(el => getComputedStyle(el).backgroundColor);
+  await expect(thumbnail).toHaveCSS('border-width', '0px');
+  await expect(notch).toHaveCSS('color', restingColor);
+  await next.click();
+  await expect(next).toHaveAttribute('aria-current', 'page');
+  await expect(next).toHaveCSS('background-color', color);
+  await expect(next.locator('.viewer-page-notch')).toHaveCSS('background-color', color);
+  await expect(thumbnail).toHaveCSS('background-color', restingColor);
+  await expect(notch).toHaveCSS('background-color', restingColor);
 });

@@ -147,6 +147,20 @@ for (const width of [390, 1440]) test(`@mocked solid thumbnail surfaces match th
   await openReader(page);
   const strip = page.locator('.reader-focus-strip');
   const thumbnail = strip.locator('.viewer-page-choice').first();
+  await expect.poll(() => thumbnail.locator('img').evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+  // The image itself must fill its box without letterboxing; padding alone
+  // previously looked equal while the actual photo had larger top/bottom gaps.
+  for (const choice of (await strip.locator('.viewer-page-choice').all()).slice(0, 2)) {
+    const geometry = await choice.evaluate(el => {
+      const frame = el.getBoundingClientRect();
+      const img = el.querySelector('img')!;
+      const photo = img.getBoundingClientRect();
+      return { insets: [photo.left - frame.left, frame.right - photo.right, photo.top - frame.top, frame.bottom - photo.bottom],
+        renderedRatio: photo.width / photo.height, naturalRatio: img.naturalWidth / img.naturalHeight };
+    });
+    for (const inset of geometry.insets) expect(inset).toBeCloseTo(4, 1);
+    expect(geometry.renderedRatio).toBeCloseTo(geometry.naturalRatio, 2);
+  }
   const before = (await thumbnail.boundingBox())!;
   const notch = thumbnail.locator('.viewer-page-notch');
   const color = await notch.evaluate(el => getComputedStyle(el).backgroundColor);

@@ -113,7 +113,7 @@ for (const reducedMotion of ['reduce', 'no-preference'] as const) {
   });
 }
 
-for (const width of [320, 390, 430, 844, 1280]) {
+for (const width of [320, 390, 430, 844, 901, 1280, 1440, 1920]) {
   test(`@mocked inline scans preserve geometry, edge painting and endpoint selection at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -134,18 +134,36 @@ for (const width of [320, 390, 430, 844, 1280]) {
     sameGeometry(await boxes(page, selectors), resting);
     await baseline.evaluate(el => el.remove());
     const carousel = page.locator('.scan-carousel');
+    const frame = (await carousel.boundingBox())!;
+    expect(frame.x).toBeCloseTo(0, 0);
+    expect(frame.width).toBeCloseTo(width, 0);
+    const noSnap = await page.addStyleTag({ content: '.scan-carousel {scroll-snap-type:none !important;}' });
     if (width <= 900) {
-      const frame = (await carousel.boundingBox())!;
-      expect(frame.x).toBe(0);
-      expect(frame.width).toBe(width);
-      const noSnap = await page.addStyleTag({ content: '.scan-carousel {scroll-snap-type:none !important;}' });
       await carousel.evaluate(el => { el.scrollLeft = 120; });
       await paintsAtEdges(page, '.scan-slide', Math.max(frame.y + 100, 250));
-      await noSnap.evaluate(el => el.remove());
     } else {
-      expect((await carousel.boundingBox())!.x).toBeGreaterThan(0);
-      expect(await carousel.evaluate(el => getComputedStyle(el).paddingInlineStart)).toBe('0px');
+      // Put the incoming image halfway through the right screen edge, then
+      // the outgoing image halfway through the left. Their boxes alone are
+      // insufficient: hit testing detects an ancestor clipping their paint.
+      for (const [index, edge] of [[1, width - 1], [0, 1]]) {
+        await carousel.evaluate((el, { index, width }) => {
+          const image = el.children[index].querySelector('.scan-slide-img')!.getBoundingClientRect();
+          el.scrollLeft += image.left + image.width / 2 - (index === 1 ? width : 0);
+        }, { index, width });
+        const image = (await page.locator('.scan-slide-img').nth(index).boundingBox())!;
+        const y = Math.max(image.y + 100, 250);
+        expect(await page.evaluate(({ edge, y }) =>
+          document.elementFromPoint(edge, y)?.closest('.scan-slide')?.getAttribute('data-index'),
+        { edge, y })).toBe(String(index));
+      }
     }
+    // Finish the synthetic unsnapped paint probe at a real snap point before
+    // testing user navigation. Otherwise WebKit can still be restoring the
+    // probe's intermediate scroll position during the following click.
+    await carousel.evaluate(el => { el.scrollLeft = 0; });
+    await expect(page.locator('.scan-navigation [role="status"]')).toHaveText('1 / 3');
+    await noSnap.evaluate(el => el.remove());
+    await expect.poll(() => carousel.evaluate(el => el.scrollLeft)).toBe(0);
     for (const n of [3, 1, 2, 1]) {
       await page.getByRole('button', { name: `Go to scan ${n}: letter`, exact: true }).evaluate(el => el.click());
       await expect(page.locator('.scan-navigation [role="status"]')).toHaveText(`${n} / 3`);

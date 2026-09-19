@@ -297,6 +297,12 @@
   .scan-carousel {
     padding-block: .75rem;
     margin-block: -.75rem;
+    /* As on mobile, extend the scroll window to the screen edges while
+       restoring the figure's content width inside it. The public shell clips
+       any scrollbar/safe-area excess; image size and snap centers stay put. */
+    --scan-edge-inset: max(0px, calc((100vw - 100%) / 2));
+    margin-inline: calc(-1 * var(--scan-edge-inset));
+    padding-inline: var(--scan-edge-inset);
   }
   .scan-slide-img {
     border-radius: 8px;

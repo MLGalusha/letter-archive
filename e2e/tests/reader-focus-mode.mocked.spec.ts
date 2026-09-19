@@ -272,3 +272,63 @@ test('@mocked keyboard focus stays on the scan instead of outlining the empty sl
   await page.locator('.letter-scan-figure .viewer-page-choice').nth(1).click();
   expect(await opener.locator('.scan-slide-img').evaluate(el => getComputedStyle(el, '::after').content)).toBe('none');
 });
+
+for (const width of [390, 1440]) test(`@mocked only extreme thumbnails crop while full scans stay complete at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 844 });
+  const images = [
+    { width: 600, height: 800 }, // Ordinary letter: 3:4.
+    { width: 800, height: 600 }, // Ordinary envelope: 4:3.
+    { width: 800, height: 200 }, // Wide clipping: 4:1.
+    { width: 200, height: 800 }, // Narrow receipt: 1:4.
+  ].map((size, index) => ({ ...size, id: `scan-${index + 1}`, type: 'letter', pageNumber: index + 1, imageUrl: `/images/${index + 1}.png` }));
+  await mockReader(page, images);
+  // Raster fixtures preserve natural dimensions in both Chromium and WebKit.
+  const bodies = await Promise.all(images.map(image => page.evaluate(({ width, height }) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = width; canvas.height = height;
+    const context = canvas.getContext('2d')!;
+    context.fillStyle = 'tan'; context.fillRect(0, 0, width, height);
+    return canvas.toDataURL('image/png').split(',')[1];
+  }, image)));
+  await page.route('**/images/**', route => {
+    const index = images.findIndex(image => image.imageUrl === new URL(route.request().url()).pathname);
+    return route.fulfill({ contentType: 'image/png', body: Buffer.from(bodies[index], 'base64') });
+  });
+  await page.goto('/letter/current');
+  const checkStrip = async (selector: string) => {
+    const choices = page.locator(`${selector} .viewer-page-choice`);
+    for (let index = 0; index < images.length; index++) {
+      const choice = choices.nth(index);
+      await choice.scrollIntoViewIfNeeded();
+      await expect.poll(() => choice.locator('img').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
+      const geometry = await choice.evaluate(el => {
+        const frame = el.getBoundingClientRect();
+        const image = el.querySelector('img')!.getBoundingClientRect();
+        const notch = el.querySelector('.viewer-page-notch')!.getBoundingClientRect();
+        return { width: image.width, height: image.height,
+          insets: [image.left - frame.left, frame.right - image.right, image.top - frame.top, frame.bottom - image.bottom],
+          uncoveredHeight: notch.top - image.top };
+      });
+      expect(geometry.width).toBeCloseTo(48, 1);
+      expect(geometry.height).toBeCloseTo([64, 36, 32, 96][index], 1);
+      for (const inset of geometry.insets) expect(inset).toBeCloseTo(4, 1);
+      expect(geometry.uncoveredHeight).toBeGreaterThanOrEqual(18);
+    }
+  };
+  await checkStrip('.letter-scan-figure');
+  await page.locator('.letter-scan-figure .viewer-page-choice').nth(2).click();
+  const wideScan = page.locator('.scan-slide').nth(2);
+  await expect.poll(() => wideScan.locator('img').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth === 800)).toBe(true);
+  await expect.poll(() => wideScan.locator('.scan-slide-img').evaluate(el => {
+    const box = el.getBoundingClientRect(); return box.width / box.height;
+  })).toBeCloseTo(4, 2);
+  await wideScan.press('Enter');
+  await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'focused');
+  await checkStrip('.reader-focus-strip');
+  for (const index of [2, 3]) {
+    await page.locator('.reader-focus-strip .viewer-page-choice').nth(index).click();
+    await expect.poll(() => page.locator('.viewer-transform').evaluate(el => {
+      const box = el.getBoundingClientRect(); return box.width / box.height;
+    })).toBeCloseTo(images[index].width / images[index].height, 2);
+  }
+});

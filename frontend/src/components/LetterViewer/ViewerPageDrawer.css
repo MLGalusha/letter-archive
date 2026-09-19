@@ -41,7 +41,16 @@
 }
 .viewer-page-choice:focus-visible { outline: 2px solid var(--page-selection); outline-offset: 1px; }
 .viewer-page-choice .preview-image { height: auto; border-radius: calc(48px * var(--scan-corner-ratio, .01)); background: #ffffff0a; }
-.viewer-page-choice .preview-image__image { height: auto; aspect-ratio: auto 3 / 4; object-fit: contain; border-radius: inherit; }
+.viewer-page-choice .preview-image__image {
+  height: auto;
+  aspect-ratio: auto 3 / 4;
+  /* At the shared 48px image width, bound previews between 3:2 and 1:2.
+     Natural proportions inside that range remain unchanged; only extremes crop. */
+  min-height: 32px;
+  max-height: 96px;
+  object-fit: cover;
+  border-radius: inherit;
+}
 .viewer-page-choice .preview-image__error { font-size: .6rem; color: var(--page-ink); }
 .viewer-page-notch {
   position: absolute;

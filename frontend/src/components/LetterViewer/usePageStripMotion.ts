@@ -3,7 +3,7 @@ import type { PageMotion } from './pageMotion';
 
 /** Native touch scrolling, explicit centering, or main-image progress owns the strip. */
 export function usePageStripMotion(selected: number,
-  onSelect: (index: number) => void, motion?: PageMotion, count = 0) {
+  onSelect: (index: number) => void | boolean, motion?: PageMotion, count = 0) {
   const root = useRef<HTMLDivElement>(null);
   const current = useRef({ selected, onSelect });
   const choose = useRef<(index: number) => void>(() => {});
@@ -53,8 +53,8 @@ export function usePageStripMotion(selected: number,
     };
     choose.current = index => {
       stop(); following = false; browsing = false; drag = null; resumeSelection = false;
-      current.current.onSelect(index);
-      settle(index, false);
+      // A focus-mode choice is deferred until the current scan has zoomed out.
+      if (current.current.onSelect(index) !== false) settle(index, false);
     };
     const beginBrowsing = () => {
       stop(); following = false; browsing = true;

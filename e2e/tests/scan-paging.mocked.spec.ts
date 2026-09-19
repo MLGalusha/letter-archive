@@ -27,13 +27,14 @@ for (const width of [1440, 1920]) for (const target of [0, 2]) {
       (window as any).thumbnailMotionSamples = samples;
       const start = performance.now();
       const tick = () => {
-        samples.push({ t: performance.now() - start, scan: carousel.scrollLeft, strip: strip.scrollLeft });
-        if (performance.now() - start < 1000) requestAnimationFrame(tick);
+        const t = performance.now() - start;
+        samples.push({ t, scan: carousel.scrollLeft, strip: strip.scrollLeft });
+        if (t < 1000) requestAnimationFrame(tick);
       };
       tick();
     });
     await page.mouse.click(clickX, 400);
-    await expect.poll(() => page.evaluate(() => (window as any).thumbnailMotionSamples.at(-1).t)).toBeGreaterThan(1000);
+    await expect.poll(() => page.evaluate(() => (window as any).thumbnailMotionSamples.at(-1).t)).toBeGreaterThanOrEqual(1000);
     const samples = await page.evaluate(() => (window as any).thumbnailMotionSamples as { t: number; scan: number; strip: number }[]);
     const from = samples[0].strip, to = samples.at(-1)!.strip;
     expect(Math.abs(to - from)).toBeGreaterThan(20);

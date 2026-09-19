@@ -65,7 +65,7 @@
 .public-site-shell[data-reader-focus] .letter-hero-section,
 .public-site-shell[data-reader-focus] .letter-reading-column,
 .public-site-shell[data-reader-focus] .scan-slide {
-  transition: transform 420ms cubic-bezier(.22,.75,.2,1), opacity 420ms ease;
+  transition: transform var(--reader-focus-duration, 420ms) cubic-bezier(.22,.75,.2,1), opacity var(--reader-focus-duration, 420ms) ease;
 }
 .public-site-shell[data-reader-focus] .scan-slide[data-focus-side='selected'],
 .public-site-shell[data-reader-focus] .letter-scan-figure figcaption,

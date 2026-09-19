@@ -20,7 +20,10 @@ async function recordReturnPaints(page: Page) {
         const [image, sx, sy, sw, sh, dx, dy, dw, dh] = args;
         (window as any).returnPaints.push({ source: sources.get(image), naturalWidth: image.width,
           sx, sy, sw, sh, dx, dy, dw, dh, radiusRatio,
-          backingWidth: this.canvas.width, backingHeight: this.canvas.height });
+          backingWidth: this.canvas.width, backingHeight: this.canvas.height,
+          carousel: document.querySelector('.scan-carousel')?.scrollLeft,
+          strip: document.querySelector('.reader-focus-strip .viewer-page-drawer')?.scrollLeft,
+          selected: document.querySelector('.reader-focus-strip [aria-current="page"]')?.getAttribute('aria-label') });
       }
       return (draw as Function).apply(this, args);
     };
@@ -104,7 +107,12 @@ for (const width of [390, 1440]) for (const selected of [1, 2]) for (const zoomS
     expect(paints.length).toBeGreaterThan(3);
     expect(paints[0].naturalWidth * paints[0].dw / paints[0].sw).toBeCloseTo(zoomed.width, 0);
     expect(new Set(paints.map(paint => paint.source)).size).toBe(1);
-    expect(paints[0].source).toMatch(new RegExp(`/images/${selected}\\.svg`));
+    expect(paints[0].source).toMatch(/\/images\/1\.svg/);
+    for (const paint of paints) {
+      expect(paint.carousel).toBeCloseTo(0);
+      expect(paint.strip).toBeCloseTo(paints[0].strip);
+      expect(paint.selected).toBe('Go to scan 1: letter');
+    }
     for (const paint of paints) {
       expect(paint.dw).toBeLessThanOrEqual(width);
       expect(paint.dh).toBeLessThanOrEqual(844);
@@ -128,6 +136,39 @@ for (const width of [390, 1440]) for (const selected of [1, 2]) for (const zoomS
   });
 }
 
+for (const reducedMotion of ['reduce', 'no-preference'] as const) {
+  test(`@mocked queued thumbnail return supports backward navigation and latest choice with ${reducedMotion}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 844 });
+    await page.emulateMedia({ reducedMotion });
+    await recordReturnPaints(page);
+    await mockReader(page);
+    await page.goto('/letter/current');
+    await page.locator('.letter-scan-figure .viewer-page-choice').nth(2).click();
+    const centered = (index: number) => expect.poll(() => page.locator('.scan-slide').nth(index).evaluate(el => {
+      const rect = el.getBoundingClientRect(); return Math.abs(rect.left + rect.width / 2 - innerWidth / 2);
+    })).toBeLessThan(2);
+    await centered(2);
+    await page.locator('.scan-slide').nth(2).press('+');
+    await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'focused');
+    await page.keyboard.press('+');
+    await expect(page.locator('.viewer-transform')).not.toHaveClass(/animating/);
+    // Both clicks occur before the return can finish; the latest destination wins.
+    await page.locator('.reader-focus-strip').evaluate(el => {
+      const buttons = el.querySelectorAll<HTMLButtonElement>('.viewer-page-choice');
+      buttons[1].click();
+      buttons[0].click();
+    });
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await centered(0);
+    await expect(page.locator('.scan-navigation [role="status"]')).toHaveText('1 / 3');
+    const paints = await page.evaluate(() => (window as any).returnPaints as any[]);
+    if (reducedMotion === 'no-preference') {
+      expect(paints.length).toBeGreaterThan(3);
+      for (const paint of paints) expect(paint.source).toMatch(/\/images\/3\.svg/);
+    }
+  });
+}
+
 for (const width of [390, 1440]) for (const selected of [1, 2]) {
   test(`@mocked zoom return to scan ${selected} uses a complete preview while original is pending at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
@@ -144,7 +185,7 @@ for (const width of [390, 1440]) for (const selected of [1, 2]) {
       const paints = await page.evaluate(() => (window as any).returnPaints as any[]);
       expect(paints.length).toBeGreaterThan(3);
       expect(new Set(paints.map(paint => paint.source)).size).toBe(1);
-      expect(paints[0].source).toMatch(new RegExp(`/images/${selected}\\.svg\\?`));
+      expect(paints[0].source).toMatch(/\/images\/1\.svg\?/);
       expect(paints.at(-1).sw).toBeCloseTo(paints.at(-1).naturalWidth);
       await expect(page.locator('.scan-navigation [role="status"]')).toHaveText(`${selected} / 2`);
     } finally { release(); }

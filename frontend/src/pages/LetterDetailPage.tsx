@@ -409,7 +409,10 @@ export default function LetterDetailPage() {
       {/* ── Image Viewer Modal ─────────────────────────────── */}
       {viewerIsActive && createPortal(
         <ReaderFocusViewer cornerRatios={cornerRatios} entryZoom={entryZoom} images={allImages} letterId={letter.id} initialIndex={viewerStartPage}
-          onPageChange={syncViewerPage} onClose={() => setViewerOpen(false)} />,
+          onPageChange={syncViewerPage} onClose={index => {
+            setViewerOpen(false);
+            if (index !== activeIndex) scrollToSlide(index, 'smooth', 240);
+          }} />,
         document.body,
       )}
       <BackToTop />

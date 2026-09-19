@@ -9,8 +9,8 @@ const OriginalResizeObserver = globalThis.ResizeObserver;
 const disconnect = vi.fn();
 const opened = vi.fn();
 let motion: UseCarouselDragReturn['pageMotion'];
-function flush() {
-  act(() => { const pending = [...frames.values()]; frames.clear(); pending.forEach(callback => callback(0)); });
+function flush(now = 0) {
+  act(() => { const pending = [...frames.values()]; frames.clear(); pending.forEach(callback => callback(now)); });
 }
 function Harness({ loaded = true, identity = 'a' }: { loaded?: boolean; identity?: string }) {
   const { attachCarousel, activeIndex, carouselDraggedRef, scrollToSlide, pageMotion } = useCarouselDrag();
@@ -22,6 +22,7 @@ function Harness({ loaded = true, identity = 'a' }: { loaded?: boolean; identity
     </div>}
     <output data-testid="active">{activeIndex}</output>
     <button onClick={() => scrollToSlide(2)}>Third</button>
+    <button onClick={() => scrollToSlide(1, 'smooth', 240)}>Timed second</button>
   </>;
 }
 function geometry() {
@@ -46,6 +47,32 @@ beforeEach(() => {
 afterEach(() => { globalThis.ResizeObserver = OriginalResizeObserver; vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe('scan carousel lifecycle and position', () => {
+  it('finishes the timed return slide within its budget and cancels it for gestures or newer choices', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: false }));
+    vi.spyOn(performance, 'now').mockReturnValue(0);
+    const view = render(<Harness />); const carousel = geometry(); flush();
+    carousel.scrollTo = vi.fn((options?: ScrollToOptions | number, _y?: number) => {
+      carousel.scrollLeft = typeof options === 'number' ? options : options?.left ?? carousel.scrollLeft;
+    });
+    fireEvent.click(screen.getByText('Timed second'));
+    flush(120);
+    expect(carousel.scrollLeft).toBeGreaterThan(0);
+    expect(carousel.scrollLeft).toBeLessThan(220);
+    flush(240);
+    expect(carousel.scrollLeft).toBe(220);
+    expect(carousel.style.scrollSnapType).toBe('');
+    for (const interrupt of ['gesture', 'selection', 'unmount']) {
+      carousel.scrollLeft = 0;
+      fireEvent.click(screen.getByText('Timed second'));
+      flush(60);
+      if (interrupt === 'gesture') fireEvent.wheel(carousel);
+      else if (interrupt === 'selection') fireEvent.click(screen.getByText('Third'));
+      else view.unmount();
+      const stopped = carousel.scrollLeft;
+      flush(240);
+      expect(carousel.scrollLeft).toBe(stopped);
+    }
+  });
   it('does not restart thumbnail following after scrollend flushes a queued frame', () => {
     render(<Harness />); const carousel = geometry(); flush();
     carousel.scrollLeft = 160; fireEvent.scroll(carousel); flush();

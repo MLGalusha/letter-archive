@@ -12,7 +12,7 @@ export interface UseCarouselDragReturn {
   /** True when a drag gesture occurred (suppresses click handler) */
   carouselDraggedRef: RefObject<boolean>;
   /** Smoothly scroll to a slide by index */
-  scrollToSlide: (index: number, behavior?: ScrollBehavior) => void;
+  scrollToSlide: (index: number, behavior?: ScrollBehavior, durationMs?: number) => void;
 }
 
 /**
@@ -26,17 +26,23 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
   const carouselDraggedRef = useRef(false);
   const explicitSelection = useRef(false);
   const navigationTargetRef = useRef<number | null>(null);
+  const pagingFrame = useRef<number | null>(null);
+  const cancelPaging = useCallback(() => {
+    if (pagingFrame.current !== null) cancelAnimationFrame(pagingFrame.current);
+    pagingFrame.current = null;
+  }, []);
   const [carousel, setCarousel] = useState<HTMLDivElement | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [transitionFromIndex, setTransitionFromIndex] = useState<number | null>(null);
   const attachCarousel = useCallback((node: HTMLDivElement | null) => {
+    cancelPaging();
     carouselRef.current = node;
     navigationTargetRef.current = null;
     carouselDraggedRef.current = false;
     setCarousel(node);
     setActiveIndex(0);
     setTransitionFromIndex(null);
-  }, []);
+  }, [cancelPaging]);
 
   // Observe the mounted node, including when initial loading renders no carousel.
   useEffect(() => {
@@ -83,6 +89,7 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
     };
 
     const restoreSnap = () => {
+      cancelPaging();
       explicitSelection.current = false;
       navigationTargetRef.current = null;
       setTransitionFromIndex(null);
@@ -124,7 +131,7 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
       observer?.disconnect();
       if (rafId != null) cancelAnimationFrame(rafId);
     };
-  }, [carousel, pageMotion]);
+  }, [carousel, pageMotion, cancelPaging]);
 
   // Mouse drag-to-scroll (desktop only — touch uses native scroll)
   useEffect(() => {
@@ -135,6 +142,7 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
     let scrollStart = 0;
 
     const onMouseDown = (e: MouseEvent) => {
+      cancelPaging();
       explicitSelection.current = false;
       navigationTargetRef.current = null;
       setTransitionFromIndex(null);
@@ -173,9 +181,10 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
       document.removeEventListener('mouseup', onMouseUp);
       onMouseUp();
     };
-  }, [carousel]);
+  }, [carousel, cancelPaging]);
 
-  const scrollToSlide = useCallback((index: number, behavior: ScrollBehavior = 'smooth') => {
+  const scrollToSlide = useCallback((index: number, behavior: ScrollBehavior = 'smooth', durationMs?: number) => {
+    cancelPaging();
     const carousel = carouselRef.current;
     if (!carousel) return;
     const slide = carousel.children[index] as HTMLElement | undefined;
@@ -213,6 +222,28 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
       });
     }
     setTransitionFromIndex(departure);
+    if (resolvedBehavior === 'smooth' && durationMs && departure !== null) {
+      const from = carousel.scrollLeft;
+      // The focus return has a bounded second stage instead of adding a full
+      // browser-defined scroll duration. Gestures/new choices cancel this RAF.
+      carousel.scrollTo({ left: from, behavior: 'instant' });
+      const start = performance.now();
+      const tick = (now: number) => {
+        const progress = Math.min(1, (now - start) / durationMs);
+        carousel.scrollTo({ left: from + (targetLeft - from) * (1 - (1 - progress) ** 3), behavior: 'instant' });
+        if (progress < 1) pagingFrame.current = requestAnimationFrame(tick);
+        else {
+          pagingFrame.current = null;
+          explicitSelection.current = false;
+          navigationTargetRef.current = null;
+          setTransitionFromIndex(null);
+          carousel.style.scrollSnapType = '';
+          pageMotion.publish(null);
+        }
+      };
+      pagingFrame.current = requestAnimationFrame(tick);
+      return;
+    }
     carousel.scrollTo({
       left: targetLeft,
       behavior: resolvedBehavior,
@@ -223,7 +254,7 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
       navigationTargetRef.current = null;
       carousel.style.scrollSnapType = '';
     }
-  }, [pageMotion]);
+  }, [pageMotion, cancelPaging]);
 
   return { carouselRef, attachCarousel, activeIndex, transitionFromIndex, pageMotion, carouselDraggedRef, scrollToSlide };
 }

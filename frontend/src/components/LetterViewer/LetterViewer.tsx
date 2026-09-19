@@ -571,7 +571,6 @@ const LetterViewer = memo(function LetterViewer({
     zoomTimer.current = null;
     zoomAnimating.current = false;
     setIsAnimating(false);
-    currentImageIndexRef.current = index;
     if (gestureFrame.current !== null) cancelAnimationFrame(gestureFrame.current);
     gestureFrame.current = null;
     setPinchResolutionScale(null);
@@ -579,13 +578,14 @@ const LetterViewer = memo(function LetterViewer({
     touchStateRef.current.panStart = null;
     touchStateRef.current.isPinching = false;
     touchStateRef.current.lastTapTime = 0;
-    setCurrentImageIndex(index);
     if (focusMode) {
-      // Update the document destination before starting the exit, including
-      // when the selected thumbnail is clicked again.
+      // Queue the destination without replacing the scan being zoomed out.
       onPageChange?.(index, displayImages[index]);
       onClose?.();
+      return false; // The regular page owns thumbnail movement after the return.
     }
+    currentImageIndexRef.current = index;
+    setCurrentImageIndex(index);
   }, [saveCurrentImageState, cancelSwipe, focusMode, onPageChange, onClose, displayImages]);
   const nextImage = useCallback(() => selectImage((currentImageIndexRef.current + 1) % displayImages.length), [selectImage, displayImages.length]);
   const prevImage = useCallback(() => selectImage((currentImageIndexRef.current - 1 + displayImages.length) % displayImages.length), [selectImage, displayImages.length]);

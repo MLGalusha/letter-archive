@@ -18,7 +18,7 @@ const visibleSource = (element: Element | null) => visibleImage(element)?.curren
 /** Owns the reversible trip between the document scan and the viewport stage. */
 export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onPageChange, cornerRatios, entryZoom = 1 }: {
   images: LetterImage[]; letterId: string; initialIndex: number; cornerRatios: number[]; entryZoom?: number;
-  onClose: () => void; onPageChange: (index: number) => void;
+  onClose: (selectedIndex: number) => void; onPageChange: (index: number) => void;
 }) {
   const [origin] = useState(() => {
     const image = scanElement(initialIndex);
@@ -28,8 +28,8 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
       strip: document.querySelector('.letter-scan-figure .scan-navigation')?.getBoundingClientRect() };
   });
   const [phase, setPhase] = useState<'preparing' | 'entering' | 'focused' | 'exiting'>('preparing');
-  const [index, setIndex] = useState(initialIndex);
-  const indexRef = useRef(index);
+  const [index] = useState(initialIndex);
+  const pendingSelection = useRef(initialIndex);
   const closing = useRef(false);
   const flightRef = useRef<HTMLImageElement>(null);
   const returnCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -109,6 +109,7 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
 
     return () => {
       delete shell.dataset.readerFocus;
+      shell.style.removeProperty('--reader-focus-duration');
       shell.querySelectorAll<HTMLElement>('[data-focus-side]').forEach(el => delete el.dataset.focusSide);
       animations.current.forEach(animation => animation.cancel());
       if (returnSnapshot.current) {
@@ -119,7 +120,6 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
   }, [origin, dialogRef]);
 
   useLayoutEffect(() => {
-    indexRef.current = index;
     document.querySelectorAll<HTMLElement>('.scan-slide').forEach((el, i) => {
       el.dataset.focusSide = i < index ? 'left' : i > index ? 'right' : 'selected';
     });
@@ -127,7 +127,7 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
   }, [index, onPageChange]);
 
   const selectPage = useCallback((next: number) => {
-    setIndex(next);
+    pendingSelection.current = next;
   }, []);
 
   const exiting = phase === 'exiting';
@@ -137,7 +137,9 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
     const returnCanvas = returnCanvasRef.current;
     const shell = document.querySelector<HTMLElement>('.main-page-layout.public-site-shell');
     if (!dialog || !flight || !returnCanvas || !shell) return;
-    const duration = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : DURATION;
+    // Different-page choices share a ~500ms budget: 260ms return, 240ms slide.
+    const duration = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0
+      : exiting && pendingSelection.current !== index ? 260 : DURATION;
     let cancelled = false;
     let frame = 0;
     let flightFrame = 0;
@@ -150,7 +152,7 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
         return;
       }
       const entering = !exiting;
-      const target = scanElement(indexRef.current);
+      const target = scanElement(index);
       const from = entering ? origin.image : flight.style.visibility === 'visible'
         ? flight.getBoundingClientRect() : image.getBoundingClientRect();
       const to = entering ? image.getBoundingClientRect() : target?.getBoundingClientRect();
@@ -163,6 +165,7 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
       animations.current.forEach(animation => animation.cancel());
       animations.current = [];
       shell.dataset.readerFocus = entering ? 'entering' : 'exiting';
+      shell.style.setProperty('--reader-focus-duration', `${duration}ms`);
       image.style.visibility = 'hidden';
       let liveFlight: Promise<void> | undefined;
       if (entering && from && to && from.width && to.width && source) {
@@ -238,7 +241,7 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
           animations.current = [];
           setPhase('focused');
           shell.dataset.readerFocus = 'focused';
-        } else closeCallback.current();
+        } else closeCallback.current(pendingSelection.current);
       });
     };
     frame = requestAnimationFrame(run);
@@ -247,7 +250,7 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
       // Release the backing store as soon as the temporary surface is finished.
       returnCanvas.width = 0; returnCanvas.height = 0;
     };
-  }, [exiting, dialogRef, origin, prepareReturnImage]);
+  }, [exiting, dialogRef, origin, prepareReturnImage, index]);
 
   return <div className="reader-focus-backdrop viewer-backdrop" data-phase={phase}>
     <div ref={dialogRef} className="reader-focus viewer-modal" role="dialog" aria-modal="true" aria-label="Original scans" tabIndex={-1}>

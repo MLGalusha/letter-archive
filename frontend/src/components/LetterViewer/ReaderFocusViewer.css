@@ -76,6 +76,16 @@
 .public-site-shell:is([data-reader-focus='entering'], [data-reader-focus='focused']) .letter-reading-column { transform: translateY(100vh); opacity: 0; }
 .public-site-shell:is([data-reader-focus='entering'], [data-reader-focus='focused']) [data-focus-side='left'] { transform: translateX(-100vw); }
 .public-site-shell:is([data-reader-focus='entering'], [data-reader-focus='focused']) [data-focus-side='right'] { transform: translateX(100vw); }
+/* Entry uses the visible edge distance, so side previews slide away perceptibly.
+   Once offscreen, park them at the original return position without animation. */
+.public-site-shell[data-reader-focus='entering'] .scan-slide:not([data-focus-side='selected']) {
+  transform: translateX(var(--reader-focus-exit-x, 0px));
+}
+.public-site-shell[data-reader-focus='focused'] .scan-slide { transition: none; }
+.public-site-shell[data-reader-focus='entering'] .header,
+.public-site-shell[data-reader-focus='entering'] .header-reader-cover {
+  transition-timing-function: ease-in-out;
+}
 @media (max-height: 500px) {
   .reader-focus-fit { inset-block: 92px; }
   .reader-focus-strip { bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }

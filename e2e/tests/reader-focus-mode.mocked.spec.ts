@@ -264,6 +264,49 @@ for (const width of [390, 1440]) test(`@mocked focus mode zooms edge to edge and
   await expect(opener).toBeFocused();
 });
 
+for (const width of [390, 1440, 1920]) test(`@mocked focus entry visibly slides neighbors away and eases the header at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 900 });
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await mockReader(page);
+  await page.goto('/letter/current');
+  await page.locator('.letter-scan-figure .viewer-page-choice').nth(1).click();
+  await expect.poll(() => page.locator('.scan-slide').nth(1).evaluate(el => {
+    const r = el.getBoundingClientRect(); return Math.abs(r.left + r.width / 2 - innerWidth / 2);
+  })).toBeLessThan(2);
+  const measure = () => page.evaluate(() => {
+    const scans = [...document.querySelectorAll('.scan-slide-img')].map(el => {
+      const r = el.getBoundingClientRect(); return { left: r.left, right: r.right };
+    });
+    return { scans, headerBottom: document.querySelector('.header')!.getBoundingClientRect().bottom };
+  });
+  const before = await measure();
+  await page.locator('.scan-slide').nth(1).press('+');
+  await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'entering');
+  await page.evaluate(() => {
+    // Inspect a real intermediate animation frame without a wall-clock race.
+    for (const animation of document.getAnimations()) { animation.pause(); animation.currentTime = 150; }
+  });
+  const during = await measure();
+  expect(during.headerBottom).toBeGreaterThan(before.headerBottom * .4);
+  expect(during.headerBottom).toBeLessThan(before.headerBottom - 5);
+  if (width > 900) {
+    expect(during.scans[0].right).toBeGreaterThan(2);
+    expect(during.scans[0].right).toBeLessThan(before.scans[0].right - 10);
+    expect(during.scans[2].left).toBeLessThan(width - 2);
+    expect(during.scans[2].left).toBeGreaterThan(before.scans[2].left + 10);
+    await expect(page.locator('.reader-focus-backdrop')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  }
+  await page.evaluate(() => document.getAnimations().forEach(animation => animation.play()));
+  await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'focused');
+  const after = await measure();
+  expect(after.scans[0].right).toBeLessThanOrEqual(0);
+  expect(after.scans[2].left).toBeGreaterThanOrEqual(width);
+  await closeReader(page);
+  const returned = await measure();
+  expect(returned.headerBottom).toBeCloseTo(before.headerBottom, 0);
+  expect(returned.scans).toEqual(before.scans);
+});
+
 for (const reduce of [false, true]) test(`@mocked focus entry and exit share the image geometry, reduced motion ${reduce}`, async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ reducedMotion: reduce ? 'reduce' : 'no-preference' });

@@ -110,7 +110,10 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
     return () => {
       delete shell.dataset.readerFocus;
       shell.style.removeProperty('--reader-focus-duration');
-      shell.querySelectorAll<HTMLElement>('[data-focus-side]').forEach(el => delete el.dataset.focusSide);
+      shell.querySelectorAll<HTMLElement>('[data-focus-side]').forEach(el => {
+        delete el.dataset.focusSide;
+        el.style.removeProperty('--reader-focus-exit-x');
+      });
       animations.current.forEach(animation => animation.cancel());
       if (returnSnapshot.current) {
         returnSnapshot.current.canvas.width = 0; returnSnapshot.current.canvas.height = 0;
@@ -121,6 +124,11 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
 
   useLayoutEffect(() => {
     document.querySelectorAll<HTMLElement>('.scan-slide').forEach((el, i) => {
+      // Travel only the visible distance to the viewport edge during entry.
+      // A full viewport jump makes narrow side previews disappear in one frame.
+      const rect = el.querySelector('.scan-slide-img')?.getBoundingClientRect();
+      if (rect && i !== index) el.style.setProperty('--reader-focus-exit-x',
+        `${i < index ? -Math.max(0, rect.right) - 1 : Math.max(0, innerWidth - rect.left) + 1}px`);
       el.dataset.focusSide = i < index ? 'left' : i > index ? 'right' : 'selected';
     });
     onPageChange(index);

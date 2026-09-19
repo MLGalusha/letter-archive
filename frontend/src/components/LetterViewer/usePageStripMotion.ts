@@ -38,7 +38,7 @@ export function usePageStripMotion(selected: number,
       stop();
       list.style.scrollSnapType = 'none';
       const from = list.scrollLeft, to = points[index] ?? from;
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || Math.abs(to - from) < 0.5) {
+      if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || Math.abs(to - from) < 0.5) {
         finish(index, commit); return;
       }
       const start = performance.now();

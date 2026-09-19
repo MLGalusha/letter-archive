@@ -32,7 +32,8 @@
   bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   left: 50%;
   transform: translateX(-50%);
-  width: min(52rem, calc(100% - 24px));
+  /* Preserve the document strip's clipping window when the scrollbar disappears. */
+  width: min(var(--reader-strip-width, 52rem), calc(100% - 24px));
   z-index: 2;
   visibility: hidden;
   border-radius: 14px;

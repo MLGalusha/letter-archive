@@ -327,7 +327,8 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
     };
   }, [exiting, dialogRef, origin, prepareReturnImage, index, directZoom, setChromeHidden]);
 
-  return <div className="reader-focus-backdrop viewer-backdrop" data-phase={phase} data-direct-zoom={directZoom}>
+  return <div className="reader-focus-backdrop viewer-backdrop" data-phase={phase} data-direct-zoom={directZoom}
+    style={origin.strip ? { '--reader-strip-width': `${origin.strip.width}px` } as React.CSSProperties : undefined}>
     <div ref={dialogRef} className="reader-focus viewer-modal" role="dialog" aria-modal="true" aria-label="Original scans" tabIndex={-1}>
       <LetterViewer images={images} letterId={letterId} variant="lightbox" focusMode cornerRatios={cornerRatios} entryZoom={entryZoom}
         focusOrigin={directZoom ? origin.image : undefined} onFocusScale={followScale} onZoomExit={directZoom ? finishZoomOut : requestClose}

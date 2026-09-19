@@ -110,6 +110,7 @@ for (const width of [390, 1440]) for (const [count, selected] of [[2, 0], [2, 1]
     await page.evaluate(() => document.fonts.ready);
     // Wait for the native thumbnail centering to settle before measuring entry.
     await page.waitForTimeout(500);
+    const originalClip = await page.locator('.letter-scan-figure .viewer-page-drawer').boundingBox();
     const samples = await page.evaluate(async () => {
       const read = () => [...document.querySelectorAll(document.querySelector('.reader-focus-strip')
         ? '.reader-focus-strip .viewer-page-choice' : '.letter-scan-figure .viewer-page-choice')].map(el => {
@@ -124,6 +125,9 @@ for (const width of [390, 1440]) for (const [count, selected] of [[2, 0], [2, 1]
       }
       return samples;
     });
+    const zoomClip = await page.locator('.reader-focus-strip .viewer-page-drawer').boundingBox();
+    expect(Math.abs(zoomClip!.width - originalClip!.width)).toBeLessThan(1);
+    expect(Math.abs(zoomClip!.x - originalClip!.x)).toBeLessThan(1);
     const travel = samples.at(-1)![selected].y - samples[0][selected].y;
     for (let frame = 1; frame < samples.length; frame++) {
       for (let i = 0; i < count; i++) expect(Math.abs(samples[frame][i].x - samples[0][i].x)).toBeLessThan(1);

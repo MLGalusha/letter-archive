@@ -1163,7 +1163,7 @@ const LetterViewer = memo(function LetterViewer({
         )}
       </div>
 
-      {focusMode && <div className="reader-focus-strip" style={{ maxWidth: (displayImages.length - 1) * 128 + 64 }}><InlineScanNavigation cornerRatios={cornerRatios} images={displayImages}
+      {focusMode && <div className="reader-focus-strip"><InlineScanNavigation cornerRatios={cornerRatios} images={displayImages}
         selected={currentImageIndex} onSelect={selectImage} /></div>}
       {isLightbox && !focusMode && <ViewerPageDrawer id={drawerId} images={displayImages}
         selected={currentImageIndex} onSelect={selectImage} motion={pageMotion} />}

@@ -1,6 +1,53 @@
 import { expect, test } from '@playwright/test';
 import { API_BASE_URL } from './utils/test-helpers';
-import { openReader, closeReader } from './utils/reader-viewer-fixture';
+import { openReader, closeReader, mockReader } from './utils/reader-viewer-fixture';
+
+for (const width of [1440, 1920]) for (const target of [0, 2]) {
+  test(`@mocked thumbnails animate after dragging then clicking side scan ${target + 1} at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await mockReader(page);
+    await page.goto('/letter/current');
+    const carousel = page.locator('.scan-carousel');
+    await expect(carousel).toBeVisible();
+    const pitch = await carousel.evaluate(el => el.children[1].getBoundingClientRect().left - el.children[0].getBoundingClientRect().left);
+    await page.mouse.move(width * .55, 400);
+    await page.mouse.down();
+    await page.mouse.move(width * .55 - pitch * .77, 400, { steps: 20 });
+    await page.mouse.up();
+    await expect(page.locator('.scan-navigation [role="status"]')).toHaveText('2 / 3');
+    await expect.poll(() => carousel.evaluate(el => el.scrollLeft)).toBeCloseTo(pitch, 0);
+    // Include the user's scrolled-down case and a click immediately after drag.
+    if (target === 2) await page.evaluate(() => window.scrollTo({ top: 120, behavior: 'instant' }));
+    const box = (await page.locator('.scan-slide-img').nth(target).boundingBox())!;
+    const clickX = (Math.max(0, box.x) + Math.min(width, box.x + box.width)) / 2;
+    await page.evaluate(() => {
+      const carousel = document.querySelector('.scan-carousel')!;
+      const strip = document.querySelector('.viewer-page-drawer--inline')!;
+      const samples: { t: number; scan: number; strip: number }[] = [];
+      (window as any).thumbnailMotionSamples = samples;
+      const start = performance.now();
+      const tick = () => {
+        samples.push({ t: performance.now() - start, scan: carousel.scrollLeft, strip: strip.scrollLeft });
+        if (performance.now() - start < 1000) requestAnimationFrame(tick);
+      };
+      tick();
+    });
+    await page.mouse.click(clickX, 400);
+    await expect.poll(() => page.evaluate(() => (window as any).thumbnailMotionSamples.at(-1).t)).toBeGreaterThan(1000);
+    const samples = await page.evaluate(() => (window as any).thumbnailMotionSamples as { t: number; scan: number; strip: number }[]);
+    const from = samples[0].strip, to = samples.at(-1)!.strip;
+    expect(Math.abs(to - from)).toBeGreaterThan(20);
+    const between = samples.filter(s => Math.abs(s.strip - from) > 1 && Math.abs(s.strip - to) > 1);
+    expect(between.length).toBeGreaterThan(2);
+    expect(between.some(s => Math.abs(s.scan - target * pitch) > 10)).toBe(true);
+    // A single final 64px jump was the failure; normal easing has small steps.
+    const largestStep = Math.max(...samples.slice(1).map((s, i) => Math.abs(s.strip - samples[i].strip)));
+    expect(largestStep).toBeLessThan(Math.abs(to - from) * .75);
+    await expect(page.locator('.scan-navigation [role="status"]')).toHaveText(`${target + 1} / 3`);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(await page.evaluate(() => scrollY)).toBe(0);
+  });
+}
 
 for (const width of [320, 390, 1440]) test(`@mocked 24 scan previews stay compact and direct selection arrives without traversing other pages at ${width}px`, async ({ page }) => {
   await page.setViewportSize({ width, height: 900 });

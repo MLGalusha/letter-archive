@@ -94,6 +94,10 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
       const target = navigationTargetRef.current;
       if (target === null || Math.abs(carousel.scrollLeft - target) <= 1) {
         const wasExplicit = explicitSelection.current;
+        // Do not let a queued scroll frame re-publish drag progress after the
+        // strip has been released at scrollend.
+        if (rafId !== null) cancelAnimationFrame(rafId);
+        rafId = null;
         // Publish the final position before releasing synchronization.
         if (!wasExplicit) updateActiveDot();
         pageMotion.publish(null);
@@ -187,6 +191,9 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
     explicitSelection.current = true;
     // The clicked page owns selection while the image travels. Intermediate
     // slides must not pull the thumbnail animation back toward older pages.
+    // A click can interrupt native settling before scrollend arrives (or on a
+    // browser without scrollend). Explicit selection now owns strip motion.
+    pageMotion.publish(null);
     setActiveIndex(index);
     carousel.style.scrollSnapType = 'none';
     navigationTargetRef.current = targetLeft;
@@ -216,7 +223,7 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
       navigationTargetRef.current = null;
       carousel.style.scrollSnapType = '';
     }
-  }, []);
+  }, [pageMotion]);
 
   return { carouselRef, attachCarousel, activeIndex, transitionFromIndex, pageMotion, carouselDraggedRef, scrollToSlide };
 }

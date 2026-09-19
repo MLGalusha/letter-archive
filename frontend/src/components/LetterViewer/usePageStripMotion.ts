@@ -128,7 +128,9 @@ export function usePageStripMotion(selected: number,
     const unsubscribe = motion?.subscribe(position => {
       if (browsing) return;
       if (position === null) {
-        if (following) { following = false; finish(current.current.selected, false); }
+        // Handoffs may happen mid-drag. Resume selection from the current
+        // position rather than jumping to the previous page's center first.
+        if (following) { following = false; settle(current.current.selected, false); }
         return;
       }
       stop(); drag = null; following = true;

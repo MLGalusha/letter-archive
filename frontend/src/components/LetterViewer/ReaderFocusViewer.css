@@ -1,5 +1,5 @@
 /* One viewport stage, a separate control layer, and the unchanged document below. */
-.reader-focus-backdrop {
+.reader-focus-backdrop.viewer-backdrop {
   --viewer-surface: #f5ede1;
   --bg: #f5ede1;
   --text-muted: #6d5f51;
@@ -97,3 +97,6 @@
 .public-site-shell[data-reader-focus] .scan-slide[data-focus-side="selected"] { transform: none; transition: none; }
 /* The departing/returning header stays in front until it clears the viewport. */
 .public-site-shell[data-reader-focus] .header { z-index: 1100; }
+
+/* Allow document scrolling, while reserving scan pinch gestures for focus mode. */
+.scan-slide { touch-action: pan-x pan-y; }

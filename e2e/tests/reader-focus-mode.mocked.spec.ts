@@ -92,3 +92,52 @@ test('@mocked deliberate pinch past fit exits while ordinary fit stays open', as
   await expect(page.getByRole('dialog')).toHaveCount(0);
   expect(await page.evaluate(() => visualViewport!.scale)).toBe(1);
 });
+
+for (const width of [390, 1440]) test(`@mocked inline zoom enters focus without a dark transition at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 844 });
+  await openReader(page);
+  await closeReader(page);
+  const scan = page.locator('.scan-slide').first();
+  await scan.evaluate(el => el.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, ctrlKey: true, deltaY: -30 })));
+  await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'entering');
+  await expect(page.locator('.reader-focus-backdrop')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  await expect(page.locator('.reader-focus-backdrop')).toHaveCSS('--viewer-surface', '#f5ede1');
+  await page.locator('.viewer-container').evaluate(el => el.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, ctrlKey: true, deltaY: -40 })));
+  await expect.poll(() => page.locator('.letter-viewer--focus').getAttribute('data-zoom').then(Number)).toBeCloseTo(Math.pow(1.01, 70), 2);
+  const geometry = await page.evaluate(async () => {
+    await new Promise(resolve => setTimeout(resolve, 150));
+    const flight = document.querySelector('.reader-focus-flight')!.getBoundingClientRect();
+    const image = document.querySelector('.viewer-transform')!.getBoundingClientRect();
+    return { flight: flight.width, image: image.width };
+  });
+  expect(geometry.flight).toBeGreaterThan(geometry.image * .65);
+  await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'focused');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'exiting');
+  await expect(page.locator('.reader-focus-backdrop')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+test('@mocked native pinch starts on the inline scan and continues through focus entry', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Native multitouch uses CDP.');
+  await page.setViewportSize({ width: 390, height: 844 });
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 2 });
+  await openReader(page);
+  await closeReader(page);
+  const scan = (await page.locator('.scan-slide-img').first().boundingBox())!;
+  const x = scan.x + scan.width / 2, y = Math.max(150, scan.y + scan.height / 2);
+  const points = (distance: number) => [{ x: x - distance / 2, y, id: 1 }, { x: x + distance / 2, y, id: 2 }];
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: points(100) });
+  for (const distance of [110, 130, 160, 200]) {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: points(distance) });
+  }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'focused');
+  await expect.poll(() => page.locator('.letter-viewer--focus').getAttribute('data-zoom').then(Number)).toBeCloseTo(2, 2);
+  expect(await page.evaluate(() => visualViewport!.scale)).toBe(1);
+  await expect(page.locator('.viewer-page-counter')).toHaveText('1 / 3');
+  await page.locator('.reader-focus-strip').getByRole('button', { name: 'Go to scan 2: letter', exact: true }).click();
+  await expect(page.locator('.letter-viewer--focus')).toHaveAttribute('data-zoom', '1');
+  await closeReader(page);
+});

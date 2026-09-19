@@ -19,6 +19,7 @@ import ReaderTranscript from "../components/LetterViewer/ReaderTranscript";
 import HeaderDock from "../components/Header/HeaderDock";
 import HeaderScrubber from "../components/HeaderScrubber/HeaderScrubber";
 import useLetterScrubber from "../components/LetterHeaderDock/useLetterScrubber";
+import { useScanFocusEntry } from "../hooks/useScanFocusEntry";
 import useCarouselDrag from "../hooks/useCarouselDrag";
 import BackToTop from "../components/BackToTop";
 import "./LetterDetailPage.css";
@@ -220,6 +221,8 @@ export default function LetterDetailPage() {
     setViewerOpen(true);
   }, []);
 
+  const { entryZoom, resetEntryZoom } = useScanFocusEntry(openViewer, letterId);
+
   const viewerIsActive = viewerOpen && displayedLetterIsCurrent;
 
   const syncViewerPage = useCallback((index: number) => scrollToSlide(index, 'instant'), [scrollToSlide]);
@@ -306,8 +309,8 @@ export default function LetterDetailPage() {
                     data-index={idx}
                     role="button"
                     tabIndex={0}
-                    onClick={(e) => { if (!carouselDraggedRef.current) openViewer(idx, e.currentTarget); }}
-                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openViewer(idx, e.currentTarget); } }}
+                    onClick={(e) => { if (!carouselDraggedRef.current) { resetEntryZoom(); openViewer(idx, e.currentTarget); } }}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); resetEntryZoom(); openViewer(idx, e.currentTarget); } }}
                     aria-label={
                       isLetter
                         ? `View page ${img.pageNumber ?? idx + 1} full size`
@@ -393,7 +396,7 @@ export default function LetterDetailPage() {
 
       {/* ── Image Viewer Modal ─────────────────────────────── */}
       {viewerIsActive && createPortal(
-        <ReaderFocusViewer images={allImages} letterId={letter.id} initialIndex={viewerStartPage}
+        <ReaderFocusViewer entryZoom={entryZoom} images={allImages} letterId={letter.id} initialIndex={viewerStartPage}
           onPageChange={syncViewerPage} onClose={() => setViewerOpen(false)} />,
         document.body,
       )}

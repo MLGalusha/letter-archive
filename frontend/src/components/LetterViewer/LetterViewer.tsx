@@ -48,6 +48,7 @@ interface LetterViewerProps {
   variant?: "panel" | "lightbox";
   initialIndex?: number;
   focusMode?: boolean;
+  entryZoom?: number;
   initialAspectRatio?: number;
   fallbackSrc?: string;
   onClose?: () => void;
@@ -116,6 +117,7 @@ const LetterViewer = memo(function LetterViewer({
   variant = "panel",
   initialIndex = 0,
   focusMode = false,
+  entryZoom = 1,
   initialAspectRatio,
   fallbackSrc,
   onClose,
@@ -503,6 +505,14 @@ const LetterViewer = memo(function LetterViewer({
     },
     [getScaleFromSliderPosition, applyZoom]
   );
+
+  // A pinch can begin on the document scan and continue on that original native
+  // touch target. Consume its live scale without restarting the gesture.
+  const entryZoomHandler = useRef(applyZoom);
+  useLayoutEffect(() => { entryZoomHandler.current = applyZoom; }, [applyZoom]);
+  useEffect(() => {
+    if (focusMode) entryZoomHandler.current(entryZoom, false);
+  }, [entryZoom, focusMode]);
 
   // ============================================================================
   // WHEEL ZOOM

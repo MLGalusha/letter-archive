@@ -14,8 +14,8 @@ const visibleSource = (element: Element | null) => {
 };
 
 /** Owns the reversible trip between the document scan and the viewport stage. */
-export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onPageChange }: {
-  images: LetterImage[]; letterId: string; initialIndex: number;
+export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onPageChange, entryZoom = 1 }: {
+  images: LetterImage[]; letterId: string; initialIndex: number; entryZoom?: number;
   onClose: () => void; onPageChange: (index: number) => void;
 }) {
   const [origin] = useState(() => {
@@ -90,6 +90,7 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
     const duration = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : DURATION;
     let cancelled = false;
     let frame = 0;
+    let flightFrame = 0;
     const run = () => {
       if (cancelled) return;
       const image = dialog.querySelector<HTMLElement>('.viewer-transform');
@@ -109,14 +110,35 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
       animations.current = [];
       shell.dataset.readerFocus = entering ? 'entering' : 'exiting';
       image.style.visibility = 'hidden';
+      let liveFlight: Promise<void> | undefined;
       if (from && to && from.width && to.width && source) {
         flight.src = source;
         Object.assign(flight.style, { visibility: 'visible', left: `${from.left}px`, top: `${from.top}px`,
           width: `${from.width}px`, height: `${from.height}px` });
-        animations.current.push(flight.animate([
-          { transform: 'none' },
-          { transform: `translate(${to.left - from.left}px, ${to.top - from.top}px) scale(${to.width / from.width}, ${to.height / from.height})` },
-        ], { duration, easing: EASING, fill: 'both' }));
+        if (entering) {
+          // The destination stays live: wheel/pinch updates during entry must
+          // enlarge the visible scan now, not jump when the flight finishes.
+          const clock = strip.animate([{ opacity: 1 }, { opacity: 1 }], { duration, easing: EASING, fill: 'both' });
+          animations.current.push(clock);
+          liveFlight = new Promise(resolve => {
+            const draw = () => {
+              if (cancelled) { resolve(); return; }
+              const progress = clock.effect?.getComputedTiming().progress ?? 0;
+              const destination = image.getBoundingClientRect();
+              const mix = (a: number, b: number) => a + (b - a) * progress;
+              Object.assign(flight.style, { left: `${mix(from.left, destination.left)}px`, top: `${mix(from.top, destination.top)}px`,
+                width: `${mix(from.width, destination.width)}px`, height: `${mix(from.height, destination.height)}px` });
+              if (progress === 1) resolve();
+              else flightFrame = requestAnimationFrame(draw);
+            };
+            draw();
+          });
+        } else {
+          animations.current.push(flight.animate([
+            { transform: 'none' },
+            { transform: `translate(${to.left - from.left}px, ${to.top - from.top}px) scale(${to.width / from.width}, ${to.height / from.height})` },
+          ], { duration, easing: EASING, fill: 'both' }));
+        }
       }
       const stripRect = strip.getBoundingClientRect();
       const documentStrip = document.querySelector('.letter-scan-figure .scan-navigation')?.getBoundingClientRect();
@@ -133,7 +155,7 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
       strip.style.visibility = 'visible';
       if (entering) setPhase('entering');
       // Includes the page's CSS movement even if no scan is available to animate.
-      const finished = animations.current.length ? Promise.allSettled(animations.current.map(a => a.finished))
+      const finished = animations.current.length ? Promise.allSettled([...animations.current.map(a => a.finished), ...(liveFlight ? [liveFlight] : [])])
         : new Promise(resolve => setTimeout(resolve, duration));
       void finished.then(() => {
         if (cancelled || (entering && closing.current)) return;
@@ -146,12 +168,12 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
       });
     };
     frame = requestAnimationFrame(run);
-    return () => { cancelled = true; cancelAnimationFrame(frame); };
+    return () => { cancelled = true; cancelAnimationFrame(frame); cancelAnimationFrame(flightFrame); };
   }, [exiting, dialogRef, origin]);
 
   return <div className="reader-focus-backdrop viewer-backdrop" data-phase={phase}>
     <div ref={dialogRef} className="reader-focus viewer-modal" role="dialog" aria-modal="true" aria-label="Original scans" tabIndex={-1}>
-      <LetterViewer images={images} letterId={letterId} variant="lightbox" focusMode
+      <LetterViewer images={images} letterId={letterId} variant="lightbox" focusMode entryZoom={entryZoom}
         initialIndex={initialIndex} initialAspectRatio={origin.image ? origin.image.width / origin.image.height : undefined}
         fallbackSrc={origin.src} onClose={requestClose} onPageChange={selectPage} />
     </div>

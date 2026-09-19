@@ -50,7 +50,7 @@
   border-radius: 14px;
 }
 .reader-focus-strip .viewer-page-drawer { margin-top: 0; overscroll-behavior: contain; }
-.reader-focus .letter-viewer--zoomed .reader-focus-strip {
+.reader-focus .letter-viewer--zoomed .reader-focus-strip .viewer-page-choice {
   background: rgb(115 115 110 / .23);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);

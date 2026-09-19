@@ -52,12 +52,12 @@ test('@mocked leaving the route while fullscreen restores background interaction
   await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#f5ede1');
 });
 
-test('@mocked pointer opening restores focus to its actual scan trigger', async ({ page }) => {
+test('@mocked pointer zoom restores focus to its actual scan trigger', async ({ page }) => {
   const { opener } = await openReader(page);
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.locator('body').click({ position: { x: 1, y: 1 } });
-  await opener.click();
+  await opener.evaluate(el => el.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, ctrlKey: true, deltaY: -30 })));
   const dialog = page.getByRole('dialog', { name: 'Original scans' });
   expect(await dialog.evaluate(el => el.contains(document.activeElement))).toBe(true);
   await expect(dialog.getByRole('button', { name: 'Close viewer' })).toHaveCount(0);

@@ -100,7 +100,7 @@
   justify-content: center;
   position: relative;
   scroll-snap-align: center;
-  cursor: zoom-in;
+  cursor: pointer;
 }
 .scan-slide-img {
   position: relative;
@@ -235,7 +235,7 @@
 }
 .scan-slide:focus-visible .scan-slide-img::after {
   /* Keep keyboard focus discoverable without adding a border to the scan. */
-  content: "Open full size";
+  content: "Select image · + to zoom";
   position: absolute;
   right: .5rem;
   bottom: .5rem;

@@ -18,6 +18,16 @@ export function useScanFocusEntry(open: (index: number, opener: HTMLElement) => 
       setEntryZoom(Math.pow(1.01, -event.deltaY));
       open(Number(opener.dataset.scanIndex), opener);
     };
+    const key = (event: KeyboardEvent) => {
+      if ((event.key !== '+' && event.key !== '=') || event.ctrlKey || event.metaKey || event.altKey
+        || document.querySelector('.reader-focus-backdrop')) return;
+      const opener = scan(event.target);
+      if (!opener) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setEntryZoom(1.4);
+      open(Number(opener.dataset.scanIndex), opener);
+    };
     const start = (event: TouchEvent) => {
       if (pinch || event.touches.length !== 2 || document.querySelector('.reader-focus-backdrop')) return;
       const opener = scan(event.target);
@@ -47,17 +57,19 @@ export function useScanFocusEntry(open: (index: number, opener: HTMLElement) => 
     };
     const options = { capture: true, passive: false };
     document.addEventListener('wheel', wheel, options);
+    document.addEventListener('keydown', key, options);
     document.addEventListener('touchstart', start, options);
     document.addEventListener('touchmove', move, options);
     document.addEventListener('touchend', end, options);
     document.addEventListener('touchcancel', end, options);
     return () => {
       document.removeEventListener('wheel', wheel, options);
+      document.removeEventListener('keydown', key, options);
       document.removeEventListener('touchstart', start, options);
       document.removeEventListener('touchmove', move, options);
       document.removeEventListener('touchend', end, options);
       document.removeEventListener('touchcancel', end, options);
     };
   }, [open, owner]);
-  return { entryZoom, resetEntryZoom: () => setEntryZoom(1) };
+  return { entryZoom };
 }

@@ -111,7 +111,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) for (const wid
     await expect(next).toBeFocused();
     await opener.focus();
     await expect(opener).toBeFocused();
-    await opener.press('Enter');
+    await opener.press('+');
     await expect(page.getByRole('dialog', { name: 'Original scans' })).toBeVisible();
     await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'focused');
     expect(await page.locator('.reader-focus-strip [aria-current="page"]').evaluate(el => {

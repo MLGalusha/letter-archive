@@ -302,7 +302,7 @@ describe("LetterDetailPage", () => {
     expect(screen.getByText("Original scans are not available.")).toBeInTheDocument();
   });
 
-  it("opens the main scan among extra images without transcript scan buttons", async () => {
+  it("selects the main scan without opening focus mode and supports keyboard zoom", async () => {
     const user = userEvent.setup();
     getLetterByIdMock.mockResolvedValue(createLetter({ images: [
       { id: 'card-first', type: 'card', imageUrl: '/images/card.jpg' },
@@ -311,7 +311,11 @@ describe("LetterDetailPage", () => {
     renderLetterDetailPage();
     await user.click(await screen.findByRole('button', { name: 'Original formatting' }));
     expect(screen.queryByRole('button', { name: /View page .* on scan/ })).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'View page 1 full size' }));
+    const scan = screen.getByRole('button', { name: 'Select page 1' });
+    await user.click(scan);
+    expect(screen.queryByText('LetterViewer')).not.toBeInTheDocument();
+    expect(scan).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.keyDown(scan, { key: '+' });
     expect(await screen.findByText('LetterViewer')).toHaveAttribute('data-index', '1');
   });
 

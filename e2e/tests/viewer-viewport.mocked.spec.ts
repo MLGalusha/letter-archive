@@ -31,7 +31,7 @@ test('@mocked fullscreen paints document edges and restores them on repeated clo
     await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#f5ede1');
     await expect(opener).toBeFocused();
     if (cycle < 2) {
-      await opener.press('Enter');
+      await opener.press('+');
       await expect(surface).toHaveAttribute('data-phase', 'focused');
     }
   }
@@ -51,7 +51,7 @@ test('@mocked fullscreen blocks chrome gestures while preserving drawer scrollin
     return { root: document.documentElement.style.cssText, body: document.body.style.cssText };
   });
   await opener.focus();
-  await opener.press('Enter');
+  await opener.press('+');
   const gestures = await page.evaluate(() => {
     const dispatch = (selector: string, type: string) => {
       const event = new Event(type, { bubbles: true, cancelable: true });

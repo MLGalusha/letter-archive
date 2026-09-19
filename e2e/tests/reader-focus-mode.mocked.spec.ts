@@ -2,6 +2,62 @@ import { expect, test } from '@playwright/test';
 import { join } from 'node:path';
 import { openReader, closeReader, mockReader } from './utils/reader-viewer-fixture';
 
+for (const width of [390, 1440]) for (const reducedMotion of ['reduce', 'no-preference'] as const) {
+  test(`@mocked scan clicks select and return to the top without zoom at ${width}px with ${reducedMotion}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.emulateMedia({ reducedMotion });
+    await mockReader(page);
+    await page.goto('/letter/current');
+    const clickVisibleImage = async (index: number) => {
+      const rect = (await page.locator('.scan-slide-img').nth(index).boundingBox())!;
+      const left = Math.max(0, rect.x), right = Math.min(width, rect.x + rect.width);
+      expect(right - left).toBeGreaterThan(10);
+      await page.mouse.click((left + right) / 2, Math.max(220, Math.min(450, rect.y + rect.height / 2)));
+    };
+    await expect(page.locator('.scan-slide-img').first()).toBeVisible();
+    await page.evaluate(() => window.scrollTo({ top: 120, behavior: 'instant' }));
+    await expect.poll(() => page.evaluate(() => scrollY)).toBe(120);
+    await clickVisibleImage(0);
+    await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await clickVisibleImage(0);
+    expect(await page.evaluate(() => scrollY)).toBe(0);
+    await expect(page.locator('.scan-navigation [role="status"]')).toHaveText('1 / 3');
+    if (width === 390) {
+      // Side scans are offscreen on phones; exercise the selected second scan.
+      await page.locator('.letter-scan-figure .viewer-page-choice').nth(1).click();
+      await expect.poll(() => page.locator('.scan-slide').nth(1).evaluate(el => {
+        const rect = el.getBoundingClientRect();
+        return Math.abs(rect.left + rect.width / 2 - innerWidth / 2);
+      })).toBeLessThan(2);
+    }
+    await page.evaluate(() => window.scrollTo({ top: 120, behavior: 'instant' }));
+    await clickVisibleImage(1);
+    await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
+    await expect(page.locator('.scan-navigation [role="status"]')).toHaveText('2 / 3');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.locator('.scan-slide').nth(1)).toHaveAttribute('aria-pressed', 'true');
+    await page.evaluate(() => window.scrollTo({ top: 120, behavior: 'instant' }));
+    await page.locator('.scan-slide').nth(1).press('Enter');
+    await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  });
+}
+
+test('@mocked dragging the main scan does not trigger click-to-top', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 844 });
+  await mockReader(page);
+  await page.goto('/letter/current');
+  await expect(page.locator('.scan-slide-img').first()).toBeVisible();
+  await page.evaluate(() => window.scrollTo({ top: 120, behavior: 'instant' }));
+  await page.mouse.move(750, 400);
+  await page.mouse.down();
+  await page.mouse.move(500, 400, { steps: 10 });
+  await page.mouse.up();
+  expect(await page.evaluate(() => scrollY)).toBe(120);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
 for (const width of [390, 1440]) for (const selected of [1, 2]) {
   test(`@mocked thumbnail ${selected} exits directly from zoom to regular mode at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
@@ -23,9 +79,9 @@ for (const width of [390, 1440]) for (const selected of [1, 2]) {
     await expect.poll(() => scan.evaluate(el => {
       const rect = el.getBoundingClientRect(); return Math.abs(rect.left + rect.width / 2 - innerWidth / 2);
     })).toBeLessThan(2);
-    await scan.press('Enter');
+    await scan.press('+');
     await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'focused');
-    await expect(page.locator('.letter-viewer--focus')).toHaveAttribute('data-zoom', '1');
+    await expect(page.locator('.letter-viewer--focus')).toHaveAttribute('data-zoom', '1.4');
     await closeReader(page);
   });
 }
@@ -109,7 +165,7 @@ for (const reduce of [false, true]) test(`@mocked focus entry and exit share the
   await closeReader(page);
   await expect(page.getByRole('dialog')).toHaveCount(0);
   const before = await page.locator('.scan-slide-img').first().boundingBox();
-  await opener.click();
+  await opener.press('+');
   if (!reduce) {
     await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'entering');
     const flight = (await page.locator('.reader-focus-flight').boundingBox())!;
@@ -119,7 +175,7 @@ for (const reduce of [false, true]) test(`@mocked focus entry and exit share the
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   expect(await page.locator('.scan-slide-img').first().boundingBox()).toEqual(before);
-  await opener.click();
+  await opener.press('+');
   await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'focused');
   await page.goBack();
   await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -253,7 +309,7 @@ for (const width of [390, 1440]) test(`@mocked scan corners keep the regular ima
   const reference = await ratio('.scan-slide-img');
   expect(reference).toBeGreaterThan(0);
   await expect.poll(() => ratio('.letter-scan-figure .preview-image')).toBeCloseTo(reference, 5);
-  await opener.click();
+  await opener.press('+');
   await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'entering');
   expect(await ratio('.reader-focus-flight')).toBeCloseTo(reference, 5);
   await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'focused');
@@ -320,9 +376,9 @@ test('@mocked keyboard focus stays on the scan instead of outlining the empty sl
   await expect(opener).toBeFocused();
   await expect(opener).toHaveCSS('outline-style', 'none');
   await expect(opener.locator('.scan-slide-img')).toHaveCSS('outline-style', 'none');
-  expect(await opener.locator('.scan-slide-img').evaluate(el => getComputedStyle(el, '::after').content)).toBe('"Open full size"');
+  expect(await opener.locator('.scan-slide-img').evaluate(el => getComputedStyle(el, '::after').content)).toBe('"Select image · + to zoom"');
   // Retain keyboard access after restoring focus.
-  await opener.press('Enter');
+  await opener.press('+');
   await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'focused');
   await closeReader(page);
   await page.locator('.letter-scan-figure .viewer-page-choice').nth(1).click();
@@ -374,17 +430,17 @@ for (const width of [390, 1440]) test(`@mocked only extreme thumbnails crop whil
   await checkStrip('.letter-scan-figure');
   await page.locator('.letter-scan-figure .viewer-page-choice').nth(2).click();
   const wideScan = page.locator('.scan-slide').nth(2);
-  await expect.poll(() => wideScan.locator('img').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth === 800)).toBe(true);
+  await expect.poll(() => wideScan.locator('.progressive-image__full').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth === 800)).toBe(true);
   await expect.poll(() => wideScan.locator('.scan-slide-img').evaluate(el => {
     const box = el.getBoundingClientRect(); return box.width / box.height;
   })).toBeCloseTo(4, 2);
-  await wideScan.press('Enter');
+  await wideScan.press('+');
   await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'focused');
   await checkStrip('.reader-focus-strip');
   for (const index of [2, 3]) {
     await page.locator('.reader-focus-strip .viewer-page-choice').nth(index).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    await page.locator('.scan-slide').nth(index).press('Enter');
+    await page.locator('.scan-slide').nth(index).press('+');
     await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'focused');
     await expect.poll(() => page.locator('.viewer-transform').evaluate(el => {
       const box = el.getBoundingClientRect(); return box.width / box.height;

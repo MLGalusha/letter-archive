@@ -224,7 +224,14 @@ export default function LetterDetailPage() {
     setViewerOpen(true);
   }, []);
 
-  const { entryZoom, resetEntryZoom } = useScanFocusEntry(openViewer, letterId);
+  const { entryZoom } = useScanFocusEntry(openViewer, letterId);
+
+  const selectScan = useCallback((index: number) => {
+    if (index !== activeIndex) scrollToSlide(index);
+    if (window.scrollY > 0) {
+      window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+    }
+  }, [activeIndex, scrollToSlide]);
 
   const viewerIsActive = viewerOpen && displayedLetterIsCurrent;
 
@@ -312,12 +319,14 @@ export default function LetterDetailPage() {
                     data-index={idx}
                     role="button"
                     tabIndex={0}
-                    onClick={(e) => { if (!carouselDraggedRef.current) { resetEntryZoom(); openViewer(idx, e.currentTarget); } }}
-                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); resetEntryZoom(); openViewer(idx, e.currentTarget); } }}
+                    onClick={() => { if (!carouselDraggedRef.current) selectScan(idx); }}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectScan(idx); } }}
+                    aria-pressed={idx === activeIndex}
+                    aria-description="Select image and scroll to the top. Press + to zoom in."
                     aria-label={
                       isLetter
-                        ? `View page ${img.pageNumber ?? idx + 1} full size`
-                        : `View ${typeLabel} full size`
+                        ? `Select page ${img.pageNumber ?? idx + 1}`
+                        : `Select ${typeLabel}`
                     }
                   >
                     <ReaderScanImage

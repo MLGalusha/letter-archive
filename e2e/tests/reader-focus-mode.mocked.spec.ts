@@ -32,6 +32,22 @@ async function recordReturnPaints(page: Page) {
   await page.evaluate(record);
 }
 
+for (const width of [390, 1440]) test(`@mocked thumbnail number notches keep their regular size through zoom at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 844 });
+  await mockReader(page);
+  await page.goto('/letter/current');
+  await expect(page.locator('.letter-scan-figure .viewer-page-notch').first()).toBeVisible();
+  const sizes = (selector: string) => page.locator(selector).evaluateAll(elements => elements.map(el => {
+    const r = el.getBoundingClientRect(); return { width: r.width, height: r.height };
+  }));
+  const before = await sizes('.letter-scan-figure .viewer-page-notch');
+  await page.locator('.scan-slide').first().dispatchEvent('wheel', { deltaY: -1, ctrlKey: true, bubbles: true, cancelable: true });
+  await expect(page.locator('.reader-focus-strip .viewer-page-notch')).toHaveCount(before.length);
+  expect(await sizes('.reader-focus-strip .viewer-page-notch')).toEqual(before);
+  await page.locator('.reader-focus .viewer-container').dispatchEvent('wheel', { deltaY: -80, ctrlKey: true, bubbles: true, cancelable: true });
+  expect(await sizes('.reader-focus-strip .viewer-page-notch')).toEqual(before);
+});
+
 for (const width of [390, 1440]) for (const [count, selected] of [[2, 0], [2, 1], [7, 3], [7, 6]]) {
   test(`@mocked zoom preserves thumbnail horizontal positions for scan ${selected + 1} of ${count} at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 920 });

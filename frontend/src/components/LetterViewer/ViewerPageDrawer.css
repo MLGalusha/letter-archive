@@ -53,6 +53,7 @@
 }
 .viewer-page-choice .preview-image__error { font-size: .6rem; color: var(--page-ink); }
 .viewer-page-notch {
+  box-sizing: border-box;
   position: absolute;
   bottom: 0;
   left: 50%;

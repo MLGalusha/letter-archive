@@ -17,7 +17,7 @@ import { useHeaderDock, EMPTY_DOCK_STATE } from "../../contexts/HeaderDockContex
 
 interface HeaderDockProps {
   children?: ReactNode;
-  /** Letter-detail: transparent header background so content scrolls under it. */
+  /** Letter-detail: floating lower edge with content covered above the card midpoint. */
   transparent?: boolean;
   /** Override the "Collections" nav link label + target. */
   collectionsLink?: { label: string; to: string };

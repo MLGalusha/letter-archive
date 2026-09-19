@@ -6,7 +6,7 @@ import './ViewerPageDrawer.css';
 import { usePageStripMotion } from './usePageStripMotion';
 import type { PageMotion } from './pageMotion';
 
-/** Shared filmstrip with coordinated paging and damped pointer motion. Only settled user scrolling selects a new scan. */
+/** Shared filmstrip with coordinated paging and native touch scrolling. Only settled user scrolling selects a new scan. */
 export const ViewerPageDrawer = memo(function ViewerPageDrawer({ id, images, selected, onSelect, motion, layout = 'viewer' }: {
   id: string; images: LetterImage[]; selected: number; onSelect: (index: number) => void;
   motion?: PageMotion;

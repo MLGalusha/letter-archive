@@ -2,6 +2,36 @@ import { expect, test } from '@playwright/test';
 import { join } from 'node:path';
 import { openReader, closeReader, mockReader } from './utils/reader-viewer-fixture';
 
+for (const width of [390, 1440]) test(`@mocked scan brightness stays standard when zoom loads the original at ${width}px`, async ({ page }) => {
+  test.skip(!await page.evaluate(() => CSS.supports('dynamic-range-limit', 'standard')),
+    'This browser build predates HDR dynamic-range control.');
+  await page.setViewportSize({ width, height: 844 });
+  const { opener } = await openReader(page);
+  const image = page.locator('.reader-focus .viewer-image');
+  await expect(image).toHaveAttribute('src', /[?&]w=\d+/);
+  await expect(image).toHaveCSS('dynamic-range-limit', 'standard');
+  await expect(page.locator('.reader-focus-flight')).toHaveCSS('dynamic-range-limit', 'standard');
+  await expect(page.locator('.reader-focus-strip img').first()).toHaveCSS('dynamic-range-limit', 'standard');
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/images/1.svg', async route => { await held; await route.fallback(); });
+  try {
+    for (let i = 0; i < 5; i++) await page.keyboard.press('+');
+    await expect(image).toHaveAttribute('src', /\/images\/1\.svg$/);
+    await expect(page.locator('.reader-focus .viewer-image-thumb')).toHaveCSS('dynamic-range-limit', 'standard');
+  } finally { release(); }
+  // Cross the rendition threshold: preserve original pixels without enabling
+  // HDR brightness. Physical HDR luminance cannot be checked in headless SDR.
+  await expect(image).toHaveAttribute('src', /\/images\/1\.svg$/);
+  await expect(image).toHaveCSS('opacity', '1');
+  await expect(image).toHaveCSS('dynamic-range-limit', 'standard');
+  await page.locator('.reader-focus-strip').getByRole('button', { name: 'Go to scan 1: letter', exact: true }).click();
+  await expect(image).toHaveAttribute('src', /[?&]w=\d+/);
+  await expect(image).toHaveCSS('dynamic-range-limit', 'standard');
+  await closeReader(page);
+  await expect(opener.locator('img').last()).toHaveCSS('dynamic-range-limit', 'standard');
+});
+
 for (const width of [390, 1440]) test(`@mocked focus mode zooms edge to edge and restores the page at ${width}px`, async ({ page }) => {
   await page.setViewportSize({ width, height: 844 });
   const { y, opener } = await openReader(page);

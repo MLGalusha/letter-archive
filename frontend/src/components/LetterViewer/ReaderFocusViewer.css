@@ -1,3 +1,11 @@
+/* Resized previews are SDR, but original photos can contain HDR gain maps.
+   Keep the same brightness when zoom loads the original, including the
+   transition image and thumbnails, without reducing the scan's resolution. */
+.letter-scan-figure,
+.reader-focus-backdrop {
+  dynamic-range-limit: standard;
+}
+
 /* One viewport stage, a separate control layer, and the unchanged document below. */
 .reader-focus-backdrop.viewer-backdrop {
   --viewer-surface: #f5ede1;

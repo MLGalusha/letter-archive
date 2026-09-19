@@ -280,7 +280,7 @@ export default function LetterDetailPage() {
       <HeaderDock transparent collectionsLink={collectionsLink}>
         {scrubberProps && <HeaderScrubber {...scrubberProps} disabled={navigationPending} />}
       </HeaderDock>
-      {pending && <div className="letter-navigation-status" role="status"><span className="sr-only">Loading letter...</span></div>}
+      {pending && <div className="sr-only" role="status">Loading letter...</div>}
       <article className="letter-article" aria-busy={pending} inert={pending}>
         {seo && (
           <SEO

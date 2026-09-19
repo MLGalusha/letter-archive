@@ -167,8 +167,8 @@ for (const width of [390, 1440]) test(`@mocked solid thumbnail surfaces match th
   await expect(thumbnail).toHaveCSS('background-color', color);
   await expect(thumbnail).toHaveCSS('backdrop-filter', 'none');
   await expect(strip).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-  const radius = await thumbnail.evaluate(el => getComputedStyle(el).borderRadius);
-  await expect(thumbnail.locator('.preview-image')).toHaveCSS('border-radius', radius);
+  await expect(thumbnail).toHaveCSS('border-radius', '6px');
+  await expect(thumbnail.locator('.preview-image')).toHaveCSS('border-radius', '5px');
   expect((await notch.boundingBox())!.y + 18).toBe(before.y + before.height);
   await page.keyboard.press('+');
   await expect(thumbnail).toHaveCSS('background-color', color);

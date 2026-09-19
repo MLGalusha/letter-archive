@@ -151,7 +151,7 @@ for (const mode of ['inline', 'fullscreen']) test(`@mocked ${mode} thumbnails tr
   }
 });
 
-for (const mode of ['inline', 'fullscreen']) test(`@mocked ${mode} thumbnail coast can be grabbed and reversed in a 24-page letter`, async ({ page }) => {
+for (const mode of ['inline', 'fullscreen']) test(`@mocked ${mode} thumbnail mouse settlement can be grabbed and reversed in a 24-page letter`, async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openReader(page, Array.from({ length: 24 }, (_, i) => ({ id: `scan-${i}`, type: 'letter', pageNumber: i + 1, imageUrl: `/images/${i}.svg`, width: 600, height: 800 })));
   if (mode === 'inline') await page.getByRole('button', { name: 'Close viewer' }).click();
@@ -241,4 +241,110 @@ test('@mocked diagonal trackpad movement selects the centered thumbnail', async 
     const box = el.getBoundingClientRect(), active = el.querySelector('[aria-current="page"]')!.getBoundingClientRect();
     return Math.abs(active.left + active.width / 2 - box.left - box.width / 2);
   })).toBeLessThan(1);
+});
+
+for (const mode of ['inline', 'fullscreen']) test(`@mocked ${mode} thumbnail native touch accepts diagonal starts`, async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Native touch injection requires CDP; physical Safari remains a device check.');
+  await page.setViewportSize({ width: 390, height: 844 });
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 2 });
+  await openReader(page, Array.from({ length: 12 }, (_, i) => ({ id: `scan-${i}`, type: 'letter', pageNumber: i + 1, imageUrl: `/images/${i}.svg`, width: 600, height: 800 })));
+  if (mode === 'inline') await page.getByRole('button', { name: 'Close viewer' }).click();
+  const strip = page.locator(mode === 'inline' ? '.viewer-page-drawer--inline' : '[role="dialog"] .viewer-page-drawer');
+  await strip.scrollIntoViewIfNeeded();
+  const box = (await strip.boundingBox())!, x = box.x + box.width / 2, y = box.y + box.height / 2;
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y, id: 1 }] });
+  for (const [dx, dy] of [[-6, 6], [-20, 8], [-40, 8], [-60, 8], [-80, 8], [-100, 8]]) {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + dx, y: y + dy, id: 1 }] });
+    await page.waitForTimeout(25);
+  }
+  expect(await strip.evaluate(el => el.scrollLeft)).toBeGreaterThan(60);
+  await expect(strip.getByRole('button').first()).toHaveAttribute('aria-current', 'page');
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await expect.poll(() => strip.evaluate(el => {
+    const selected = el.querySelector('[aria-current="page"]')!.getBoundingClientRect(), box = el.getBoundingClientRect();
+    return Math.abs(selected.left + selected.width / 2 - box.left - box.width / 2);
+  })).toBeLessThan(1);
+  await expect(strip.getByRole('button').first()).not.toHaveAttribute('aria-current', 'page');
+  // A fresh native flick can be grabbed and reversed without our code moving it
+  // while the second finger contact is held.
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 290, y, id: 1 }] });
+  for (const nextX of [250, 210, 170, 130]) {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: nextX, y, id: 1 }] });
+    await page.waitForTimeout(16);
+  }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 180, y, id: 1 }] });
+  // Establish a new drag: browser-owned snap/momentum can continue until the
+  // next contact crosses native touch slop. A touchStart alone is not a drag.
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 200, y, id: 1 }] });
+  await page.waitForTimeout(50);
+  const grabbed = await strip.evaluate(el => el.scrollLeft);
+  await page.waitForTimeout(220);
+  expect(await strip.evaluate(el => el.scrollLeft)).toBeCloseTo(grabbed, 0);
+  for (const nextX of [220, 240, 260, 280, 300]) {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: nextX, y, id: 1 }] });
+    await page.waitForTimeout(25);
+  }
+  expect(await strip.evaluate(el => el.scrollLeft)).toBeLessThan(grabbed - 60);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await expect.poll(() => strip.evaluate(el => {
+    const selected = el.querySelector('[aria-current="page"]')!.getBoundingClientRect(), box = el.getBoundingClientRect();
+    return Math.abs(selected.left + selected.width / 2 - box.left - box.width / 2);
+  })).toBeLessThan(1);
+});
+
+for (const mode of ['inline', 'fullscreen']) test(`@mocked ${mode} thumbnail tap animates intermediate positions`, async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const now = new Date('2026-09-18T12:00:00Z');
+  await page.clock.install({ time: now });
+  await openReader(page);
+  if (mode === 'inline') await page.getByRole('button', { name: 'Close viewer' }).click();
+  const strip = page.locator(mode === 'inline' ? '.viewer-page-drawer--inline' : '[role="dialog"] .viewer-page-drawer');
+  await page.evaluate(() => document.fonts.ready);
+  await page.clock.pauseAt(new Date(now.getTime() + 60_000));
+  await strip.getByRole('button').nth(1).evaluate(el => el.click());
+  await expect(strip.getByRole('button').nth(1)).toHaveAttribute('aria-current', 'page');
+  const samples: number[] = [];
+  // Check intermediate positions at controlled times, not a runner-dependent
+  // number of frames captured inside a180ms wall-clock window.
+  for (let i = 0; i < 4; i++) {
+    await page.clock.runFor(32);
+    samples.push(await strip.evaluate(el => el.scrollLeft));
+  }
+  expect(samples.every(x => x > 1 && x < 64)).toBe(true);
+  expect(samples.every((x, i) => i === 0 || x > samples[i - 1])).toBe(true);
+  await page.clock.runFor(200);
+  expect(await strip.evaluate(el => el.scrollLeft)).toBeCloseTo(64, 0);
+});
+
+for (const mode of ['inline', 'fullscreen']) for (const gesture of ['hold', 'vertical']) test(`@mocked ${mode} holding a thumbnail animation does not change selection (${gesture})`, async ({ page }) => {
+  const now = new Date('2026-09-18T12:00:00Z');
+  await page.clock.install({ time: now });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openReader(page);
+  if (mode === 'inline') await page.getByRole('button', { name: 'Close viewer' }).click();
+  const strip = page.locator(mode === 'inline' ? '.viewer-page-drawer--inline' : '[role="dialog"] .viewer-page-drawer');
+  await page.clock.pauseAt(new Date(now.getTime() + 60_000));
+  await strip.getByRole('button').nth(2).evaluate(el => el.click());
+  await expect(strip.getByRole('button').nth(2)).toHaveAttribute('aria-current', 'page');
+  await page.clock.runFor(16);
+  expect(await strip.evaluate(el => el.scrollLeft)).toBeLessThan(64);
+  await strip.evaluate(el => {
+    const event = new Event('touchstart', { bubbles: true });
+    Object.defineProperty(event, 'touches', { value: [{ clientX: 195, clientY: 700 }] });
+    el.dispatchEvent(event);
+  });
+  if (gesture === 'vertical') await strip.evaluate(el => {
+    const event = new Event('touchmove', { bubbles: true });
+    Object.defineProperty(event, 'touches', { value: [{ clientX: 198, clientY: 760 }] }); el.dispatchEvent(event);
+  });
+  await page.clock.runFor(300);
+  await strip.evaluate(el => {
+    const event = new Event('touchend', { bubbles: true });
+    Object.defineProperty(event, 'touches', { value: [] }); el.dispatchEvent(event);
+  });
+  await page.clock.runFor(500);
+  await expect(strip.getByRole('button').nth(2)).toHaveAttribute('aria-current', 'page');
+  expect(await strip.evaluate(el => el.scrollLeft)).toBeCloseTo(128, 0);
 });

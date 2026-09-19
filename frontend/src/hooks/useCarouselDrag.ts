@@ -40,8 +40,11 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
     if (!carousel) return;
 
     let rafId: number | null = null;
+    let queuedExplicit = false;
     const updateActiveDot = () => {
       rafId = null;
+      const suppressProgress = queuedExplicit || explicitSelection.current;
+      queuedExplicit = false;
       const slides = carousel.children;
       if (slides.length === 0) return;
 
@@ -66,11 +69,13 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
       const first = (slides[0] as HTMLElement).getBoundingClientRect();
       const second = slides[1]?.getBoundingClientRect();
       const pitch = second ? second.left - first.left : first.width;
-      if (pitch > 0 && !explicitSelection.current) pageMotion.publish((center - first.left - first.width / 2) / pitch);
+      if (pitch > 0 && !suppressProgress) pageMotion.publish((center - first.left - first.width / 2) / pitch);
       setActiveIndex(closestIdx);
     };
 
+    // Keep the event origin even if scrollend clears the flag before this frame.
     const onScroll = () => {
+      queuedExplicit ||= explicitSelection.current;
       if (rafId == null) rafId = requestAnimationFrame(updateActiveDot);
     };
 

@@ -5,7 +5,7 @@
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  touch-action: pan-y pinch-zoom;
+  touch-action: auto;
   user-select: none;
   overscroll-behavior: contain;
   scroll-snap-type: x mandatory;

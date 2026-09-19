@@ -275,11 +275,14 @@ for (const mode of ['inline', 'fullscreen']) test(`@mocked ${mode} thumbnail nat
   }
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 180, y, id: 1 }] });
+  // Establish a new drag: browser-owned snap/momentum can continue until the
+  // next contact crosses native touch slop. A touchStart alone is not a drag.
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 200, y, id: 1 }] });
   await page.waitForTimeout(50);
   const grabbed = await strip.evaluate(el => el.scrollLeft);
   await page.waitForTimeout(220);
   expect(await strip.evaluate(el => el.scrollLeft)).toBeCloseTo(grabbed, 0);
-  for (const nextX of [200, 220, 240, 260, 280]) {
+  for (const nextX of [220, 240, 260, 280, 300]) {
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: nextX, y, id: 1 }] });
     await page.waitForTimeout(25);
   }

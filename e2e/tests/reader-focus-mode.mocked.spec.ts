@@ -2,6 +2,34 @@ import { expect, test } from '@playwright/test';
 import { join } from 'node:path';
 import { openReader, closeReader, mockReader } from './utils/reader-viewer-fixture';
 
+for (const width of [390, 1440]) for (const selected of [1, 2]) {
+  test(`@mocked thumbnail ${selected} exits directly from zoom to regular mode at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await openReader(page);
+    await page.keyboard.press('+');
+    await page.keyboard.press('+');
+    await expect.poll(() => page.locator('.viewer-transform').evaluate(el => el.getAnimations().length)).toBe(0);
+    const zoomed = (await page.locator('.viewer-transform').boundingBox())!;
+    await page.locator('.reader-focus-strip').getByRole('button', { name: `Go to scan ${selected}: letter`, exact: true }).click();
+    const flight = page.locator('.reader-focus-flight');
+    await expect(flight).toHaveCSS('visibility', 'visible');
+    // The return flight starts at the zoomed size, with no intermediate fit reset.
+    expect(await flight.evaluate(el => parseFloat(el.style.width))).toBeCloseTo(zoomed.width, 0);
+    await expect(flight).toHaveAttribute('src', new RegExp(`/images/${selected}\\.svg`));
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.locator('.scan-navigation [role="status"]')).toHaveText(`${selected} / 3`);
+    await expect.poll(() => page.evaluate(() => history.state?.readerFocus ?? null)).toBeNull();
+    const scan = page.locator('.scan-slide').nth(selected - 1);
+    await expect.poll(() => scan.evaluate(el => {
+      const rect = el.getBoundingClientRect(); return Math.abs(rect.left + rect.width / 2 - innerWidth / 2);
+    })).toBeLessThan(2);
+    await scan.press('Enter');
+    await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'focused');
+    await expect(page.locator('.letter-viewer--focus')).toHaveAttribute('data-zoom', '1');
+    await closeReader(page);
+  });
+}
+
 for (const width of [390, 1440]) test(`@mocked scan brightness stays standard when zoom loads the original at ${width}px`, async ({ page }) => {
   test.skip(!await page.evaluate(() => CSS.supports('dynamic-range-limit', 'standard')),
     'This browser build predates HDR dynamic-range control.');
@@ -26,9 +54,7 @@ for (const width of [390, 1440]) test(`@mocked scan brightness stays standard wh
   await expect(image).toHaveCSS('opacity', '1');
   await expect(image).toHaveCSS('dynamic-range-limit', 'standard');
   await page.locator('.reader-focus-strip').getByRole('button', { name: 'Go to scan 1: letter', exact: true }).click();
-  await expect(image).toHaveAttribute('src', /[?&]w=\d+/);
-  await expect(image).toHaveCSS('dynamic-range-limit', 'standard');
-  await closeReader(page);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(opener.locator('img').last()).toHaveCSS('dynamic-range-limit', 'standard');
 });
 
@@ -69,9 +95,6 @@ for (const width of [390, 1440]) test(`@mocked focus mode zooms edge to edge and
     return el.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
   })).toBe(true);
   await strip.getByRole('button', { name: 'Go to scan 2: letter', exact: true }).click();
-  await expect(dialog.locator('.letter-viewer')).toHaveAttribute('data-zoom', '1');
-  await expect(dialog.locator('.viewer-page-counter')).toHaveText('2 / 3');
-  await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
   await expect(page.locator('.scan-navigation [role="status"]')).toHaveText('2 / 3');
   await expect.poll(() => page.evaluate(() => scrollY)).toBeCloseTo(y, 0);
@@ -170,8 +193,8 @@ test('@mocked native pinch starts on the inline scan and continues through focus
   expect(await page.evaluate(() => visualViewport!.scale)).toBe(1);
   await expect(page.locator('.viewer-page-counter')).toHaveText('1 / 3');
   await page.locator('.reader-focus-strip').getByRole('button', { name: 'Go to scan 2: letter', exact: true }).click();
-  await expect(page.locator('.letter-viewer--focus')).toHaveAttribute('data-zoom', '1');
-  await closeReader(page);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.locator('.scan-navigation [role="status"]')).toHaveText('2 / 3');
 });
 
 for (const width of [390, 1440]) test(`@mocked solid thumbnail surfaces match their number notches at ${width}px`, async ({ page }) => {
@@ -210,11 +233,13 @@ for (const width of [390, 1440]) test(`@mocked solid thumbnail surfaces match th
   await expect(thumbnail).toHaveCSS('border-width', '0px');
   await expect(notch).toHaveCSS('color', restingColor);
   await next.click();
-  await expect(next).toHaveAttribute('aria-current', 'page');
-  await expect(next).toHaveCSS('background-color', color);
-  await expect(next.locator('.viewer-page-notch')).toHaveCSS('background-color', color);
-  await expect(thumbnail).toHaveCSS('background-color', restingColor);
-  await expect(notch).toHaveCSS('background-color', restingColor);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  const regularChoices = page.locator('.letter-scan-figure .viewer-page-choice');
+  await expect(regularChoices.nth(1)).toHaveAttribute('aria-current', 'page');
+  await expect(regularChoices.nth(1)).toHaveCSS('background-color', color);
+  await expect(regularChoices.nth(1).locator('.viewer-page-notch')).toHaveCSS('background-color', color);
+  await expect(regularChoices.first()).toHaveCSS('background-color', restingColor);
+  await expect(regularChoices.first().locator('.viewer-page-notch')).toHaveCSS('background-color', restingColor);
 });
 
 for (const width of [390, 1440]) test(`@mocked scan corners keep the regular image proportion across sizes at ${width}px`, async ({ page }) => {
@@ -358,6 +383,9 @@ for (const width of [390, 1440]) test(`@mocked only extreme thumbnails crop whil
   await checkStrip('.reader-focus-strip');
   for (const index of [2, 3]) {
     await page.locator('.reader-focus-strip .viewer-page-choice').nth(index).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await page.locator('.scan-slide').nth(index).press('Enter');
+    await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'focused');
     await expect.poll(() => page.locator('.viewer-transform').evaluate(el => {
       const box = el.getBoundingClientRect(); return box.width / box.height;
     })).toBeCloseTo(images[index].width / images[index].height, 2);

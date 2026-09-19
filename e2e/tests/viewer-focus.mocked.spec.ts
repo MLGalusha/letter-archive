@@ -24,10 +24,8 @@ for (const width of [390, 1440]) {
     await dialog.locator('.viewer-container').dblclick();
     await expect(dialog.locator('.letter-viewer')).toHaveAttribute('data-zoom', '2.5');
     await dialog.getByRole('button', { name: 'Go to scan 2: letter', exact: true }).click();
-    await expect(dialog.locator('.viewer-page-counter')).toHaveText('2 / 3');
-    await expect(dialog.locator('.letter-viewer')).toHaveAttribute('data-zoom', '1');
-    await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
+    await expect(page.locator('.scan-navigation [role="status"]')).toHaveText('2 / 3');
     await expect(opener).toBeFocused();
     await expect(page.locator('#root')).not.toHaveAttribute('inert');
     expect((await page.locator('body').evaluate(el => el.style.cssText)) || '').toBe(styles || '');

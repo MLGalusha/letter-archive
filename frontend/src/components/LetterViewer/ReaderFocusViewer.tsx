@@ -109,7 +109,7 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
       const to = entering ? image.getBoundingClientRect() : target?.getBoundingClientRect();
       const cornerRatio = entering || !target?.getBoundingClientRect().width ? origin.cornerRatio
         : parseFloat(getComputedStyle(target).borderTopLeftRadius) / target.getBoundingClientRect().width;
-      const source = entering ? origin.src : visibleSource(image) || flight.src;
+      const source = entering ? origin.src : visibleSource(image) || visibleSource(target) || flight.src;
       // Capture the displayed frame before cancelling a partially completed trip.
       animations.current.forEach(animation => animation.cancel());
       animations.current = [];

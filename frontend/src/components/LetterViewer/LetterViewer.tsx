@@ -329,6 +329,8 @@ const LetterViewer = memo(function LetterViewer({
   // Load state when changing images within the same letter
   // Lightbox always resets to 1x; panel restores from localStorage
   useEffect(() => {
+    // Focus thumbnails exit to the document; preserve zoom for the return flight.
+    if (focusMode) return;
     if (!letterId || variant === "lightbox") {
       setScale(1);
       setPosition({ x: 0, y: 0 });
@@ -349,7 +351,7 @@ const LetterViewer = memo(function LetterViewer({
     // No saved state for this image - reset to defaults
     setScale(1);
     setPosition({ x: 0, y: 0 });
-  }, [currentImageIndex, letterId, displayImages, variant]);
+  }, [currentImageIndex, letterId, displayImages, variant, focusMode]);
 
   // Notify parent of page changes
   useEffect(() => {
@@ -559,14 +561,16 @@ const LetterViewer = memo(function LetterViewer({
   const selectImage = useCallback((index: number) => {
     cancelSwipe();
     saveCurrentImageState();
-    scaleRef.current = 1;
-    positionRef.current = { x: 0, y: 0 };
+    if (!focusMode) {
+      scaleRef.current = 1;
+      positionRef.current = { x: 0, y: 0 };
+      setScale(1);
+      setPosition({ x: 0, y: 0 });
+    }
     if (zoomTimer.current !== null) clearTimeout(zoomTimer.current);
     zoomTimer.current = null;
     zoomAnimating.current = false;
     setIsAnimating(false);
-    setScale(1);
-    setPosition({ x: 0, y: 0 });
     currentImageIndexRef.current = index;
     if (gestureFrame.current !== null) cancelAnimationFrame(gestureFrame.current);
     gestureFrame.current = null;
@@ -576,7 +580,13 @@ const LetterViewer = memo(function LetterViewer({
     touchStateRef.current.isPinching = false;
     touchStateRef.current.lastTapTime = 0;
     setCurrentImageIndex(index);
-  }, [saveCurrentImageState, cancelSwipe]);
+    if (focusMode) {
+      // Update the document destination before starting the exit, including
+      // when the selected thumbnail is clicked again.
+      onPageChange?.(index, displayImages[index]);
+      onClose?.();
+    }
+  }, [saveCurrentImageState, cancelSwipe, focusMode, onPageChange, onClose, displayImages]);
   const nextImage = useCallback(() => selectImage((currentImageIndexRef.current + 1) % displayImages.length), [selectImage, displayImages.length]);
   const prevImage = useCallback(() => selectImage((currentImageIndexRef.current - 1 + displayImages.length) % displayImages.length), [selectImage, displayImages.length]);
 

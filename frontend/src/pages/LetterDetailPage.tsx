@@ -331,6 +331,7 @@ export default function LetterDetailPage() {
                   >
                     <ReaderScanImage
                       imageUrl={img.imageUrl}
+                      previewEnabled={readyScan === activeScanKey && allowImageSpeculation()}
                       enabled={idx === activeIndex || idx === transitionFromIndex || (Math.abs(idx - activeIndex) === 1 && readyScan === activeScanKey && allowImageSpeculation())}
                       fetchPriority={idx === activeIndex ? 'high' : 'low'}
                       onReadyChange={(ready) => { if (idx === activeIndex) setReadyScan(ready ? activeScanKey : null); }}

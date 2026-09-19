@@ -439,3 +439,6 @@
   background: rgba(255, 255, 255, 0.98);
   border-color: rgba(31, 109, 122, 0.35);
 }
+
+/* A decoded scan replaces its preview in one paint, never a fade from blank. */
+.scan-slide-img .progressive-image__full { transition: none; }

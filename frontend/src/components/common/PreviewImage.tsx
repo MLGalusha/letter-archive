@@ -10,7 +10,7 @@ export function PreviewImage({ src, alt, className, preloadMargin = '1200px 0px'
   enabled?: boolean; src: string; alt: string; className?: string; preloadMargin?: string; context?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [nearViewport, setNearViewport] = useState(() => typeof IntersectionObserver === 'undefined');
+  const [nearViewport, setNearViewport] = useState(() => imagePreloadService.isPreloaded(src) || typeof IntersectionObserver === 'undefined');
   const { attempt, failed, onError, onLoad } = useImageRetry(src);
   const loadStartedAt = useRef(0);
 
@@ -37,7 +37,7 @@ export function PreviewImage({ src, alt, className, preloadMargin = '1200px 0px'
         src={nearViewport ? src : undefined}
         alt={alt}
         loading="eager"
-        decoding="async"
+        decoding={imagePreloadService.isPreloaded(src) ? 'sync' : 'async'}
         draggable={false}
         onLoad={(event) => {
           onLoad();

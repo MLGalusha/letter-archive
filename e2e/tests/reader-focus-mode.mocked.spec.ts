@@ -32,6 +32,49 @@ async function recordReturnPaints(page: Page) {
   await page.evaluate(record);
 }
 
+for (const width of [390, 1440]) test(`@mocked rapid paging retains loaded scans and previews along long jumps at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 900 });
+  await mockReader(page, Array.from({ length: 9 }, (_, i) => ({ ...viewerImages[0], id: `scan-${i + 1}`, pageNumber: i + 1, imageUrl: `/images/${i + 1}.svg` })));
+  await page.goto('/letter/current');
+  const painted = () => page.locator('.scan-slide').evaluateAll(slides => slides.length === 9 && slides.every(slide =>
+    [...slide.querySelectorAll('img')].some(img => img.complete && img.naturalWidth > 0 && getComputedStyle(img).opacity === '1')));
+  await expect.poll(painted).toBe(true);
+  const first = page.locator('.scan-slide').first().locator('.progressive-image__full');
+  const source = await first.getAttribute('src');
+  const blankFrames = await page.evaluate(async () => {
+    const blanks: unknown[] = [];
+    for (const selected of [8, 0, 6, 2, 8, 0]) {
+      (document.querySelectorAll('.letter-scan-figure .viewer-page-choice')[selected] as HTMLButtonElement).click();
+      for (let frame = 0; frame < 8; frame++) {
+        await new Promise(requestAnimationFrame);
+        for (const slide of document.querySelectorAll('.scan-slide')) {
+          if (![...slide.querySelectorAll('img')].some(img => img.complete && img.naturalWidth > 0 && getComputedStyle(img).opacity === '1')) blanks.push({ selected, index: slide.getAttribute('data-index'), images: [...slide.querySelectorAll('img')].map(i => ({ src: i.getAttribute('src'), complete: i.complete, width: i.naturalWidth, opacity: getComputedStyle(i).opacity })) });
+        }
+      }
+    }
+    return blanks;
+  });
+  expect(blankFrames).toEqual([]);
+  await expect(first).toHaveAttribute('src', source!);
+});
+
+for (const width of [390, 1440]) test(`@mocked zoom thumbnails have sources on their first frame at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 900 });
+  await mockReader(page);
+  await page.goto('/letter/current');
+  await expect.poll(() => page.locator('.letter-scan-figure .viewer-page-choice img').evaluateAll(images => images.length === 3 && images.every(img => (img as HTMLImageElement).complete && (img as HTMLImageElement).naturalWidth > 0))).toBe(true);
+  const frames = await page.evaluate(async () => {
+    document.querySelector('.scan-slide')!.dispatchEvent(new WheelEvent('wheel', { deltaY: -1, ctrlKey: true, bubbles: true, cancelable: true }));
+    const frames = [];
+    for (let i = 0; i < 6; i++) {
+      await new Promise(requestAnimationFrame);
+      frames.push([...document.querySelectorAll<HTMLImageElement>(document.querySelector('.reader-focus-strip') ? '.reader-focus-strip img' : '.letter-scan-figure .viewer-page-choice img')].map(img => Boolean(img.getAttribute('src')) && img.complete && img.naturalWidth > 0));
+    }
+    return frames;
+  });
+  for (const frame of frames) expect(frame).toEqual([true, true, true]);
+});
+
 for (const width of [390, 1440]) test(`@mocked thumbnail number notches keep their regular size through zoom at ${width}px`, async ({ page }) => {
   await page.setViewportSize({ width, height: 844 });
   await mockReader(page);

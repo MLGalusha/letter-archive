@@ -31,6 +31,12 @@ export async function openReader(page: Page, images = viewerImages) {
   const y = await page.evaluate(() => window.scrollY);
   const styles = await page.locator('body').evaluate(el => el.style.cssText);
   await opener.press('Enter');
+  await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'focused');
   return { opener, y, styles };
 }
 
+
+export async function closeReader(page: Page) {
+  await page.getByRole('button', { name: 'Close viewer' }).click();
+  await expect(page.getByRole('dialog', { name: 'Original scans' })).toHaveCount(0);
+}

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openReader } from './utils/reader-viewer-fixture';
+import { openReader, closeReader } from './utils/reader-viewer-fixture';
 
 test('@mocked fullscreen paints document edges and restores them on repeated close', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -10,7 +10,7 @@ test('@mocked fullscreen paints document edges and restores them on repeated clo
     await expect(page.locator('html')).toHaveCSS('background-color', color);
     await expect(page.locator('body')).toHaveCSS('background-color', color);
     await expect(page.locator('html')).toHaveCSS('overflow', 'hidden');
-    await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', color);
+    await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#f5ede1');
     for (const height of [620, 844]) {
       await page.setViewportSize({ width: 390, height });
       await expect.poll(() => surface.evaluate(el => {
@@ -20,32 +20,37 @@ test('@mocked fullscreen paints document edges and restores them on repeated clo
       const close = await page.getByRole('button', { name: 'Close viewer' }).boundingBox();
       const header = page.locator('.viewer-modal-header');
       await expect(header).toHaveCSS('position', 'fixed');
-      await expect(header).toHaveCSS('background-color', color);
+      await expect(header).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
       const headerBox = (await header.boundingBox())!;
       expect(headerBox.x).toBe(0);
       expect(headerBox.y).toBe(0);
       expect(headerBox.width).toBe(390);
       expect(headerBox.height).toBeLessThan(height / 2);
       const stageBox = (await page.locator('.viewer-container').boundingBox())!;
-      expect(stageBox.y).toBeGreaterThanOrEqual(headerBox.y + headerBox.height);
+      expect(stageBox.y).toBe(0);
+      expect(stageBox.height).toBe(height);
       const pages = await page.getByRole('dialog', { name: 'Original scans' }).locator('.viewer-page-drawer').boundingBox();
       expect(close!.y).toBeGreaterThanOrEqual(0);
       expect(pages!.y + pages!.height).toBeLessThanOrEqual(height);
     }
-    await page.getByRole('button', { name: 'Close viewer' }).click();
+    await closeReader(page);
     await expect(page.locator('body')).toHaveAttribute('style', styles);
     await expect(page.locator('html')).toHaveCSS('background-color', 'rgb(245, 237, 225)');
     await expect(page.locator('html')).toHaveCSS('overflow', 'visible');
     await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#f5ede1');
     await expect(opener).toBeFocused();
-    if (cycle < 2) await opener.press('Enter');
+    if (cycle < 2) {
+      await opener.press('Enter');
+      await expect(surface).toHaveAttribute('data-phase', 'focused');
+    }
   }
 });
 
 test('@mocked fullscreen blocks chrome gestures while preserving drawer scrolling and prior styles', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const { opener } = await openReader(page);
-  await page.getByRole('button', { name: 'Close viewer' }).click();
+  await closeReader(page);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   const original = await page.evaluate(() => {
     document.documentElement.style.setProperty('background-color', 'rgb(1, 2, 3)', 'important');
     document.documentElement.style.setProperty('overflow', 'clip');
@@ -64,13 +69,14 @@ test('@mocked fullscreen blocks chrome gestures while preserving drawer scrollin
     };
     return {
       chromeTouch: dispatch('.viewer-modal-header', 'touchmove'),
-      chromeWheel: dispatch('.viewer-toolbar', 'wheel'),
+      chromeWheel: dispatch('.viewer-modal-header', 'wheel'),
       drawerTouch: dispatch('.viewer-modal .viewer-page-drawer', 'touchmove'),
       drawerWheel: dispatch('.viewer-modal .viewer-page-drawer', 'wheel'),
     };
   });
   expect(gestures).toEqual({ chromeTouch: true, chromeWheel: true, drawerTouch: false, drawerWheel: false });
-  await page.getByRole('button', { name: 'Close viewer' }).click();
+  await closeReader(page);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   const restored = await page.evaluate(() => ({
     root: document.documentElement.style.cssText, body: document.body.style.cssText,
     theme: document.querySelector('meta[name="theme-color"]')!.getAttribute('content'), y: scrollY,

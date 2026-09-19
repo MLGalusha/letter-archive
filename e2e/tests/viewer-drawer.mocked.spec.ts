@@ -1,60 +1,16 @@
 import { expect, test } from '@playwright/test';
-import { openReader } from './utils/reader-viewer-fixture';
+import { openReader, closeReader } from './utils/reader-viewer-fixture';
 
-test('@mocked releasing a paused swipe starts gently and reaches the next page continuously', async ({ page }) => {
+test('@mocked focus-mode dragging at fit leaves the current scan selected', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openReader(page);
-  await expect(page.locator('.viewer-image')).toHaveCSS('opacity', '1');
-  // Observe the rendered drag before measuring release: a fixed delay can end
-  // before React's animation-frame update on a loaded CI worker.
   await page.locator('.viewer-container').evaluate(stage => {
-    for (const [type, x] of [['touchstart', 300], ['touchmove', 180]] as const) {
+    for (const [type, touches] of [['touchstart', [{clientX:300,clientY:250}]], ['touchmove', [{clientX:100,clientY:250}]], ['touchend', []]] as const) {
       const event = new Event(type, { bubbles: true, cancelable: true });
-      Object.defineProperty(event, 'touches', { value: [{ clientX: x, clientY: 250 }] });
-      stage.dispatchEvent(event);
+      Object.defineProperty(event, 'touches', { value: touches }); stage.dispatchEvent(event);
     }
   });
-  await expect(page.locator('.viewer-carriage')).toHaveCSS('transform', 'matrix(1, 0, 0, 1, -120, 0)');
-  const measured = await page.evaluate(async () => {
-    const stage = document.querySelector('.viewer-container')!;
-    const carriage = document.querySelector('.viewer-carriage')!;
-    const touch = (type: string, x?: number) => {
-      const event = new Event(type, { bubbles: true, cancelable: true });
-      Object.defineProperty(event, 'touches', { value: x === undefined ? [] : [{ clientX: x, clientY: 250 }] });
-      stage.dispatchEvent(event);
-    };
-    const read = () => new DOMMatrixReadOnly(getComputedStyle(carriage).transform).m41;
-    await new Promise(resolve => setTimeout(resolve, 120)); // Release from rest, not a flick.
-    const start = read();
-    const animationReady = new Promise<Animation>(resolve => {
-      carriage.addEventListener('transitionrun', () => {
-        const animation = carriage.getAnimations()[0];
-        animation.pause(); resolve(animation);
-      }, { once: true });
-    });
-    touch('touchend');
-    const animation = await animationReady;
-    await animation.ready;
-    animation.currentTime = 16;
-    const firstFrame = read();
-    await new Promise(requestAnimationFrame);
-    await new Promise(requestAnimationFrame);
-    const strip = document.querySelector('[role="dialog"] .viewer-page-drawer')!;
-    const buttons = strip.querySelectorAll('button');
-    const pitch = buttons[1].getBoundingClientRect().left - buttons[0].getBoundingClientRect().left;
-    const stripError = Math.abs(strip.scrollLeft - (-firstFrame / stage.clientWidth) * pitch);
-    animation.currentTime = Number(animation.effect!.getTiming().duration) - 0.1;
-    const end = read();
-    animation.play();
-    return { start, firstFrame, end, stripError, width: stage.clientWidth };
-  });
-  console.log('Paused release measured CSS pixels:', JSON.stringify(measured));
-  expect(measured.stripError).toBeLessThan(2);
-  expect(measured.start).toBeCloseTo(-120, 0);
-  expect(Math.abs(measured.firstFrame - measured.start)).toBeLessThan(12);
-  expect(measured.firstFrame).toBeLessThan(measured.start);
-  expect(measured.end).toBeCloseTo(-measured.width, 0);
-  await expect(page.locator('.viewer-page-counter')).toHaveText('2 / 3');
+  await expect(page.locator('.viewer-page-counter')).toHaveText('1 / 3');
   await expect(page.locator('.viewer-carriage')).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 0)');
 });
 
@@ -112,7 +68,7 @@ test.describe('touch toolbar', () => {
       await expect(toolbar.getByRole('button', { name, includeHidden: true })).toBeHidden();
     }
     await expect(page.locator('.viewer-mobile-zoom')).toHaveText('100%');
-    await expect(page.locator('.viewer-mobile-zoom')).toBeVisible();
+    await expect(page.locator('.viewer-mobile-zoom')).toBeHidden();
     await expect(page.locator('.viewer-zoom-controls')).toBeHidden();
     const strip = page.getByRole('dialog').locator('.viewer-page-drawer');
     const geometry = await strip.boundingBox();
@@ -126,14 +82,13 @@ test.describe('touch toolbar', () => {
   });
 });
 
-test('@mocked a narrow mouse layout keeps explicit zoom controls', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await openReader(page);
-  for (const name of ['Zoom in', 'Zoom out', 'Fit scan']) await expect(page.getByRole('button', { name })).toBeVisible();
-  await page.getByRole('button', { name: 'Zoom in' }).click();
-  await expect(page.locator('.viewer-zoom-badge')).toHaveText('140%');
-  await page.getByRole('button', { name: 'Fit scan' }).click();
-  await expect(page.locator('.viewer-zoom-badge')).toHaveText('100%');
+test('@mocked narrow mouse focus mode supports keyboard zoom without a toolbar', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 }); await openReader(page);
+  await expect(page.locator('.viewer-toolbar')).toHaveCount(0);
+  await page.keyboard.press('+');
+  await expect(page.locator('.letter-viewer')).toHaveAttribute('data-zoom', '1.4');
+  await page.keyboard.press('0');
+  await expect(page.locator('.letter-viewer')).toHaveAttribute('data-zoom', '1');
 });
 
 test('@mocked fullscreen Close clears simulated phone safe areas and remains clickable', async ({ page, browserName }) => {
@@ -145,7 +100,7 @@ test('@mocked fullscreen Close clears simulated phone safe areas and remains cli
   const close = page.getByRole('button', { name: 'Close viewer' });
   await expect.poll(async () => (await close.boundingBox())!.y).toBeGreaterThanOrEqual(59);
   expect((await close.boundingBox())!.height).toBeGreaterThanOrEqual(44);
-  const toolbar = page.locator('.viewer-toolbar');
+  const toolbar = page.getByRole('dialog').locator('.viewer-page-drawer');
   expect((await toolbar.boundingBox())!.y + (await toolbar.boundingBox())!.height).toBeLessThanOrEqual(844 - 34);
   await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { top: 0, bottom: 21, left: 47, right: 47 } });
   await page.setViewportSize({ width: 844, height: 390 });
@@ -172,16 +127,16 @@ for (const width of [320, 844, 1440]) test(`@mocked drawer reserves scan space a
   const boxes = await dialog.evaluate(el => {
     const box = (s: string) => el.querySelector(s)!.getBoundingClientRect().toJSON();
     return { stage: box('.viewer-container'), drawer: box('.viewer-page-drawer'), image: box('.viewer-image'),
-      toolbar: box('.viewer-toolbar'), close: box('.viewer-close'), overflow: document.documentElement.scrollWidth > innerWidth,
+      close: box('.viewer-close'), overflow: document.documentElement.scrollWidth > innerWidth,
       controls: [...el.querySelectorAll('.viewer-toolbar button')].map(button => button.getBoundingClientRect().toJSON()) };
   });
   expect(boxes.overflow).toBe(false);
   expect(boxes.image.width / boxes.image.height).toBeCloseTo(2.5, 1);
   expect(boxes.image.top).toBeGreaterThanOrEqual(boxes.stage.top - 1);
   expect(boxes.image.bottom).toBeLessThanOrEqual(boxes.stage.bottom + 1);
-  expect(boxes.toolbar.top).toBeGreaterThanOrEqual(boxes.stage.bottom);
-  expect(boxes.close.bottom).toBeLessThanOrEqual(boxes.stage.top);
-  expect(boxes.drawer.top).toBeGreaterThanOrEqual(boxes.stage.bottom);
+  expect(boxes.image.bottom).toBeLessThanOrEqual(boxes.drawer.top);
+  expect(boxes.close.top).toBeGreaterThanOrEqual(boxes.stage.top);
+  expect(boxes.drawer.bottom).toBeLessThanOrEqual(boxes.stage.bottom);
   for (const box of boxes.controls) {
     expect(box.width).toBeGreaterThanOrEqual(44); expect(box.height).toBeGreaterThanOrEqual(44);
     expect(box.right).toBeLessThanOrEqual(width);
@@ -226,7 +181,7 @@ test('@mocked always-visible strip loads only nearby thumbnails', async ({ page 
   await expect.poll(() => last.locator('img').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
   await last.click();
   await expect(page.locator('.viewer-page-counter')).toHaveText('32 / 32');
-  await expect(page.locator('.viewer-zoom-badge')).toHaveText('100%');
+  await expect(page.locator('.viewer-mobile-zoom')).toHaveText('100%');
   expect(requested.size).toBeLessThan(20);
 });
 
@@ -240,8 +195,8 @@ test('@mocked zoom keeps its transform and clear preview through a delayed resol
     await route.fallback();
   });
   try {
-    await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
-    await expect(page.locator('.viewer-zoom-badge')).toHaveText('140%');
+    await page.keyboard.press('+');
+    await expect(page.locator('.viewer-mobile-zoom')).toHaveText('140%');
     await expect(page.locator('.viewer-image-thumb')).toBeVisible();
     expect(await surface!.evaluate(el => el === document.querySelector('.viewer-transform') && el.isConnected)).toBe(true);
     await expect.poll(() => page.locator('.viewer-transform').evaluate(el => new DOMMatrixReadOnly(getComputedStyle(el).transform).a)).toBeCloseTo(1.4, 2);
@@ -252,7 +207,7 @@ test('@mocked zoom keeps its transform and clear preview through a delayed resol
   } finally { release(); }
 });
 
-test('@mocked synthetic swipe takeover, zoomed pan and pinch keep their gesture owner', async ({ page }) => {
+test('@mocked zoomed pan and pinch keep their gesture owner without page swipes', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 }); await openReader(page);
   await expect(page.locator('.viewer-image')).toHaveCSS('opacity', '1');
   await page.evaluate(() => {
@@ -262,29 +217,8 @@ test('@mocked synthetic swipe takeover, zoomed pan and pinch keep their gesture 
       document.querySelector('.viewer-container')!.dispatchEvent(event);
     };
   });
-  const capture = await page.evaluate(async () => {
-    const touch = (window as any).viewerTouch; const frame = () => new Promise(requestAnimationFrame);
-    touch('touchstart', [[300, 250]]); touch('touchmove', [[160, 250]]);
-    await frame(); await frame(); touch('touchend', []);
-    await new Promise(resolve => setTimeout(resolve, 70));
-    const carriage = document.querySelector('.viewer-carriage')!;
-    // Freeze the animation clock so WebKit's separate computed-style reads
-    // compare the same instant, even when this test shares a busy worker host.
-    const animations = carriage.getAnimations();
-    animations.forEach(animation => animation.pause());
-    await Promise.all(animations.map(animation => animation.ready));
-    const before = new DOMMatrixReadOnly(getComputedStyle(carriage).transform).m41;
-    touch('touchstart', [[160, 250]]); await frame(); await frame();
-    const after = new DOMMatrixReadOnly(getComputedStyle(carriage).transform).m41;
-    touch('touchmove', [[160 - before, 250]]); await frame(); await frame(); touch('touchcancel', []);
-    return { before, after };
-  });
-  expect(capture.before).toBeLessThan(-100); expect(capture.after).toBeCloseTo(capture.before, 0);
-  await expect(page.locator('.viewer-page-counter')).toHaveText('1 / 3');
-  await page.waitForTimeout(350); // Past the cancelled fallback: no late commit.
-  await expect(page.locator('.viewer-page-counter')).toHaveText('1 / 3');
   await page.locator('.viewer-container').dblclick();
-  await expect(page.locator('.viewer-zoom-badge')).toHaveText('250%');
+  await expect(page.locator('.viewer-mobile-zoom')).toHaveText('250%');
   await expect.poll(() => page.locator('.viewer-transform').evaluate(el => new DOMMatrixReadOnly(getComputedStyle(el).transform).a)).toBeCloseTo(2.5, 2);
   await page.evaluate(async () => {
     const touch = (window as any).viewerTouch;
@@ -293,7 +227,7 @@ test('@mocked synthetic swipe takeover, zoomed pan and pinch keep their gesture 
   });
   await expect(page.locator('.viewer-page-counter')).toHaveText('1 / 3');
   await expect.poll(() => page.locator('.viewer-transform').evaluate(el => new DOMMatrixReadOnly(getComputedStyle(el).transform).m41)).toBeLessThan(-50);
-  await page.getByRole('button', { name: 'Fit scan' }).click();
+  await page.keyboard.press('0');
   await expect.poll(() => page.locator('.viewer-transform').evaluate(el => new DOMMatrixReadOnly(getComputedStyle(el).transform).a)).toBe(1);
   await page.evaluate(async () => {
     const touch = (window as any).viewerTouch;
@@ -301,7 +235,7 @@ test('@mocked synthetic swipe takeover, zoomed pan and pinch keep their gesture 
     touch('touchstart', [[100, 250], [200, 250]]); touch('touchmove', [[50, 250], [250, 250]]);
     await new Promise(requestAnimationFrame); touch('touchend', []);
   });
-  await expect(page.locator('.viewer-zoom-badge')).toHaveText('200%');
+  await expect(page.locator('.viewer-mobile-zoom')).toHaveText('200%');
   await expect(page.locator('.viewer-page-counter')).toHaveText('1 / 3');
 });
 
@@ -332,7 +266,7 @@ test('@mocked a touch takes over the visible zoom before its target arrives', as
     });
     // Establish the initial computed style before starting a CSS transition.
     surface.getBoundingClientRect();
-    document.querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!.click();
+    document.querySelector('.viewer-close')!.dispatchEvent(new KeyboardEvent('keydown', { key: '+', bubbles: true }));
   });
   // React may schedule the programmatic click's commit with a zero-delay task.
   // Advance it while keeping the 150ms application cleanup timer pending.
@@ -356,10 +290,10 @@ test('@mocked a touch takes over the visible zoom before its target arrives', as
 
 test('@mocked reduced motion removes zoom interpolation', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' }); await openReader(page);
-  await page.getByRole('button', { name: 'Zoom in' }).click();
+  await page.keyboard.press('+');
   await expect(page.locator('.viewer-transform')).toHaveCSS('transition-duration', '0s');
   await expect(page.locator('.viewer-image')).toHaveCSS('transition-duration', '0s');
   await page.getByRole('dialog').getByRole('button', { name: 'Go to scan 2: letter' }).click();
   await expect(page.locator('.viewer-page-counter')).toHaveText('2 / 3');
-  await expect(page.locator('.viewer-zoom-badge')).toHaveText('100%');
+  await expect(page.locator('.viewer-mobile-zoom')).toHaveText('100%');
 });

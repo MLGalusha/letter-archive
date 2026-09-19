@@ -1,0 +1,99 @@
+/* One viewport stage, a separate control layer, and the unchanged document below. */
+.reader-focus-backdrop {
+  --viewer-surface: #f5ede1;
+  --bg: #f5ede1;
+  --text-muted: #6d5f51;
+  --accent: #1f6d7a;
+  background: transparent;
+  color: #2d241d;
+  font-family: 'Instrument Sans', sans-serif;
+}
+.reader-focus-backdrop[data-phase='focused'] { background: var(--bg); }
+.reader-focus.viewer-modal { padding: 0; }
+.reader-focus .letter-viewer--focus { display: block; position: relative; width: 100%; height: 100%; }
+.reader-focus .viewer-workspace { display: contents; }
+.reader-focus .viewer-container { position: absolute; inset: 0; width: 100%; height: 100%; overflow: hidden; }
+.reader-focus-fit {
+  position: absolute;
+  inset: calc(108px + env(safe-area-inset-top, 0px)) 12px calc(108px + env(safe-area-inset-bottom, 0px));
+  pointer-events: none;
+  visibility: hidden;
+}
+.reader-focus .viewer-modal-header {
+  background: transparent;
+  height: auto;
+  padding: calc(12px + env(safe-area-inset-top, 0px)) calc(12px + env(safe-area-inset-right, 0px)) 0 0;
+  pointer-events: none;
+  z-index: 3;
+}
+.reader-focus .viewer-mobile-zoom { display: none; }
+.reader-focus .viewer-close {
+  pointer-events: auto;
+  border-radius: 50%;
+  background: rgb(110 110 105 / .12);
+  color: #453e36;
+  opacity: .5;
+  transform: translateY(-3px);
+  transition: opacity 180ms ease, transform 180ms ease, background 180ms ease;
+}
+.reader-focus .viewer-close:hover, .reader-focus .viewer-close:focus-visible,
+.reader-focus .letter-viewer--zoomed .viewer-close { opacity: 1; transform: none; background: rgb(235 232 223 / .8); }
+.reader-focus-backdrop:not([data-phase='focused']) .viewer-modal-header { opacity: 0; }
+.reader-focus-strip {
+  position: absolute;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(52rem, calc(100% - 24px));
+  z-index: 2;
+  visibility: hidden;
+  border-radius: 14px;
+}
+.reader-focus-strip .viewer-page-drawer { margin-top: 0; overscroll-behavior: contain; }
+.reader-focus .letter-viewer--zoomed .reader-focus-strip {
+  background: rgb(115 115 110 / .23);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.reader-focus .viewer-image, .reader-focus .viewer-image-thumb { border-radius: 4px; }
+.reader-focus-backdrop[data-phase='preparing'] .viewer-transform { visibility: hidden; }
+.reader-focus-flight {
+  position: fixed;
+  transform-origin: 0 0;
+  object-fit: fill;
+  max-width: none;
+  max-height: none;
+  pointer-events: none;
+  visibility: hidden;
+  z-index: 1;
+  border-radius: 4px;
+}
+.public-site-shell[data-reader-focus] .header,
+.public-site-shell[data-reader-focus] .header-reader-cover,
+.public-site-shell[data-reader-focus] .letter-hero-section,
+.public-site-shell[data-reader-focus] .letter-reading-column,
+.public-site-shell[data-reader-focus] .scan-slide {
+  transition: transform 420ms cubic-bezier(.22,.75,.2,1), opacity 420ms ease;
+}
+.public-site-shell[data-reader-focus] .scan-slide[data-focus-side='selected'],
+.public-site-shell[data-reader-focus] .letter-scan-figure figcaption,
+.public-site-shell[data-reader-focus] .back-to-top { visibility: hidden; }
+.public-site-shell:is([data-reader-focus='entering'], [data-reader-focus='focused']) .header,
+.public-site-shell:is([data-reader-focus='entering'], [data-reader-focus='focused']) .header-reader-cover { transform: translateY(-120%); }
+.public-site-shell:is([data-reader-focus='entering'], [data-reader-focus='focused']) .letter-hero-section,
+.public-site-shell:is([data-reader-focus='entering'], [data-reader-focus='focused']) .letter-reading-column { transform: translateY(100vh); opacity: 0; }
+.public-site-shell:is([data-reader-focus='entering'], [data-reader-focus='focused']) [data-focus-side='left'] { transform: translateX(-100vw); }
+.public-site-shell:is([data-reader-focus='entering'], [data-reader-focus='focused']) [data-focus-side='right'] { transform: translateX(100vw); }
+@media (max-height: 500px) {
+  .reader-focus-fit { inset-block: 92px; }
+  .reader-focus-strip { bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .public-site-shell[data-reader-focus] *, .reader-focus * { transition-duration: 0s !important; }
+}
+
+/* Selecting a thumbnail recenters the hidden document scan without inheriting
+   its departing-neighbor transform. Its measured return destination stays real. */
+.public-site-shell[data-reader-focus] .scan-slide[data-focus-side="selected"] { transform: none; transition: none; }
+/* The departing/returning header stays in front until it clears the viewport. */
+.public-site-shell[data-reader-focus] .header { z-index: 1100; }

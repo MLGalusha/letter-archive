@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { API_BASE_URL } from './utils/test-helpers';
-import { openReader } from './utils/reader-viewer-fixture';
+import { openReader, closeReader } from './utils/reader-viewer-fixture';
 
 test.use({ isMobile: true, hasTouch: true });
 test.beforeEach(async ({ page }) => {
@@ -118,7 +118,7 @@ for (const width of [320, 390, 430, 844, 901, 1280, 1440, 1920]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await openReader(page);
-    await page.getByRole('button', { name: 'Close viewer' }).click();
+    await closeReader(page);
     // The fixture opens a tall scan at its center. Return to the top and let
     // the existing scroll-responsive header finish expanding before measuring.
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
@@ -190,7 +190,7 @@ test('@mocked asymmetric safe-area geometry keeps both carousel content lanes an
   expect(homeCard.width).toBe(524);
   await noDocumentOverflow(page);
   await openReader(page);
-  await page.getByRole('button', { name: 'Close viewer' }).click();
+  await closeReader(page);
   await page.addStyleTag({ content: '.letter-article {--reader-inset-left:56px;--reader-inset-right:12px;}' });
   const carousel = page.locator('.scan-carousel');
   for (const n of [3, 1]) {

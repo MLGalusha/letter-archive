@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { openReader } from './utils/reader-viewer-fixture';
+import { openReader, closeReader } from './utils/reader-viewer-fixture';
 
 async function scrollTo(page: Page, y: number) {
   await page.evaluate(y => window.scrollTo({ top: y, behavior: 'instant' }), y);
@@ -57,7 +57,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) for (const wid
     await page.emulateMedia({ reducedMotion });
     await page.setViewportSize({ width, height: 844 });
     const { opener } = await openReader(page);
-    await page.getByRole('button', { name: 'Close viewer' }).click();
+    await closeReader(page);
     await page.route('**/letters/summaries**', route => route.fulfill({ json: {
       total: 3, letters: ['previous', 'current', 'next'].map(id => ({ id })),
     } }));
@@ -117,7 +117,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) for (const wid
       const r = el.getBoundingClientRect();
       return el.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
     })).toBe(true);
-    await page.getByRole('button', { name: 'Close viewer' }).click();
+    await closeReader(page);
     await expect(opener).toBeFocused();
     await scrollTo(page, 500);
     await scrollTo(page, 420);
@@ -131,7 +131,7 @@ for (const width of [390, 900, 901, 1440, 1920]) {
     await page.setViewportSize({ width, height: 900 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await openReader(page);
-    await page.getByRole('button', { name: 'Close viewer' }).click();
+    await closeReader(page);
     await page.getByRole('button', { name: 'Go to scan 2: letter', exact: true }).evaluate(el => el.click());
     const scans = page.locator('.scan-carousel .progressive-image__full');
     await expect.poll(() => scans.evaluateAll(images => images.every(image => (image as HTMLImageElement).naturalWidth > 0))).toBe(true);

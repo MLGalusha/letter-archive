@@ -6,8 +6,8 @@ import { imagePreloadService } from '../../services/imagePreloadService';
 import { useImageRetry } from '../../hooks/useImageRetry';
 
 /** Small card previews need one display-sized image, not several competing tiers. */
-export function PreviewImage({ src, alt, className, preloadMargin = '1200px 0px', context = 'archive-card' }: {
-  src: string; alt: string; className?: string; preloadMargin?: string; context?: string;
+export function PreviewImage({ src, alt, className, preloadMargin = '1200px 0px', context = 'archive-card', enabled = true }: {
+  enabled?: boolean; src: string; alt: string; className?: string; preloadMargin?: string; context?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [nearViewport, setNearViewport] = useState(() => typeof IntersectionObserver === 'undefined');
@@ -19,7 +19,7 @@ export function PreviewImage({ src, alt, className, preloadMargin = '1200px 0px'
   }, [nearViewport, src]);
 
   useEffect(() => {
-    if (nearViewport) return;
+    if (nearViewport || !enabled) return;
     const observer = new IntersectionObserver((entries) => {
       if (!entries.some((entry) => entry.isIntersecting)) return;
       setNearViewport(true);
@@ -27,7 +27,7 @@ export function PreviewImage({ src, alt, className, preloadMargin = '1200px 0px'
     }, { root: containerRef.current?.closest('[data-image-scroll-root]') ?? getAppScrollRootForIO(), rootMargin: preloadMargin });
     if (containerRef.current) observer.observe(containerRef.current);
     return () => observer.disconnect();
-  }, [nearViewport, preloadMargin]);
+  }, [nearViewport, preloadMargin, enabled]);
 
   return (
     <div ref={containerRef} className={`preview-image ${className ?? ''}`}>

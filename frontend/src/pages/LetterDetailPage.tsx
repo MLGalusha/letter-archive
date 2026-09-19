@@ -2,10 +2,9 @@ import { useSiteSettings } from '../hooks/useSiteSettings';
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, Fragment } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { useAccessibleDialog } from "../components/common/useAccessibleDialog";
 import SEO from "../components/SEO";
 
-import LetterViewer from "../components/LetterViewer/LetterViewer";
+import { ReaderFocusViewer } from "../components/LetterViewer/ReaderFocusViewer";
 import { InlineScanNavigation } from "../components/LetterViewer/InlineScanNavigation";
 import { getAdjacentLetters, getLetterById, type AdjacentLettersResponse } from "../api/letters";
 import type { LetterImage, LetterImageType, PublicLetter } from "../types/Letter";
@@ -22,7 +21,6 @@ import HeaderScrubber from "../components/HeaderScrubber/HeaderScrubber";
 import useLetterScrubber from "../components/LetterHeaderDock/useLetterScrubber";
 import useCarouselDrag from "../hooks/useCarouselDrag";
 import BackToTop from "../components/BackToTop";
-import { useReaderViewerSurface } from "../hooks/useReaderViewerSurface";
 import "./LetterDetailPage.css";
 
 /* ── helpers ─────────────────────────────────────────────── */
@@ -224,12 +222,7 @@ export default function LetterDetailPage() {
 
   const viewerIsActive = viewerOpen && displayedLetterIsCurrent;
 
-  const { dialogRef: viewerDialogRef } = useAccessibleDialog({
-    isOpen: viewerIsActive,
-    onClose: () => setViewerOpen(false),
-    isolateBackground: true,
-  });
-  useReaderViewerSurface(viewerIsActive, viewerDialogRef);
+  const syncViewerPage = useCallback((index: number) => scrollToSlide(index, 'instant'), [scrollToSlide]);
 
   // Memoize all derived values — must be before conditional returns (Rules of Hooks)
   const derived = useMemo(() => {
@@ -308,6 +301,7 @@ export default function LetterDetailPage() {
                 return (
                   <div
                     key={img.id ?? idx}
+                    data-scan-index={idx}
                     className="scan-slide"
                     data-index={idx}
                     role="button"
@@ -350,7 +344,7 @@ export default function LetterDetailPage() {
             </div>
 
             <figcaption>
-              <InlineScanNavigation key={letter.id} images={carouselImages} selected={activeIndex} motion={pageMotion}
+              <InlineScanNavigation enabled={!viewerIsActive} key={letter.id} images={carouselImages} selected={activeIndex} motion={pageMotion}
                 onSelect={index => scrollToSlide(index,
                   window.matchMedia('(min-width: 901px)').matches ? 'smooth' : 'instant')} />
             </figcaption>
@@ -399,36 +393,8 @@ export default function LetterDetailPage() {
 
       {/* ── Image Viewer Modal ─────────────────────────────── */}
       {viewerIsActive && createPortal(
-        // Portal escapes page transforms and covers the fixed header.
-        <div
-          className="viewer-backdrop"
-          onMouseDown={(e) => {
-            // Only close if mousedown started directly on the backdrop (not on viewer content)
-            if (e.target === e.currentTarget) {
-              (e.currentTarget as HTMLElement).dataset.backdropMousedown = "1";
-            }
-          }}
-          onMouseUp={(e) => {
-            const el = e.currentTarget as HTMLElement;
-            if (el.dataset.backdropMousedown === "1" && e.target === e.currentTarget) {
-              setViewerOpen(false);
-            }
-            delete el.dataset.backdropMousedown;
-          }}
-        >
-          <div className="viewer-modal" ref={viewerDialogRef}
-            role="dialog" aria-modal="true" aria-label="Original scans" tabIndex={-1}>
-            <LetterViewer
-              key={viewerStartPage}
-              images={allImages}
-              letterId={letter.id}
-              showOnlyLetterPages={false}
-              variant="lightbox"
-              initialIndex={viewerStartPage}
-              onClose={() => setViewerOpen(false)}
-            />
-          </div>
-        </div>,
+        <ReaderFocusViewer images={allImages} letterId={letter.id} initialIndex={viewerStartPage}
+          onPageChange={syncViewerPage} onClose={() => setViewerOpen(false)} />,
         document.body,
       )}
       <BackToTop />

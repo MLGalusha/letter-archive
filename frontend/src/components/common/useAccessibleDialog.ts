@@ -21,12 +21,14 @@ interface AccessibleDialogOptions {
   isOpen: boolean;
   onClose: () => void;
   isolateBackground?: boolean;
+  restoreFocusTo?: HTMLElement | null;
 }
 
 export function useAccessibleDialog({
   isOpen,
   onClose,
   isolateBackground = false,
+  restoreFocusTo,
 }: AccessibleDialogOptions) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
@@ -90,9 +92,9 @@ export function useAccessibleDialog({
 
     pendingRestoreRef.current = false;
     deferRestoreRef.current = false;
-    openerRef.current = document.activeElement instanceof HTMLElement
+    openerRef.current = restoreFocusTo ?? (document.activeElement instanceof HTMLElement
       ? document.activeElement
-      : null;
+      : null);
 
     const dialog = dialogRef.current;
     // Isolate siblings along the portal's ancestor path without making the
@@ -113,7 +115,7 @@ export function useAccessibleDialog({
     }
     const focusable = () => Array.from(
       dialog?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? [],
-    );
+    ).filter(element => element.tabIndex >= 0 && !element.matches(':disabled') && !element.closest('[inert], [hidden]'));
     (focusable()[0] ?? dialog)?.focus({ preventScroll: isolateBackground });
 
     const isTopmostDialog = () => {
@@ -166,7 +168,7 @@ export function useAccessibleDialog({
         restoreFocus();
       }
     };
-  }, [isOpen, isolateBackground, restoreFocus]);
+  }, [isOpen, isolateBackground, restoreFocus, restoreFocusTo]);
 
   return {
     dialogRef,

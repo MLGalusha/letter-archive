@@ -7,10 +7,11 @@ import { usePageStripMotion } from './usePageStripMotion';
 import type { PageMotion } from './pageMotion';
 
 /** Shared filmstrip with coordinated paging and native touch scrolling. Only settled user scrolling selects a new scan. */
-export const ViewerPageDrawer = memo(function ViewerPageDrawer({ id, images, selected, onSelect, motion, layout = 'viewer' }: {
+export const ViewerPageDrawer = memo(function ViewerPageDrawer({ id, images, selected, onSelect, motion, layout = 'viewer', enabled = true }: {
   id: string; images: LetterImage[]; selected: number; onSelect: (index: number) => void;
   motion?: PageMotion;
   layout?: 'viewer' | 'inline';
+  enabled?: boolean;
 }) {
   const { root, choose, suppressClick } = usePageStripMotion( selected, onSelect, motion, images.length);
 
@@ -29,7 +30,7 @@ export const ViewerPageDrawer = memo(function ViewerPageDrawer({ id, images, sel
         if (event.detail > 0 && suppressClick.current) { suppressClick.current = false; return; }
         choose.current(index);
       }}>
-      <PreviewImage src={getImageUrl(image.imageUrl, { width: 200 })} alt="" preloadMargin="120px" context="viewer-pages" />
+      <PreviewImage enabled={enabled} src={getImageUrl(image.imageUrl, { width: 200 })} alt="" preloadMargin="120px" context="viewer-pages" />
       <span className="viewer-page-notch" aria-hidden="true">{index + 1}</span>
     </button>)}
   </div>;

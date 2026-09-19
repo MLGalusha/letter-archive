@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { openReader } from './utils/reader-viewer-fixture';
+import { openReader, closeReader } from './utils/reader-viewer-fixture';
 
 
 for (const width of [390, 1440]) {
@@ -16,17 +16,15 @@ for (const width of [390, 1440]) {
     }
     await opener.evaluate(el => (el as HTMLElement).focus());
     expect(await dialog.evaluate(el => el.contains(document.activeElement))).toBe(true);
+    await dialog.getByRole('button', { name: 'Close viewer' }).focus();
     await page.keyboard.press('ArrowRight');
-    await expect(dialog.locator('.viewer-page-counter')).toHaveText('2 / 3');
+    await expect(dialog.locator('.viewer-page-counter')).toHaveText('1 / 3');
     await expect(page).toHaveURL(/\/letter\/current$/);
     await dialog.locator('.viewer-container').dblclick();
-    await expect(dialog.locator('.viewer-zoom-badge')).toHaveText('250%');
-    await dialog.getByRole('button', { name: 'Close viewer' }).focus();
-    await page.keyboard.press('ArrowLeft');
-    await expect(dialog.locator('.viewer-page-counter')).toHaveText('1 / 3');
-    await expect(dialog.locator('.viewer-zoom-badge')).toHaveText('100%');
-    await page.keyboard.press('ArrowLeft');
-    await expect(dialog.locator('.viewer-page-counter')).toHaveText('3 / 3');
+    await expect(dialog.locator('.letter-viewer')).toHaveAttribute('data-zoom', '2.5');
+    await dialog.getByRole('button', { name: 'Go to scan 2: letter', exact: true }).click();
+    await expect(dialog.locator('.viewer-page-counter')).toHaveText('2 / 3');
+    await expect(dialog.locator('.letter-viewer')).toHaveAttribute('data-zoom', '1');
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
     await expect(opener).toBeFocused();
@@ -44,6 +42,8 @@ test('@mocked leaving the route while fullscreen restores background interaction
   await openReader(page);
   await expect(page.getByRole('dialog', { name: 'Original scans' })).toBeVisible();
   await page.goBack();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.goBack();
   await expect(page).toHaveURL(/\/about$/);
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.locator('#root')).not.toHaveAttribute('inert');
@@ -56,11 +56,12 @@ test('@mocked leaving the route while fullscreen restores background interaction
 test('@mocked pointer opening restores focus to its actual scan trigger', async ({ page }) => {
   const { opener } = await openReader(page);
   await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.locator('body').click({ position: { x: 1, y: 1 } });
   await opener.click();
   const dialog = page.getByRole('dialog', { name: 'Original scans' });
   await expect(dialog.getByRole('button', { name: 'Close viewer' })).toBeFocused();
-  await dialog.getByRole('button', { name: 'Close viewer' }).click();
+  await closeReader(page);
   await expect(opener).toBeFocused();
 });
 

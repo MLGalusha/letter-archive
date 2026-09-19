@@ -296,20 +296,24 @@ for (const mode of ['inline', 'fullscreen']) test(`@mocked ${mode} thumbnail nat
 
 for (const mode of ['inline', 'fullscreen']) test(`@mocked ${mode} thumbnail tap animates intermediate positions`, async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
+  const now = new Date('2026-09-18T12:00:00Z');
+  await page.clock.install({ time: now });
   await openReader(page);
   if (mode === 'inline') await page.getByRole('button', { name: 'Close viewer' }).click();
   const strip = page.locator(mode === 'inline' ? '.viewer-page-drawer--inline' : '[role="dialog"] .viewer-page-drawer');
-  const samples = await strip.evaluate(async el => {
-    const samples: number[] = [];
-    (el.querySelectorAll('button')[1] as HTMLElement).click();
-    const start = performance.now();
-    await new Promise<void>(resolve => {
-      const sample = () => { samples.push(el.scrollLeft); if (performance.now() - start < 400) requestAnimationFrame(sample); else resolve(); };
-      requestAnimationFrame(sample);
-    });
-    return samples;
-  });
-  expect(samples.filter(x => x > 1 && x < 63).length).toBeGreaterThan(2);
+  await page.evaluate(() => document.fonts.ready);
+  await page.clock.pauseAt(new Date(now.getTime() + 60_000));
+  await strip.getByRole('button').nth(1).evaluate(el => el.click());
   await expect(strip.getByRole('button').nth(1)).toHaveAttribute('aria-current', 'page');
-  expect(samples.at(-1)).toBeCloseTo(64, 0);
+  const samples: number[] = [];
+  // Check intermediate positions at controlled times, not a runner-dependent
+  // number of frames captured inside a180ms wall-clock window.
+  for (let i = 0; i < 4; i++) {
+    await page.clock.runFor(32);
+    samples.push(await strip.evaluate(el => el.scrollLeft));
+  }
+  expect(samples.every(x => x > 1 && x < 64)).toBe(true);
+  expect(samples.every((x, i) => i === 0 || x > samples[i - 1])).toBe(true);
+  await page.clock.runFor(200);
+  expect(await strip.evaluate(el => el.scrollLeft)).toBeCloseTo(64, 0);
 });

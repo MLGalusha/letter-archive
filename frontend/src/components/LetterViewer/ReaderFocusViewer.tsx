@@ -14,13 +14,14 @@ const visibleSource = (element: Element | null) => {
 };
 
 /** Owns the reversible trip between the document scan and the viewport stage. */
-export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onPageChange, entryZoom = 1 }: {
-  images: LetterImage[]; letterId: string; initialIndex: number; entryZoom?: number;
+export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onPageChange, cornerRatios, entryZoom = 1 }: {
+  images: LetterImage[]; letterId: string; initialIndex: number; cornerRatios: number[]; entryZoom?: number;
   onClose: () => void; onPageChange: (index: number) => void;
 }) {
   const [origin] = useState(() => {
     const image = scanElement(initialIndex);
     return { opener: document.activeElement instanceof HTMLElement ? document.activeElement : null,
+      cornerRatio: image && image.getBoundingClientRect().width ? parseFloat(getComputedStyle(image).borderTopLeftRadius) / image.getBoundingClientRect().width : .01,
       image: image?.getBoundingClientRect(), src: visibleSource(image),
       strip: document.querySelector('.letter-scan-figure .scan-navigation')?.getBoundingClientRect() };
   });
@@ -59,7 +60,7 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
     const flight = flightRef.current;
     if (flight && origin.image && origin.src) {
       Object.assign(flight.style, { visibility: 'visible', left: `${origin.image.left}px`, top: `${origin.image.top}px`,
-        width: `${origin.image.width}px`, height: `${origin.image.height}px` });
+        width: `${origin.image.width}px`, height: `${origin.image.height}px`, borderRadius: `${origin.image.width * origin.cornerRatio}px` });
     }
 
     return () => {
@@ -104,6 +105,8 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
       const from = entering ? origin.image : flight.style.visibility === 'visible'
         ? flight.getBoundingClientRect() : image.getBoundingClientRect();
       const to = entering ? image.getBoundingClientRect() : target?.getBoundingClientRect();
+      const cornerRatio = entering || !target?.getBoundingClientRect().width ? origin.cornerRatio
+        : parseFloat(getComputedStyle(target).borderTopLeftRadius) / target.getBoundingClientRect().width;
       const source = entering ? origin.src : visibleSource(image) || flight.src;
       // Capture the displayed frame before cancelling a partially completed trip.
       animations.current.forEach(animation => animation.cancel());
@@ -114,7 +117,7 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
       if (from && to && from.width && to.width && source) {
         flight.src = source;
         Object.assign(flight.style, { visibility: 'visible', left: `${from.left}px`, top: `${from.top}px`,
-          width: `${from.width}px`, height: `${from.height}px` });
+          width: `${from.width}px`, height: `${from.height}px`, borderRadius: `${from.width * cornerRatio}px` });
         if (entering) {
           // The destination stays live: wheel/pinch updates during entry must
           // enlarge the visible scan now, not jump when the flight finishes.
@@ -127,7 +130,8 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
               const destination = image.getBoundingClientRect();
               const mix = (a: number, b: number) => a + (b - a) * progress;
               Object.assign(flight.style, { left: `${mix(from.left, destination.left)}px`, top: `${mix(from.top, destination.top)}px`,
-                width: `${mix(from.width, destination.width)}px`, height: `${mix(from.height, destination.height)}px` });
+                width: `${mix(from.width, destination.width)}px`, height: `${mix(from.height, destination.height)}px`,
+                borderRadius: `${mix(from.width, destination.width) * cornerRatio}px` });
               if (progress === 1) resolve();
               else flightFrame = requestAnimationFrame(draw);
             };
@@ -177,7 +181,7 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
 
   return <div className="reader-focus-backdrop viewer-backdrop" data-phase={phase}>
     <div ref={dialogRef} className="reader-focus viewer-modal" role="dialog" aria-modal="true" aria-label="Original scans" tabIndex={-1}>
-      <LetterViewer images={images} letterId={letterId} variant="lightbox" focusMode entryZoom={entryZoom}
+      <LetterViewer images={images} letterId={letterId} variant="lightbox" focusMode cornerRatios={cornerRatios} entryZoom={entryZoom}
         initialIndex={initialIndex} initialAspectRatio={origin.image ? origin.image.width / origin.image.height : undefined}
         fallbackSrc={origin.src} onClose={requestClose} onPageChange={selectPage} />
     </div>

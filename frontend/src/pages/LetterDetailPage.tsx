@@ -20,6 +20,7 @@ import HeaderDock from "../components/Header/HeaderDock";
 import HeaderScrubber from "../components/HeaderScrubber/HeaderScrubber";
 import useLetterScrubber from "../components/LetterHeaderDock/useLetterScrubber";
 import { useScanFocusEntry } from "../hooks/useScanFocusEntry";
+import { useScanCornerRatios } from "../hooks/useScanCornerRatios";
 import useCarouselDrag from "../hooks/useCarouselDrag";
 import BackToTop from "../components/BackToTop";
 import "./LetterDetailPage.css";
@@ -137,7 +138,9 @@ export default function LetterDetailPage() {
 
 
   // Scan carousel (extracted hook)
-  const { attachCarousel, activeIndex, transitionFromIndex, pageMotion, carouselDraggedRef, scrollToSlide } = useCarouselDrag();
+  const { carouselRef, attachCarousel, activeIndex, transitionFromIndex, pageMotion, carouselDraggedRef, scrollToSlide } = useCarouselDrag();
+
+  const cornerRatios = useScanCornerRatios(carouselRef, letter?.images);
 
   const [readyScan, setReadyScan] = useState<string | null>(null);
   const activeScanKey = `${letter?.id}:${letter?.images[activeIndex]?.imageUrl ?? activeIndex}`;
@@ -347,7 +350,7 @@ export default function LetterDetailPage() {
             </div>
 
             <figcaption>
-              <InlineScanNavigation enabled={!viewerIsActive} key={letter.id} images={carouselImages} selected={activeIndex} motion={pageMotion}
+              <InlineScanNavigation cornerRatios={cornerRatios} enabled={!viewerIsActive} key={letter.id} images={carouselImages} selected={activeIndex} motion={pageMotion}
                 onSelect={index => scrollToSlide(index,
                   window.matchMedia('(min-width: 901px)').matches ? 'smooth' : 'instant')} />
             </figcaption>
@@ -396,7 +399,7 @@ export default function LetterDetailPage() {
 
       {/* ── Image Viewer Modal ─────────────────────────────── */}
       {viewerIsActive && createPortal(
-        <ReaderFocusViewer entryZoom={entryZoom} images={allImages} letterId={letter.id} initialIndex={viewerStartPage}
+        <ReaderFocusViewer cornerRatios={cornerRatios} entryZoom={entryZoom} images={allImages} letterId={letter.id} initialIndex={viewerStartPage}
           onPageChange={syncViewerPage} onClose={() => setViewerOpen(false)} />,
         document.body,
       )}

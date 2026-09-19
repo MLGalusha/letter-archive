@@ -1,6 +1,6 @@
 import { imagePreloadService } from "../../services/imagePreloadService";
 import { RetryingImage } from "../common/RetryingImage";
-import { memo, useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo, useId } from "react";
+import { memo, useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo, useId, type CSSProperties } from "react";
 import type { LetterImage } from "../../types/Letter";
 import { getImageUrl } from "../../api/client";
 import { useProgressiveImage } from "../../hooks/useProgressiveImage";
@@ -48,6 +48,7 @@ interface LetterViewerProps {
   variant?: "panel" | "lightbox";
   initialIndex?: number;
   focusMode?: boolean;
+  cornerRatios?: number[];
   entryZoom?: number;
   initialAspectRatio?: number;
   fallbackSrc?: string;
@@ -117,6 +118,7 @@ const LetterViewer = memo(function LetterViewer({
   variant = "panel",
   initialIndex = 0,
   focusMode = false,
+  cornerRatios,
   entryZoom = 1,
   initialAspectRatio,
   fallbackSrc,
@@ -949,6 +951,7 @@ const LetterViewer = memo(function LetterViewer({
 
   return (
     <div
+      style={focusMode ? { '--scan-image-corner-radius': `${physicalWidth / (window.devicePixelRatio || 1) * (cornerRatios?.[currentImageIndex] ?? .01)}px` } as CSSProperties : undefined}
       data-zoom={scale}
       className={`letter-viewer${focusMode ? " letter-viewer--focus" : ""}${focusMode && scale > 1.01 ? " letter-viewer--zoomed" : ""}${isLightbox ? " letter-viewer--lightbox" : ""}${isLightbox && onClose ? " letter-viewer--with-header" : ""}`}
     >
@@ -1091,7 +1094,7 @@ const LetterViewer = memo(function LetterViewer({
         )}
       </div>
 
-      {focusMode && <div className="reader-focus-strip" style={{ maxWidth: (displayImages.length - 1) * 128 + 64 }}><InlineScanNavigation images={displayImages}
+      {focusMode && <div className="reader-focus-strip" style={{ maxWidth: (displayImages.length - 1) * 128 + 64 }}><InlineScanNavigation cornerRatios={cornerRatios} images={displayImages}
         selected={currentImageIndex} onSelect={selectImage} /></div>}
       {isLightbox && !focusMode && <ViewerPageDrawer id={drawerId} images={displayImages}
         selected={currentImageIndex} onSelect={selectImage} motion={pageMotion} />}

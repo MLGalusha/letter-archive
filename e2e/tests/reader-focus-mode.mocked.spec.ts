@@ -168,7 +168,7 @@ for (const width of [390, 1440]) test(`@mocked solid thumbnail surfaces match th
   await expect(thumbnail).toHaveCSS('backdrop-filter', 'none');
   await expect(strip).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   await expect(thumbnail).toHaveCSS('border-radius', '6px');
-  await expect(thumbnail.locator('.preview-image')).toHaveCSS('border-radius', '5px');
+  expect(await thumbnail.locator('.preview-image').evaluate(el => parseFloat(getComputedStyle(el).borderTopLeftRadius))).toBeLessThan(1.5);
   expect((await notch.boundingBox())!.y + 18).toBe(before.y + before.height);
   await page.keyboard.press('+');
   await expect(thumbnail).toHaveCSS('background-color', color);
@@ -183,4 +183,33 @@ for (const width of [390, 1440]) test(`@mocked solid thumbnail surfaces match th
   await expect(next.locator('.viewer-page-notch')).toHaveCSS('background-color', color);
   await expect(thumbnail).toHaveCSS('background-color', restingColor);
   await expect(notch).toHaveCSS('background-color', restingColor);
+});
+
+for (const width of [390, 1440]) test(`@mocked scan corners keep the regular image proportion across sizes at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 844 });
+  const { opener } = await openReader(page);
+  await closeReader(page);
+  const ratio = (selector: string) => page.locator(selector).first().evaluate(el => {
+    const style = getComputedStyle(el);
+    return parseFloat(style.borderTopLeftRadius) / parseFloat(style.width);
+  });
+  const reference = await ratio('.scan-slide-img');
+  expect(reference).toBeGreaterThan(0);
+  await expect.poll(() => ratio('.letter-scan-figure .preview-image')).toBeCloseTo(reference, 5);
+  await opener.click();
+  await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'entering');
+  expect(await ratio('.reader-focus-flight')).toBeCloseTo(reference, 5);
+  await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'focused');
+  expect(await ratio('.reader-focus .viewer-image')).toBeCloseTo(reference, 5);
+  expect(await ratio('.reader-focus .preview-image')).toBeCloseTo(reference, 5);
+  await page.keyboard.press('+');
+  await page.keyboard.press('+');
+  expect(await ratio('.reader-focus .viewer-image')).toBeCloseTo(reference, 5);
+  await page.setViewportSize({ width: width === 390 ? 1440 : 390, height: 844 });
+  await expect.poll(async () => Math.abs(await ratio('.reader-focus .viewer-image') - await ratio('.scan-slide-img'))).toBeLessThan(.00001);
+  await expect.poll(async () => Math.abs(await ratio('.reader-focus .preview-image') - await ratio('.scan-slide-img'))).toBeLessThan(.00001);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'exiting');
+  expect(await ratio('.reader-focus-flight')).toBeCloseTo(await ratio('.scan-slide-img'), 5);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 });

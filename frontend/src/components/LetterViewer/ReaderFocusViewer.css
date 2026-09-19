@@ -50,7 +50,7 @@
   border-radius: 14px;
 }
 .reader-focus-strip .viewer-page-drawer { margin-top: 0; overscroll-behavior: contain; }
-.reader-focus .viewer-image, .reader-focus .viewer-image-thumb { border-radius: 4px; }
+.reader-focus .viewer-image, .reader-focus .viewer-image-thumb { border-radius: var(--scan-image-corner-radius); }
 .reader-focus-backdrop[data-phase='preparing'] .viewer-transform { visibility: hidden; }
 .reader-focus-flight {
   position: fixed;

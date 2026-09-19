@@ -295,6 +295,10 @@
     --scan-height: min(42rem, max(16rem, calc(100svh - var(--header-height, 6rem) - 10rem)));
   }
   .scan-carousel {
+    /* Raise only the large scans; the sibling figcaption/thumbnail strip
+       remains beneath the reader's header cover. */
+    position: relative;
+    z-index: 45;
     padding-block: .75rem;
     margin-block: -.75rem;
     /* As on mobile, extend the scroll window to the screen edges while

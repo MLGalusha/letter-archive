@@ -174,10 +174,10 @@ for (const width of [390, 1440]) test(`@mocked thumbnail frost blurs actual back
   const frosted = await contrast();
   const disabled = await page.addStyleTag({ content: '.reader-focus-strip .viewer-page-choice { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }' });
   const sharp = await contrast();
-  expect(sharp).toBeGreaterThan(100);
+  expect(sharp).toBeGreaterThan(60);
   expect(frosted).toBeLessThan(sharp / 4);
   await disabled.evaluate(el => el.remove());
   await page.keyboard.press('+');
-  await expect(thumbnail).toHaveCSS('backdrop-filter', 'blur(12px)');
+  await expect(thumbnail).toHaveCSS('backdrop-filter', 'blur(24px)');
   expect(await thumbnail.boundingBox()).toEqual(before);
 });

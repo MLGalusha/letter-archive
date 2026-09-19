@@ -53,9 +53,9 @@
 /* Each button's border box owns its frosted surface. Keep the strip and gaps
    clear, and retain the frost at fit as well as while the scan is zoomed. */
 .reader-focus .reader-focus-strip .viewer-page-choice {
-  background: rgb(220 222 220 / .48);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgb(220 222 220 / .68);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
 }
 .reader-focus .viewer-image, .reader-focus .viewer-image-thumb { border-radius: 4px; }
 .reader-focus-backdrop[data-phase='preparing'] .viewer-transform { visibility: hidden; }

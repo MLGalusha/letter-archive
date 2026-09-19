@@ -37,12 +37,19 @@ test('@mocked releasing a paused swipe starts gently and reaches the next page c
     await animation.ready;
     animation.currentTime = 16;
     const firstFrame = read();
+    await new Promise(requestAnimationFrame);
+    await new Promise(requestAnimationFrame);
+    const strip = document.querySelector('[role="dialog"] .viewer-page-drawer')!;
+    const buttons = strip.querySelectorAll('button');
+    const pitch = buttons[1].getBoundingClientRect().left - buttons[0].getBoundingClientRect().left;
+    const stripError = Math.abs(strip.scrollLeft - (-firstFrame / stage.clientWidth) * pitch);
     animation.currentTime = Number(animation.effect!.getTiming().duration) - 0.1;
     const end = read();
     animation.play();
-    return { start, firstFrame, end, width: stage.clientWidth };
+    return { start, firstFrame, end, stripError, width: stage.clientWidth };
   });
   console.log('Paused release measured CSS pixels:', JSON.stringify(measured));
+  expect(measured.stripError).toBeLessThan(2);
   expect(measured.start).toBeCloseTo(-120, 0);
   expect(Math.abs(measured.firstFrame - measured.start)).toBeLessThan(12);
   expect(measured.firstFrame).toBeLessThan(measured.start);
@@ -72,7 +79,7 @@ test.describe('touch toolbar', () => {
       return Math.abs(selected.left + selected.width / 2 - box.left - box.width / 2);
     })).toBeLessThan(1);
   });
-  test('@mocked a native pinch survives both image rendition replacements', async ({ page, browserName }) => {
+  test('@mocked a native pinch keeps its rendition stable until finger release', async ({ page, browserName }) => {
     test.skip(browserName !== 'chromium', 'Trusted multi-touch dispatch uses CDP; not physical iOS validation.');
     await page.setViewportSize({ width: 390, height: 844 });
     await openReader(page);
@@ -89,10 +96,10 @@ test.describe('touch toolbar', () => {
     for (const distance of [110, 120, 140, 150, 170, 200]) {
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: points(distance) });
       await expect(page.locator('.viewer-mobile-zoom')).toHaveText(`${distance}%`);
-      if (distance === 120) await expect(image).toHaveAttribute('src', /w=1600/);
-      if (distance === 150) await expect(image).not.toHaveAttribute('src', /[?&]w=/);
+      await expect(image).toHaveAttribute('src', /w=1200/);
     }
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await expect(image).not.toHaveAttribute('src', /[?&]w=/);
     await expect(page.locator('.viewer-page-counter')).toHaveText('1 / 3');
     await page.getByRole('dialog').getByRole('button', { name: 'Go to scan 2: letter' }).tap();
     await expect(page.locator('.viewer-mobile-zoom')).toHaveText('100%');

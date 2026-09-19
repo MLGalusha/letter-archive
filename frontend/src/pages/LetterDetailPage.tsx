@@ -138,7 +138,7 @@ export default function LetterDetailPage() {
 
 
   // Scan carousel (extracted hook)
-  const { attachCarousel, activeIndex, carouselDraggedRef, scrollToSlide } = useCarouselDrag();
+  const { attachCarousel, activeIndex, pageMotion, carouselDraggedRef, scrollToSlide } = useCarouselDrag();
 
   const [readyScan, setReadyScan] = useState<string | null>(null);
   const activeScanKey = `${letter?.id}:${letter?.images[activeIndex]?.imageUrl ?? activeIndex}`;
@@ -280,7 +280,7 @@ export default function LetterDetailPage() {
       <HeaderDock transparent collectionsLink={collectionsLink}>
         {scrubberProps && <HeaderScrubber {...scrubberProps} disabled={navigationPending} />}
       </HeaderDock>
-      {pending && <div className="letter-navigation-status" role="status"><span className="sr-only">Loading letter...</span></div>}
+      {pending && <div className="sr-only" role="status">Loading letter...</div>}
       <article className="letter-article" aria-busy={pending} inert={pending}>
         {seo && (
           <SEO
@@ -350,7 +350,7 @@ export default function LetterDetailPage() {
             </div>
 
             <figcaption>
-              <InlineScanNavigation key={letter.id} images={carouselImages} selected={activeIndex}
+              <InlineScanNavigation key={letter.id} images={carouselImages} selected={activeIndex} motion={pageMotion}
                 onSelect={index => scrollToSlide(index, 'instant')} />
             </figcaption>
           </figure>

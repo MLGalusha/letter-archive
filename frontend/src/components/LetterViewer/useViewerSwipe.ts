@@ -126,5 +126,5 @@ export function useViewerSwipe(
 
   useEffect(() => () => cancel(), [cancel, contentKey]);
 
-  return { ...view, begin, move, release, cancel, finish, settlingRef: settling };
+  return { ...view, readOffset, begin, move, release, cancel, finish, settlingRef: settling };
 }

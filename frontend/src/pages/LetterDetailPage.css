@@ -225,9 +225,6 @@
   gap: .75rem;
   flex-wrap: wrap;
 }
-.letter-article[aria-busy="true"] {
-  opacity: .6;
-}
 .letter-article :is(button, summary, .scan-slide):focus-visible {
   outline: 2px solid var(--accent-strong);
   outline-offset: 3px;
@@ -435,16 +432,4 @@
 .detail-action-btn:hover {
   background: rgba(255, 255, 255, 0.98);
   border-color: rgba(31, 109, 122, 0.35);
-}
-
-
-/* Pending feedback is outside document flow; it cannot displace the reader. */
-.letter-navigation-status {
-  position: fixed;
-  inset-inline: 1.25rem;
-  top: var(--header-height, 6rem);
-  height: 3px;
-  background: var(--accent);
-  z-index: 49;
-  opacity: .6;
 }

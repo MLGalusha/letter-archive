@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, useState, useMemo, type RefObject } from 'react';
+
+import { createPageMotion, type PageMotion } from '../components/LetterViewer/pageMotion';
 
 export interface UseCarouselDragReturn {
   carouselRef: RefObject<HTMLDivElement | null>;
   /** Attach when the carousel appears after loading or changes letters. */
   attachCarousel: (node: HTMLDivElement | null) => void;
   activeIndex: number;
+  pageMotion: PageMotion;
   /** True when a drag gesture occurred (suppresses click handler) */
   carouselDraggedRef: RefObject<boolean>;
   /** Smoothly scroll to a slide by index */
@@ -17,8 +20,10 @@ export interface UseCarouselDragReturn {
  * Reports the slide closest to the viewport center for React-rendered dots.
  */
 export default function useCarouselDrag(): UseCarouselDragReturn {
+  const pageMotion = useMemo(() => createPageMotion(), []);
   const carouselRef = useRef<HTMLDivElement>(null);
   const carouselDraggedRef = useRef(false);
+  const explicitSelection = useRef(false);
   const navigationTargetRef = useRef<number | null>(null);
   const [carousel, setCarousel] = useState<HTMLDivElement | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -58,6 +63,10 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
         }
       }
 
+      const first = (slides[0] as HTMLElement).getBoundingClientRect();
+      const second = slides[1]?.getBoundingClientRect();
+      const pitch = second ? second.left - first.left : first.width;
+      if (pitch > 0 && !explicitSelection.current) pageMotion.publish((center - first.left - first.width / 2) / pitch);
       setActiveIndex(closestIdx);
     };
 
@@ -66,6 +75,7 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
     };
 
     const restoreSnap = () => {
+      explicitSelection.current = false;
       navigationTargetRef.current = null;
       carousel.style.scrollSnapType = '';
     };
@@ -73,7 +83,13 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
       // An interrupted animation can emit its own late scrollend. It must not
       // restore snapping over a newer target that has not arrived yet.
       const target = navigationTargetRef.current;
-      if (target === null || Math.abs(carousel.scrollLeft - target) <= 1) restoreSnap();
+      if (target === null || Math.abs(carousel.scrollLeft - target) <= 1) {
+        const wasExplicit = explicitSelection.current;
+        // Publish the final position before releasing synchronization.
+        if (!wasExplicit) updateActiveDot();
+        pageMotion.publish(null);
+        restoreSnap();
+      }
     };
     carousel.addEventListener('scrollend', onScrollEnd);
     carousel.addEventListener('touchstart', restoreSnap, { passive: true });
@@ -95,7 +111,7 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
       observer?.disconnect();
       if (rafId != null) cancelAnimationFrame(rafId);
     };
-  }, [carousel]);
+  }, [carousel, pageMotion]);
 
   // Mouse drag-to-scroll (desktop only — touch uses native scroll)
   useEffect(() => {
@@ -106,6 +122,7 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
     let scrollStart = 0;
 
     const onMouseDown = (e: MouseEvent) => {
+      explicitSelection.current = false;
       isDragging = true;
       carouselDraggedRef.current = false;
       startX = e.clientX;
@@ -156,6 +173,7 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
     // Native snapping can retain its previous target during a rapid reversal
     // in WebKit. Explicit paging owns the target until it settles or the user
     // starts a gesture; those events restore native touch/trackpad snapping.
+    explicitSelection.current = true;
     carousel.style.scrollSnapType = 'none';
     navigationTargetRef.current = targetLeft;
     const resolvedBehavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : behavior;
@@ -172,5 +190,5 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
     }
   }, []);
 
-  return { carouselRef, attachCarousel, activeIndex, carouselDraggedRef, scrollToSlide };
+  return { carouselRef, attachCarousel, activeIndex, pageMotion, carouselDraggedRef, scrollToSlide };
 }

@@ -118,7 +118,7 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
         if (entering) {
           // The destination stays live: wheel/pinch updates during entry must
           // enlarge the visible scan now, not jump when the flight finishes.
-          const clock = strip.animate([{ opacity: 1 }, { opacity: 1 }], { duration, easing: EASING, fill: 'both' });
+          const clock = flight.animate([{ opacity: 1 }, { opacity: 1 }], { duration, easing: EASING, fill: 'both' });
           animations.current.push(clock);
           liveFlight = new Promise(resolve => {
             const draw = () => {
@@ -162,6 +162,10 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
         if (entering) {
           flight.style.visibility = 'hidden';
           image.style.visibility = '';
+          // Filled animations can retain compositor/backdrop boundaries after
+          // finishing. The resting CSS already matches their final geometry.
+          animations.current.forEach(animation => animation.cancel());
+          animations.current = [];
           setPhase('focused');
           shell.dataset.readerFocus = 'focused';
         } else closeCallback.current();

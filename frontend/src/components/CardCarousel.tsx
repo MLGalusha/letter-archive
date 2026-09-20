@@ -126,7 +126,7 @@ export default function CardCarousel({ children, label, className = '', layout =
 
   if (!slides.length) return null;
   return (
-    <div className={`card-carousel ${className}`} data-layout={layout} data-swipe-ignore={interactive || undefined}
+    <div className={`card-carousel ${className}`} data-layout={layout}
       role={interactive ? 'region' : undefined} aria-roledescription={interactive ? 'carousel' : undefined}
       aria-label={interactive ? label : undefined} onKeyDown={onKeyDown}>
       <div className="card-carousel-frame" data-settled-slide={settledSlide ?? undefined}>

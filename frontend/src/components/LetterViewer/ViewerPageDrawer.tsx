@@ -15,7 +15,7 @@ export const ViewerPageDrawer = memo(function ViewerPageDrawer({ id, images, sel
 }) {
   const { root, choose, suppressClick } = usePageStripMotion( selected, onSelect, motion, images.length);
 
-  return <div id={id} ref={root} className={`viewer-page-drawer${layout === 'inline' ? ' viewer-page-drawer--inline' : ''}`} role="region" aria-label="Scan pages" data-image-scroll-root data-swipe-ignore onDragStart={event => event.preventDefault()}
+  return <div id={id} ref={root} className={`viewer-page-drawer${layout === 'inline' ? ' viewer-page-drawer--inline' : ''}`} role="region" aria-label="Scan pages" data-image-scroll-root onDragStart={event => event.preventDefault()}
     onKeyDown={event => {
       const index = event.key === 'ArrowRight' ? Math.min(images.length - 1, selected + 1)
         : event.key === 'ArrowLeft' ? Math.max(0, selected - 1)

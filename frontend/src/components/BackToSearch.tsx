@@ -96,7 +96,7 @@ export default function BackToSearch({
 
   const buttonRef = useTouchScrollAction(jumpToSearch);
 
-  // Portal keeps fixed controls outside page swipe transforms.
+  // Portal keeps fixed controls outside page layout containers.
   const handleClick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.preventDefault();

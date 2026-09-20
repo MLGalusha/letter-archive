@@ -23,11 +23,6 @@ vi.mock("../../components/LetterViewer/LetterViewer", () => ({
   default: ({ initialIndex }: { initialIndex: number }) => <div data-index={initialIndex}>LetterViewer</div>,
 }));
 
-// Keep this regression touch-capable if a page gesture is accidentally restored.
-vi.mock("../../hooks/useIsTouchDevice", () => ({
-  default: () => true,
-}));
-
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
   return {

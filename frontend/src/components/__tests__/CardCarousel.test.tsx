@@ -52,12 +52,11 @@ describe('CardCarousel', () => {
       fireEvent(viewport, event); expect(event.defaultPrevented).toBe(false);
     }
   });
-  it('renders zero or one item without carousel controls or trapping collection gestures', () => {
+  it('renders zero or one item without carousel controls', () => {
     const view = render(<CardCarousel label="Highlights">{[null, false]}</CardCarousel>);
     expect(view.container).toBeEmptyDOMElement();
     view.rerender(<CardCarousel label="Highlights">{[slides[0]]}</CardCarousel>);
     expect(screen.queryByRole('button')).toBeNull();
-    expect(view.container.querySelector('[data-swipe-ignore]')).toBeNull();
     view.rerender(<CardCarousel label="Highlights">{slides}</CardCarousel>);
     fireEvent.click(screen.getByLabelText('Slide 2'));
     expect(screen.getByLabelText('Slide 2')).toHaveAttribute('aria-current', 'true');

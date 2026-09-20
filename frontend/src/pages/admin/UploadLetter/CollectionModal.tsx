@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { getTypeName } from "../../../utils/filename-parser";
+import { formatDate } from "./utils";
 import type { CollectionGroup, LetterGroup, UploadedImage } from "./types";
 
 interface CollectionModalProps {
@@ -10,16 +11,6 @@ interface CollectionModalProps {
   onViewImage: (image: UploadedImage, allImages: UploadedImage[]) => void;
   onToggleDeletionLetter: (collectionCode: string, letterKey: string) => void;
   onToggleDeletionImage: (id: string) => void;
-}
-
-function formatDate(isoDate: string): string {
-  const [year, month, day] = isoDate.split("-").map(Number);
-  const date = new Date(year, month - 1, day);
-  return date.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
 }
 
 export default function CollectionModal({

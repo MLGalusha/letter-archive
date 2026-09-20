@@ -22,6 +22,7 @@ import {
 } from './relationship-provenance.js';
 import { buildHumanMetadataJobPatch } from '../letter/metadata-job.js';
 import { buildStructuredMetadataSqlPatch } from '../letter/metadata-projection.js';
+import { serializeDate, uniqueStrings } from '../../utils/value-helpers.js';
 
 export async function createCanonicalPlace(
   data: Omit<NewCanonicalPlace, 'id' | 'createdAt' | 'updatedAt'>,
@@ -45,25 +46,6 @@ export async function getAllCanonicalPlaces(): Promise<CanonicalPlace[]> {
   return db.query.canonicalPlaces.findMany({
     orderBy: [asc(canonicalPlaces.canonicalName)],
   });
-}
-
-function serializeDate(value: Date | null | undefined): string | null {
-  if (!value) return null;
-  return value.toISOString();
-}
-
-function uniqueStrings(values: Array<string | null | undefined>): string[] {
-  const out: string[] = [];
-  const seen = new Set<string>();
-  for (const value of values) {
-    if (!value) continue;
-    const normalized = value.trim();
-    if (!normalized) continue;
-    if (seen.has(normalized)) continue;
-    seen.add(normalized);
-    out.push(normalized);
-  }
-  return out;
 }
 
 interface MergePlaceSnapshot {

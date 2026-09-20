@@ -1,4 +1,5 @@
 import { type MouseEvent as ReactMouseEvent } from 'react';
+import CardCarousel from './CardCarousel';
 import CardMediaImages from './CardMediaImages';
 import useMediaSelection from '../hooks/useMediaSelection';
 import type { LetterImageType } from '../types/Letter';
@@ -17,11 +18,12 @@ export interface ShowcaseItem {
 
 interface ShowcaseCardProps {
   items: ShowcaseItem[];
+  swipeImages?: boolean;
   onNavigate?: (letterId: string, imageId?: string) => void;
 }
 
-export default function ShowcaseCard({ items, onNavigate }: ShowcaseCardProps) {
-  const { index, step } = useMediaSelection(items.map(item => `${item.letterId}:${item.imageId || item.imageUrl}`));
+export default function ShowcaseCard({ items, onNavigate, swipeImages = false }: ShowcaseCardProps) {
+  const { index, step, select } = useMediaSelection(items.map(item => `${item.letterId}:${item.imageId || item.imageUrl}`));
   const item = items[index];
   const hasMultiple = items.length > 1;
 
@@ -38,12 +40,13 @@ export default function ShowcaseCard({ items, onNavigate }: ShowcaseCardProps) {
   };
 
   const Content = onNavigate ? 'a' : 'div';
-  const params = new URLSearchParams({ from: 'highlight' });
-  if (item.imageId) params.set('image', item.imageId);
-
-  return (
-    <div className={`cd-highlight-card cd-highlight-card--${item.mediaType}`}>
-      <Content className="cd-highlight-open-link" data-carousel-drag={onNavigate ? true : undefined} draggable={false}
+  const media = items.map(gi => ({ key: `${gi.letterId}:${gi.imageId || gi.imageUrl}`, imageUrl: gi.imageUrl, alt: gi.hook || gi.label }));
+  const renderPage = (pageIndex: number) => {
+    const item = items[pageIndex];
+    const params = new URLSearchParams({ from: 'highlight' });
+    if (item.imageId) params.set('image', item.imageId);
+    return (
+      <Content className={`cd-highlight-open-link${swipeImages ? " card-media-page" : ""}`} data-carousel-drag={onNavigate ? true : undefined} draggable={false}
         href={onNavigate ? `/letter/${item.letterId}?${params.toString()}` : undefined}
         aria-label={[item.label, item.peopleLine, item.date, item.hook].filter(Boolean).join(', ')}
         onClick={(event: ReactMouseEvent) => {
@@ -52,8 +55,10 @@ export default function ShowcaseCard({ items, onNavigate }: ShowcaseCardProps) {
           onNavigate(item.letterId, item.imageId);
         }}
       >
-      <CardMediaImages items={items.map(gi => ({ key: `${gi.letterId}:${gi.imageId || gi.imageUrl}`, imageUrl: gi.imageUrl, alt: gi.hook || gi.label }))}
-        index={index} className="cd-highlight-img" context="showcase" />
+      {(!swipeImages || Math.abs(pageIndex - index) <= 1) && (
+        <CardMediaImages items={swipeImages ? [media[pageIndex]] : media}
+          index={swipeImages ? 0 : index} className="cd-highlight-img" context="showcase" />
+      )}
       {!item.imageUrl && <div className="cd-highlight-placeholder" />}
       <div className="cd-highlight-overlay" />
       <span className="cd-highlight-label">{item.label}</span>
@@ -69,11 +74,21 @@ export default function ShowcaseCard({ items, onNavigate }: ShowcaseCardProps) {
         )}
       </div>
       </Content>
+    );
+  };
+  return (
+    <div className={`cd-highlight-card cd-highlight-card--${item.mediaType}`}>
+      {swipeImages ? (
+        <CardCarousel className="card-media-carousel" label="Highlight images" initialIndex={index} onSlideChange={select} showDots={false}>
+          {items.map((entry, i) => <div key={`${entry.letterId}:${entry.imageId || entry.imageUrl}`} className={`card-media-page cd-highlight-card--${entry.mediaType}`}>{renderPage(i)}</div>)}
+        </CardCarousel>
+      ) : renderPage(index)}
       {hasMultiple && (
         <>
           <span className="cd-highlight-page-counter">
             {index + 1}/{items.length}
           </span>
+          {!swipeImages && <>
           <button type="button"
             className="cd-highlight-zone cd-highlight-zone--prev"
             onClick={handlePrev}
@@ -84,6 +99,7 @@ export default function ShowcaseCard({ items, onNavigate }: ShowcaseCardProps) {
             onClick={handleNext}
             aria-label="Next"
           />
+          </>}
         </>
       )}
     </div>

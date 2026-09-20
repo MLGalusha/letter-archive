@@ -8,11 +8,11 @@ test.use({ isMobile: true, hasTouch: true });
 test.beforeEach(async ({ page }) => {
   await page.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, route => route.abort());
 });
-async function openCards(page: Page, path = '/collections/003', withNotes = true) {
+async function openCards(page: Page, path = '/collections/003', withNotes = true, multiScan = false) {
   await page.setViewportSize({ width: 390, height: 844 });
   const collection = { id: 'collection-003', collectionCode: '003', title: 'Carousel collection', description: withNotes ? 'Carousel browser checks' : '', createdAt: '2026-01-01', letterCount: 24 };
   const letters = ['letter', 'photo'].map((type, index) => ({
-    id: `item-${index}`, images: [{ id: `scan-${index}`, type, imageUrl: `/images/scan-${index}` }],
+    id: `item-${index}`, images: Array.from({ length: multiScan ? 3 : 1 }, (_, scan) => ({ id: `scan-${index}-${scan}`, type, imageUrl: `/images/scan-${index}-${scan}` })),
     metadata: { dateRaw: '19470810', date: '1947-08-10', hook: 'A public archive item', verified: true },
     transcriptStatus: 'VERIFIED', metadataContentStatus: 'VERIFIED', photoDescription: 'A family photograph',
   }));
@@ -34,7 +34,7 @@ async function openCards(page: Page, path = '/collections/003', withNotes = true
     return route.fulfill({ status: 404, json: { error: 'Not found' } });
   });
   await page.goto(path);
-  const carousel = page.locator('.card-carousel');
+  const carousel = page.locator('.home-showcase, .cd-highlights-col');
   await expect(carousel.locator('.card-carousel-dot')).toHaveCount(2);
   await page.evaluate(() => document.fonts.ready);
   await carousel.scrollIntoViewIfNeeded();
@@ -53,7 +53,7 @@ for (const path of ['/', '/collections/003']) {
     await expect(dots.nth(1)).toHaveAttribute('aria-current', 'true');
     await page.setViewportSize({ width: 1280, height: 900 });
     await expect(carousel).toHaveAttribute('data-layout', 'static');
-    await expect(carousel.locator('[inert]')).toHaveCount(0);
+    await expect(carousel.locator(':scope > .card-carousel-frame > .card-carousel-viewport > .card-carousel-slide[inert]')).toHaveCount(0);
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(dots.nth(1)).toHaveAttribute('aria-current', 'true');
     await page.clock.fastForward(60000);
@@ -93,7 +93,7 @@ for (const path of ['/', '/collections/003']) {
     await expect(viewport).toHaveCSS('overscroll-behavior-x', 'none');
     for (const index of [0, 1]) {
       await carousel.locator('.card-carousel-dot').nth(index).click();
-      await expect(carousel.locator('.card-carousel-frame')).toHaveAttribute('data-settled-slide', String(index));
+      await expect(carousel.locator(':scope > .card-carousel-frame')).toHaveAttribute('data-settled-slide', String(index));
       const box = (await viewport.boundingBox())!;
       await page.mouse.move(box.x + box.width / 2, box.y + 80);
       await page.mouse.down();
@@ -143,7 +143,7 @@ for (const width of [320, 390, 430, 640]) {
   test(`@mocked collection cards share a fixed rounded frame and a straight seam at ${width}px`, async ({ page }) => {
     const carousel = await openCards(page, '/collections/003', false);
     await page.setViewportSize({ width, height: 844 });
-    const frame = carousel.locator('.card-carousel-frame');
+    const frame = carousel.locator(':scope > .card-carousel-frame');
     const before = await frame.boundingBox();
     // This fixture has no People panel. Desktop's reserved sidebar width must
     // not shrink the mobile carousel when collection metadata is absent.
@@ -202,7 +202,7 @@ test('@mocked native wheel scrolling changes cards while vertical wheel scrollin
 test('@mocked homepage outline only surrounds the settled text card', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const carousel = await openCards(page, '/');
-  const frame = carousel.locator('.card-carousel-frame');
+  const frame = carousel.locator(':scope > .card-carousel-frame');
   const viewport = carousel.locator('.card-carousel-viewport');
   const outline = () => frame.evaluate(el => getComputedStyle(el, '::after').visibility);
   await expect.poll(outline).toBe('visible');
@@ -227,4 +227,54 @@ test('@mocked homepage outline only surrounds the settled text card', async ({ p
   await expect(carousel).toHaveAttribute('data-layout', 'static');
   await expect(carousel.locator('.home-hero-copy')).toHaveCSS('border-top-color', 'rgba(217, 207, 191, 0.95)');
   await expect.poll(() => frame.evaluate(el => getComputedStyle(el, '::after').content)).toBe('none');
+});
+
+
+test.describe('wide image cards', () => {
+  test.use({ isMobile: false, hasTouch: false });
+  for (const path of ['/', '/collections/003']) test(`@mocked wide cards reuse swipe paging and keep image selection across layouts: ${path}`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const outer = await openCards(page, path, true, true);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await expect(outer).toHaveAttribute('data-layout', 'static');
+    const cards = page.locator(path === '/' ? '.home-hero-feature-card' : '.cd-highlight-card');
+    const card = cards.first();
+    const counter = card.locator(path === '/' ? '.home-hero-page-counter' : '.cd-highlight-page-counter');
+    const initialHref = await card.locator('a').first().getAttribute('href');
+    const expectedImage = path === '/' ? 'two' : `scan-${initialHref?.includes('item-0') ? 0 : 1}-1`;
+    const inner = card.locator('.card-media-carousel');
+    const viewport = inner.locator('.card-carousel-viewport');
+    await expect(card.locator('button')).toHaveCount(0);
+    await viewport.scrollIntoViewIfNeeded();
+    const dimensions = await card.evaluate(el => {
+      const card = el.getBoundingClientRect();
+      const viewport = el.querySelector('.card-carousel-viewport')!.getBoundingClientRect();
+      return { widthDifference: viewport.width - card.width, heightDifference: viewport.height - card.height };
+    });
+    expect(dimensions.widthDifference).toBeCloseTo(0, 0);
+    expect(dimensions.heightDifference).toBeCloseTo(0, 0);
+    const box = (await viewport.boundingBox())!;
+    await page.mouse.move(box.x + box.width - 35, box.y + 90);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 35, box.y + 90, { steps: 12 });
+    await page.mouse.up();
+    await expect(counter).toHaveText(path === '/' ? '2/2' : '2/3');
+    await expect(page).toHaveURL(new RegExp(path === '/' ? '/$' : '/collections/003$'));
+    if (path !== '/') await expect(cards.nth(1).locator('.cd-highlight-page-counter')).toHaveText('1/3');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(outer).toHaveAttribute('data-layout', 'carousel');
+    if (path === '/') await outer.locator('.card-carousel-dot').nth(1).click();
+    await expect(card.locator('.card-media-carousel')).toHaveCount(0);
+    await expect(counter).toHaveText(path === '/' ? '2/2' : '2/3');
+    await card.getByRole('button', { name: path === '/' ? 'Previous page' : 'Previous', exact: true }).click();
+    await expect(counter).toHaveText(path === '/' ? '1/2' : '1/3');
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await viewport.focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(counter).toHaveText(path === '/' ? '2/2' : '2/3');
+    await expect(card.locator('button')).toHaveCount(0);
+    await expect(card.locator('.card-media-carousel')).toHaveCount(1);
+    await card.locator('.card-carousel-slide:not([inert]) a').click();
+    await expect(page).toHaveURL(new RegExp(`image=${expectedImage}`));
+  });
 });

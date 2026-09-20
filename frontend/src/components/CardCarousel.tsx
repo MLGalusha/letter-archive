@@ -6,19 +6,24 @@ interface CardCarouselProps {
   children: ReactNode;
   label: string;
   className?: string;
+  initialIndex?: number;
+  onSlideChange?: (index: number) => void;
+  showDots?: boolean;
   /** Keep content mounted when the page switches to its desktop layout. */
   layout?: 'carousel' | 'static';
 }
 
 /** One clipped frame, native touch/trackpad scrolling, and no cloned content. */
-export default function CardCarousel({ children, label, className = '', layout = 'carousel' }: CardCarouselProps) {
+export default function CardCarousel({ children, label, className = '', layout = 'carousel', initialIndex = 0, onSlideChange, showDots = true }: CardCarouselProps) {
   const slides = Children.toArray(children);
   const keys = slides.map((slide, i) => isValidElement(slide) ? String(slide.key ?? i) : String(i));
   const signature = JSON.stringify(keys);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(() => keys[initialIndex] ?? null);
   const active = Math.max(0, keys.indexOf(selected ?? keys[0]));
-  const [settledSlide, setSettledSlide] = useState<number | null>(0);
-  const selectedRef = useRef<string | null>(null);
+  const [settledSlide, setSettledSlide] = useState<number | null>(initialIndex);
+  const selectedRef = useRef<string | null>(keys[initialIndex] ?? null);
+  const changeRef = useRef(onSlideChange);
+  useLayoutEffect(() => { changeRef.current = onSlideChange; }, [onSlideChange]);
   const viewportRef = useRef<HTMLDivElement>(null);
   const targetRef = useRef<number | null>(null);
   const carousel = layout === 'carousel';
@@ -32,8 +37,10 @@ export default function CardCarousel({ children, label, className = '', layout =
     let frame = 0;
     let settleTimer: ReturnType<typeof setTimeout> | undefined;
     const select = (index: number) => {
+      const changed = selectedRef.current !== observedKeys[index];
       selectedRef.current = observedKeys[index];
       setSelected(observedKeys[index]);
+      if (changed) changeRef.current?.(index);
     };
     const readPosition = () => {
       frame = 0;
@@ -139,7 +146,7 @@ export default function CardCarousel({ children, label, className = '', layout =
           ))}
         </div>
       </div>
-      {interactive && (
+      {interactive && showDots && (
         <div className="card-carousel-dots" role="group" aria-label="Choose slide">
           {slides.map((_, index) => <button key={keys[index]} type="button" className="card-carousel-dot"
             aria-label={`Slide ${index + 1}`} aria-current={index === active ? 'true' : undefined} onClick={() => goTo(index)} />)}

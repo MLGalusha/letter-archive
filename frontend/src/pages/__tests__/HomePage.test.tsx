@@ -6,6 +6,10 @@ import HomePage from "../HomePage";
 import { HeaderDockProvider } from "../../contexts/HeaderDockContext";
 import type { ArchiveShelfItem } from "../../types/Letter";
 
+// These page tests exercise the compact layout's inner page buttons.
+// Wide-layout swiping is covered by the real-browser carousel suite.
+vi.mock("../../hooks/useIsMobile", () => ({ default: () => true }));
+
 function LocationProbe() { const location = useLocation(); return <output data-testid="location">{location.pathname}</output>; }
 
 const listBlogPostsMock = vi.fn();
@@ -53,6 +57,7 @@ function makeShelfItem(index: number): ArchiveShelfItem {
 
 describe("HomePage archive browsing", () => {
   beforeEach(() => {
+    HTMLElement.prototype.scrollTo = vi.fn();
     listBlogPostsMock.mockReset();
     searchArchiveShelfMock.mockReset();
     getFeaturedLetterMock.mockReset();

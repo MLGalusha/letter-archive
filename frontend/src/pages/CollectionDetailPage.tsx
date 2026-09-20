@@ -357,10 +357,10 @@ export default function CollectionDetailPage() {
               <CardCarousel label="Collection highlights" className="cd-highlights-col" layout={isMobile ? "carousel" : "static"}>
                 {[
                   ...highlightShowcaseItems.map(({ key, items }) => (
-                    <ShowcaseCard key={key} items={items} onNavigate={handleHighlightClick} />
+                    <ShowcaseCard key={key} items={items} swipeImages={!isMobile} onNavigate={handleHighlightClick} />
                   )),
                   ...(galleryShowcaseItems.length > 0 ? [
-                    <ShowcaseCard key="gallery" items={galleryShowcaseItems} onNavigate={handleHighlightClick} />
+                    <ShowcaseCard key="gallery" items={galleryShowcaseItems} swipeImages={!isMobile} onNavigate={handleHighlightClick} />
                   ] : []),
                 ]}
               </CardCarousel>

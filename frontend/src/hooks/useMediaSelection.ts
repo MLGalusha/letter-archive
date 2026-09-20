@@ -12,5 +12,8 @@ export default function useMediaSelection(keys: string[]) {
     const next = (index + delta + keys.length) % keys.length;
     setSelection({ key: keys[next], index: next });
   };
-  return { index, step };
+  const select = (next: number) => {
+    if (keys[next] !== undefined) setSelection({ key: keys[next], index: next });
+  };
+  return { index, step, select };
 }

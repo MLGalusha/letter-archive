@@ -112,14 +112,15 @@ function HeroLetterCard({
   heroImages,
   ariaLabel,
   onNavigate,
+  swipeImages,
 }: {
+  swipeImages: boolean;
   heroLetter: FeaturedLetter;
   heroImages: LetterImage[];
   ariaLabel: string;
   onNavigate: (letterId: string, params: URLSearchParams) => void;
 }) {
-  const { index: heroPageIndex, step } = useMediaSelection(heroImages.map(image => `${heroLetter.id}:${image.id}`));
-  const currentImage = heroImages[heroPageIndex] || null;
+  const { index: heroPageIndex, step, select } = useMediaSelection(heroImages.map(image => `${heroLetter.id}:${image.id}`));
   const hasMultiplePages = heroImages.length > 1;
   const heroPeopleLine = getCorrespondentLine(heroLetter);
   const heroDate = formatFeaturedLetterDate(heroLetter.letterDate || heroLetter.dateRaw);
@@ -127,9 +128,7 @@ function HeroLetterCard({
   const handlePointerDown = (e: React.PointerEvent) => {
     pointerStartRef.current = { x: e.clientX, y: e.clientY };
   };
-  const letterParams = new URLSearchParams({ from: 'highlight' });
-  if (currentImage) letterParams.set('image', currentImage.id);
-  const navigateToLetter = (e: ReactMouseEvent<HTMLAnchorElement>) => {
+  const navigateToLetter = (e: ReactMouseEvent<HTMLAnchorElement>, currentImage: LetterImage | null) => {
     const start = pointerStartRef.current;
     pointerStartRef.current = null;
     if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
@@ -156,21 +155,24 @@ function HeroLetterCard({
     step(1);
   };
 
-  return (
-    <div
-      className={`letter-card home-hero-feature-card letter-card--${heroLetter.imageType || 'letter'}`}
-    >
-      <a className="home-hero-open-link" data-carousel-drag draggable={false}
+  const media = heroImages.map(img => ({ key: img.id, imageUrl: img.imageUrl,
+    alt: `Scan of letter${heroLetter.sender ? ` from ${heroLetter.sender}` : ''}${heroLetter.recipient ? ` to ${heroLetter.recipient}` : ''}` }));
+  const renderPage = (pageIndex: number) => {
+    const currentImage = heroImages[pageIndex] || null;
+    const letterParams = new URLSearchParams({ from: 'highlight' });
+    if (currentImage) letterParams.set('image', currentImage.id);
+    return (
+      <a className={`home-hero-open-link${swipeImages ? " card-media-page" : ""}`} data-carousel-drag draggable={false}
         href={`/letter/${heroLetter.id}?${letterParams.toString()}`}
         aria-label={ariaLabel}
         onPointerDown={handlePointerDown}
         onPointerCancel={() => { pointerStartRef.current = null; }}
-        onClick={navigateToLetter}
+        onClick={event => navigateToLetter(event, currentImage)}
       >
       {heroImages.length > 0 ? (
-        <CardMediaImages items={heroImages.map(img => ({ key: img.id, imageUrl: img.imageUrl,
-          alt: `Scan of letter${heroLetter.sender ? ` from ${heroLetter.sender}` : ''}${heroLetter.recipient ? ` to ${heroLetter.recipient}` : ''}` }))}
-          index={heroPageIndex} className="letter-card-image" context="hero" midWidth={480} />
+        (!swipeImages || Math.abs(pageIndex - heroPageIndex) <= 1) &&
+        <CardMediaImages items={swipeImages ? [media[pageIndex]] : media}
+          index={swipeImages ? 0 : heroPageIndex} className="letter-card-image" context="hero" midWidth={480} />
       ) : heroLetter.imageUrl ? (
         <ProgressiveImage
           className="letter-card-image"
@@ -192,18 +194,28 @@ function HeroLetterCard({
         <span className="home-hero-feature-title">Featured Letter</span>
         <span className="home-hero-feature-collection">Collection {heroLetter.collectionCode || "009"}</span>
       </div>
-      {hasMultiplePages && (
-        <span className="home-hero-page-counter">
-          {heroPageIndex + 1}/{heroImages.length}
-        </span>
-      )}
       <div className="letter-card-content">
         {heroPeopleLine && <div className="letter-card-meta">{heroPeopleLine}</div>}
         {heroDate && <div className="letter-card-date">{heroDate}</div>}
         {heroLetter.hook && <p className="letter-hook">{heroLetter.hook}</p>}
       </div>
       </a>
+    );
+  };
+  return (
+    <div className={`letter-card home-hero-feature-card letter-card--${heroLetter.imageType || 'letter'}`}>
+      {swipeImages && heroImages.length > 0 ? (
+        <CardCarousel className="card-media-carousel" label="Featured letter images" initialIndex={heroPageIndex} onSlideChange={select} showDots={false}>
+          {heroImages.map((img, i) => <div key={img.id} className="card-media-page">{renderPage(i)}</div>)}
+        </CardCarousel>
+      ) : renderPage(heroPageIndex)}
       {hasMultiplePages && (
+        <span className="home-hero-page-counter">
+          {heroPageIndex + 1}/{heroImages.length}
+        </span>
+      )}
+
+      {hasMultiplePages && !swipeImages && (
         <>
           <button
             type="button"
@@ -357,6 +369,7 @@ export default function HomePage() {
             heroLetter ? (
               <HeroLetterCard
                 key="featured"
+                swipeImages={!isMobile}
                 heroLetter={heroLetter}
                 heroImages={heroImages}
                 ariaLabel={heroAriaLabel}

@@ -126,8 +126,19 @@ export default function LetterDetailPage() {
   const navigationPending = !!navigationPresentation && !navigationResolved;
 
   // Image viewer modal
-  const [viewerOpen, setViewerOpen] = useState(false);
-  const [viewerStartPage, setViewerStartPage] = useState(0);
+  const [viewerOpen, setViewerOpen] = useState(() => Boolean(history.state?.readerFocus && history.state?.readerFocusLetter === letterId));
+  const [viewerStartPage, setViewerStartPage] = useState(() => history.state?.readerFocusLetter === letterId ? history.state.readerFocusIndex ?? 0 : 0);
+  useEffect(() => {
+    // Forward revisits the same-URL focus entry after its viewer has unmounted.
+    // The viewer adopts that entry instead of pushing another history step.
+    const restoreViewer = () => {
+      if (!history.state?.readerFocus || history.state.readerFocusLetter !== letterId) return;
+      setViewerStartPage(history.state.readerFocusIndex ?? 0);
+      setViewerOpen(true);
+    };
+    window.addEventListener('popstate', restoreViewer);
+    return () => window.removeEventListener('popstate', restoreViewer);
+  }, [letterId]);
   const [routeOwner, setRouteOwner] = useState(letterId);
   // Reset route-local UI before committing a different destination, including Back.
   if (routeOwner !== letterId) {

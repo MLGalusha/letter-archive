@@ -52,7 +52,9 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
   const returnCanvasRef = useRef<HTMLCanvasElement>(null);
   const returnSnapshot = useRef<{ key: string; canvas: HTMLCanvasElement } | null>(null);
   const animations = useRef<Animation[]>([]);
-  const historyToken = useId();
+  const sessionToken = useId();
+  const [historyToken] = useState(() => history.state?.readerFocusLetter === letterId
+    ? history.state.readerFocus ?? sessionToken : sessionToken);
   const closeCallback = useRef(onClose);
   useLayoutEffect(() => { closeCallback.current = onClose; }, [onClose]);
   const requestClose = useCallback(() => {
@@ -152,13 +154,13 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
 
   useLayoutEffect(() => {
     // StrictMode replays effects; the same focus session owns one history entry.
-    if (history.state?.readerFocus !== historyToken) history.pushState({ ...history.state, readerFocus: historyToken }, '');
+    if (history.state?.readerFocus !== historyToken) history.pushState({ ...history.state, readerFocus: historyToken, readerFocusLetter: letterId, readerFocusIndex: initialIndex }, '');
     const onPop = () => { if (history.state?.readerFocus !== historyToken) requestClose(); };
     window.addEventListener('popstate', onPop);
     return () => {
       window.removeEventListener('popstate', onPop);
     };
-  }, [requestClose, historyToken]);
+  }, [requestClose, historyToken, letterId, initialIndex]);
 
   useLayoutEffect(() => {
     const shell = document.querySelector<HTMLElement>('.main-page-layout.public-site-shell');

@@ -135,6 +135,7 @@ let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
 describe("LetterDetailPage", () => {
   beforeEach(() => {
+    window.history.replaceState(null, "");
     vi.clearAllMocks();
     vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
     HTMLElement.prototype.scrollTo = vi.fn();

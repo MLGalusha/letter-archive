@@ -100,3 +100,17 @@ test('@mocked shared dialogs preserve native radio group tab stops', async ({ pa
   await page.keyboard.press('Tab');
   await expect(page.getByLabel('Other form candidate')).toBeFocused();
 });
+
+test('@mocked browser Forward restores the viewer without duplicating its history entry', async ({ page }) => {
+  await page.goto('/about');
+  await openReader(page);
+  await closeReader(page);
+  await page.goForward();
+  await expect(page.getByRole('dialog', { name: 'Original scans' })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('dialog', { name: 'Original scans' })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/about$/);
+});

@@ -1,6 +1,7 @@
 import { Children, isValidElement, useLayoutEffect, useRef, useState, type ReactNode, type KeyboardEvent } from 'react';
 import useCardCarouselPointer from '../hooks/useCardCarouselPointer';
 import './CardCarousel.css';
+import useCarouselMotion from '../hooks/useCarouselMotion';
 
 interface CardCarouselProps {
   children: ReactNode;
@@ -13,7 +14,7 @@ interface CardCarouselProps {
   layout?: 'carousel' | 'static';
 }
 
-/** One clipped frame, native touch/trackpad scrolling, and no cloned content. */
+/** One clipped frame, bounded pointer settling, native wheel scrolling, and no clones. */
 export default function CardCarousel({ children, label, className = '', layout = 'carousel', initialIndex = 0, onSlideChange, showDots = true }: CardCarouselProps) {
   const slides = Children.toArray(children);
   const keys = slides.map((slide, i) => isValidElement(slide) ? String(slide.key ?? i) : String(i));
@@ -28,7 +29,14 @@ export default function CardCarousel({ children, label, className = '', layout =
   const targetRef = useRef<number | null>(null);
   const carousel = layout === 'carousel';
   const interactive = carousel && slides.length > 1;
-  const pointer = useCardCarouselPointer(interactive);
+  const motion = useCarouselMotion();
+  const pointer = useCardCarouselPointer(interactive, viewportRef, (element, index) => {
+    targetRef.current = index;
+    motion.move(element, index * element.clientWidth);
+  }, motion.finish);
+
+  const finishMotion = useRef(motion.finish);
+  useLayoutEffect(() => { finishMotion.current = motion.finish; }, [motion.finish]);
 
   useLayoutEffect(() => {
     const observedKeys: string[] = JSON.parse(signature);
@@ -68,6 +76,7 @@ export default function CardCarousel({ children, label, className = '', layout =
       settleTimer = setTimeout(settle, 160);
     };
     const realign = () => {
+      finishMotion.current();
       targetRef.current = null;
       viewport.style.scrollSnapType = '';
       const index = Math.max(0, observedKeys.indexOf(selectedRef.current ?? observedKeys[0]));
@@ -76,6 +85,7 @@ export default function CardCarousel({ children, label, className = '', layout =
       if (carousel) viewport.scrollTo({ left: index * viewport.clientWidth, behavior: 'instant' });
     };
     const interrupt = () => {
+      finishMotion.current();
       if (targetRef.current !== null) viewport.style.scrollSnapType = '';
       targetRef.current = null;
     };
@@ -105,15 +115,8 @@ export default function CardCarousel({ children, label, className = '', layout =
     // snap target competing with a rapidly reversed smooth-scroll target.
     viewport.style.scrollSnapType = 'none';
     targetRef.current = next;
-    if (Math.abs(viewport.scrollLeft - next * viewport.clientWidth) < 1) {
-      viewport.scrollTo({ left: next * viewport.clientWidth, behavior: 'instant' });
-      viewport.style.scrollSnapType = '';
-      targetRef.current = null;
-      return;
-    }
     setSettledSlide(null);
-    viewport.scrollTo({ left: next * viewport.clientWidth,
-      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+    motion.move(viewport, next * viewport.clientWidth);
   };
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (!interactive || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;

@@ -164,7 +164,7 @@ for (const width of [320, 390, 430, 640]) {
   });
 }
 
-test('@mocked native diagonal touch moves continuously without custom direction locking', async ({ page, browserName }) => {
+test('@mocked diagonal horizontal touch follows the finger and settles on release', async ({ page, browserName }) => {
   test.skip(browserName !== 'chromium', 'CDP delivers real touch input only in Chromium; physical Safari remains a separate check.');
   const carousel = await openCards(page);
   const box = (await carousel.locator('.card-carousel-viewport').boundingBox())!;
@@ -332,4 +332,39 @@ test.describe('image page button feedback', () => {
       await expect(card.locator('.cd-highlight-page-counter')).toHaveText('2/3');
     });
   });
+});
+
+test('@mocked touch release settles promptly and hands off to the next tap or vertical scroll', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Real touch delivery uses CDP; physical Safari must also be checked.');
+  const outer = await openCards(page, '/collections/003', true, true);
+  const viewport = outer.locator(':scope > .card-carousel-frame > .card-carousel-viewport');
+  const cdp = await page.context().newCDPSession(page);
+  const touch = async (type: string, x = 0, y = 0) => cdp.send('Input.dispatchTouchEvent', {
+    type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }],
+  });
+  const box = (await viewport.boundingBox())!;
+  const y = box.y + 110;
+  await touch('touchStart', box.x + box.width - 30, y);
+  for (const fraction of [0.7, 0.5, 0.3]) await touch('touchMove', box.x + box.width * fraction, y);
+  const released = Date.now();
+  await touch('touchEnd');
+  await expect.poll(() => viewport.evaluate(el => Math.abs(el.scrollLeft - el.clientWidth)), { intervals: [16], timeout: 400 }).toBeLessThan(1);
+  expect(Date.now() - released).toBeLessThan(400);
+  const next = outer.locator('.card-carousel-slide').nth(1).locator('.image-page-control--next');
+  await next.tap();
+  await expect(outer.locator('.card-carousel-slide').nth(1).locator('.cd-highlight-page-counter')).toHaveText('2/3');
+  // Start a new vertical gesture immediately after releasing a reverse swipe,
+  // while its short settling animation is still pending.
+  const reverse = (await viewport.boundingBox())!;
+  await touch('touchStart', reverse.x + 30, reverse.y + 110);
+  for (const fraction of [0.3, 0.5, 0.7]) await touch('touchMove', reverse.x + reverse.width * fraction, reverse.y + 110);
+  await touch('touchEnd');
+  const startY = await page.evaluate(() => window.scrollY);
+  const current = (await viewport.boundingBox())!;
+  await touch('touchStart', current.x + current.width / 2, current.y + 230);
+  await touch('touchMove', current.x + current.width / 2, current.y + 190);
+  await touch('touchMove', current.x + current.width / 2, current.y + 90);
+  await touch('touchEnd');
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(startY + 40);
+  await expect(page).toHaveURL(/collections\/003$/);
 });

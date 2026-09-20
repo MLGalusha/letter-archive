@@ -15,7 +15,7 @@ function setTemporaryStyles(element: HTMLElement, values: Record<string, string>
 }
 
 /** The public reader's modal owns document painting and scroll locking together. */
-export function useReaderViewerSurface(active: boolean, dialogRef: RefObject<HTMLDivElement | null>) {
+export function useReaderViewerSurface(active: boolean, dialogRef: RefObject<HTMLDivElement | null>, surfaceColor?: string) {
   useLayoutEffect(() => {
     const dialog = dialogRef.current;
     const backdrop = dialog?.parentElement;
@@ -25,9 +25,16 @@ export function useReaderViewerSurface(active: boolean, dialogRef: RefObject<HTM
     const openedPath = window.location.pathname;
     // Read the actual surface so the root, body and browser hint cannot drift
     // from the viewer's CSS. Layout effect applies them in the opening commit.
-    const color = getComputedStyle(backdrop).backgroundColor;
+    const color = surfaceColor ?? getComputedStyle(backdrop).backgroundColor;
+    const rootStyle = getComputedStyle(document.documentElement);
+    const gutter = rootStyle.scrollbarGutter.includes('stable') ? rootStyle.scrollbarGutter
+      : window.innerWidth > document.documentElement.clientWidth ? 'stable' : 'auto';
     const restoreRoot = setTemporaryStyles(document.documentElement, {
       'background-color': color, 'overflow-x': 'hidden', 'overflow-y': 'hidden',
+      // Preserve the document geometry used as the thumbnail return target.
+      // Overlay scrollbars have no gutter. Reserving one would shrink the page
+      // during zoom and make it jump back when the lock is released.
+      'scrollbar-gutter': gutter,
     });
     const restoreBody = setTemporaryStyles(document.body, {
       position: 'fixed', top: `-${savedY}px`, width: '100%',
@@ -60,5 +67,5 @@ export function useReaderViewerSurface(active: boolean, dialogRef: RefObject<HTM
       // Router/history restoration owns a different route's position.
       if (window.location.pathname === openedPath) appScrollTo(savedY);
     };
-  }, [active, dialogRef]);
+  }, [active, dialogRef, surfaceColor]);
 }

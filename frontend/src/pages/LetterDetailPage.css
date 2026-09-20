@@ -1,3 +1,10 @@
+/* WebKit blocks ordinary wheel scrolling when a cancellable zoom listener
+   meets root overscroll containment. Keep native wheel scrolling on pointer
+   devices; touch-only Safari retains its existing edge behavior. */
+@media (any-pointer: fine) {
+  html:has(.letter-article) { overscroll-behavior-y: auto; }
+}
+
 /* A3: the document owns vertical scrolling; this lane owns every reader gutter. */
 .sr-only {
   position: absolute;
@@ -15,7 +22,7 @@
 .letter-article {
   width: min(100%, 70rem);
   margin-inline: auto;
-  padding: calc(var(--header-height, 6rem) + 1.5rem) calc(1.5rem + env(safe-area-inset-right, 0px)) calc(3rem + env(safe-area-inset-bottom, 0px)) calc(1.5rem + env(safe-area-inset-left, 0px));
+  padding: calc(var(--header-height, 6rem) + 1.5rem) calc(1.5rem + env(safe-area-inset-right, 0px)) calc(4rem + env(safe-area-inset-bottom, 0px)) calc(1.5rem + env(safe-area-inset-left, 0px));
   overflow-wrap: anywhere;
 }
 .letter-hero-section {
@@ -100,7 +107,7 @@
   justify-content: center;
   position: relative;
   scroll-snap-align: center;
-  cursor: zoom-in;
+  cursor: pointer;
 }
 .scan-slide-img {
   position: relative;
@@ -225,9 +232,13 @@
   gap: .75rem;
   flex-wrap: wrap;
 }
-.letter-article :is(button, summary, .scan-slide):focus-visible {
+.letter-article :is(button, summary):focus-visible {
   outline: 2px solid var(--accent-strong);
   outline-offset: 3px;
+}
+.scan-slide:focus {
+  /* The slide includes empty carousel space; never draw a box around it. */
+  outline: none;
 }
 #letter-transcript, #letter-scans {
   scroll-margin-top: calc(var(--header-height, 6rem) + 1rem);
@@ -274,112 +285,114 @@
     padding: 1rem;
   }
 }
+
+/* Desktop shares the mobile gallery and page strip. Only the surrounding
+   grid and reading typography change; the document still owns scrolling. */
+@media (min-width: 901px) {
+  .letter-article {
+    width: min(100%, 80rem);
+  }
+  .letter-reader,
+  .letter-reader--text-only {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 48rem) minmax(0, 1fr);
+    row-gap: 2.5rem;
+    column-gap: 0;
+  }
+  .letter-scan-figure {
+    grid-column: 1 / -1;
+    grid-row: auto;
+    width: min(100%, 52rem);
+    justify-self: center;
+    --scan-height: min(42rem, max(16rem, calc(100svh - var(--header-height, 6rem) - 10rem)));
+  }
+  .scan-carousel {
+    /* Raise only the large scans; the sibling figcaption/thumbnail strip
+       remains beneath the reader's header cover. */
+    position: relative;
+    z-index: 45;
+    padding-block: .75rem;
+    margin-block: -.75rem;
+    /* As on mobile, extend the scroll window to the screen edges while
+       restoring the figure's content width inside it. The public shell clips
+       any scrollbar/safe-area excess; image size and snap centers stay put. */
+    --scan-edge-inset: max(0px, calc((100vw - 100%) / 2));
+    margin-inline: calc(-1 * var(--scan-edge-inset));
+    padding-inline: var(--scan-edge-inset);
+  }
+  .scan-slide-img {
+    border-radius: 8px;
+  }
+  .letter-hero-section,
+  .letter-reading-column {
+    grid-column: 2;
+    grid-row: auto;
+    width: 100%;
+    max-width: none;
+  }
+  .letter-hero-section h1 {
+    font-size: 2.25rem;
+  }
+  .letter-summary-section {
+    margin-top: 1.25rem;
+    padding-left: 1.25rem;
+    border-left: 2px solid var(--accent);
+  }
+  .letter-summary-section summary {
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+  }
+  .letter-summary-text,
+  .letter-headline-hook {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 1rem;
+    line-height: 1.7;
+  }
+  .transcript-header-row {
+    padding-top: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .transcript-label {
+    font-size: .75rem;
+    font-weight: 700;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+  }
+  .transcript-status[data-verified="true"] {
+    padding: .3rem .6rem;
+    border-radius: 999px;
+    background: var(--accent-soft, #dff1f5);
+    color: var(--accent-strong);
+    font-size: .65rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+  .transcript-text:not(.transcript-original) {
+    font-size: 1.25rem;
+    line-height: 1.75;
+  }
+  .transcript-reading-line {
+    display: block;
+    white-space: normal;
+  }
+  .transcript-reading-line--blank {
+    height: 1.15em;
+  }
+  .transcript-reading-line--indented {
+    text-indent: 1.25em;
+  }
+  .transcript-reading-line--positioned {
+    text-align: right;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .letter-article .progressive-image__full {
     transition: none;
   }
 }
-.letter-nav-section {
-  grid-column: wide;
-  margin-top: 2.8rem;
-  padding-top: 2rem;
-  padding-left: env(safe-area-inset-left, 0px);
-  padding-right: env(safe-area-inset-right, 0px);
-  border-top: 1px solid rgba(217, 207, 191, 0.5);
-}
-
-.nav-position-label {
-  text-align: center;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  margin-bottom: 1rem;
-}
-
-.adjacent-teasers {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-}
-
-.teaser-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  padding: 1rem 1.2rem;
-  border: 1px solid rgba(217, 207, 191, 0.7);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.55);
-  text-decoration: none;
-  color: inherit;
-  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.teaser-card:hover {
-  background: rgba(255, 255, 255, 0.9);
-  border-color: rgba(31, 109, 122, 0.3);
-  box-shadow: 0 8px 24px rgba(29, 26, 20, 0.06);
-}
-
-.teaser-wraps {
-  border-style: dashed;
-}
-
-.teaser-direction {
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--accent);
-}
-
-.teaser-body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-  margin-top: 0.2rem;
-}
-
-.teaser-next {
-  text-align: right;
-}
-
-.teaser-date {
-  font-family: "Playfair Display", Georgia, serif;
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.teaser-people {
-  font-size: 0.82rem;
-  color: var(--text-muted);
-}
-
-.teaser-hook {
-  margin: 0.15rem 0 0;
-  font-size: 0.85rem;
-  font-style: italic;
-  line-height: 1.5;
-  color: var(--text-muted);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.teaser-content-labels {
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  letter-spacing: 0.02em;
-}
-
-.teaser-placeholder {
-  /* Empty cell to maintain grid layout when only prev or next exists */
-}
-
 .viewer-backdrop {
   --viewer-surface: #181a19;
   position: fixed;
@@ -433,3 +446,6 @@
   background: rgba(255, 255, 255, 0.98);
   border-color: rgba(31, 109, 122, 0.35);
 }
+
+/* A decoded scan replaces its preview in one paint, never a fade from blank. */
+.scan-slide-img .progressive-image__full { transition: none; }

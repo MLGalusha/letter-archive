@@ -2,7 +2,7 @@ import { expect, type Page } from '@playwright/test';
 import { API_BASE_URL } from './test-helpers';
 
 export const viewerImages = [1, 2, 3].map(pageNumber => ({ id: `scan-${pageNumber}`, type: 'letter', pageNumber, imageUrl: `/images/${pageNumber}.svg`, width: 600, height: 800 }));
-export async function openReader(page: Page, images = viewerImages) {
+export async function mockReader(page: Page, images = viewerImages) {
   await page.route(`${API_BASE_URL}/**`, route => {
     const path = new URL(route.request().url()).pathname;
     if (path.startsWith('/images/')) {
@@ -20,8 +20,12 @@ export async function openReader(page: Page, images = viewerImages) {
     } });
     return route.fulfill({ status: 404, json: {} });
   });
+}
+
+export async function openReader(page: Page, images = viewerImages) {
+  await mockReader(page, images);
   await page.goto('/letter/current');
-  const opener = page.locator('[aria-label="View page 1 full size"]');
+  const opener = page.locator('[aria-label="Select page 1"]');
   await expect(opener).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
   await opener.scrollIntoViewIfNeeded();
@@ -30,7 +34,16 @@ export async function openReader(page: Page, images = viewerImages) {
   await opener.focus();
   const y = await page.evaluate(() => window.scrollY);
   const styles = await page.locator('body').evaluate(el => el.style.cssText);
-  await opener.press('Enter');
+  await opener.press('+');
+  await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'focused');
+  // Most viewer assertions start at fit; entry itself now requires zoom.
+  await page.keyboard.press('0');
+  await expect(page.locator('.viewer-transform')).not.toHaveClass(/animating/);
   return { opener, y, styles };
 }
 
+
+export async function closeReader(page: Page) {
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Original scans' })).toHaveCount(0);
+}

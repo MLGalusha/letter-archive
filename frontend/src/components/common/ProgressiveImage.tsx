@@ -10,6 +10,8 @@ export interface ProgressiveImageProps {
   src: string;
   thumbSrc: string;
   midSrc?: string;
+  /** Small carousel preview, independent of admission for the display-size scan. */
+  previewSrc?: string;
   alt: string;
   className?: string;
   imgClassName?: string;
@@ -41,6 +43,7 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
       containerRef: externalContainerRef,
       thumbSrc,
       midSrc,
+      previewSrc,
       alt,
       className,
       imgClassName,
@@ -150,6 +153,11 @@ export const ProgressiveImage = forwardRef<HTMLImageElement, ProgressiveImagePro
 
     return (
       <div ref={containerRef} className={`progressive-image ${className ?? ''}`} style={containerStyle}>
+        {previewSrc && !fullLoaded && (
+          <img src={previewSrc} alt="" aria-hidden draggable={false}
+            className={`progressive-image__thumb ${imgClassName ?? ''}`}
+            style={{ ...imgStyle, objectFit }} fetchPriority="low" decoding="sync" />
+        )}
         {showPlaceholder && placeholderSrc && (
           <img
             key={`placeholder:${placeholderSrc}:${placeholderRetry.attempt}`}

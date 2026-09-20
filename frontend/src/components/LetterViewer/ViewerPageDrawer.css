@@ -3,6 +3,7 @@
   --page-ink: #f4eee4;
   --page-selection: #f4eee4;
   display: flex;
+  align-items: center;
   gap: 8px;
   overflow-x: auto;
   touch-action: auto;
@@ -10,7 +11,7 @@
   overscroll-behavior: contain;
   scroll-snap-type: x mandatory;
   min-width: 0;
-  min-height: 0;
+  min-height: 76px;
   width: 100%;
   padding-block: 4px;
   scrollbar-width: none;
@@ -25,31 +26,44 @@
   position: relative;
   flex: 0 0 56px;
   width: 56px;
-  height: 76px;
-  padding: 2px;
-  border: 2px solid transparent;
+  height: auto;
+  padding: 4px;
+  border: 0;
   border-radius: 6px;
-  background: transparent;
+  background: var(--page-surface);
   color: var(--page-ink);
   scroll-snap-align: center;
   cursor: pointer;
 }
-.viewer-page-choice[aria-current="page"] { border-color: var(--page-selection); }
+.viewer-page-choice[aria-current="page"] {
+  background: var(--page-selection);
+  color: var(--page-selected-ink, #181a19);
+}
 .viewer-page-choice:focus-visible { outline: 2px solid var(--page-selection); outline-offset: 1px; }
-.viewer-page-choice .preview-image { height: 100%; border-radius: 2px; background: #ffffff0a; }
-.viewer-page-choice .preview-image__image { object-fit: contain; }
+.viewer-page-choice .preview-image { position: relative; height: auto; border-radius: calc(48px * var(--scan-corner-ratio, .01)); background: #ffffff0a; }
+.viewer-page-choice .preview-image__image {
+  height: auto;
+  aspect-ratio: auto 3 / 4;
+  /* At the shared 48px image width, bound previews between 3:2 and 1:2.
+     Natural proportions inside that range remain unchanged; only extremes crop. */
+  min-height: 32px;
+  max-height: 96px;
+  object-fit: cover;
+  border-radius: inherit;
+}
 .viewer-page-choice .preview-image__error { font-size: .6rem; color: var(--page-ink); }
 .viewer-page-notch {
+  box-sizing: border-box;
   position: absolute;
-  bottom: -2px;
+  bottom: 0;
   left: 50%;
   transform: translateX(-50%);
   min-width: 22px;
   height: 18px;
   padding-inline: 3px;
   border-radius: 7px 7px 0 0;
-  background: var(--page-surface);
-  color: var(--page-ink);
+  background: inherit;
+  color: inherit;
   font: 400 11px/18px system-ui, sans-serif;
   font-variant-numeric: tabular-nums;
 }
@@ -58,6 +72,16 @@
   --page-surface: var(--bg);
   --page-ink: var(--text-muted);
   --page-selection: var(--accent);
+  --page-selected-ink: var(--bg);
   overscroll-behavior-y: auto;
   margin-top: 8px;
+}
+
+/* Centered selection needs an odd number of complete 56px cards, with 8px
+   gaps. Leave spare space outside the scrolling window instead of revealing
+   a fraction of the next card at either edge. */
+.scan-navigation { container-type: inline-size; }
+.scan-navigation .viewer-page-drawer--inline {
+  width: min(100%, calc(56px + round(down, max(0px, 100cqw - 56px), 128px)));
+  margin-inline: auto;
 }

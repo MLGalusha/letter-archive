@@ -34,7 +34,7 @@ export default defineConfig({
     },
     {
       name: 'public-webkit',
-      testMatch: ['header-occlusion.mocked.spec.ts', 'mobile-swipe-edges.mocked.spec.ts', 'reader-navigation.mocked.spec.ts', 'reader-a3.mocked.spec.ts', 'viewer-focus.mocked.spec.ts', 'viewer-drawer.mocked.spec.ts', 'viewer-viewport.mocked.spec.ts', 'scan-paging.mocked.spec.ts', 'public-archive-history.mocked.spec.ts', 'progressive-image-scheduling.mocked.spec.ts', 'reader-renditions.mocked.spec.ts', 'reader-preview-layout.mocked.spec.ts', 'public-request-ownership.mocked.spec.ts', 'carousel-visibility.mocked.spec.ts', 'admin-polling.mocked.spec.ts'],
+      testMatch: ['reader-focus-mode.mocked.spec.ts', 'header-occlusion.mocked.spec.ts', 'mobile-swipe-edges.mocked.spec.ts', 'reader-navigation.mocked.spec.ts', 'reader-a3.mocked.spec.ts', 'viewer-focus.mocked.spec.ts', 'viewer-drawer.mocked.spec.ts', 'viewer-viewport.mocked.spec.ts', 'scan-paging.mocked.spec.ts', 'public-archive-history.mocked.spec.ts', 'progressive-image-scheduling.mocked.spec.ts', 'reader-renditions.mocked.spec.ts', 'reader-preview-layout.mocked.spec.ts', 'public-request-ownership.mocked.spec.ts', 'carousel-visibility.mocked.spec.ts', 'admin-polling.mocked.spec.ts'],
       use: { ...devices['Desktop Safari'] },
     },
   ],

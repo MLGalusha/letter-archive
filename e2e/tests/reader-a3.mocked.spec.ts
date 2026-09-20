@@ -27,6 +27,9 @@ for (const width of [320, 390, 900, 901, 1440]) {
     // Observe beyond the former entry timers and their animation lifetime.
     await page.waitForTimeout(1200);
     expect(await page.evaluate(() => window.scrollY)).toBe(0);
+    const scanImage = page.locator('.scan-slide[data-index="1"] .progressive-image__full');
+    await expect.poll(() => scanImage.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+    await expect(scanImage).toHaveCSS('opacity', '1');
     const boxes = await page.evaluate(() => {
       const rect = (selector: string) => document.querySelector(selector)!.getBoundingClientRect().toJSON();
       return { heading: rect('.letter-hero-section h1'), header: rect('header.header'),
@@ -37,14 +40,17 @@ for (const width of [320, 390, 900, 901, 1440]) {
     expect(boxes.heading.top - boxes.header.bottom).toBeGreaterThanOrEqual(15);
     expect(boxes.docWidth).toBeLessThanOrEqual(boxes.viewport);
     expect(boxes.image.width / boxes.image.height).toBeCloseTo(.75, 2);
-    if (width > 900) expect(boxes.image.height).toBeLessThanOrEqual(513);
     if (width <= 900) {
       expect(boxes.text.top).toBeGreaterThan(boxes.scan.bottom);
-      expect(boxes.image.width).toBeCloseTo(width - 24, 0);
+      // WebKit's fractional flex sizing can differ by just over half a pixel.
+      expect(Math.abs(boxes.image.width - (width - 24))).toBeLessThan(1);
       expect(boxes.heading.top).toBeGreaterThanOrEqual(boxes.scan.bottom);
     } else {
-      expect(boxes.text.width).toBeGreaterThan(boxes.scan.width * 1.8);
-      expect(boxes.text.right).toBeLessThan(boxes.scan.left);
+      expect(boxes.image.height).toBeGreaterThan(513);
+      expect(boxes.scan.bottom).toBeLessThanOrEqual(900);
+      expect(boxes.image.left + boxes.image.width / 2).toBeCloseTo(width / 2, 0);
+      expect(boxes.heading.top).toBeGreaterThanOrEqual(boxes.scan.bottom);
+      expect(boxes.text.top).toBeGreaterThan(boxes.heading.bottom);
     }
     await testInfo.attach('A3 geometry', { body: JSON.stringify(boxes), contentType: 'application/json' });
     await testInfo.attach('A3 reader', { body: await page.screenshot(), contentType: 'image/png' });

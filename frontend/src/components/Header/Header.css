@@ -53,6 +53,33 @@
   background: linear-gradient(to bottom, var(--bg, #f5ede1) var(--header-cover-edge), transparent var(--header-cover-edge));
 }
 
+.header-reader-cover {
+  display: none;
+}
+
+@media (min-width: 901px) {
+  /* Reader layer order: text/thumbnails, cover (40), scans (45), header (50).
+     Mobile keeps the backdrop attached to its hiding/revealing header. */
+  .header-reader-cover {
+    display: block;
+    position: fixed;
+    inset: 0 0 auto;
+    z-index: 40;
+    background: var(--bg, #f5ede1);
+    pointer-events: none;
+  }
+
+  .header.header--transparent {
+    background: transparent;
+    pointer-events: none;
+  }
+
+  .header--transparent .header-inner,
+  .header--transparent .skip-link {
+    pointer-events: auto;
+  }
+}
+
 /* Hide: slide the whole bar and backdrop up. */
 .header--hidden {
   transform: translateY(calc(-100% - 1rem));

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { openReader } from './utils/reader-viewer-fixture';
+import { openReader, closeReader } from './utils/reader-viewer-fixture';
 
 
 for (const width of [390, 1440]) {
@@ -8,7 +8,9 @@ for (const width of [390, 1440]) {
     const { opener, y, styles } = await openReader(page);
     const dialog = page.getByRole('dialog', { name: 'Original scans' });
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole('button', { name: 'Close viewer' })).toBeFocused();
+    await expect(dialog).toHaveCSS('outline-style', 'none');
+    expect(await dialog.evaluate(el => el.contains(document.activeElement))).toBe(true);
+    await expect(dialog.getByRole('button', { name: 'Close viewer' })).toHaveCount(0);
     await expect(page.locator('#root')).toHaveAttribute('inert', '');
     for (let i = 0; i < 16; i++) {
       await page.keyboard.press(i < 8 ? 'Tab' : 'Shift+Tab');
@@ -16,19 +18,15 @@ for (const width of [390, 1440]) {
     }
     await opener.evaluate(el => (el as HTMLElement).focus());
     expect(await dialog.evaluate(el => el.contains(document.activeElement))).toBe(true);
+    await dialog.focus();
     await page.keyboard.press('ArrowRight');
-    await expect(dialog.locator('.viewer-page-counter')).toHaveText('2 / 3');
+    await expect(dialog.locator('.viewer-page-counter')).toHaveText('1 / 3');
     await expect(page).toHaveURL(/\/letter\/current$/);
     await dialog.locator('.viewer-container').dblclick();
-    await expect(dialog.locator('.viewer-zoom-badge')).toHaveText('250%');
-    await dialog.getByRole('button', { name: 'Close viewer' }).focus();
-    await page.keyboard.press('ArrowLeft');
-    await expect(dialog.locator('.viewer-page-counter')).toHaveText('1 / 3');
-    await expect(dialog.locator('.viewer-zoom-badge')).toHaveText('100%');
-    await page.keyboard.press('ArrowLeft');
-    await expect(dialog.locator('.viewer-page-counter')).toHaveText('3 / 3');
-    await page.keyboard.press('Escape');
+    await expect(dialog.locator('.letter-viewer')).toHaveAttribute('data-zoom', '2.5');
+    await dialog.getByRole('button', { name: 'Go to scan 2: letter', exact: true }).click();
     await expect(dialog).toHaveCount(0);
+    await expect(page.locator('.scan-navigation [role="status"]')).toHaveText('2 / 3');
     await expect(opener).toBeFocused();
     await expect(page.locator('#root')).not.toHaveAttribute('inert');
     expect((await page.locator('body').evaluate(el => el.style.cssText)) || '').toBe(styles || '');
@@ -44,6 +42,8 @@ test('@mocked leaving the route while fullscreen restores background interaction
   await openReader(page);
   await expect(page.getByRole('dialog', { name: 'Original scans' })).toBeVisible();
   await page.goBack();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.goBack();
   await expect(page).toHaveURL(/\/about$/);
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.locator('#root')).not.toHaveAttribute('inert');
@@ -53,14 +53,16 @@ test('@mocked leaving the route while fullscreen restores background interaction
   await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#f5ede1');
 });
 
-test('@mocked pointer opening restores focus to its actual scan trigger', async ({ page }) => {
+test('@mocked pointer zoom restores focus to its actual scan trigger', async ({ page }) => {
   const { opener } = await openReader(page);
   await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.locator('body').click({ position: { x: 1, y: 1 } });
-  await opener.click();
+  await opener.evaluate(el => el.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, ctrlKey: true, deltaY: -30 })));
   const dialog = page.getByRole('dialog', { name: 'Original scans' });
-  await expect(dialog.getByRole('button', { name: 'Close viewer' })).toBeFocused();
-  await dialog.getByRole('button', { name: 'Close viewer' }).click();
+  expect(await dialog.evaluate(el => el.contains(document.activeElement))).toBe(true);
+  await expect(dialog.getByRole('button', { name: 'Close viewer' })).toHaveCount(0);
+  await closeReader(page);
   await expect(opener).toBeFocused();
 });
 
@@ -97,4 +99,18 @@ test('@mocked shared dialogs preserve native radio group tab stops', async ({ pa
   await expect(page.getByLabel('Last candidate')).toBeChecked();
   await page.keyboard.press('Tab');
   await expect(page.getByLabel('Other form candidate')).toBeFocused();
+});
+
+test('@mocked browser Forward restores the viewer without duplicating its history entry', async ({ page }) => {
+  await page.goto('/about');
+  await openReader(page);
+  await closeReader(page);
+  await page.goForward();
+  await expect(page.getByRole('dialog', { name: 'Original scans' })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('dialog', { name: 'Original scans' })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/about$/);
 });

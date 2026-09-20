@@ -146,7 +146,8 @@ for (const reducedData of [false, true]) {
       await expect(page.getByAltText('Page 1 of letter')).toHaveAttribute('src', /w=1200/);
       const beforeResize = urls.length;
       await page.setViewportSize({ width: 1440, height: 1000 });
-      await expect(page.getByAltText('Page 1 of letter')).toHaveAttribute('src', /w=1200/);
+      // The desktop scan is wider at DPR 3 and needs the next rendition.
+      await expect(page.getByAltText('Page 1 of letter')).toHaveAttribute('src', /w=1600/);
       expect(urls.slice(beforeResize).some(url => /scan-(3|4)\?/.test(url) && url.includes('w=1200'))).toBe(false);
     } finally { release(); await context.close(); }
   });

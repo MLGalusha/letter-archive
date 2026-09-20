@@ -27,6 +27,7 @@ export default memo(function Header() {
   const location = useLocation();
 
   const headerRef = useRef<HTMLElement>(null);
+  const readerCoverRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLElement>(null);
   const maxHeaderHeightRef = useRef(0);
   const headerGeometryRef = useRef("");
@@ -48,6 +49,12 @@ export default memo(function Header() {
     if (!shell) return;
 
     const update = () => {
+      // Desktop scans pass above this separate cover, but below the header
+      // card. Follow its current midpoint even during a resize while scrolled.
+      if (readerCoverRef.current) {
+        const midpoint = (el.offsetHeight + parseFloat(getComputedStyle(el).paddingTop)) / 2;
+        readerCoverRef.current.style.height = `${midpoint}px`;
+      }
       if (!atTop) return;
       // Reset for width/safe-area changes, but not height-only dock animations.
       const geometry = `${el.clientWidth}:${getComputedStyle(el).paddingTop}:${state.hasContent}`;
@@ -67,7 +74,7 @@ export default memo(function Header() {
     // Safe-area changes can alter padding without resizing the content box.
     ro.observe(el, { box: "border-box" });
     return () => ro.disconnect();
-  }, [atTop, state.hasContent]);
+  }, [atTop, state.hasContent, state.transparent]);
 
   useEffect(() => {
     preloadCollectionsRoute();
@@ -127,6 +134,8 @@ export default memo(function Header() {
   ].filter(Boolean).join(" ");
 
   return (
+    <>
+    {state.transparent && <div ref={readerCoverRef} className="header-reader-cover" aria-hidden="true" />}
     <header ref={headerRef} className={headerClass} inert={hidden}>
       <a href="#main-content" className="skip-link">Skip to content</a>
       <div className="header-inner">
@@ -179,5 +188,6 @@ export default memo(function Header() {
         </nav>
       </div>
     </header>
+    </>
   );
 });

@@ -7,6 +7,7 @@ export interface UseCarouselDragReturn {
   /** Attach when the carousel appears after loading or changes letters. */
   attachCarousel: (node: HTMLDivElement | null) => void;
   activeIndex: number;
+  transitionFromIndex: number | null;
   pageMotion: PageMotion;
   /** True when a drag gesture occurred (suppresses click handler) */
   carouselDraggedRef: RefObject<boolean>;
@@ -27,12 +28,14 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
   const navigationTargetRef = useRef<number | null>(null);
   const [carousel, setCarousel] = useState<HTMLDivElement | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [transitionFromIndex, setTransitionFromIndex] = useState<number | null>(null);
   const attachCarousel = useCallback((node: HTMLDivElement | null) => {
     carouselRef.current = node;
     navigationTargetRef.current = null;
     carouselDraggedRef.current = false;
     setCarousel(node);
     setActiveIndex(0);
+    setTransitionFromIndex(null);
   }, []);
 
   // Observe the mounted node, including when initial loading renders no carousel.
@@ -70,7 +73,7 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
       const second = slides[1]?.getBoundingClientRect();
       const pitch = second ? second.left - first.left : first.width;
       if (pitch > 0 && !suppressProgress) pageMotion.publish((center - first.left - first.width / 2) / pitch);
-      setActiveIndex(closestIdx);
+      if (!suppressProgress || navigationTargetRef.current === null) setActiveIndex(closestIdx);
     };
 
     // Keep the event origin even if scrollend clears the flag before this frame.
@@ -82,6 +85,7 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
     const restoreSnap = () => {
       explicitSelection.current = false;
       navigationTargetRef.current = null;
+      setTransitionFromIndex(null);
       carousel.style.scrollSnapType = '';
     };
     const onScrollEnd = () => {
@@ -90,6 +94,10 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
       const target = navigationTargetRef.current;
       if (target === null || Math.abs(carousel.scrollLeft - target) <= 1) {
         const wasExplicit = explicitSelection.current;
+        // Do not let a queued scroll frame re-publish drag progress after the
+        // strip has been released at scrollend.
+        if (rafId !== null) cancelAnimationFrame(rafId);
+        rafId = null;
         // Publish the final position before releasing synchronization.
         if (!wasExplicit) updateActiveDot();
         pageMotion.publish(null);
@@ -128,6 +136,8 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
 
     const onMouseDown = (e: MouseEvent) => {
       explicitSelection.current = false;
+      navigationTargetRef.current = null;
+      setTransitionFromIndex(null);
       isDragging = true;
       carouselDraggedRef.current = false;
       startX = e.clientX;
@@ -179,21 +189,37 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
     // in WebKit. Explicit paging owns the target until it settles or the user
     // starts a gesture; those events restore native touch/trackpad snapping.
     explicitSelection.current = true;
+    // The clicked page owns selection while the image travels. Intermediate
+    // slides must not pull the thumbnail animation back toward older pages.
+    // A click can interrupt native settling before scrollend arrives (or on a
+    // browser without scrollend). Explicit selection now owns strip motion.
+    pageMotion.publish(null);
+    setActiveIndex(index);
     carousel.style.scrollSnapType = 'none';
     navigationTargetRef.current = targetLeft;
     const resolvedBehavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : behavior;
+    // Keep the visible scan admitted while the destination loads and travels
+    // into place. Measure the departure so rapid reversals work mid-animation.
+    let departure: number | null = null;
+    if (resolvedBehavior === 'smooth' && Math.abs(targetLeft - carousel.scrollLeft) > 1) {
+      let nearestDistance = Infinity;
+      Array.from(carousel.children).forEach((child, childIndex) => {
+        const rect = child.getBoundingClientRect();
+        const distance = Math.abs(rect.left + rect.width / 2 - center);
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          departure = childIndex;
+        }
+      });
+    }
+    setTransitionFromIndex(departure);
+    // Instant jumps also keep snapping disabled until scrollend; restoring it
+    // in the same turn can make WebKit resume the previous smooth target.
     carousel.scrollTo({
       left: targetLeft,
       behavior: resolvedBehavior,
     });
-    if (resolvedBehavior === 'instant') {
-      // Direct selection need not traverse/admit the intervening scans. Update
-      // the control and image admission in the same click, then restore touch snap.
-      navigationTargetRef.current = null;
-      carousel.style.scrollSnapType = '';
-      setActiveIndex(index);
-    }
-  }, []);
+  }, [pageMotion]);
 
-  return { carouselRef, attachCarousel, activeIndex, pageMotion, carouselDraggedRef, scrollToSlide };
+  return { carouselRef, attachCarousel, activeIndex, transitionFromIndex, pageMotion, carouselDraggedRef, scrollToSlide };
 }

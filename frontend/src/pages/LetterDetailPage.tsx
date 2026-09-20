@@ -1,11 +1,10 @@
 import { useSiteSettings } from '../hooks/useSiteSettings';
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, Fragment } from "react";
 import { createPortal } from "react-dom";
-import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
-import { useAccessibleDialog } from "../components/common/useAccessibleDialog";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import SEO from "../components/SEO";
 
-import LetterViewer from "../components/LetterViewer/LetterViewer";
+import { ReaderFocusViewer } from "../components/LetterViewer/ReaderFocusViewer";
 import { InlineScanNavigation } from "../components/LetterViewer/InlineScanNavigation";
 import { getAdjacentLetters, getLetterById, type AdjacentLettersResponse } from "../api/letters";
 import type { LetterImage, LetterImageType, PublicLetter } from "../types/Letter";
@@ -20,9 +19,10 @@ import ReaderTranscript from "../components/LetterViewer/ReaderTranscript";
 import HeaderDock from "../components/Header/HeaderDock";
 import HeaderScrubber from "../components/HeaderScrubber/HeaderScrubber";
 import useLetterScrubber from "../components/LetterHeaderDock/useLetterScrubber";
+import { useScanFocusEntry } from "../hooks/useScanFocusEntry";
+import { useScanCornerRatios } from "../hooks/useScanCornerRatios";
 import useCarouselDrag from "../hooks/useCarouselDrag";
 import BackToTop from "../components/BackToTop";
-import { useReaderViewerSurface } from "../hooks/useReaderViewerSurface";
 import "./LetterDetailPage.css";
 
 /* ── helpers ─────────────────────────────────────────────── */
@@ -126,8 +126,19 @@ export default function LetterDetailPage() {
   const navigationPending = !!navigationPresentation && !navigationResolved;
 
   // Image viewer modal
-  const [viewerOpen, setViewerOpen] = useState(false);
-  const [viewerStartPage, setViewerStartPage] = useState(0);
+  const [viewerOpen, setViewerOpen] = useState(() => Boolean(history.state?.readerFocus && history.state?.readerFocusLetter === letterId));
+  const [viewerStartPage, setViewerStartPage] = useState(() => history.state?.readerFocusLetter === letterId ? history.state.readerFocusIndex ?? 0 : 0);
+  useEffect(() => {
+    // Forward revisits the same-URL focus entry after its viewer has unmounted.
+    // The viewer adopts that entry instead of pushing another history step.
+    const restoreViewer = () => {
+      if (!history.state?.readerFocus || history.state.readerFocusLetter !== letterId) return;
+      setViewerStartPage(history.state.readerFocusIndex ?? 0);
+      setViewerOpen(true);
+    };
+    window.addEventListener('popstate', restoreViewer);
+    return () => window.removeEventListener('popstate', restoreViewer);
+  }, [letterId]);
   const [routeOwner, setRouteOwner] = useState(letterId);
   // Reset route-local UI before committing a different destination, including Back.
   if (routeOwner !== letterId) {
@@ -138,7 +149,9 @@ export default function LetterDetailPage() {
 
 
   // Scan carousel (extracted hook)
-  const { attachCarousel, activeIndex, pageMotion, carouselDraggedRef, scrollToSlide } = useCarouselDrag();
+  const { carouselRef, attachCarousel, activeIndex, transitionFromIndex, pageMotion, carouselDraggedRef, scrollToSlide } = useCarouselDrag();
+
+  const cornerRatios = useScanCornerRatios(carouselRef, letter?.images);
 
   const [readyScan, setReadyScan] = useState<string | null>(null);
   const activeScanKey = `${letter?.id}:${letter?.images[activeIndex]?.imageUrl ?? activeIndex}`;
@@ -222,14 +235,18 @@ export default function LetterDetailPage() {
     setViewerOpen(true);
   }, []);
 
+  const { entryZoom, directZoom } = useScanFocusEntry(openViewer, letterId);
+
+  const selectScan = useCallback((index: number) => {
+    if (index !== activeIndex) scrollToSlide(index);
+    if (window.scrollY > 0) {
+      window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+    }
+  }, [activeIndex, scrollToSlide]);
+
   const viewerIsActive = viewerOpen && displayedLetterIsCurrent;
 
-  const { dialogRef: viewerDialogRef } = useAccessibleDialog({
-    isOpen: viewerIsActive,
-    onClose: () => setViewerOpen(false),
-    isolateBackground: true,
-  });
-  useReaderViewerSurface(viewerIsActive, viewerDialogRef);
+  const syncViewerPage = useCallback((index: number) => scrollToSlide(index, 'instant'), [scrollToSlide]);
 
   // Memoize all derived values — must be before conditional returns (Rules of Hooks)
   const derived = useMemo(() => {
@@ -308,21 +325,25 @@ export default function LetterDetailPage() {
                 return (
                   <div
                     key={img.id ?? idx}
+                    data-scan-index={idx}
                     className="scan-slide"
                     data-index={idx}
                     role="button"
                     tabIndex={0}
-                    onClick={(e) => { if (!carouselDraggedRef.current) openViewer(idx, e.currentTarget); }}
-                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openViewer(idx, e.currentTarget); } }}
+                    onClick={() => { if (!carouselDraggedRef.current) selectScan(idx); }}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectScan(idx); } }}
+                    aria-pressed={idx === activeIndex}
+                    aria-description="Select image and scroll to the top. Press + to zoom in."
                     aria-label={
                       isLetter
-                        ? `View page ${img.pageNumber ?? idx + 1} full size`
-                        : `View ${typeLabel} full size`
+                        ? `Select page ${img.pageNumber ?? idx + 1}`
+                        : `Select ${typeLabel}`
                     }
                   >
                     <ReaderScanImage
                       imageUrl={img.imageUrl}
-                      enabled={idx === activeIndex || (Math.abs(idx - activeIndex) === 1 && readyScan === activeScanKey && allowImageSpeculation())}
+                      previewEnabled={readyScan === activeScanKey && allowImageSpeculation()}
+                      enabled={idx === activeIndex || idx === transitionFromIndex || (Math.abs(idx - activeIndex) === 1 && readyScan === activeScanKey && allowImageSpeculation())}
                       fetchPriority={idx === activeIndex ? 'high' : 'low'}
                       onReadyChange={(ready) => { if (idx === activeIndex) setReadyScan(ready ? activeScanKey : null); }}
                       alt={
@@ -350,8 +371,9 @@ export default function LetterDetailPage() {
             </div>
 
             <figcaption>
-              <InlineScanNavigation key={letter.id} images={carouselImages} selected={activeIndex} motion={pageMotion}
-                onSelect={index => scrollToSlide(index, 'instant')} />
+              <InlineScanNavigation cornerRatios={cornerRatios} enabled={!viewerIsActive} key={letter.id} images={carouselImages} selected={activeIndex} motion={pageMotion}
+                onSelect={index => scrollToSlide(index,
+                  window.matchMedia('(min-width: 901px)').matches ? 'smooth' : 'instant')} />
             </figcaption>
           </figure>
         )}
@@ -367,7 +389,7 @@ export default function LetterDetailPage() {
           </details>}
         </header>
         <div className="letter-reading-column">
-          {hasTranscript ? <ReaderTranscript key={letter.id} letter={letter} onViewSource={openViewer} />
+          {hasTranscript ? <ReaderTranscript key={letter.id} letter={letter} />
             : !isPhotoRecord && <p className="reader-empty">A transcript is not available for this letter.</p>}
           {!carouselImages.length && <p className="reader-empty">Original scans are not available.</p>}
           {isPhotoRecord && letter.photoDescription && <section className="letter-supporting-section">
@@ -394,100 +416,15 @@ export default function LetterDetailPage() {
         </div>
         </div>
 
-        {/* ── 6. Collection Footer Nav ───────────────────────── */}
-        {adjacent && adjacent.total > 1 && (
-          <nav className="letter-nav-section">
-            {adjacent.position != null && (
-              <div className="nav-position-label">
-                Letter {adjacent.position} of {adjacent.total}
-              </div>
-            )}
-
-            {(adjacent.prev || adjacent.next) && (
-              <div className="adjacent-teasers">
-                {adjacent.prev ? (
-                  <Link to={`/letter/${adjacent.prev.id}`} className={`teaser-card${adjacent.prevWraps ? " teaser-wraps" : ""}`}>
-                    <span className="teaser-direction">
-                      {adjacent.prevWraps ? "\u2190 Last in Collection" : "\u2190 Previous"}
-                    </span>
-                    <div className="teaser-body">
-                      {adjacent.prev.date && <span className="teaser-date">{adjacent.prev.date}</span>}
-                      {(adjacent.prev.sender || adjacent.prev.recipient) && (
-                        <span className="teaser-people">
-                          {[adjacent.prev.sender, adjacent.prev.recipient].filter(Boolean).join(" \u2192 ")}
-                        </span>
-                      )}
-                      {adjacent.prev.hook ? (
-                        <p className="teaser-hook">{adjacent.prev.hook}</p>
-                      ) : adjacent.prev.contentLabels && (
-                        <span className="teaser-content-labels">
-                          {adjacent.prev.contentLabels.join(" \u00B7 ")}
-                        </span>
-                      )}
-                    </div>
-                  </Link>
-                ) : <div className="teaser-placeholder" />}
-                {adjacent.next ? (
-                  <Link to={`/letter/${adjacent.next.id}`} className={`teaser-card teaser-next${adjacent.nextWraps ? " teaser-wraps" : ""}`}>
-                    <span className="teaser-direction">
-                      {adjacent.nextWraps ? "First in Collection \u2192" : "Next \u2192"}
-                    </span>
-                    <div className="teaser-body">
-                      {adjacent.next.date && <span className="teaser-date">{adjacent.next.date}</span>}
-                      {(adjacent.next.sender || adjacent.next.recipient) && (
-                        <span className="teaser-people">
-                          {[adjacent.next.sender, adjacent.next.recipient].filter(Boolean).join(" \u2192 ")}
-                        </span>
-                      )}
-                      {adjacent.next.hook ? (
-                        <p className="teaser-hook">{adjacent.next.hook}</p>
-                      ) : adjacent.next.contentLabels && (
-                        <span className="teaser-content-labels">
-                          {adjacent.next.contentLabels.join(" \u00B7 ")}
-                        </span>
-                      )}
-                    </div>
-                  </Link>
-                ) : <div className="teaser-placeholder" />}
-              </div>
-            )}
-          </nav>
-        )}
-
       </article>
 
       {/* ── Image Viewer Modal ─────────────────────────────── */}
       {viewerIsActive && createPortal(
-        // Portal escapes page transforms and covers the fixed header.
-        <div
-          className="viewer-backdrop"
-          onMouseDown={(e) => {
-            // Only close if mousedown started directly on the backdrop (not on viewer content)
-            if (e.target === e.currentTarget) {
-              (e.currentTarget as HTMLElement).dataset.backdropMousedown = "1";
-            }
-          }}
-          onMouseUp={(e) => {
-            const el = e.currentTarget as HTMLElement;
-            if (el.dataset.backdropMousedown === "1" && e.target === e.currentTarget) {
-              setViewerOpen(false);
-            }
-            delete el.dataset.backdropMousedown;
-          }}
-        >
-          <div className="viewer-modal" ref={viewerDialogRef}
-            role="dialog" aria-modal="true" aria-label="Original scans" tabIndex={-1}>
-            <LetterViewer
-              key={viewerStartPage}
-              images={allImages}
-              letterId={letter.id}
-              showOnlyLetterPages={false}
-              variant="lightbox"
-              initialIndex={viewerStartPage}
-              onClose={() => setViewerOpen(false)}
-            />
-          </div>
-        </div>,
+        <ReaderFocusViewer cornerRatios={cornerRatios} entryZoom={entryZoom} directZoom={directZoom} images={allImages} letterId={letter.id} initialIndex={viewerStartPage}
+          onPageChange={syncViewerPage} onClose={index => {
+            setViewerOpen(false);
+            if (index !== activeIndex) scrollToSlide(index);
+          }} />,
         document.body,
       )}
       <BackToTop />

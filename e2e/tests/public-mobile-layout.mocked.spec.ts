@@ -137,10 +137,11 @@ test.describe('@mocked Public mobile layout', () => {
     await expect(image).toBeVisible();
     await image.scrollIntoViewIfNeeded();
     const saved = await page.evaluate(() => scrollY);
-    await image.click();
-    await expect(page.getByRole('button', { name: 'Close viewer' })).toBeVisible();
+    await image.focus(); await image.press('+');
+    await expect(page.getByRole('dialog', { name: 'Original scans' })).toBeVisible();
     expect(await page.evaluate(() => document.body.style.position)).toBe('fixed');
-    await page.getByRole('button', { name: 'Close viewer' }).click();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: 'Original scans' })).toHaveCount(0);
     expect(await page.evaluate(() => document.body.style.position)).toBe('');
     await expect.poll(() => page.evaluate(() => scrollY)).toBeCloseTo(saved, 0);
   });
@@ -156,12 +157,16 @@ test.describe('@mocked Public mobile layout', () => {
     await expect(page.locator('.scan-slide').first()).toBeVisible();
     await page.evaluate(() => document.fonts.ready);
     await scroll(page, 300);
-    await page.locator('.scan-slide').first().click();
-    await expect(page.getByRole('button', { name: 'Close viewer' })).toBeVisible();
+    await page.locator('.scan-slide').first().focus();
+    await page.keyboard.press('+');
+    await expect(page.getByRole('dialog', { name: 'Original scans' })).toBeVisible();
     expect(await page.evaluate(() => parseFloat(document.body.style.top))).toBeLessThan(0);
+    // First Back closes the viewer's own history entry; the next leaves the letter.
+    await page.goBack();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
     await page.goBack();
     await expect(page.locator('.letter-card').first()).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Close viewer' })).toHaveCount(0);
+    await expect(page.getByRole('dialog', { name: 'Original scans' })).toHaveCount(0);
     await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
   });
 

@@ -1,6 +1,7 @@
+import { useLayoutEffect } from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import useCarouselDrag from '../useCarouselDrag';
+import useCarouselDrag, { type UseCarouselDragReturn } from '../useCarouselDrag';
 
 let frames: Map<number, FrameRequestCallback>;
 let nextFrame: number;
@@ -8,11 +9,13 @@ let resize: ResizeObserverCallback;
 const OriginalResizeObserver = globalThis.ResizeObserver;
 const disconnect = vi.fn();
 const opened = vi.fn();
+let motion: UseCarouselDragReturn['pageMotion'];
 function flush() {
   act(() => { const pending = [...frames.values()]; frames.clear(); pending.forEach(callback => callback(0)); });
 }
 function Harness({ loaded = true, identity = 'a' }: { loaded?: boolean; identity?: string }) {
-  const { attachCarousel, activeIndex, carouselDraggedRef, scrollToSlide } = useCarouselDrag();
+  const { attachCarousel, activeIndex, carouselDraggedRef, scrollToSlide, pageMotion } = useCarouselDrag();
+  useLayoutEffect(() => { motion = pageMotion; }, [pageMotion]);
   return <>
     {loaded && <div key={identity} ref={attachCarousel} data-testid="carousel">
       {[0, 1, 2].map(index => <div key={index} data-testid={`slide-${index}`}
@@ -44,6 +47,32 @@ beforeEach(() => {
 afterEach(() => { globalThis.ResizeObserver = OriginalResizeObserver; vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe('scan carousel lifecycle and position', () => {
+  it('does not restart thumbnail following after scrollend flushes a queued frame', () => {
+    render(<Harness />); const carousel = geometry(); flush();
+    carousel.scrollLeft = 160; fireEvent.scroll(carousel); flush();
+    expect(motion.get()).toBeCloseTo(160 / 220);
+    carousel.scrollLeft = 220; fireEvent.scroll(carousel);
+    expect(frames.size).toBe(1);
+    fireEvent(carousel, new Event('scrollend'));
+    expect(screen.getByTestId('active')).toHaveTextContent('1');
+    expect(motion.get()).toBeNull();
+    flush();
+    expect(motion.get()).toBeNull();
+    expect(frames.size).toBe(0);
+  });
+  it('releases drag progress when a selection interrupts settling before scrollend', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: false }));
+    render(<Harness />); const carousel = geometry(); flush();
+    carousel.scrollTo = vi.fn();
+    carousel.scrollLeft = 160; fireEvent.scroll(carousel); flush();
+    expect(motion.get()).toBeCloseTo(160 / 220);
+    fireEvent.scroll(carousel);
+    fireEvent.click(screen.getByText('Third'));
+    expect(motion.get()).toBeNull();
+    flush();
+    expect(motion.get()).toBeNull();
+    expect(screen.getByTestId('active')).toHaveTextContent('2');
+  });
   it('attaches after initial loading and uses one coordinate system for the closest slide', () => {
     const view = render(<Harness loaded={false} />); view.rerender(<Harness />);
     const carousel = geometry(); flush();
@@ -82,8 +111,8 @@ describe('scan carousel lifecycle and position', () => {
     fireEvent.mouseDown(carousel, { clientX: 100 }); fireEvent.mouseUp(document);
     fireEvent.click(screen.getByTestId('slide-1')); expect(opened).toHaveBeenCalledWith(1);
   });
-  it('does not let a stale scrollend steal the requested target and returns snapping to gestures', () => {
-    vi.stubGlobal('matchMedia', () => ({ matches: false }));
+  it.each([false, true])('does not let a stale scrollend steal the requested target (instant=%s)', (instant) => {
+    vi.stubGlobal('matchMedia', () => ({ matches: instant }));
     render(<Harness />); const carousel = geometry();
     carousel.scrollTo = vi.fn();
     fireEvent.click(screen.getByText('Third'));
@@ -106,5 +135,18 @@ describe('scan carousel lifecycle and position', () => {
     fireEvent.click(screen.getByText('Third'));
     expect(scrollTo).toHaveBeenCalledWith({ left: 440, behavior: reducedMotion ? 'instant' : 'smooth' });
     expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+  it('keeps the clicked page selected during smooth travel and yields to a new gesture', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: false }));
+    render(<Harness />); const carousel = geometry(); flush();
+    carousel.scrollTo = vi.fn();
+    fireEvent.click(screen.getByText('Third'));
+    expect(screen.getByTestId('active')).toHaveTextContent('2');
+    carousel.scrollLeft = 220;
+    fireEvent.scroll(carousel); flush();
+    expect(screen.getByTestId('active')).toHaveTextContent('2');
+    fireEvent.touchStart(carousel);
+    fireEvent.scroll(carousel); flush();
+    expect(screen.getByTestId('active')).toHaveTextContent('1');
   });
 });

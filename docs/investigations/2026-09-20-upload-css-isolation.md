@@ -42,3 +42,11 @@ These measurements distinguish the 400 px CSS maximum from the padded rendered b
 This receipt covers navigation/style isolation and targeted browser geometry. It does not establish real upload persistence, every results/duplicate dialog state, physical-device feel, Safari behavior, production deployment, or remote CI. The implementation's component regression and uploader dialog checks are separate evidence.
 
 The initial empty-image review fixture exposed an existing unrelated `LetterViewer.tsx` null-aspect path (`loadedAspect?.url === currentImage?.imageUrl` can compare two undefined values before reading `loadedAspect.ratio`). A valid mocked image was supplied for this acceptance run; application source was not changed.
+
+## PR review and CI correction
+
+Initial CI run `35489171246` on `c8096ca6` failed two upload tests because they still selected `.header-stats`. The tests now use the uploader-owned selector; the non-mocked collection-input fallback is updated too. No expectations were weakened. Three retry-free Chromium repetitions passed 15/15 cases, followed by 5/5 on the final upload suite after adding close-button coverage.
+
+Review comment `discussion_r4056119952` correctly identified a lost inherited `line-height: 1` on the renamed modal close/back control. Direct CSS regression failed before the restoration and passed afterward. The real browser also verifies computed line height equals the button's 24px font size. The coordinator independently reviewed the final correction.
+
+That initial CI run also recorded one unrelated WebKit reader-focus geometry attempt (478.5px → 478px width; x480.75 → x481) which passed its configured retry. The reader test is identical to main and neither this PR nor PR189 changes its implementation. The exact scenario passed one local retry-free WebKit check. This establishes intermittency, not a root-cause fix; it is recorded separately rather than changing reader behavior or tolerance in this CSS PR. Final-head required CI still gates readiness.

@@ -621,10 +621,22 @@ const LineReviewSession = forwardRef<LineReviewModeHandle, LineReviewModeProps>(
     onAutoSave({ transcriptionText: fullText });
   }, [currentLetterPageIndex, currentLineIndex, alignedLines, pageNonBlankMap, onTranscriptChange, onAutoSave, pageRawTexts]);
 
+  // Trust applies to the entire keyed source session. Page navigation must not
+  // revoke it, but unmount/source replacement and every block cycle must.
+  const trustRequestEpoch = useRef(0);
+  useLayoutEffect(() => {
+    trustRequestEpoch.current += 1;
+    return () => { trustRequestEpoch.current += 1; };
+  }, [mutationsBlocked]);
+  const captureTrustGuard = useCallback(() => {
+    const epoch = trustRequestEpoch.current;
+    return () => trustRequestEpoch.current === epoch && !mutationsBlockedRef.current;
+  }, []);
+
   // Verify segments — mark ALL letter pages as trusted (letter-level, not per-page)
   const handleVerifySegments = useCallback(async () => {
     if (mutationsBlockedRef.current) return;
-    const isCurrent = captureGuard();
+    const isCurrent = captureTrustGuard();
     if (!(await autoSaveSegments()) || !isCurrent()) return;
     if (!letterPages.length) return;
     try {
@@ -647,7 +659,7 @@ const LineReviewSession = forwardRef<LineReviewModeHandle, LineReviewModeProps>(
       if (isCurrent()) handleMutationError(err, 'Failed to verify segments');
     }
   }, [
-    captureGuard,
+    captureTrustGuard,
     letterPages,
     autoSaveSegments,
     handleMutationError,
@@ -659,7 +671,7 @@ const LineReviewSession = forwardRef<LineReviewModeHandle, LineReviewModeProps>(
   const handleUnverifySegments = useCallback(async () => {
     if (mutationsBlockedRef.current) return;
     if (!letterPages.length) return;
-    const isCurrent = captureGuard();
+    const isCurrent = captureTrustGuard();
     try {
       await updateLetterSegmentTrust(
         letter.id,
@@ -681,7 +693,7 @@ const LineReviewSession = forwardRef<LineReviewModeHandle, LineReviewModeProps>(
       if (isCurrent()) handleMutationError(err, 'Failed to unverify segments');
     }
   }, [
-    captureGuard,
+    captureTrustGuard,
     handleMutationError,
     letterPages,
     letter.id,

@@ -43,3 +43,11 @@ Playwright CLI, Chromium, Vite `127.0.0.1:4188`, session `quality-editor`. A two
 | Scroll then Fit Height | Image returns to 390 × 546, transform cleared, minimap removed |
 
 Browser coverage is a local mocked desktop/narrow viewport check. Physical touch devices, production persistence and deployed behavior are not asserted. Independent review and final-head CI remain the parent task's gate; no merge or deployment is authorized by this receipt.
+
+## PR review correction: letter-wide trust completion
+
+[Review finding on PR #205](https://github.com/MLGalusha/letter-archive/pull/205#discussion_r4056179320) confirmed: changing pages while a letter-wide verify/unverify request was pending revoked the page persistence guard. The successful server change then failed to update the local lock state.
+
+Two delayed-response component regressions reproduced the incorrect lock state for verify and unverify. Trust requests now use a source-session lifetime guard, independent of the selected page. Keyed source replacement, unmount and each committed mutation-block cycle still revoke that guard. Page saves and page/mode transitions retain their existing page-specific guard.
+
+After the correction, **74 focused tests pass**, including verify/unverify navigation plus four source-replacement and block/unblock controls. Changed files pass ESLint; frontend TypeScript and `git diff --check` pass. This correction was verified at the component layer; the earlier full-suite/build/browser receipt above belongs to the initial implementation, with final-head CI still required.

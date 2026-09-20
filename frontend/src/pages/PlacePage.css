@@ -165,7 +165,7 @@
 
 .place-page .letter-item:hover {
   transform: translateY(-1px);
-  box-shadow: 0 20px 40px rgba(29, 26, 20, 0.08);
+  box-shadow: var(--shadow-soft, 0 20px 40px rgba(29, 26, 20, 0.08));
   border-color: rgba(31, 109, 122, 0.22);
 }
 

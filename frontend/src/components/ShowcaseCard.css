@@ -20,7 +20,7 @@
 }
 
 .cd-highlight-card:hover {
-  box-shadow: 0 16px 36px rgba(29, 26, 20, 0.12);
+  box-shadow: var(--shadow-soft, 0 16px 36px rgba(29, 26, 20, 0.12));
 }
 
 .cd-highlight-img {

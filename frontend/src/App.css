@@ -37,8 +37,8 @@ html, body {
   --border-light: rgba(217, 207, 191, 0.6);
   --highlight: rgba(255, 255, 255, 0.95);
   --border-card: 1px solid rgba(217, 207, 191, 0.95);
-  --shadow: 0 22px 60px rgba(29, 26, 20, 0.08);
-  --shadow-soft: 0 12px 32px rgba(29, 26, 20, 0.07);
+  --shadow: none;
+  --shadow-soft: none;
   color: var(--text);
   font-family: "Instrument Sans", "Avenir Next", "Segoe UI", sans-serif;
   text-align: left;
@@ -102,7 +102,7 @@ html, body {
   border-radius: 999px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 250, 242, 0.98));
   color: var(--text);
-  box-shadow: 0 12px 28px rgba(29, 26, 20, 0.08);
+  box-shadow: var(--shadow-soft, 0 12px 28px rgba(29, 26, 20, 0.08));
 }
 
 .public-site-shell .btn-card:hover:not(:disabled),
@@ -110,7 +110,7 @@ html, body {
   transform: translateY(-1px);
   color: var(--accent-strong);
   border-color: rgba(31, 109, 122, 0.35);
-  box-shadow: 0 18px 32px rgba(29, 26, 20, 0.1);
+  box-shadow: var(--shadow-soft, 0 18px 32px rgba(29, 26, 20, 0.1));
 }
 
 .public-site-shell .btn-card:active:not(:disabled),

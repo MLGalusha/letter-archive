@@ -13,6 +13,13 @@ export interface ConnectionFinderProps {
   onPathFound?: (path: string[]) => void;
 }
 
+interface ConnectionRequestState {
+  owner: string;
+  loading: boolean;
+  result: { path: PathNode[]; edges: PathEdge[]; message?: string } | null;
+  error: string | null;
+}
+
 const RELATIONSHIP_LABELS: Record<string, string> = {
   'spouse': 'spouse of',
   'fiancé/fiancée': 'fiancé(e) of',
@@ -35,9 +42,12 @@ export function ConnectionFinder({ persons, onPathFound }: ConnectionFinderProps
   const [personB, setPersonB] = useState<string>('');
   const [searchA, setSearchA] = useState('');
   const [searchB, setSearchB] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ path: PathNode[]; edges: PathEdge[]; message?: string } | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [requestState, setRequestState] = useState<ConnectionRequestState | null>(null);
+  const requestOwner = personA && personB ? `${personA}\0${personB}` : null;
+  const currentRequest = requestState?.owner === requestOwner ? requestState : null;
+  const loading = currentRequest?.loading ?? false;
+  const result = currentRequest?.result ?? null;
+  const error = currentRequest?.error ?? null;
 
   const filteredPersonsA = useMemo(
     () => persons.filter((p) => p.name.toLowerCase().includes(searchA.toLowerCase()) && p.id !== personB),
@@ -48,49 +58,43 @@ export function ConnectionFinder({ persons, onPathFound }: ConnectionFinderProps
     [persons, searchB, personA]
   );
 
-  const handleFindConnection = useCallback(async () => {
-    if (!personA || !personB) {
-      setError('Please select both people');
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    setResult(null);
-
-    try {
-      const connectionResult = await findConnectionPath(personA, personB);
-      setResult(connectionResult);
-
-      if (connectionResult.path.length > 0) {
-        onPathFound?.(connectionResult.path.map((p) => p.id));
-      } else {
-        onPathFound?.([]);
-      }
-    } catch (err) {
-      setError(getErrorMessage(err, 'Failed to find connection'));
-      console.error('Connection finder error:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [personA, personB, onPathFound]);
-
   const handleClear = useCallback(() => {
     setPersonA('');
     setPersonB('');
     setSearchA('');
     setSearchB('');
-    setResult(null);
-    setError(null);
+    setRequestState(null);
     onPathFound?.([]);
   }, [onPathFound]);
 
   // Auto-search when both persons are selected
   useEffect(() => {
-    if (personA && personB) {
-      handleFindConnection();
-    }
-  }, [personA, personB, handleFindConnection]);
+    if (!personA || !personB || !requestOwner) return;
+    let active = true;
+    // The pair can be initialized or replaced outside one selection event, so
+    // the request lifecycle stays effect-owned and tagged to that exact pair.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- External graph request lifecycle.
+    setRequestState({ owner: requestOwner, loading: true, result: null, error: null });
+
+    void findConnectionPath(personA, personB)
+      .then((connectionResult) => {
+        if (!active) return;
+        setRequestState({ owner: requestOwner, loading: false, result: connectionResult, error: null });
+        onPathFound?.(connectionResult.path.map((person) => person.id));
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        setRequestState({
+          owner: requestOwner,
+          loading: false,
+          result: null,
+          error: getErrorMessage(err, 'Failed to find connection'),
+        });
+        console.error('Connection finder error:', err);
+      });
+
+    return () => { active = false; };
+  }, [personA, personB, requestOwner, onPathFound]);
 
   const getPersonName = (id: string) => {
     return persons.find((p) => p.id === id)?.name || 'Unknown';

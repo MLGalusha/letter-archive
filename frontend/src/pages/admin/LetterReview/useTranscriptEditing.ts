@@ -85,6 +85,8 @@ export function useTranscriptEditing({
   } = useTooltip();
 
   useLayoutEffect(() => {
+    // Reset editing state when the active review visit changes and close its visit-owned tooltip.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional visit ownership reset.
     setStoredSession((current) => (
       current.owner === visit ? current : sessionFrom(visit)
     ));
@@ -190,7 +192,7 @@ export function useTranscriptEditing({
     },
     [
       isTranscriptEditing,
-      letter?.transcriptStatus,
+      letter,
       showEditTooltipAt,
       visit,
     ],

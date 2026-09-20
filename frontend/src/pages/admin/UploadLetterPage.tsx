@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { isAuthenticated } from "../../api/auth";
 import { checkDuplicates } from "../../api/admin";
@@ -66,6 +66,7 @@ export default function UploadLetterPage() {
       const uploaded = job.results.filter(r => r.outcome === 'created');
       const replaced = job.results.filter(r => r.outcome === 'replaced');
       const unchanged = job.results.filter(r => r.outcome === 'unchanged');
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Completed upload jobs deliver external results and remove acknowledged pending files once.
       setUploadResults({
         uploaded,
         replaced,
@@ -101,7 +102,7 @@ export default function UploadLetterPage() {
 
   // Cleanup URLs on unmount
   const imagesRef = useRef(images);
-  imagesRef.current = images;
+  useLayoutEffect(() => { imagesRef.current = images; }, [images]);
   useEffect(() => {
     return () => {
       imagesRef.current.forEach((img) => URL.revokeObjectURL(img.url));
@@ -137,15 +138,21 @@ export default function UploadLetterPage() {
     };
   }, [collections, uncategorizedImages, images]);
 
-  // Update next collection code when collections change
+  // Refresh only an untouched suggestion; imported files must not overwrite a typed code.
+  const suggestedCollectionCode = useRef("001");
   useEffect(() => {
+    const previousSuggestion = suggestedCollectionCode.current;
     const nextCode = getNextCollectionCode(collections);
-    setEditState((prev) => ({ ...prev, newCollectionCode: nextCode }));
+    suggestedCollectionCode.current = nextCode;
+    setEditState((prev) => prev.newCollectionCode === previousSuggestion
+      ? { ...prev, newCollectionCode: nextCode }
+      : prev);
   }, [collections]);
 
   // Fall back to delete mode if uncategorized images disappear while in organize mode
   useEffect(() => {
     if (uncategorizedImages.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- The last uncategorized image can disappear after an external upload; organize mode then becomes unavailable.
       setEditState((prev) => prev.mode === "organize" ? { ...prev, mode: "delete" } : prev);
     }
   }, [uncategorizedImages.length]);

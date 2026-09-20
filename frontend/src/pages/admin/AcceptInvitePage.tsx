@@ -6,13 +6,25 @@ import "./AdminLoginPage.css";
 
 type Status = "loading" | "valid" | "invalid" | "expired";
 
+interface InviteValidationState {
+  token: string;
+  status: Status;
+  prefilledEmail: string | null;
+}
+
 export default function AcceptInvitePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token") || "";
 
-  const [status, setStatus] = useState<Status>("loading");
-  const [prefilledEmail, setPrefilledEmail] = useState<string | null>(null);
+  const [validation, setValidation] = useState<InviteValidationState>({
+    token,
+    status: "loading",
+    prefilledEmail: null,
+  });
+  const currentValidation = validation.token === token ? validation : null;
+  const status: Status = !token ? "invalid" : currentValidation?.status ?? "loading";
+  const prefilledEmail = currentValidation?.prefilledEmail ?? null;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -25,26 +37,24 @@ export default function AcceptInvitePage() {
       return;
     }
 
-    if (!token) {
-      setStatus("invalid");
-      return;
-    }
+    if (!token) return;
 
-    validateInvite(token)
+    let active = true;
+    void validateInvite(token)
       .then((result) => {
+        if (!active) return;
         if (result.valid) {
-          setStatus("valid");
-          if (result.email) {
-            setPrefilledEmail(result.email);
-            setEmail(result.email);
-          }
+          const validatedEmail = result.email || null;
+          setValidation({ token, status: "valid", prefilledEmail: validatedEmail });
+          setEmail(validatedEmail || "");
         } else {
-          setStatus("invalid");
+          setValidation({ token, status: "invalid", prefilledEmail: null });
         }
       })
       .catch(() => {
-        setStatus("invalid");
+        if (active) setValidation({ token, status: "invalid", prefilledEmail: null });
       });
+    return () => { active = false; };
   }, [token, navigate]);
 
   const handleSubmit = async (e: FormEvent) => {

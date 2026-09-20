@@ -13,7 +13,17 @@ interface DuplicateSuggestionsProps {
 
 const DISMISSED_KEY_PREFIX = 'dismissed_duplicates_';
 
-export default function DuplicateSuggestions({
+function loadDismissedPairs(entityType: DuplicateSuggestionsProps['entityType']): Set<string> {
+  const stored = localStorage.getItem(`${DISMISSED_KEY_PREFIX}${entityType}`);
+  if (!stored) return new Set();
+  try {
+    return new Set(JSON.parse(stored));
+  } catch {
+    return new Set();
+  }
+}
+
+function DuplicateSuggestionsForType({
   entityType,
   onMerge,
   onRefresh,
@@ -22,34 +32,27 @@ export default function DuplicateSuggestions({
   const [suggestions, setSuggestions] = useState<DuplicateSuggestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
-  const [dismissedPairs, setDismissedPairs] = useState<Set<string>>(new Set());
-
-  // Load dismissed pairs from localStorage
-  useEffect(() => {
-    const stored = localStorage.getItem(`${DISMISSED_KEY_PREFIX}${entityType}`);
-    if (stored) {
-      try {
-        setDismissedPairs(new Set(JSON.parse(stored)));
-      } catch {
-        // Invalid data, ignore
-      }
-    }
-  }, [entityType]);
+  const [dismissedPairs, setDismissedPairs] = useState<Set<string>>(
+    () => loadDismissedPairs(entityType),
+  );
 
   // Fetch suggestions
   useEffect(() => {
+    let active = true;
     async function fetchSuggestions() {
+      // A refresh reruns this external request without remounting the type-owned state.
       setLoading(true);
       try {
         const response = await getDuplicateSuggestions(entityType, 50);
-        setSuggestions(response.suggestions);
+        if (active) setSuggestions(response.suggestions);
       } catch (err) {
-        showToast(getErrorMessage(err, 'Failed to fetch duplicate suggestions'), 'error');
+        if (active) showToast(getErrorMessage(err, 'Failed to fetch duplicate suggestions'), 'error');
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     }
-    fetchSuggestions();
+    void fetchSuggestions();
+    return () => { active = false; };
   }, [entityType, onRefresh, showToast]);
 
   const getPairKey = useCallback((a: string, b: string) => {
@@ -175,4 +178,8 @@ export default function DuplicateSuggestions({
       )}
     </div>
   );
+}
+
+export default function DuplicateSuggestions(props: DuplicateSuggestionsProps) {
+  return <DuplicateSuggestionsForType key={props.entityType} {...props} />;
 }

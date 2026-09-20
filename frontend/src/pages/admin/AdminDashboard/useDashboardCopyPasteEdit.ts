@@ -47,6 +47,8 @@ export function useDashboardCopyPasteEdit({
 
   useEffect(() => {
     if (selectedIds.size > 0 && !editToolbarOpen) {
+      // Selection is produced by the sibling selection hook; opening the toolbar is its UI transition.
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Close paths clear selection, so manual close remains honored.
       setEditToolbarOpen(true);
     }
   }, [selectedIds.size, editToolbarOpen]);

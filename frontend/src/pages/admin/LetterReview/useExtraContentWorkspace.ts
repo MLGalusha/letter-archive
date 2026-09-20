@@ -89,6 +89,8 @@ export function useExtraContentWorkspace({
 
   useLayoutEffect(() => {
     activeOwner.current = owner;
+    // Synchronize the persisted baseline while preserving any unsaved local draft.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Conflict-aware external draft synchronization.
     setStored((current) => {
       const owned = current.owner === owner
         ? current

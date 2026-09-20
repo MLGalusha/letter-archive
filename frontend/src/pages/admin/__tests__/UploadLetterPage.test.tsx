@@ -266,6 +266,30 @@ describe('UploadLetterPage', () => {
     expect(screen.getByText(/1 original/)).toBeInTheDocument();
   });
 
+  it('preserves a manually chosen collection code when another categorized image arrives', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<UploadLetterPage />);
+
+    await user.upload(getFileInput(container), [
+      makeImageFile('009-19470810-L01-01.jpg'),
+      makeImageFile('notes.jpg'),
+    ]);
+    await screen.findByText('Collection 009');
+    await screen.findByText('Uncategorized 1');
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    await user.click(screen.getByRole('button', { name: 'Organize' }));
+    await user.click(screen.getByText('New Collection'));
+    const codeInput = container.querySelector<HTMLInputElement>('.collection-input');
+    expect(codeInput).not.toBeNull();
+    await user.clear(codeInput!);
+    await user.type(codeInput!, '777');
+
+    await user.upload(getFileInput(container), makeImageFile('009-19470810-L01-02.jpg'));
+
+    await waitFor(() => expect(checkDuplicatesMock).toHaveBeenLastCalledWith(['009-19470810-L01-02.jpg']));
+    expect(codeInput).toHaveValue('777');
+  });
+
   it('blocks upload when nothing has been categorized yet', async () => {
     const user = userEvent.setup();
     const { container } = render(<UploadLetterPage />);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useRef, useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   BarChart,
@@ -285,7 +285,11 @@ export default function UsagePage() {
     }
   }, []);
 
+  const overviewRequest = useRef<symbol | null>(null);
+  const callsRequest = useRef<symbol | null>(null);
   const loadOverview = useCallback(async () => {
+    const request = Symbol();
+    overviewRequest.current = request;
     setLoading(true);
     setError(null);
 
@@ -295,6 +299,7 @@ export default function UsagePage() {
       getUsageAnalytics({ months, collectionCode: collectionCode || undefined }),
     ]);
 
+    if (request !== overviewRequest.current) return;
     if (totalsResult.status === 'fulfilled') setTotals(totalsResult.value);
     if (summaryResult.status === 'fulfilled') setSummary(summaryResult.value);
     if (analyticsResult.status === 'fulfilled') setAnalytics(analyticsResult.value);
@@ -311,6 +316,8 @@ export default function UsagePage() {
   }, [months, collectionCode]);
 
   const loadCalls = useCallback(async (offset: number, append: boolean) => {
+    const request = Symbol();
+    callsRequest.current = request;
     setCallsLoading(true);
 
     try {
@@ -323,25 +330,31 @@ export default function UsagePage() {
         collectionCode: collectionCode || undefined,
       });
 
+      if (request !== callsRequest.current) return;
       setCalls((previous) => (append ? [...previous, ...data.calls] : data.calls));
       setCallsTotal(data.total);
     } catch (err) {
-      setError(getErrorMessage(err, 'Failed to load call history.'));
+      if (request === callsRequest.current) setError(getErrorMessage(err, 'Failed to load call history.'));
     } finally {
-      setCallsLoading(false);
+      if (request === callsRequest.current) setCallsLoading(false);
     }
   }, [callTypeFilter, dateFrom, dateTo, collectionCode]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Start an external query; response ownership is guarded separately from loading state.
     void loadCollections();
   }, [loadCollections]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Start an external query; response ownership is guarded separately from loading state.
     void loadOverview();
+    return () => { overviewRequest.current = null; };
   }, [loadOverview]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Start an external query; response ownership is guarded separately from loading state.
     void loadCalls(0, false);
+    return () => { callsRequest.current = null; };
   }, [loadCalls]);
 
   const allTypes = analytics?.byType.length

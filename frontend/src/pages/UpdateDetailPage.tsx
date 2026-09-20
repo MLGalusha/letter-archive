@@ -65,6 +65,7 @@ export default function BlogDetailPage() {
     if (!slug) return;
 
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- The route starts an external request; its cleanup already rejects stale responses.
     setLoading(true);
     setError(null);
 

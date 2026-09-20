@@ -108,6 +108,8 @@ export function useAnalysisRegenerationWorkspace({
       metadata: null,
       entity: null,
     };
+    // Adopt this visit's private session before paint; the visit boundary prevents stale progress/drafts.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional owner transition for a visit-scoped workspace.
     setStoredSession((current) => (
       current.owner === visit
         ? current

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
@@ -248,6 +248,33 @@ afterEach(() => {
 });
 
 describe('UsagePage', () => {
+  it('ignores a stale call-history failure after changing collection', async () => {
+    const user = userEvent.setup();
+    let rejectInitial!: (reason?: unknown) => void;
+    getUsageCallsMock
+      .mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectInitial = reject; }))
+      .mockResolvedValueOnce({
+        total: 1,
+        calls: [{
+          id: 'current-call', letterId: 'current-letter', callType: 'transcription', model: 'current-model',
+          inputTokens: 10, outputTokens: 5, totalTokens: 15, inputCost: '0.001', outputCost: '0.001',
+          totalCost: '0.002', durationMs: 100, createdAt: '2026-03-20T15:30:00.000Z',
+          collectionCode: '009', collectionTitle: 'Letters Home', dateRaw: '19470820', sender: 'Alice', recipient: 'Bob',
+        }],
+      });
+
+    render(<MemoryRouter><UsagePage /></MemoryRouter>);
+    expect(await screen.findByText('Window Intelligence')).toBeInTheDocument();
+    await waitFor(() => expect(getUsageCallsMock).toHaveBeenCalledTimes(1));
+    await user.selectOptions(screen.getByLabelText('Collection'), '009');
+    await waitFor(() => expect(getUsageCallsMock).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText('current-model')).toBeInTheDocument();
+
+    await act(async () => { rejectInitial(new Error('stale request failed')); });
+    expect(screen.queryByText('stale request failed')).not.toBeInTheDocument();
+    expect(screen.getByText('current-model')).toBeInTheDocument();
+  });
+
   it('renders the richer analytics sections and applies collection filters to reloads', async () => {
     const user = userEvent.setup();
 

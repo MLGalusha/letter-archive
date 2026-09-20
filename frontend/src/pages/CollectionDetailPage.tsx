@@ -27,6 +27,13 @@ import useIsTouchDevice from '../hooks/useIsTouchDevice';
 import useSwipeNavigation from '../hooks/useSwipeNavigation';
 import './CollectionDetailPage.css';
 
+const EMPTY_COLLECTION_LETTERS: CollectionWithLetters['letters'] = [];
+
+interface CollectionPopup {
+  title: string;
+  content: ReactNode;
+}
+
 export default function CollectionDetailPage() {
   const navigate = useNavigate();
   const { collectionCode } = useParams<{ collectionCode: string }>();
@@ -55,7 +62,11 @@ export default function CollectionDetailPage() {
   const error = overview && overview.code === collectionCode ? overview.error : null;
 
   /* ---- Popup state ---- */
-  const [popup, setPopup] = useState<{ title: string; content: ReactNode } | null>(null);
+  const [popupResult, setPopupResult] = useState<{ code: string | undefined; value: CollectionPopup } | null>(null);
+  const popup = popupResult && popupResult.code === collectionCode ? popupResult.value : null;
+  const setPopup = useCallback((value: CollectionPopup | null) => {
+    setPopupResult(value ? { code: collectionCode, value } : null);
+  }, [collectionCode]);
 
   /* ---- Archive search (extracted hook) ---- */
   const fixedFilters = useMemo(
@@ -69,15 +80,6 @@ export default function CollectionDetailPage() {
     fixedFilters,
   });
 
-  // Freeze facets and total while a search is in flight so the SearchBar's
-  // refine panel doesn't reshuffle counts between keystrokes (causes layout jumps).
-  const stableFacetsRef = useRef(archive.archiveResults.facets);
-  const stableTotalRef = useRef(archive.archiveResults.total);
-  if (!archive.archiveLoading) {
-    stableFacetsRef.current = archive.archiveResults.facets;
-    stableTotalRef.current = archive.archiveResults.total;
-  }
-
   /* ---- Sticky dock (extracted hook) ---- */
   const archiveSearchRef = useRef<HTMLElement | null>(null);
   const searchPanelRef = useRef<HTMLDivElement | null>(null);
@@ -89,7 +91,7 @@ export default function CollectionDetailPage() {
   });
 
   /* ---- Computed from collection data ---- */
-  const collectionLetters = collection?.letters ?? [];
+  const collectionLetters = collection?.letters ?? EMPTY_COLLECTION_LETTERS;
 
   const stats = useMemo(
     () => computeCollectionStats(collectionLetters),
@@ -118,9 +120,6 @@ export default function CollectionDetailPage() {
     if (!collectionCode) return;
 
     const controller = new AbortController();
-    setOverview(null);
-    setProfileResult(null);
-    setPopup(null);
 
     void getCollectionByCode(collectionCode, controller.signal).then((data) => {
       if (controller.signal.aborted) return;
@@ -424,8 +423,8 @@ export default function CollectionDetailPage() {
             <SearchBar
               query={archive.searchQuery}
               filters={archive.filters}
-              facets={stableFacetsRef.current}
-              total={stableTotalRef.current}
+              facets={archive.archiveResults.facets}
+              total={archive.archiveResults.total}
               loading={archive.archiveLoading}
               embedded
               variant="full"

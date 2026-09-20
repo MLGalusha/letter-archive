@@ -21,6 +21,8 @@ export default function useLetterScrubber(
   const total = adjacent?.total ?? 0;
   const hasCurrentList = !!letters && letters.length === total && currentIdx >= 0;
   const pos = hasCurrentList ? currentIdx + 1 : (adjacent?.position ?? 1);
+  const previousLetter = adjacent?.prev;
+  const nextLetter = adjacent?.next;
 
   const handleNavigate = useCallback(
     (targetPos: number) => {
@@ -38,20 +40,20 @@ export default function useLetterScrubber(
     if (hasCurrentList && letters) {
       const prevIdx = currentIdx === 0 ? letters.length - 1 : currentIdx - 1;
       navigate(`/letter/${letters[prevIdx].id}`);
-    } else if (adjacent?.prev) {
-      navigate(`/letter/${adjacent.prev.id}`);
+    } else if (previousLetter) {
+      navigate(`/letter/${previousLetter.id}`);
     }
-  }, [letters, hasCurrentList, currentIdx, total, adjacent?.prev, navigate]);
+  }, [letters, hasCurrentList, currentIdx, total, previousLetter, navigate]);
 
   const handleNext = useCallback(() => {
     if (total <= 1) return;
     if (hasCurrentList && letters) {
       const nextIdx = currentIdx === letters.length - 1 ? 0 : currentIdx + 1;
       navigate(`/letter/${letters[nextIdx].id}`);
-    } else if (adjacent?.next) {
-      navigate(`/letter/${adjacent.next.id}`);
+    } else if (nextLetter) {
+      navigate(`/letter/${nextLetter.id}`);
     }
-  }, [letters, hasCurrentList, currentIdx, total, adjacent?.next, navigate]);
+  }, [letters, hasCurrentList, currentIdx, total, nextLetter, navigate]);
 
   return useMemo(() => {
     if (!adjacent || total <= 1) return null;

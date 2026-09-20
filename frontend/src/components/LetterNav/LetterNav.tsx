@@ -12,6 +12,8 @@ export default function LetterNav({ letterId }: LetterNavProps) {
   const navigate = useNavigate();
   const [adjacent, setAdjacent] = useState<AdjacentLettersResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const previousLetterId = adjacent?.prev;
+  const nextLetterId = adjacent?.next;
 
   useEffect(() => {
     async function fetchAdjacent() {
@@ -31,16 +33,16 @@ export default function LetterNav({ letterId }: LetterNavProps) {
   }, [letterId]);
 
   const handlePrev = useCallback(() => {
-    if (adjacent?.prev) {
-      navigate(`/letter/${adjacent.prev}`);
+    if (previousLetterId) {
+      navigate(`/letter/${previousLetterId}`);
     }
-  }, [adjacent?.prev, navigate]);
+  }, [previousLetterId, navigate]);
 
   const handleNext = useCallback(() => {
-    if (adjacent?.next) {
-      navigate(`/letter/${adjacent.next}`);
+    if (nextLetterId) {
+      navigate(`/letter/${nextLetterId}`);
     }
-  }, [adjacent?.next, navigate]);
+  }, [nextLetterId, navigate]);
 
   // Keyboard navigation
   useEffect(() => {

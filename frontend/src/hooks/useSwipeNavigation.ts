@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { decideGestureAxis } from '../utils/directionalGesture';
 
 /**
@@ -68,7 +68,9 @@ export default function useSwipeNavigation({
   // Mutable refs to avoid stale closures in native listeners
   const offsetRef = useRef(0);
   const callbacksRef = useRef({ onSwipeLeft, onSwipeRight, threshold });
-  callbacksRef.current = { onSwipeLeft, onSwipeRight, threshold };
+  useLayoutEffect(() => {
+    callbacksRef.current = { onSwipeLeft, onSwipeRight, threshold };
+  }, [onSwipeLeft, onSwipeRight, threshold]);
 
   const touchRef = useRef({
     startX: 0,

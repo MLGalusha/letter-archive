@@ -265,15 +265,6 @@ export default function HomePage() {
   // ── Archive search (extracted hook) ──
   const archive = useArchiveSearch({ storageKey: "home", defaultSort: "relevance" });
 
-  // Freeze facets and total while a search is in flight so the SearchBar's
-  // refine panel doesn't reshuffle counts between keystrokes (causes layout jumps).
-  const stableFacetsRef = useRef(archive.archiveResults.facets);
-  const stableTotalRef = useRef(archive.archiveResults.total);
-  if (!archive.archiveLoading) {
-    stableFacetsRef.current = archive.archiveResults.facets;
-    stableTotalRef.current = archive.archiveResults.total;
-  }
-
   // ── Sticky dock (extracted hook) ──
   const archiveSearchRef = useRef<HTMLElement | null>(null);
   const searchPanelRef = useRef<HTMLDivElement | null>(null);
@@ -473,8 +464,8 @@ export default function HomePage() {
         <SearchBar
           query={archive.searchQuery}
           filters={archive.filters}
-          facets={stableFacetsRef.current}
-          total={stableTotalRef.current}
+          facets={archive.archiveResults.facets}
+          total={archive.archiveResults.total}
           loading={archive.archiveLoading}
           embedded
           variant="full"

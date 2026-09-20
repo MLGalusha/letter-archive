@@ -452,6 +452,7 @@ for (const width of [390, 1440, 1920]) test(`@mocked focus entry visibly slides 
     });
     return { scans, headerBottom: document.querySelector('.header')!.getBoundingClientRect().bottom };
   });
+  await expect.poll(() => page.locator('.scan-carousel').evaluate(el => (el as HTMLElement).style.scrollSnapType)).toBe('');
   const before = await measure();
   await page.locator('.scan-slide').nth(1).press('+');
   await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'entering');
@@ -553,6 +554,14 @@ for (const width of [390, 1440]) test(`@mocked tiny wheel steps cross the docume
   await mockReader(page);
   await page.goto('/letter/current');
   await expect(page.locator('.scan-slide-img').first()).toBeVisible();
+  // The adjacent-letter response mounts the header dock after the scan. Wait
+  // for its layout before taking the origin used throughout this gesture.
+  await expect(page.locator('.header')).toHaveClass(/header--has-dock/);
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    await Promise.all(document.getAnimations().map(animation => animation.finished.catch(() => {})));
+    await new Promise(requestAnimationFrame);
+  });
   const samples = await page.evaluate(async () => {
     const read = () => {
       const image = document.querySelector('.viewer-transform') ?? document.querySelector('.scan-slide-img')!;

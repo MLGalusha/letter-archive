@@ -436,6 +436,57 @@ describe('LineReviewMode', () => {
     expect(updateLetterSegmentTrustMock).not.toHaveBeenCalled();
   });
 
+  it.each(['verify', 'unverify'] as const)(
+    'applies a delayed letter-wide %s after navigating to another page',
+    async action => {
+      const pending = createDeferred<void>();
+      updateLetterSegmentTrustMock.mockReturnValueOnce(pending.promise);
+      const letter = makeSegmentTransitionLetter();
+      if (action === 'unverify') letter.images.forEach(page => { page.segmentTrustState = 'trusted'; });
+      const { container } = render(<LineReviewMode {...defaultProps} letter={letter} fullViewport />);
+      await simulateImageLoadAsync(container);
+      if (action === 'verify') fireEvent.click(screen.getByRole('button', { name: 'Verify' }));
+      else fireEvent.doubleClick(container.querySelector('.seg-lock-overlay')!);
+      await waitFor(() => expect(updateLetterSegmentTrustMock).toHaveBeenCalledTimes(1));
+      fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+      await waitFor(() => expect(screen.getByAltText('Page 2')).toBeTruthy());
+      await simulateImageLoadAsync(container);
+      await act(async () => { pending.resolve(); await pending.promise; });
+      expect(!!container.querySelector('.seg-lock-overlay')).toBe(action === 'verify');
+      // Letter-wide completion must apply to the original page as well.
+      fireEvent.click(screen.getByRole('button', { name: 'Previous page' }));
+      await waitFor(() => expect(screen.getByAltText('Page 1')).toBeTruthy());
+      expect(!!container.querySelector('.seg-lock-overlay')).toBe(action === 'verify');
+    },
+  );
+
+  it.each([
+    { action: 'verify', revoke: 'source' },
+    { action: 'unverify', revoke: 'source' },
+    { action: 'verify', revoke: 'block-cycle' },
+    { action: 'unverify', revoke: 'block-cycle' },
+  ] as const)('revokes a delayed $action after a $revoke change', async ({ action, revoke }) => {
+    const pending = createDeferred<void>();
+    updateLetterSegmentTrustMock.mockReturnValueOnce(pending.promise);
+    const letter = makeSegmentTransitionLetter();
+    if (action === 'unverify') letter.images.forEach(page => { page.segmentTrustState = 'trusted'; });
+    const props = { ...defaultProps, letter, fullViewport: true };
+    const { container, rerender } = render(<LineReviewMode {...props} />);
+    await simulateImageLoadAsync(container);
+    if (action === 'verify') fireEvent.click(screen.getByRole('button', { name: 'Verify' }));
+    else fireEvent.doubleClick(container.querySelector('.seg-lock-overlay')!);
+    await waitFor(() => expect(updateLetterSegmentTrustMock).toHaveBeenCalledTimes(1));
+    if (revoke === 'source') {
+      rerender(<LineReviewMode {...props} letter={{ ...letter, primarySourceRevision: 10 }} />);
+      await simulateImageLoadAsync(container);
+    } else {
+      rerender(<LineReviewMode {...props} mutationsBlocked />);
+      rerender(<LineReviewMode {...props} />);
+    }
+    await act(async () => { pending.resolve(); await pending.promise; });
+    expect(!!container.querySelector('.seg-lock-overlay')).toBe(action === 'unverify');
+  });
+
   it('cancels a queued segment save when mutations become terminal', async () => {
     const letter = makeSegmentTransitionLetter();
     const { container, rerender } = render(

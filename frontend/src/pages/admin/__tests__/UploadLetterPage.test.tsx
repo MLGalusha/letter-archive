@@ -279,10 +279,9 @@ describe('UploadLetterPage', () => {
     await user.click(screen.getByRole('button', { name: 'Edit' }));
     await user.click(screen.getByRole('button', { name: 'Organize' }));
     await user.click(screen.getByText('New Collection'));
-    const codeInput = container.querySelector<HTMLInputElement>('.collection-input');
-    expect(codeInput).not.toBeNull();
-    await user.clear(codeInput!);
-    await user.type(codeInput!, '777');
+    const codeInput = screen.getByPlaceholderText('001');
+    await user.clear(codeInput);
+    await user.type(codeInput, '777');
 
     await user.upload(getFileInput(container), makeImageFile('009-19470810-L01-02.jpg'));
 

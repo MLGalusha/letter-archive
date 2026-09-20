@@ -169,8 +169,10 @@ export function useDashboardLettersData({
     }
   }, []);
 
+  // Loading is keyed to the committed dashboard query and guarded by request ownership refs.
   useEffect(() => {
     if (!isAuthenticated()) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Fetches external rows; stale responses are rejected above.
     void fetchLetters(true, 1);
   }, [fetchLetters, query]);
 

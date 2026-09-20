@@ -33,6 +33,7 @@ export default function BackToSearch({
 
   useEffect(() => {
     if (!visible) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Ending the scroll-listener session clears direction so a later session starts hidden.
       setScrollingUp(false);
       return;
     }

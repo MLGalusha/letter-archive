@@ -220,8 +220,8 @@ const MetadataSection = memo(function MetadataSection({
         onClick={saving ? undefined : onMetadataFieldClick}
         onDoubleClick={saving ? undefined : onMetadataFieldDoubleClick}
       >
-        <div className="form-row">
-          <div className="form-group sender-border">
+        <div className="review-form-row">
+          <div className="review-form-group sender-border">
             <label htmlFor="sender">Sender</label>
             <input
               type="text"
@@ -240,7 +240,7 @@ const MetadataSection = memo(function MetadataSection({
               }
             />
           </div>
-          <div className="form-group recipient-border">
+          <div className="review-form-group recipient-border">
             <label htmlFor="recipient">Recipient</label>
             <input
               type="text"
@@ -299,8 +299,8 @@ const MetadataSection = memo(function MetadataSection({
           </div>
         )}
 
-        <div className="form-row">
-          <div className="form-group">
+        <div className="review-form-row">
+          <div className="review-form-group">
             <label htmlFor="date">Date</label>
             <input
               type="date"
@@ -322,7 +322,7 @@ const MetadataSection = memo(function MetadataSection({
           </div>
         </div>
 
-        <div className="form-group">
+        <div className="review-form-group">
           <label htmlFor="location">Location Written</label>
           <input
             type="text"
@@ -344,7 +344,7 @@ const MetadataSection = memo(function MetadataSection({
           />
         </div>
 
-        <div className="form-group">
+        <div className="review-form-group">
           <label htmlFor="hook">Hook</label>
           <TagEditor
             value={hook}
@@ -362,7 +362,7 @@ const MetadataSection = memo(function MetadataSection({
           </span>
         </div>
 
-        <div className="form-group">
+        <div className="review-form-group">
           <label htmlFor="description">Summary</label>
           <TagEditor
             value={description}
@@ -380,8 +380,8 @@ const MetadataSection = memo(function MetadataSection({
         {/* AI-Extracted Metadata Section */}
         <div className="ai-metadata-section">
           <div className="ai-fields">
-            <div className="form-row">
-              <div className="form-group">
+            <div className="review-form-row">
+              <div className="review-form-group">
                 <label htmlFor="emotionalTone">Emotional Tone</label>
                 <select
                   id="emotionalTone"
@@ -408,7 +408,7 @@ const MetadataSection = memo(function MetadataSection({
                   ))}
                 </select>
               </div>
-              <div className="form-group">
+              <div className="review-form-group">
                 <label htmlFor="relationship">Relationship</label>
                 <select
                   id="relationship"
@@ -440,7 +440,7 @@ const MetadataSection = memo(function MetadataSection({
               </div>
             </div>
 
-            <div className="form-group">
+            <div className="review-form-group">
               <label>Primary Topics</label>
               <div className="topics-display">
                 {primaryTopics.length > 0 ? (
@@ -507,7 +507,7 @@ const MetadataSection = memo(function MetadataSection({
             {/* Notable Quotes (read-only display) - at the bottom */}
             {letter.metadata.notableQuotes &&
               letter.metadata.notableQuotes.length > 0 && (
-                <div className="form-group">
+                <div className="review-form-group">
                   <label>Notable Quotes</label>
                   <div className="notable-quotes">
                     {letter.metadata.notableQuotes.map(

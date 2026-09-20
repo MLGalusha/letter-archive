@@ -17,6 +17,13 @@ import type {
   EmotionalTone,
   RelationshipType,
 } from '../db/index.js';
+import type {
+  LetterImageType,
+  LineSegment,
+  LineSegmentWord,
+  SegmentClass,
+  SegmentTrustState,
+} from '../contracts/admin-wire-contracts.js';
 
 // ============================================================================
 // FRONTEND-COMPATIBLE TYPES (mirror frontend/src/types/Letter.ts)
@@ -30,29 +37,12 @@ export type FrontendLetterStatus =
   | 'published'
   | 'hidden';
 
-export type FrontendLetterImageType = 'letter' | 'photo' | 'ephemera' | 'voice' | 'article' | 'diary' | 'cover' | 'card' | 'telegram';
+export type FrontendLetterImageType = LetterImageType;
+export type FrontendLineSegmentWord = LineSegmentWord;
+export type FrontendSegmentClass = SegmentClass;
+export type FrontendLineSegment = LineSegment;
 
-export interface FrontendLineSegmentWord {
-  text: string;
-  bbox: [number, number, number, number];
-}
-
-export type FrontendSegmentClass = 'body' | 'continuation' | 'addition' | 'ignore';
-
-export interface FrontendLineSegment {
-  line: number;
-  baseline: number[][];
-  bbox: [number, number, number, number];
-  ocrText: string;
-  words?: FrontendLineSegmentWord[];
-  boundary?: { x: number; y: number }[];
-  excluded?: boolean;
-  segmentClass?: FrontendSegmentClass;
-  isMapped?: boolean;
-  mappedText?: string;
-}
-
-export type FrontendSegmentTrustState = 'unverified' | 'trusted';
+export type FrontendSegmentTrustState = SegmentTrustState;
 
 export interface FrontendLetterImage {
   id: string;

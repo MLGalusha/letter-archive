@@ -12,10 +12,7 @@ export default function useFixedToolbarPopover(
   const [style, setStyle] = useState<CSSProperties>();
 
   useLayoutEffect(() => {
-    if (!open) {
-      setStyle(undefined);
-      return;
-    }
+    if (!open) return;
 
     const updatePosition = () => {
       const anchor = anchorRef.current;
@@ -49,5 +46,5 @@ export default function useFixedToolbarPopover(
     };
   }, [anchorRef, open]);
 
-  return style;
+  return open ? style : undefined;
 }

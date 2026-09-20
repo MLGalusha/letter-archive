@@ -89,7 +89,7 @@ describe('TranscriptionRegenerationDialog', () => {
     }));
     expect(props.onClose).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(document.querySelector('.confirm-dialog-overlay')!);
+    fireEvent.click(document.querySelector('.review-confirm-dialog-overlay')!);
     expect(props.onClose).toHaveBeenCalledTimes(2);
   });
 

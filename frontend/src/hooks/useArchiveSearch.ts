@@ -92,8 +92,6 @@ export default function useArchiveSearch(config: UseArchiveSearchConfig): UseArc
   const previousLocationSearchRef = useRef(locationSearch);
   const previousScopeKeyRef = useRef(scopeKey);
   const selfWrittenSearchRef = useRef<string | null>(null);
-  const locationChanged = previousLocationSearchRef.current !== locationSearch;
-  const scopeChanged = previousScopeKeyRef.current !== scopeKey;
 
   // ── Archive results state ──
   const [archiveResults, setArchiveResults] = useState<ArchiveSearchResponse>({
@@ -147,6 +145,8 @@ export default function useArchiveSearch(config: UseArchiveSearchConfig): UseArc
   // URL. A clean URL may hydrate persistence only when the archive scope itself
   // changes. Local replaceState writes are acknowledged without rehydrating.
   useEffect(() => {
+    const locationChanged = previousLocationSearchRef.current !== locationSearch;
+    const scopeChanged = previousScopeKeyRef.current !== scopeKey;
     if (!locationChanged && !scopeChanged) return;
 
     previousLocationSearchRef.current = locationSearch;
@@ -174,9 +174,7 @@ export default function useArchiveSearch(config: UseArchiveSearchConfig): UseArc
   }, [
     codecOptions,
     invalidateRequests,
-    locationChanged,
     locationSearch,
-    scopeChanged,
     scopeKey,
     searchParams,
     storageKey,
@@ -202,7 +200,9 @@ export default function useArchiveSearch(config: UseArchiveSearchConfig): UseArc
   // finishes before the debounced request and avoids a POP racing a pending URL
   // write. The codec preserves every URL key the archive does not own.
   useEffect(() => {
-    if (locationChanged || scopeChanged) return;
+    // The hydration effect updates this ref before scheduling its state update,
+    // so it fences this render from mirroring stale state back into the URL.
+    if (archiveStateRef.current !== archiveState) return;
 
     const nextParams = encodeArchiveSearchParams(archiveState, {
       ...codecOptions,
@@ -216,9 +216,7 @@ export default function useArchiveSearch(config: UseArchiveSearchConfig): UseArc
   }, [
     archiveState,
     codecOptions,
-    locationChanged,
     locationSearch,
-    scopeChanged,
     searchParams,
     setSearchParams,
   ]);

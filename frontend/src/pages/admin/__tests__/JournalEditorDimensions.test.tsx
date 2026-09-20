@@ -1,5 +1,6 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const { getPost, savePost, publishPost, toast } = vi.hoisted(() => ({ getPost: vi.fn(), savePost: vi.fn(), publishPost: vi.fn(), toast: vi.fn() }));
 vi.mock('../../../components/AdminLayout', () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
@@ -18,8 +19,33 @@ const source = '/blog-images/a.jpg';
 const dimensions = { [source]: { width: 80, height: 160 } };
 const post = { id: 'one', title: 'Article', slug: 'article', bodyMarkdown: `![scan](${source} "float-left")`, status: 'draft', heroImageUrl: source, heroImageAlt: '', imageDimensions: dimensions, updatedAt: '2026-09-17T12:00:00Z', publishedAt: null };
 function mount(entry = '/admin/content/blog/one') { return render(<MemoryRouter initialEntries={[entry]}><Routes><Route path="/admin/content/blog/new" element={<JournalEditorPage />} /><Route path="/admin/content/blog/:id" element={<JournalEditorPage />} /></Routes></MemoryRouter>); }
+function mountWithRouteSwitch(entry = '/admin/content/blog/one') {
+  function TestRoutes() {
+    const navigate = useNavigate();
+    return <><button type="button" onClick={() => navigate('/admin/content/blog/two')}>Open second post</button><Routes><Route path="/admin/content/blog/new" element={<JournalEditorPage />} /><Route path="/admin/content/blog/:id" element={<JournalEditorPage />} /></Routes></>;
+  }
+  return render(<MemoryRouter initialEntries={[entry]}><TestRoutes /></MemoryRouter>);
+}
 beforeEach(() => { vi.clearAllMocks(); getPost.mockResolvedValue(post); savePost.mockImplementation(async (_id, payload) => ({ ...post, ...payload })); publishPost.mockResolvedValue({ ...post, status: 'published' }); });
 describe('journal editor dimensions', () => {
+  it('keeps the newer post when an earlier route load resolves late', async () => {
+    let resolveFirst!: (value: typeof post) => void;
+    getPost.mockImplementation((id: string) => id === 'one'
+      ? new Promise((resolve) => { resolveFirst = resolve; })
+      : Promise.resolve({ ...post, id: 'two', title: 'Newer article', bodyMarkdown: 'Newer body' }));
+
+    const user = userEvent.setup();
+    mountWithRouteSwitch();
+    await waitFor(() => expect(getPost).toHaveBeenCalledWith('one'));
+    await user.click(screen.getByRole('button', { name: 'Open second post' }));
+    expect(await screen.findByDisplayValue('Newer article')).toBeInTheDocument();
+    await act(async () => { resolveFirst({ ...post, title: 'Stale first article', bodyMarkdown: 'Stale body' }); });
+
+    expect(screen.getByDisplayValue('Newer article')).toBeInTheDocument();
+    expect(screen.getByLabelText('Markdown')).toHaveValue('Newer body');
+    expect(screen.queryByDisplayValue('Stale first article')).not.toBeInTheDocument();
+  });
+
   it('preserves dimensions through hydration, autosave, explicit save and reload', async () => {
     const view = mount(); await screen.findByDisplayValue('Article');
     fireEvent.change(screen.getByLabelText('Markdown'), { target: { value: post.bodyMarkdown + '\n\nMore text.' } });

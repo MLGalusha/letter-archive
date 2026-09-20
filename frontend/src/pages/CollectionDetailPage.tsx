@@ -21,11 +21,13 @@ import { buildCollectionSeo, buildNotFoundSeo } from '../utils/seo';
 import useArchiveSearch from '../hooks/useArchiveSearch';
 import useStickyDock from '../hooks/useStickyDock';
 import ShowcaseCard, { type ShowcaseItem } from '../components/ShowcaseCard';
-import InfiniteCarousel from '../components/InfiniteCarousel';
+import CardCarousel from '../components/CardCarousel';
 import useIsMobile from '../hooks/useIsMobile';
 import useIsTouchDevice from '../hooks/useIsTouchDevice';
 import useSwipeNavigation from '../hooks/useSwipeNavigation';
 import './CollectionDetailPage.css';
+
+const EMPTY_COLLECTION_LETTERS: CollectionWithLetters['letters'] = [];
 
 export default function CollectionDetailPage() {
   const navigate = useNavigate();
@@ -69,15 +71,6 @@ export default function CollectionDetailPage() {
     fixedFilters,
   });
 
-  // Freeze facets and total while a search is in flight so the SearchBar's
-  // refine panel doesn't reshuffle counts between keystrokes (causes layout jumps).
-  const stableFacetsRef = useRef(archive.archiveResults.facets);
-  const stableTotalRef = useRef(archive.archiveResults.total);
-  if (!archive.archiveLoading) {
-    stableFacetsRef.current = archive.archiveResults.facets;
-    stableTotalRef.current = archive.archiveResults.total;
-  }
-
   /* ---- Sticky dock (extracted hook) ---- */
   const archiveSearchRef = useRef<HTMLElement | null>(null);
   const searchPanelRef = useRef<HTMLDivElement | null>(null);
@@ -89,7 +82,7 @@ export default function CollectionDetailPage() {
   });
 
   /* ---- Computed from collection data ---- */
-  const collectionLetters = collection?.letters ?? [];
+  const collectionLetters = collection?.letters ?? EMPTY_COLLECTION_LETTERS;
 
   const stats = useMemo(
     () => computeCollectionStats(collectionLetters),
@@ -118,6 +111,8 @@ export default function CollectionDetailPage() {
     if (!collectionCode) return;
 
     const controller = new AbortController();
+    // A route visit must discard the prior visit, including A -> B -> A before B loads.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Initialize the new external-request and popup session; code equality alone cannot identify a visit.
     setOverview(null);
     setProfileResult(null);
     setPopup(null);
@@ -155,8 +150,6 @@ export default function CollectionDetailPage() {
     const qs = params.toString();
     navigate(`/letter/${letterId}${qs ? `?${qs}` : ''}`);
   }, [navigate]);
-
-  const carouselPauseRef = useRef<() => void>(() => {});
 
   const handleHighlightClick = useCallback((letterId: string, imageId?: string) => {
     const params = new URLSearchParams();
@@ -386,34 +379,16 @@ export default function CollectionDetailPage() {
             )}
 
             {(highlights.length > 0 || gallery.length > 0) && (
-              isMobile ? (
-                <InfiniteCarousel classPrefix="cd-highlights" pauseRef={carouselPauseRef} suppressClickAfterDrag>
-                  {[
-                    ...highlightShowcaseItems.map(({ key, items }) => (
-                      <ShowcaseCard key={key} items={items} onNavigate={handleHighlightClick} onInteraction={() => carouselPauseRef.current()} />
-                    )),
-                    ...(galleryShowcaseItems.length > 0 ? [
-                      <ShowcaseCard key="gallery" items={galleryShowcaseItems} onNavigate={handleHighlightClick} onInteraction={() => carouselPauseRef.current()} />
-                    ] : []),
-                  ]}
-                </InfiniteCarousel>
-              ) : (
-                <div className="cd-highlights-col">
-                  {highlightShowcaseItems.map(({ key, items }) => (
-                    <ShowcaseCard
-                      key={key}
-                      items={items}
-                      onNavigate={handleHighlightClick}
-                    />
-                  ))}
-                  {galleryShowcaseItems.length > 0 && (
-                    <ShowcaseCard
-                      items={galleryShowcaseItems}
-                      onNavigate={handleHighlightClick}
-                    />
-                  )}
-                </div>
-              )
+              <CardCarousel label="Collection highlights" className="cd-highlights-col" layout={isMobile ? "carousel" : "static"}>
+                {[
+                  ...highlightShowcaseItems.map(({ key, items }) => (
+                    <ShowcaseCard key={key} items={items} onNavigate={handleHighlightClick} />
+                  )),
+                  ...(galleryShowcaseItems.length > 0 ? [
+                    <ShowcaseCard key="gallery" items={galleryShowcaseItems} onNavigate={handleHighlightClick} />
+                  ] : []),
+                ]}
+              </CardCarousel>
             )}
           </section>
         )}
@@ -424,8 +399,8 @@ export default function CollectionDetailPage() {
             <SearchBar
               query={archive.searchQuery}
               filters={archive.filters}
-              facets={stableFacetsRef.current}
-              total={stableTotalRef.current}
+              facets={archive.archiveResults.facets}
+              total={archive.archiveResults.total}
               loading={archive.archiveLoading}
               embedded
               variant="full"

@@ -75,6 +75,8 @@ export function useLetterTranscriptionWorkspace({
 
   useLayoutEffect(() => {
     activeAttemptRef.current = null;
+    // Adopt this visit's private transcription session before paint.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Required visit ownership reset for dialog/progress state.
     setStoredSession((current) => (
       current.owner === visit
         ? current

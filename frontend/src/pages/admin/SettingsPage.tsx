@@ -115,6 +115,8 @@ export default function SettingsPage() {
     }
   }, []);
 
+  // Settings, users, invites, and system information are external initial data.
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- Keep the parallel mount-time load in the effect.
   useEffect(() => { loadData(); }, [loadData]);
 
   // ── Invite handlers ─────────────────────────────────────

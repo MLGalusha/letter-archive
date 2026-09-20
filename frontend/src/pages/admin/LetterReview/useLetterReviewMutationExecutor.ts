@@ -53,6 +53,8 @@ export function useLetterReviewMutationExecutor({
     tail: Promise.resolve(),
   }), [visit]);
 
+  // This private queue serializes mutations within the current visit.
+  // eslint-disable-next-line react-hooks/immutability -- Mutability is the queue mechanism; it is not React state or caller-owned data.
   return useCallback(({
     request,
     failureMessage,
@@ -84,6 +86,8 @@ export function useLetterReviewMutationExecutor({
       }
     })();
 
+    // Append this operation so the next mutation awaits it.
+    // eslint-disable-next-line react-hooks/immutability -- Intentional per-visit promise-tail scheduling.
     queue.tail = execution.then(
       () => undefined,
       () => undefined,

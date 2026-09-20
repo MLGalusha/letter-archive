@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { isAuthenticated } from "../../api/auth";
 import { checkDuplicates } from "../../api/admin";
@@ -66,6 +66,7 @@ export default function UploadLetterPage() {
       const uploaded = job.results.filter(r => r.outcome === 'created');
       const replaced = job.results.filter(r => r.outcome === 'replaced');
       const unchanged = job.results.filter(r => r.outcome === 'unchanged');
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Completed upload jobs deliver external results and remove acknowledged pending files once.
       setUploadResults({
         uploaded,
         replaced,
@@ -101,7 +102,7 @@ export default function UploadLetterPage() {
 
   // Cleanup URLs on unmount
   const imagesRef = useRef(images);
-  imagesRef.current = images;
+  useLayoutEffect(() => { imagesRef.current = images; }, [images]);
   useEffect(() => {
     return () => {
       imagesRef.current.forEach((img) => URL.revokeObjectURL(img.url));
@@ -137,15 +138,21 @@ export default function UploadLetterPage() {
     };
   }, [collections, uncategorizedImages, images]);
 
-  // Update next collection code when collections change
+  // Refresh only an untouched suggestion; imported files must not overwrite a typed code.
+  const suggestedCollectionCode = useRef("001");
   useEffect(() => {
+    const previousSuggestion = suggestedCollectionCode.current;
     const nextCode = getNextCollectionCode(collections);
-    setEditState((prev) => ({ ...prev, newCollectionCode: nextCode }));
+    suggestedCollectionCode.current = nextCode;
+    setEditState((prev) => prev.newCollectionCode === previousSuggestion
+      ? { ...prev, newCollectionCode: nextCode }
+      : prev);
   }, [collections]);
 
   // Fall back to delete mode if uncategorized images disappear while in organize mode
   useEffect(() => {
     if (uncategorizedImages.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- The last uncategorized image can disappear after an external upload; organize mode then becomes unavailable.
       setEditState((prev) => prev.mode === "organize" ? { ...prev, mode: "delete" } : prev);
     }
   }, [uncategorizedImages.length]);
@@ -405,6 +412,9 @@ export default function UploadLetterPage() {
       ...prev,
       selectedCollection: null,
       selectedImageIds: new Set(),
+      newCollectionCode: editState.selectedCollection === "new"
+        ? suggestedCollectionCode.current
+        : prev.newCollectionCode,
     }));
 
     // Recheck duplicates for new filenames
@@ -686,7 +696,7 @@ export default function UploadLetterPage() {
   const headerActions = (
     <>
       {images.length > 0 && (
-        <div className="header-stats">
+        <div className="upload-header-stats">
           <span>{stats.totalImported} imported</span>
           {stats.newFiles > 0 && (
             <>
@@ -709,9 +719,9 @@ export default function UploadLetterPage() {
         </div>
       )}
 
-      <div className="header-actions">
+      <div className="upload-header-actions">
         {editState.active && editState.mode === "organize" && (
-          <span className="selected-count">{editState.selectedImageIds.size} selected</span>
+          <span className="upload-selected-count">{editState.selectedImageIds.size} selected</span>
         )}
 
         {editState.active && editState.mode === "organize" && editState.selectedCollection === "new" && (
@@ -719,7 +729,7 @@ export default function UploadLetterPage() {
             <span className="collection-label">Collection #:</span>
             <input
               type="text"
-              className="collection-input"
+              className="upload-collection-input"
               value={editState.newCollectionCode}
               onChange={(e) => handleNewCollectionCodeChange(e.target.value)}
               placeholder="001"
@@ -824,7 +834,7 @@ export default function UploadLetterPage() {
         accept="image/*"
         multiple
         onChange={handleFileInputChange}
-        className="hidden-input"
+        className="upload-hidden-input"
       />
       <input
         ref={folderInputRef}
@@ -834,7 +844,7 @@ export default function UploadLetterPage() {
         // @ts-expect-error webkitdirectory is not in standard types
         webkitdirectory=""
         onChange={handleFileInputChange}
-        className="hidden-input"
+        className="upload-hidden-input"
       />
 
       {images.length === 0 && collections.length === 0 ? (
@@ -943,7 +953,7 @@ export default function UploadLetterPage() {
           {/* Message */}
           {message && (
             <div
-              className={`message ${message.includes("Successfully") ? "success" : "error"}`}
+              className={`upload-message ${message.includes("Successfully") ? "upload-message--success" : "upload-message--error"}`}
             >
               {message}
             </div>
@@ -982,11 +992,11 @@ export default function UploadLetterPage() {
 
       {/* Authoritative upload details for no-ops and failures. */}
       {uploadResults.show && (
-        <div className="modal-overlay" onClick={handleClearResults}>
+        <div className="upload-modal-overlay" onClick={handleClearResults}>
           <div className="upload-results-panel" onClick={(e) => e.stopPropagation()}>
             <div className="results-header">
               <h3>Upload Complete</h3>
-              <button className="modal-close" onClick={handleClearResults}>×</button>
+              <button className="upload-modal-close" onClick={handleClearResults}>×</button>
             </div>
             <div className="results-content">
               {uploadResults.uploaded.length > 0 && (
@@ -1067,7 +1077,7 @@ export default function UploadLetterPage() {
 
       {/* Duplicate Decision Dialog */}
       {duplicateDialog.show && (
-        <div className="modal-overlay" onClick={() => setDuplicateDialog({ show: false, duplicateCount: 0 })}>
+        <div className="upload-modal-overlay" onClick={() => setDuplicateDialog({ show: false, duplicateCount: 0 })}>
           <div className="duplicate-dialog" onClick={(e) => e.stopPropagation()}>
             <h3>Duplicates Found</h3>
             <p>

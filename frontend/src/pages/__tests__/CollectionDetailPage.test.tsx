@@ -128,6 +128,7 @@ function renderCollectionDetailPage() {
   return render(
     <MemoryRouter initialEntries={["/collections/009"]}>
       <Link to="/collections/010">Switch to Ten</Link>
+      <Link to="/collections/009">Return to Nine</Link>
       <Routes>
         <Route path="/collections/:collectionCode" element={<CollectionDetailPage />} />
       </Routes>
@@ -384,6 +385,20 @@ describe("CollectionDetailPage", () => {
     expect(screen.getByRole('heading', { name: 'Collection Ten' })).toBeInTheDocument();
     expect(screen.queryByText('Old collection narrative')).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Collection Nine' })).not.toBeInTheDocument();
+  });
+
+  it('does not resurrect an earlier popup on a quick A to B to A visit', async () => {
+    const overview = await getCollectionByCodeMock();
+    renderCollectionDetailPage();
+    await screen.findByRole('heading', { name: 'Collection Nine' });
+    await userEvent.click(screen.getByRole('button', { name: /Alice Smith/ }));
+    expect(document.querySelector('.cd-popup')).not.toBeNull();
+    getCollectionByCodeMock.mockImplementation((code: string) => code === '010'
+      ? new Promise(() => {}) : Promise.resolve(overview));
+    await userEvent.click(screen.getByRole('link', { name: 'Switch to Ten' }));
+    await userEvent.click(screen.getByRole('link', { name: 'Return to Nine' }));
+    await screen.findByRole('heading', { name: 'Collection Nine' });
+    expect(document.querySelector('.cd-popup')).toBeNull();
   });
 
 });

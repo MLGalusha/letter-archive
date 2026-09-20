@@ -1,0 +1,176 @@
+/**
+ * Dependency-free JSON wire contracts shared with the admin browser client.
+ *
+ * Keep this file free of imports and server runtime values. The frontend mirror
+ * is generated from this source so each Docker build context stays independent.
+ */
+
+export type LetterImageType =
+  | 'letter'
+  | 'photo'
+  | 'ephemera'
+  | 'voice'
+  | 'article'
+  | 'diary'
+  | 'cover'
+  | 'card'
+  | 'telegram';
+
+export type SegmentTrustState = 'unverified' | 'trusted';
+export type SegmentClass = 'body' | 'continuation' | 'addition' | 'ignore';
+
+export interface LineSegmentWord {
+  text: string;
+  bbox: [number, number, number, number];
+}
+
+export interface LineSegment {
+  line: number;
+  baseline: number[][];
+  bbox: [number, number, number, number];
+  ocrText: string;
+  words?: LineSegmentWord[];
+  boundary?: { x: number; y: number }[];
+  excluded?: boolean;
+  segmentClass?: SegmentClass;
+  isMapped?: boolean;
+  mappedText?: string;
+}
+
+export type AdminLetterPageCountsByType = Readonly<
+  Record<LetterImageType, number>
+>;
+
+export interface AdminLetterSummary {
+  id: string;
+  title: string;
+  collectionCode: string;
+  primarySourceRevision: number;
+  primaryImageType: LetterImageType;
+  pageCountsByType: AdminLetterPageCountsByType;
+  metadata: {
+    sender?: string;
+    recipient?: string;
+    dateRaw: string;
+  };
+  visibility: 'PUBLISHED' | 'HIDDEN';
+  transcriptPublished: boolean;
+  metadataPublished: boolean;
+  transcriptStatus: 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
+  metadataContentStatus: 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
+  extraContentStatus: 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
+  photoDescriptionStatus: 'EMPTY' | 'AI_DRAFT' | 'EDITED' | 'VERIFIED';
+  metadataJobStatus: 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';
+  transcriptDigest: string;
+  transcriptConfirmed: boolean;
+  flagged: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastOpenedAt?: string;
+}
+
+export const PROCESSING_JOB_TYPES = [
+  'transcription',
+  'metadata',
+  'entity_extraction',
+  'extra_content',
+] as const;
+
+export type ProcessingJobType = (typeof PROCESSING_JOB_TYPES)[number];
+
+export interface ProcessingJobSnapshot {
+  letterId: string;
+  primarySourceRevision: number;
+  jobStateToken: string;
+}
+
+export interface ProcessingJobActionRequest extends ProcessingJobSnapshot {
+  type: ProcessingJobType;
+}
+
+export interface ProcessingQueueClearRequest {
+  type: ProcessingJobType;
+  items: ProcessingJobSnapshot[];
+}
+
+export interface ProcessingQueueItem extends ProcessingJobSnapshot {
+  letterTitle: string;
+  collectionCode: string;
+  sender: string | null;
+  recipient: string | null;
+  queuedAt: string | null;
+}
+
+export interface ProcessingActiveJob extends ProcessingJobSnapshot {
+  letterTitle: string;
+  collectionCode: string;
+  sender: string | null;
+  recipient: string | null;
+  type: ProcessingJobType;
+  startedAt: string;
+}
+
+export interface ProcessingRecentJob extends ProcessingJobSnapshot {
+  letterTitle: string;
+  collectionCode: string;
+  type: ProcessingJobType;
+  status: 'SUCCESS' | 'FAILED' | 'CLEARED';
+  error?: string;
+  completedAt: string;
+}
+
+export interface ProcessingWorkerState {
+  lastTickAt: string | null;
+  isPolling: boolean;
+  lastError: string | null;
+  currentBatchSize: number | null;
+  updatedAt: string | null;
+}
+
+export interface ProcessingQueueStatus {
+  active: ProcessingActiveJob[];
+  queued: {
+    transcription: ProcessingQueueItem[];
+    metadata: ProcessingQueueItem[];
+    entityExtraction: ProcessingQueueItem[];
+    extraContent: ProcessingQueueItem[];
+  };
+  recent: ProcessingRecentJob[];
+  worker: ProcessingWorkerState;
+  counts: {
+    activeCount: number;
+    queuedTranscription: number;
+    queuedMetadata: number;
+    queuedEntityExtraction: number;
+    queuedExtraContent: number;
+    recentSuccessCount: number;
+    recentFailedCount: number;
+    recentClearedCount: number;
+  };
+}
+
+export interface ProcessingActionResult {
+  message: string;
+}
+
+export type ProcessingQueueClearSkipCode =
+  | 'NOT_FOUND'
+  | 'SOURCE_REVISION_CHANGED'
+  | 'PROCESSING_JOB_CHANGED';
+
+export interface ProcessingQueueClearResult extends ProcessingActionResult {
+  requested: number;
+  cleared: number;
+  skipped: number;
+  skipReasons: Array<{
+    letterId: string;
+    code: ProcessingQueueClearSkipCode;
+  }>;
+}
+
+export type ProcessingWorkerWakeResult =
+  | { requested: true }
+  | {
+      requested: false;
+      reason: 'queue_empty' | 'worker_not_configured';
+    };

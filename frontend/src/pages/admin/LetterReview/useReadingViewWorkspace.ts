@@ -62,6 +62,8 @@ export function useReadingViewWorkspace({
 
   useLayoutEffect(() => {
     canOpenRef.current = canOpen;
+    // Persist closure when content/surface eligibility disappears, so restoring it does not reopen the prior view.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional eligibility transition cleanup.
     setStoredSession((current) => {
       const owned = current.owner === visit
         ? current

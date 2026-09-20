@@ -38,6 +38,7 @@ export default function BulkMergeModal({
 
   // Reset master when entities change
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- A changed default begins a new merge-selection draft; preserve user choice between changes.
     setMasterId(defaultMasterId);
   }, [defaultMasterId]);
 

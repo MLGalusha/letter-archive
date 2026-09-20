@@ -329,7 +329,10 @@ export default function JournalEditorPage() {
 
   /* ---- load ---- */
 
+  const postLoadRequest = useRef<symbol | null>(null);
   const loadBlogPost = useCallback(async () => {
+    const request = Symbol();
+    postLoadRequest.current = request;
     if (!id) { setLoading(false); resetForNewPost(); return; }
     // This editor already owns the draft just created. Refetching it would
     // replace edits made while creation was pending and invalidate queued saves.
@@ -341,15 +344,19 @@ export default function JournalEditorPage() {
     try {
       setLoading(true); setError(null);
       const post = await adminGetBlogPost(id);
-      hydrateFromPost(post);
+      if (request === postLoadRequest.current) hydrateFromPost(post);
     } catch (err) {
-      setError(getErrorMessage(err, 'Failed to load journal entry.'));
+      if (request === postLoadRequest.current) setError(getErrorMessage(err, 'Failed to load journal entry.'));
     } finally {
-      setLoading(false);
+      if (request === postLoadRequest.current) setLoading(false);
     }
   }, [hydrateFromPost, id, resetForNewPost]);
 
-  useEffect(() => { void loadBlogPost(); }, [loadBlogPost]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Route ownership starts an external load or initializes a new draft; ignore superseded responses.
+    void loadBlogPost();
+    return () => { postLoadRequest.current = null; };
+  }, [loadBlogPost]);
 
   /* ---- persist / autosave ---- */
 

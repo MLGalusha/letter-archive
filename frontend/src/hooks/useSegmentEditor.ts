@@ -1024,7 +1024,11 @@ export function useSegmentEditor(
     bumpHistoryVersion();
   }, [editedSegments, selectedSegmentId, bumpHistoryVersion]);
 
+  // History mutations explicitly bump React state above; these read-only flags
+  // reflect that version without moving the large undo snapshots into state.
+  // eslint-disable-next-line react-hooks/refs -- bumpHistoryVersion schedules every history visibility update.
   const canUndo = undoStackRef.current.length > 0;
+  // eslint-disable-next-line react-hooks/refs -- Same versioned history snapshot as canUndo.
   const canRedo = redoStackRef.current.length > 0;
 
   const resetFromSource = useCallback((segments: LineSegment[], options?: ResetFromSourceOptions) => {

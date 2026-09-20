@@ -56,7 +56,7 @@ describe("upload utils", () => {
   });
 
   it("formats dates and file sizes", () => {
-    expect(formatDate("1886-03-14")).toContain("1886");
+    expect(formatDate("1886-03-14")).toBe("March 14, 1886");
     expect(formatFileSize(0)).toBe("0 B");
     expect(formatFileSize(1536)).toBe("1.5 KB");
   });

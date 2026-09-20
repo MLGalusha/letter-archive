@@ -1,14 +1,11 @@
 import { and, eq, isNull, sql } from 'drizzle-orm';
+import type {
+  LineSegment,
+  SegmentTrustState,
+} from '../contracts/admin-wire-contracts.js';
 import { db, letterPages, letters } from '../db/index.js';
 
-export interface LineSegment {
-  line: number;
-  baseline: number[][];
-  bbox: [number, number, number, number];
-  ocrText: string;
-  words?: { text: string; bbox: [number, number, number, number] }[];
-  boundary?: { x: number; y: number }[];
-}
+export type { LineSegment } from '../contracts/admin-wire-contracts.js';
 
 export interface PageSourceExpectation {
   primarySourceRevision: number;
@@ -17,7 +14,7 @@ export interface PageSourceExpectation {
 
 type PageSourceBoundPatch = {
   lineSegments?: LineSegment[];
-  segmentTrustState?: 'unverified' | 'trusted';
+  segmentTrustState?: SegmentTrustState;
   updatedAt: Date;
 };
 
@@ -85,7 +82,7 @@ export async function savePageLineSegments(
 
 export async function updatePageSegmentTrust(
   pageId: string,
-  trustState: 'unverified' | 'trusted',
+  trustState: SegmentTrustState,
   expected: PageSourceExpectation,
 ): Promise<boolean> {
   return updateSourceBoundPage(
@@ -97,7 +94,7 @@ export async function updatePageSegmentTrust(
 
 export async function updateLetterSegmentTrust(
   letterId: string,
-  trustState: 'unverified' | 'trusted',
+  trustState: SegmentTrustState,
   expectedRevision: number,
   expectedPages: Array<{ pageId: string; sourceChecksum: string | null }>,
 ): Promise<boolean> {

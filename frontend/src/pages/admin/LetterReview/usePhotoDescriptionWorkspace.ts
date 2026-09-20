@@ -67,6 +67,8 @@ export function usePhotoDescriptionWorkspace({
 
   useLayoutEffect(() => {
     activeOwner.current = owner;
+    // Adopt the new source-revision draft before paint; same-owner DTO updates remain untouched.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional source-session boundary reset.
     setStored((current) => (
       current.owner === owner ? current : stateFrom(letter, owner)
     ));

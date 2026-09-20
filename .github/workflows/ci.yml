@@ -29,6 +29,9 @@ jobs:
             backend/package-lock.json
             frontend/package-lock.json
 
+      - name: Verify admin wire contracts
+        run: node scripts/sync-admin-wire-contracts.mjs --check
+
       - name: Install backend deps
         working-directory: backend
         run: npm ci
@@ -50,6 +53,11 @@ jobs:
       - name: Backend tests
         working-directory: backend
         run: npm test
+
+      - name: PostgreSQL processing lease regressions
+        timeout-minutes: 10
+        working-directory: backend
+        run: npm run db:test-migrations && npm run test:processing-leases:postgres
 
       - name: Backend build
         working-directory: backend

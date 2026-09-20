@@ -1,56 +1,21 @@
 import type {
   Collection,
-  ContentStatus,
-  JobStatus,
   Letter,
-  VisibilityState,
 } from '../db/index.js';
+import type {
+  AdminLetterPageCountsByType,
+  AdminLetterSummary as AdminLetterSummaryContract,
+} from '../contracts/admin-wire-contracts.js';
 import { transcriptDigest } from '../services/letter/metadata-input-identity.js';
 import {
   generateTitle,
   mapTypeToImageType,
-  type FrontendLetterImageType,
 } from './letter.dto.js';
 
-export interface AdminLetterPageCounts {
-  letter: number;
-  photo: number;
-  cover: number;
-  telegram: number;
-  card: number;
-  ephemera: number;
-  voice: number;
-  article: number;
-  diary: number;
-}
-
-export interface AdminLetterSummary {
-  id: string;
-  title: string;
-  collectionCode: string;
-  primarySourceRevision: number;
-  primaryImageType: FrontendLetterImageType;
-  pageCountsByType: AdminLetterPageCounts;
-  metadata: {
-    sender?: string;
-    recipient?: string;
-    dateRaw: string;
-  };
-  visibility: VisibilityState;
-  transcriptPublished: boolean;
-  metadataPublished: boolean;
-  transcriptStatus: ContentStatus;
-  metadataContentStatus: ContentStatus;
-  extraContentStatus: ContentStatus;
-  photoDescriptionStatus: ContentStatus;
-  metadataJobStatus: JobStatus;
-  transcriptDigest: string;
-  transcriptConfirmed: boolean;
-  flagged: boolean;
-  createdAt: string;
-  updatedAt: string;
-  lastOpenedAt?: string;
-}
+export type AdminLetterPageCounts = {
+  -readonly [Type in keyof AdminLetterPageCountsByType]: number;
+};
+export type AdminLetterSummary = AdminLetterSummaryContract;
 
 export type AdminLetterSummarySource = Pick<
   Letter,

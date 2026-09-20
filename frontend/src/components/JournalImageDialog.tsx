@@ -35,65 +35,85 @@ export default function JournalImageDialog({ isOpen, onClose, onInsert }: Props)
   const [collections, setCollections] = useState<AdminCollectionInfo[]>([]);
   const [collectionsLoading, setCollectionsLoading] = useState(false);
   const [selectedCollection, setSelectedCollection] = useState<AdminCollectionInfo | null>(null);
-  const [letters, setLetters] = useState<Letter[]>([]);
-  const [lettersLoading, setLettersLoading] = useState(false);
+  const [lettersResult, setLettersResult] = useState<{ collectionCode: string; letters: Letter[] } | null>(null);
   const [selectedLetter, setSelectedLetter] = useState<Letter | null>(null);
-  const [letterImages, setLetterImages] = useState<LetterImage[]>([]);
-  const [imagesLoading, setImagesLoading] = useState(false);
+  const [imagesResult, setImagesResult] = useState<{ letterId: string; images: LetterImage[] } | null>(null);
+  const letters = selectedCollection && lettersResult?.collectionCode === selectedCollection.collectionCode
+    ? lettersResult.letters
+    : [];
+  const lettersLoading = Boolean(
+    selectedCollection && lettersResult?.collectionCode !== selectedCollection.collectionCode,
+  );
+  const letterImages = selectedLetter && imagesResult?.letterId === selectedLetter.id
+    ? imagesResult.images
+    : [];
+  const imagesLoading = Boolean(selectedLetter && imagesResult?.letterId !== selectedLetter.id);
 
   // Reset state when dialog opens
   useEffect(() => {
     if (isOpen) {
+      // Opening starts a fresh draft session while the dialog component remains mounted.
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional dialog-session reset.
       setUrlInput('');
       setAltInput('');
       setUploadError(null);
       setSelectedCollection(null);
       setSelectedLetter(null);
-      setLetters([]);
-      setLetterImages([]);
+      setLettersResult(null);
+      setImagesResult(null);
     }
   }, [isOpen]);
 
-  // Load collections when database tab is first selected
+  // Load collections once for each open database-tab activation.
   useEffect(() => {
-    if (tab === 'database' && collections.length === 0 && !collectionsLoading) {
-      setCollectionsLoading(true);
-      getAdminCollections()
-        .then((cols) => setCollections(cols.filter((c) => (c.letterCount ?? 0) > 0)))
-        .catch(() => {})
-        .finally(() => setCollectionsLoading(false));
-    }
-  }, [tab, collections.length, collectionsLoading]);
+    if (!isOpen || tab !== 'database') return;
+    let active = true;
+    // Loading belongs to this external request activation; cleanup prevents a
+    // closed or replaced activation from settling it.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- External collection request lifecycle.
+    setCollectionsLoading(true);
+    void getAdminCollections()
+      .then((cols) => {
+        if (active) setCollections(cols.filter((c) => (c.letterCount ?? 0) > 0));
+      })
+      .catch(() => {
+        if (active) setCollections([]);
+      })
+      .finally(() => {
+        if (active) setCollectionsLoading(false);
+      });
+    return () => { active = false; };
+  }, [isOpen, tab]);
 
   // Load letters when a collection is selected
   useEffect(() => {
-    if (!selectedCollection) {
-      setLetters([]);
-      setSelectedLetter(null);
-      setLetterImages([]);
-      return;
-    }
-    setLettersLoading(true);
-    setSelectedLetter(null);
-    setLetterImages([]);
-    getAdminCollectionByCode(selectedCollection.collectionCode)
-      .then((col) => setLetters(col.letters || []))
-      .catch(() => setLetters([]))
-      .finally(() => setLettersLoading(false));
-  }, [selectedCollection]);
+    if (!isOpen || !selectedCollection) return;
+    const collectionCode = selectedCollection.collectionCode;
+    let active = true;
+    void getAdminCollectionByCode(collectionCode)
+      .then((collection) => {
+        if (active) setLettersResult({ collectionCode, letters: collection.letters || [] });
+      })
+      .catch(() => {
+        if (active) setLettersResult({ collectionCode, letters: [] });
+      });
+    return () => { active = false; };
+  }, [isOpen, selectedCollection]);
 
   // Load full letter detail (with all images) when a letter is selected
   useEffect(() => {
-    if (!selectedLetter) {
-      setLetterImages([]);
-      return;
-    }
-    setImagesLoading(true);
-    getAdminLetterById(selectedLetter.id)
-      .then((full) => setLetterImages(full.images || []))
-      .catch(() => setLetterImages(selectedLetter.images || []))
-      .finally(() => setImagesLoading(false));
-  }, [selectedLetter]);
+    if (!isOpen || !selectedLetter) return;
+    const letter = selectedLetter;
+    let active = true;
+    void getAdminLetterById(letter.id)
+      .then((full) => {
+        if (active) setImagesResult({ letterId: letter.id, images: full.images || [] });
+      })
+      .catch(() => {
+        if (active) setImagesResult({ letterId: letter.id, images: letter.images || [] });
+      });
+    return () => { active = false; };
+  }, [isOpen, selectedLetter]);
 
   const handleUrlInsert = useCallback(() => {
     if (!urlInput.trim()) return;
@@ -282,7 +302,10 @@ export default function JournalImageDialog({ isOpen, onClose, onInsert }: Props)
                       <button
                         key={c.id}
                         className="jid-collection-item"
-                        onClick={() => setSelectedCollection(c)}
+                        onClick={() => {
+                          setSelectedCollection(c);
+                          setSelectedLetter(null);
+                        }}
                       >
                         <span className="jid-collection-code">{c.collectionCode}</span>
                         <span className="jid-collection-title">{c.title || 'Untitled'}</span>

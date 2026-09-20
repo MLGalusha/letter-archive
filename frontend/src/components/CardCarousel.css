@@ -1,0 +1,61 @@
+/* Pages supply dimensions and content. This component owns swipe geometry. */
+.card-carousel[data-layout="carousel"] { min-width: 0; }
+.card-carousel[data-layout="carousel"] .card-carousel-frame {
+  border-radius: var(--carousel-radius, 24px);
+  overflow: hidden;
+  isolation: isolate;
+}
+.card-carousel[data-layout="carousel"] .card-carousel-viewport {
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  touch-action: auto;
+}
+.card-carousel-viewport::-webkit-scrollbar { display: none; }
+.card-carousel[data-layout="carousel"] .card-carousel-slide {
+  display: flex;
+  flex: 0 0 100%;
+  min-width: 0;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+.card-carousel[data-layout="carousel"] .card-carousel-slide > * {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+.card-carousel[data-layout="static"] :is(.card-carousel-frame, .card-carousel-viewport, .card-carousel-slide) { display: contents; }
+.card-carousel-viewport[data-dragging] { cursor: grabbing; user-select: none; }
+.card-carousel-viewport:focus-visible { outline: 3px solid var(--accent); outline-offset: -4px; }
+.card-carousel-dots { display: flex; justify-content: center; padding-top: var(--carousel-dots-top, 0.35rem); }
+.card-carousel-dot {
+  appearance: none;
+  position: relative;
+  border: 0;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  margin-block: calc((var(--carousel-dot-size, 7px) - 24px) / 2);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex: none;
+}
+.card-carousel-dot::before {
+  content: '';
+  position: absolute;
+  width: var(--carousel-dot-size, 7px);
+  height: var(--carousel-dot-size, 7px);
+  left: 50%; top: 50%;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.45;
+  transform: translate(-50%, -50%);
+}
+.card-carousel-dot[aria-current="true"]::before { background: var(--accent); opacity: 1; transform: translate(-50%, -50%) scale(1.35); }
+.card-carousel-dot:focus-visible { outline: 2px solid var(--accent); border-radius: 50%; outline-offset: -2px; }

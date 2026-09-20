@@ -549,6 +549,8 @@ export function useIdentityAutoSave({
   useLayoutEffect(() => {
     currentVisitRef.current = visit;
     currentTargetRef.current = targetKey;
+    // Reset the visible identity workflow to the new visit/target before paint.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Required owner transition for timers and pending identity work.
     setStoredState((current) => (
       current.visit === visit && current.targetKey === targetKey
         ? current
@@ -579,6 +581,8 @@ export function useIdentityAutoSave({
     }
     clearCountdown();
     clearRetagReset();
+    // A newly blocked mutation lane must discard its pending/retagging display state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Deliberate mutation-gate cleanup.
     setStoredState(emptyState(visit, targetKey));
   }, [
     cancelDebouncedSaves,

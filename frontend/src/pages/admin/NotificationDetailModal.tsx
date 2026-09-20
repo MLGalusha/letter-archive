@@ -3,6 +3,7 @@ import { Modal, Button } from '../../components/common';
 import Icon from '../../components/common/Icon';
 import type { IconName } from '../../components/common/Icon';
 import type { AdminNotification, NotificationSeverity } from '../../api/admin/notifications';
+import { formatMetadataValue, humanizeKey } from './notificationFormatters';
 import './NotificationDetailModal.css';
 
 interface Props {
@@ -58,32 +59,6 @@ function shortSourceId(id: string): string {
 
 function humanType(type: string): string {
   return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-/** camelCase / snake_case → "Title case with spaces". Exported for tests. */
-export function humanizeKey(key: string): string {
-  return key
-    .replace(/_/g, ' ')
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/^./, (c) => c.toUpperCase());
-}
-
-/** Render a metadata value compactly for primitives, JSON for objects/arrays. Exported for tests. */
-export function formatMetadataValue(value: unknown): { display: string; isCode: boolean } {
-  if (value === null || value === undefined) return { display: '—', isCode: false };
-  if (typeof value === 'string') return { display: value, isCode: false };
-  if (typeof value === 'number' || typeof value === 'boolean') {
-    return { display: String(value), isCode: false };
-  }
-  if (Array.isArray(value)) {
-    // Short arrays of primitives → comma-joined; otherwise pretty JSON
-    const allPrim = value.every((v) => typeof v !== 'object' || v === null);
-    if (allPrim && value.length <= 8) {
-      return { display: value.map((v) => String(v)).join(', '), isCode: false };
-    }
-    return { display: JSON.stringify(value, null, 2), isCode: true };
-  }
-  return { display: JSON.stringify(value, null, 2), isCode: true };
 }
 
 export default function NotificationDetailModal({

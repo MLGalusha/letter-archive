@@ -264,14 +264,18 @@ export default function NotificationsPage() {
   // ──────────────────────────────────────────────────────────────────────────
   // Fetching
   // ──────────────────────────────────────────────────────────────────────────
+  const listRequest = useRef<symbol | null>(null);
   const fetchNotifications = useCallback(
     async (offset = 0, append = false) => {
+      const request = Symbol();
+      listRequest.current = request;
       try {
         if (!append) setLoading(true);
         else setLoadingMore(true);
         setError(null);
 
         const data = await getNotifications(buildParams(offset));
+        if (request !== listRequest.current) return;
 
         if (append) {
           setNotifications((prev) => [...prev, ...data.notifications]);
@@ -282,10 +286,9 @@ export default function NotificationsPage() {
         setTotal(data.total);
         setUnreadCount(data.unreadCount);
       } catch (err) {
-        setError(getErrorMessage(err, 'Failed to load notifications.'));
+        if (request === listRequest.current) setError(getErrorMessage(err, 'Failed to load notifications.'));
       } finally {
-        setLoading(false);
-        setLoadingMore(false);
+        if (request === listRequest.current) { setLoading(false); setLoadingMore(false); }
       }
     },
     [buildParams],
@@ -301,10 +304,13 @@ export default function NotificationsPage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Start the external list request; only the current request may update its results/loading state.
     fetchNotifications(0, false);
+    return () => { listRequest.current = null; };
   }, [fetchNotifications]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Fetch advisory counts from the server on mount; this is not render-derived state.
     fetchCounts();
   }, [fetchCounts]);
 

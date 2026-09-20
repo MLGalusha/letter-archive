@@ -2,6 +2,7 @@ import { RetryingImage } from "../common/RetryingImage";
 import {
   useState,
   useEffect,
+  useLayoutEffect,
   useRef,
   useCallback,
   useMemo,
@@ -11,11 +12,12 @@ import {
 import { getErrorMessage, getImageUrl } from '../../api/client';
 import {
   getPageLineSegments,
-  savePageLineSegments,
   updateLetterSegmentTrust,
 } from '../../api/admin/letters';
 import type { Letter, LineSegment, LineSegmentWord, SpecialArea } from '../../types/Letter';
-import { toLineSegments, useSegmentEditor } from '../../hooks/useSegmentEditor';
+import { useSegmentEditor } from '../../hooks/useSegmentEditor';
+import { useSegmentPersistence } from './useSegmentPersistence';
+import { useLineReviewViewport } from './useLineReviewViewport';
 import SegmentEditorOverlay from './SegmentEditorOverlay';
 import SegmentContextMenu from './SegmentContextMenu';
 import { constrainedGrouping, eastEdgeY, westEdgeY } from '../../utils/constrainedGrouping';
@@ -63,14 +65,6 @@ export interface LineReviewModeHandle {
   saveCurrentLine: () => void;
   reloadSegments: () => void;
   isLoading: boolean;
-}
-
-interface SegmentSaveState {
-  page: Letter['images'][number];
-  letterPageIndex: number;
-  revision: number;
-  isDirty: boolean;
-  getSegmentsForSave: () => LineSegment[];
 }
 
 /**
@@ -179,7 +173,7 @@ function buildWordPositionedContent(
   div.innerHTML = highlightTranscriptMarkers(joined);
 }
 
-const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(function LineReviewMode({
+const LineReviewSession = forwardRef<LineReviewModeHandle, LineReviewModeProps>(function LineReviewSession({
   letter,
   transcript,
   onTranscriptChange,
@@ -196,7 +190,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 }: LineReviewModeProps, ref) {
   const { showToast } = useToast();
   const mutationsBlockedRef = useRef(mutationsBlocked);
-  mutationsBlockedRef.current = mutationsBlocked;
+  useLayoutEffect(() => { mutationsBlockedRef.current = mutationsBlocked; }, [mutationsBlocked]);
 
   // All images (letter + extra content) for page navigation
   const allPages = useMemo(() => letter.images, [letter.images]);
@@ -207,11 +201,6 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     [letter.images],
   );
   const primarySourceRevision = letter.primarySourceRevision;
-  const sourceExpectation = useCallback((page: Letter['images'][number]) => ({
-    primarySourceRevision,
-    sourceChecksum: page.sourceChecksum ?? null,
-  }), [primarySourceRevision]);
-
   // Set of allPages indices that are letter-type
   const letterPageIndices = useMemo(() => {
     const set = new Set<number>();
@@ -238,8 +227,6 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   // Letter-page index for transcript/detection lookups (undefined for non-letter pages)
   const currentLetterPageIndex = allToLetterIndex.get(currentPageIndex);
   const [currentLineIndex, setCurrentLineIndex] = useState(0);
-  const [imageNaturalSize, setImageNaturalSize] = useState({ width: 0, height: 0 });
-  const [imageDisplaySize, setImageDisplaySize] = useState({ width: 0, height: 0 });
 
   // AI-detected line segments per page (cached across page switches)
   // Keyed by letter-page index (not allPages index)
@@ -256,15 +243,6 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
   // Overlay toggle (dimmer + input strip)
   const [overlayEnabled, setOverlayEnabled] = useState(true);
-  // Fit-height toggle
-  const [fitHeight, setFitHeight] = useState(fullViewport);
-  // Zoom + pan for fit-height mode
-  const [fitZoom, setFitZoom] = useState(1);
-  const [fitPan, setFitPan] = useState({ x: 0, y: 0 });
-  const [isPanning, setIsPanning] = useState(false);
-  const panStartRef = useRef({ x: 0, y: 0 });
-  const minimapDragRef = useRef<{ pointerId: number; rect: DOMRect } | null>(null);
-
   // Debug overlay layer toggles
   const [showKrakenLines, setShowKrakenLines] = useState(true);
   const [showGroupedLines, setShowGroupedLines] = useState(true);
@@ -289,55 +267,39 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   );
   const segmentEditor = useSegmentEditor(currentKrakenSegments);
 
-  // Keep a render-current save snapshot outside async callback closures. A
-  // slow save may finish after another segment edit, so only the revision it
-  // actually persisted is eligible to clear dirty state.
-  const segmentEditRevisionRef = useRef(0);
-  const previousSegmentEditRef = useRef<{
-    pageId: string | null;
-    segments: typeof segmentEditor.editedSegments;
-  }>({
-    pageId: null,
-    segments: segmentEditor.editedSegments,
-  });
   const currentSegmentPage = currentLetterPageIndex === undefined
     ? undefined
     : letterPages[currentLetterPageIndex];
-  const currentSegmentPageId = currentSegmentPage?.id ?? null;
-  if (
-    previousSegmentEditRef.current.pageId !== currentSegmentPageId
-    || previousSegmentEditRef.current.segments !== segmentEditor.editedSegments
-  ) {
-    segmentEditRevisionRef.current += 1;
-    previousSegmentEditRef.current = {
-      pageId: currentSegmentPageId,
-      segments: segmentEditor.editedSegments,
-    };
-  }
-  const latestSegmentSaveStateRef = useRef<SegmentSaveState | null>(null);
-  latestSegmentSaveStateRef.current = currentSegmentPage
-    && currentLetterPageIndex !== undefined
-    ? {
-        page: currentSegmentPage,
-        letterPageIndex: currentLetterPageIndex,
-        revision: segmentEditRevisionRef.current,
-        isDirty: segmentEditor.isDirty,
-        getSegmentsForSave: segmentEditor.getSegmentsForSave,
-      }
-    : null;
-  const activeSegmentFlushRef = useRef<{
-    pageId: string;
-    promise: Promise<boolean>;
-  } | null>(null);
 
-  // Sync segment editor when source segments change (page switch or redetect)
+  // Draft/history remains in useSegmentEditor. Persistence acknowledges only the
+  // committed revision it saved, and publishes that result to the page caches.
   const lastSourceRef = useRef<LineSegment[] | undefined>(currentKrakenSegments);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (currentKrakenSegments !== lastSourceRef.current) {
       lastSourceRef.current = currentKrakenSegments;
       segmentEditor.resetFromSource(currentKrakenSegments);
     }
   }, [currentKrakenSegments, segmentEditor]);
+  const { flush: autoSaveSegments, captureGuard } = useSegmentPersistence({
+    target: currentSegmentPage && currentLetterPageIndex !== undefined ? {
+      letterId: letter.id,
+      pageId: currentSegmentPage.id,
+      letterPageIndex: currentLetterPageIndex,
+      primarySourceRevision,
+      sourceChecksum: currentSegmentPage.sourceChecksum ?? null,
+    } : null,
+    draft: segmentEditor.editedSegments,
+    isDirty: segmentEditor.isDirty,
+    getSegmentsForSave: segmentEditor.getSegmentsForSave,
+    blocked: mutationsBlocked,
+    onSaved: (segments, target) => {
+      lastSourceRef.current = segments;
+      setKrakenSegmentsMap(previous => ({ ...previous, [target.letterPageIndex]: segments }));
+      setAiSegmentsMap(previous => ({ ...previous, [target.letterPageIndex]: segments }));
+      segmentEditor.markSaved();
+    },
+    onError: handleMutationError,
+  });
 
   // Mapping mode: auto-enter segment edit mode when mapping text provided
   const [mappingActive, setMappingActive] = useState(!!mappingText);
@@ -374,46 +336,39 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     }
   }, [segmentEditor.selectedSegmentId]);
 
-  const handleMappingClick = useCallback(
-    (segId: string) => {
-      if (mutationsBlockedRef.current) return;
-      if (!mappingActive || !mappingText) return;
-      const seg = segmentEditor.editedSegments.find((s) => s._id === segId);
-      if (!seg) return;
-      // Only map to special segments (continuation/addition)
-      const cls = seg.segmentClass;
-      if (cls !== 'continuation' && cls !== 'addition') return;
+  // Start mapping persistence after mapSegment has committed its draft. It shares
+  // the normal flush so edits made during the request must also reach the server.
+  const [mappingSaveRequest, setMappingSaveRequest] = useState<{ text: string; onComplete?: () => void } | null>(null);
+  const handleMappingClick = useCallback((segId: string) => {
+    if (mutationsBlockedRef.current || !mappingActive || !mappingText || !currentSegmentPage) return;
+    const segment = segmentEditor.editedSegments.find(item => item._id === segId);
+    if (segment?.segmentClass !== 'continuation' && segment?.segmentClass !== 'addition') return;
+    segmentEditor.mapSegment(segId, mappingText);
+    setMappingSaveRequest({ text: mappingText, onComplete: onMappingComplete });
+  }, [mappingActive, mappingText, currentSegmentPage, segmentEditor, onMappingComplete]);
+  useEffect(() => {
+    if (!mappingSaveRequest || mappingSaveRequest.text !== mappingText) return;
+    let active = true;
+    const isCurrent = captureGuard();
+    void autoSaveSegments('Failed to save segment mapping').then(saved => {
+      if (!active || !saved || !isCurrent()) return;
+      setMappingActive(false);
+      mappingSaveRequest.onComplete?.();
+    });
+    return () => { active = false; };
+  }, [mappingSaveRequest, mappingText, autoSaveSegments, captureGuard]);
 
-      if (currentLetterPageIndex === undefined) return;
-      const page = letterPages[currentLetterPageIndex];
-      if (!page) return;
-
-      const segments = toLineSegments(segmentEditor.editedSegments.map((segment) => (
-        segment._id === segId
-          ? { ...segment, isMapped: true, mappedText: mappingText }
-          : segment
-      )));
-      segmentEditor.mapSegment(segId, mappingText);
-
-      void savePageLineSegments(page.id, segments, sourceExpectation(page)).then(() => {
-        segmentEditor.markSaved();
-        setMappingActive(false);
-        onMappingComplete?.();
-      }).catch((error) => {
-        handleMutationError(error, 'Failed to save segment mapping');
-      });
-    },
-    [
-      mappingActive,
-      mappingText,
-      segmentEditor,
-      currentLetterPageIndex,
-      letterPages,
-      onMappingComplete,
-      handleMutationError,
-      sourceExpectation,
-    ],
-  );
+  const currentPage = allPages[currentPageIndex];
+  const {
+    containerRef, imageRef, imageNaturalSize, imageDisplaySize,
+    fitHeight, fitZoom, fitPan, isPanning, canPanZoomedImage, toggleFit, minimap,
+    handleImageLoad, handlePanMouseDown, handlePanMouseMove, handlePanMouseUp,
+    handleMinimapPointerDown, handleMinimapPointerMove, handleMinimapPointerEnd,
+  } = useLineReviewViewport({
+    pageIdentity: JSON.stringify([letter.id, primarySourceRevision, currentPage?.id, currentPage?.sourceChecksum]),
+    initiallyFit: fullViewport,
+    panEnabled: !segmentEditor.segmentEditMode || drawTool === 'select',
+  });
 
   // Detection progress steps (shown in loading overlay for current page)
 
@@ -461,14 +416,11 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     return { groupedLines, marginalSegments, matchResult };
   }, [krakenSegmentsMap, currentLetterPageIndex, pageLineTexts]);
 
-  const containerRef = useRef<HTMLDivElement>(null);
-  const imageRef = useRef<HTMLImageElement>(null);
   const inputRef = useRef<HTMLDivElement>(null);
   const lastGlobalLineIndexRef = useRef<number | null>(null);
   // Live font size override: tracks font size as user edits text (null = use render-time value)
   const [liveFontSize, setLiveFontSize] = useState<number | null>(null);
 
-  const currentPage = allPages[currentPageIndex];
 
   // Local trust state tracking (mirrors server, updated on verify/unverify)
   const [trustOverrides, setTrustOverrides] = useState<Record<string, 'trusted' | 'unverified'>>({});
@@ -478,15 +430,6 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     if (override !== undefined) return override === 'trusted';
     return p.segmentTrustState === 'trusted';
   });
-
-  // Reset image sizes and zoom when switching pages so overlay doesn't render
-  // at stale positions from the previous page's dimensions
-  useEffect(() => {
-    setImageNaturalSize({ width: 0, height: 0 });
-    setImageDisplaySize({ width: 0, height: 0 });
-    setFitZoom(1);
-    setFitPan({ x: 0, y: 0 });
-  }, [currentPageIndex]);
 
   // Fetch stored line segments from DB when a letter page loads.
   useEffect(() => {
@@ -635,139 +578,6 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     [alignedLines, scaleFactor],
   );
 
-  // Track image natural size
-  const handleImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
-    const img = e.currentTarget;
-    setImageNaturalSize({ width: img.naturalWidth, height: img.naturalHeight });
-    setImageDisplaySize({ width: img.clientWidth, height: img.clientHeight });
-  }, []);
-
-  // Update display size on resize (ResizeObserver catches sidebar toggles too)
-  useEffect(() => {
-    const img = imageRef.current;
-    if (!img) return;
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const { width, height } = entry.contentRect;
-        if (width > 0 && height > 0) {
-          setImageDisplaySize({ width, height });
-        }
-      }
-    });
-    observer.observe(img);
-    return () => observer.disconnect();
-  }, [currentPageIndex]);
-
-  // Wheel zoom for fit-height mode (Ctrl/Cmd + scroll, smooth)
-  const fitZoomRef = useRef(fitZoom);
-  fitZoomRef.current = fitZoom;
-
-  // Clamp pan so the image edges never cross inside the viewport
-  const clampPan = useCallback((pan: { x: number; y: number }, zoom: number) => {
-    const container = containerRef.current;
-    if (!container) return pan;
-    const dw = imageDisplaySize.width;
-    const dh = imageDisplaySize.height;
-    if (dw === 0 || dh === 0) return pan;
-    const cw = container.clientWidth;
-    const ch = container.clientHeight;
-    const maxX = Math.max(0, (zoom * dw - cw) / 2);
-    const maxY = Math.max(0, (zoom * dh - ch) / 2);
-    return {
-      x: Math.max(-maxX, Math.min(maxX, pan.x)),
-      y: Math.max(-maxY, Math.min(maxY, pan.y)),
-    };
-  }, [imageDisplaySize.width, imageDisplaySize.height]);
-
-  useEffect(() => {
-    if (!fitHeight) return;
-    const container = containerRef.current;
-    if (!container) return;
-
-    const handleWheel = (e: WheelEvent) => {
-      if (e.metaKey || e.ctrlKey) {
-        e.preventDefault();
-        e.stopPropagation();
-        // Smooth exponential zoom (matches public LetterViewer feel)
-        const factor = Math.pow(1.01, -e.deltaY);
-        setFitZoom(prev => {
-          const next = prev * factor;
-          const clamped = Math.min(50, Math.max(1, next));
-          // Scale pan proportionally so the view center stays put, then clamp to bounds
-          setFitPan(prevPan => {
-            if (clamped === 1) return { x: 0, y: 0 };
-            const ratio = clamped / prev;
-            return clampPan({ x: prevPan.x * ratio, y: prevPan.y * ratio }, clamped);
-          });
-          return clamped;
-        });
-      }
-    };
-
-    container.addEventListener('wheel', handleWheel, { passive: false });
-    return () => container.removeEventListener('wheel', handleWheel);
-  }, [fitHeight, clampPan]);
-
-  const canPanZoomedImage = fitHeight && fitZoom > 1 && (!segmentEditor.segmentEditMode || drawTool === 'select');
-
-  // Pan handlers for fit-height zoom
-  const handlePanMouseDown = useCallback((e: React.MouseEvent) => {
-    if (!canPanZoomedImage) return;
-    e.preventDefault();
-    setIsPanning(true);
-    panStartRef.current = { x: e.clientX - fitPan.x, y: e.clientY - fitPan.y };
-  }, [canPanZoomedImage, fitPan]);
-
-  const handlePanMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!isPanning) return;
-    setFitPan(clampPan({
-      x: e.clientX - panStartRef.current.x,
-      y: e.clientY - panStartRef.current.y,
-    }, fitZoom));
-  }, [isPanning, fitZoom, clampPan]);
-
-  const handlePanMouseUp = useCallback(() => {
-    setIsPanning(false);
-  }, []);
-
-  const panToMinimapPoint = useCallback((clientX: number, clientY: number, rect: DOMRect) => {
-    const dw = imageDisplaySize.width;
-    const dh = imageDisplaySize.height;
-    if (dw === 0 || dh === 0) return;
-
-    const nx = (clientX - rect.left) / rect.width;
-    const ny = (clientY - rect.top) / rect.height;
-    const tx = -(nx * dw - dw / 2) * fitZoom;
-    const ty = -(ny * dh - dh / 2) * fitZoom;
-    setFitPan(clampPan({ x: tx, y: ty }, fitZoom));
-  }, [imageDisplaySize.width, imageDisplaySize.height, fitZoom, clampPan]);
-
-  const handleMinimapPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const rect = e.currentTarget.getBoundingClientRect();
-    minimapDragRef.current = { pointerId: e.pointerId, rect };
-    e.currentTarget.setPointerCapture(e.pointerId);
-    panToMinimapPoint(e.clientX, e.clientY, rect);
-  }, [panToMinimapPoint]);
-
-  const handleMinimapPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (!minimapDragRef.current || minimapDragRef.current.pointerId !== e.pointerId) return;
-    e.preventDefault();
-    e.stopPropagation();
-    panToMinimapPoint(e.clientX, e.clientY, minimapDragRef.current.rect);
-  }, [panToMinimapPoint]);
-
-  const handleMinimapPointerEnd = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (!minimapDragRef.current || minimapDragRef.current.pointerId !== e.pointerId) return;
-    e.preventDefault();
-    e.stopPropagation();
-    minimapDragRef.current = null;
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    }
-  }, []);
-
   // Save current line text and trigger auto-save (only if user actually edited)
   const saveCurrentLine = useCallback(() => {
     if (mutationsBlockedRef.current) return;
@@ -811,135 +621,23 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     onAutoSave({ transcriptionText: fullText });
   }, [currentLetterPageIndex, currentLineIndex, alignedLines, pageNonBlankMap, onTranscriptChange, onAutoSave, pageRawTexts]);
 
-  // Auto-save segment edits (no trust state change)
-  const autoSaveSegments = useCallback((): Promise<boolean> => {
-    if (mutationsBlockedRef.current) return Promise.resolve(false);
-    const initialState = latestSegmentSaveStateRef.current;
-    if (!initialState) return Promise.resolve(true);
-
-    const activeFlush = activeSegmentFlushRef.current;
-    if (activeFlush?.pageId === initialState.page.id) {
-      return activeFlush.promise;
-    }
-    if (!initialState.isDirty) return Promise.resolve(true);
-
-    const targetPageId = initialState.page.id;
-    const targetLetterPageIndex = initialState.letterPageIndex;
-    const targetSourceExpectation = sourceExpectation(initialState.page);
-
-    const flushPromise = (async () => {
-      while (true) {
-        if (mutationsBlockedRef.current) return false;
-        const state = latestSegmentSaveStateRef.current;
-        if (
-          !state
-          || state.page.id !== targetPageId
-          || state.letterPageIndex !== targetLetterPageIndex
-        ) {
-          return false;
-        }
-
-        const savedRevision = state.revision;
-        const segments = state.getSegmentsForSave();
-        try {
-          await savePageLineSegments(
-            targetPageId,
-            segments,
-            targetSourceExpectation,
-          );
-        } catch (err) {
-          handleMutationError(err, 'Failed to save segment edits');
-          return false;
-        }
-
-        const latestState = latestSegmentSaveStateRef.current;
-        if (
-          !latestState
-          || latestState.page.id !== targetPageId
-          || latestState.letterPageIndex !== targetLetterPageIndex
-        ) {
-          return false;
-        }
-
-        // Another edit landed while the request was in flight. Persist that
-        // newer snapshot before allowing the page or mode to change.
-        if (latestState.revision !== savedRevision) {
-          continue;
-        }
-
-        // Update lastSourceRef BEFORE mutating the maps so the sync effect
-        // doesn't treat our own save as an external source replacement.
-        lastSourceRef.current = segments;
-        setKrakenSegmentsMap((prev) => ({
-          ...prev,
-          [targetLetterPageIndex]: segments,
-        }));
-        setAiSegmentsMap((prev) => ({
-          ...prev,
-          [targetLetterPageIndex]: segments,
-        }));
-        latestSegmentSaveStateRef.current = {
-          ...latestState,
-          isDirty: false,
-        };
-        segmentEditor.markSaved();
-        return true;
-      }
-    })();
-
-    activeSegmentFlushRef.current = {
-      pageId: targetPageId,
-      promise: flushPromise,
-    };
-    void flushPromise.then(
-      () => {
-        if (activeSegmentFlushRef.current?.promise === flushPromise) {
-          activeSegmentFlushRef.current = null;
-        }
-      },
-      () => {
-        if (activeSegmentFlushRef.current?.promise === flushPromise) {
-          activeSegmentFlushRef.current = null;
-        }
-      },
-    );
-    return flushPromise;
-  }, [
-    handleMutationError,
-    segmentEditor,
-    sourceExpectation,
-  ]);
-
-  // Auto-save on a debounced timer when dirty
-  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (mutationsBlocked) {
-      if (autoSaveTimerRef.current) {
-        clearTimeout(autoSaveTimerRef.current);
-        autoSaveTimerRef.current = null;
-      }
-      return;
-    }
-    if (!segmentEditor.isDirty) return;
-    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
-    autoSaveTimerRef.current = setTimeout(() => {
-      void autoSaveSegments();
-    }, 1500);
-    return () => {
-      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
-    };
-  }, [
-    autoSaveSegments,
-    mutationsBlocked,
-    segmentEditor.editedSegments,
-    segmentEditor.isDirty,
-  ]);
+  // Trust applies to the entire keyed source session. Page navigation must not
+  // revoke it, but unmount/source replacement and every block cycle must.
+  const trustRequestEpoch = useRef(0);
+  useLayoutEffect(() => {
+    trustRequestEpoch.current += 1;
+    return () => { trustRequestEpoch.current += 1; };
+  }, [mutationsBlocked]);
+  const captureTrustGuard = useCallback(() => {
+    const epoch = trustRequestEpoch.current;
+    return () => trustRequestEpoch.current === epoch && !mutationsBlockedRef.current;
+  }, []);
 
   // Verify segments — mark ALL letter pages as trusted (letter-level, not per-page)
   const handleVerifySegments = useCallback(async () => {
     if (mutationsBlockedRef.current) return;
-    // Save any pending changes first
-    if (segmentEditor.isDirty && !(await autoSaveSegments())) return;
+    const isCurrent = captureTrustGuard();
+    if (!(await autoSaveSegments()) || !isCurrent()) return;
     if (!letterPages.length) return;
     try {
       await updateLetterSegmentTrust(
@@ -951,16 +649,17 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           sourceChecksum: page.sourceChecksum ?? null,
         })),
       );
+      if (!isCurrent()) return;
       setTrustOverrides(prev => {
         const next = { ...prev };
         for (const p of letterPages) next[p.id] = 'trusted';
         return next;
       });
     } catch (err) {
-      handleMutationError(err, 'Failed to verify segments');
+      if (isCurrent()) handleMutationError(err, 'Failed to verify segments');
     }
   }, [
-    segmentEditor,
+    captureTrustGuard,
     letterPages,
     autoSaveSegments,
     handleMutationError,
@@ -972,6 +671,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   const handleUnverifySegments = useCallback(async () => {
     if (mutationsBlockedRef.current) return;
     if (!letterPages.length) return;
+    const isCurrent = captureTrustGuard();
     try {
       await updateLetterSegmentTrust(
         letter.id,
@@ -982,6 +682,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
           sourceChecksum: page.sourceChecksum ?? null,
         })),
       );
+      if (!isCurrent()) return;
       setTrustOverrides(prev => {
         const next = { ...prev };
         for (const p of letterPages) next[p.id] = 'unverified';
@@ -989,9 +690,10 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       });
       setLockHintVisible(false);
     } catch (err) {
-      handleMutationError(err, 'Failed to unverify segments');
+      if (isCurrent()) handleMutationError(err, 'Failed to unverify segments');
     }
   }, [
+    captureTrustGuard,
     handleMutationError,
     letterPages,
     letter.id,
@@ -1014,17 +716,18 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
   ): Promise<boolean> => {
     if (segmentTransitionPendingRef.current) return false;
     segmentTransitionPendingRef.current = true;
+    const isCurrent = captureGuard();
     try {
       if (saveTranscriptLine) {
         saveCurrentLine();
       }
-      if (!(await autoSaveSegments())) return false;
+      if (!(await autoSaveSegments()) || !isCurrent()) return false;
       transition();
       return true;
     } finally {
       segmentTransitionPendingRef.current = false;
     }
-  }, [autoSaveSegments, saveCurrentLine]);
+  }, [autoSaveSegments, captureGuard, saveCurrentLine]);
 
   const handleExitSegmentEditMode = useCallback(async () => {
     await runAfterSegmentFlush(() => {
@@ -1053,7 +756,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
         }
       }
     }
-  }, [saveCurrentLine, currentLineIndex, alignedLines.length, currentPageIndex, allPages.length, letterPageIndices]);
+  }, [containerRef, saveCurrentLine, currentLineIndex, alignedLines.length, currentPageIndex, allPages.length, letterPageIndices]);
 
   // Navigate to previous line (cross-page: skips to prev letter page)
   const goToPrevLine = useCallback(() => {
@@ -1081,7 +784,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       setCurrentLineIndex(0);
       containerRef.current?.scrollTo({ top: 0 });
     }, true);
-  }, [currentPageIndex, allPages.length, runAfterSegmentFlush]);
+  }, [containerRef, currentPageIndex, allPages.length, runAfterSegmentFlush]);
 
   // Navigate to previous page (any type)
   const goToPrevPage = useCallback(async () => {
@@ -1091,7 +794,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       setCurrentLineIndex(0);
       containerRef.current?.scrollTo({ top: 0 });
     }, true);
-  }, [currentPageIndex, runAfterSegmentFlush]);
+  }, [containerRef, currentPageIndex, runAfterSegmentFlush]);
 
   // Clamp line index when aligned lines change (e.g., after page switch)
   useEffect(() => {
@@ -1143,7 +846,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       top: nextScrollTop,
       behavior: 'smooth',
     });
-  }, [currentLine, currentLineIndex, globalLineIndex, scaleFactor, pageFontSize, fitHeight]);
+  }, [containerRef, currentLine, currentLineIndex, globalLineIndex, scaleFactor, pageFontSize, fitHeight]);
 
   // Build word-positioned content and focus when line changes
   useEffect(() => {
@@ -1451,7 +1154,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
     if (e.target === containerRef.current) {
       handleFullExit();
     }
-  }, [handleFullExit]);
+  }, [containerRef, handleFullExit]);
 
   if (!currentPage) return null;
 
@@ -1483,6 +1186,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
             className="mapping-banner-cancel"
             onClick={() => {
               setMappingActive(false);
+              setMappingSaveRequest(null);
               onMappingComplete?.();
             }}
           >
@@ -2007,22 +1711,14 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
       )}
 
       {/* Minimap — shown when fit-height mode is zoomed in */}
-      {fitHeight && fitZoom > 1 && imageDisplaySize.width > 0 && containerRef.current && (() => {
-        const dw = imageDisplaySize.width;
-        const dh = imageDisplaySize.height;
-        const cw = containerRef.current.clientWidth;
-        const ch = containerRef.current.clientHeight;
-        const leftPct = Math.max(0, (0.5 - (cw / 2 + fitPan.x) / (fitZoom * dw)) * 100);
-        const topPct = Math.max(0, (0.5 - (ch / 2 + fitPan.y) / (fitZoom * dh)) * 100);
-        const widthPct = Math.min(100, (cw / (fitZoom * dw)) * 100);
-        const heightPct = Math.min(100, (ch / (fitZoom * dh)) * 100);
-        return (
+      {minimap && (
           <div
             className="line-review-minimap"
             onPointerDown={handleMinimapPointerDown}
             onPointerMove={handleMinimapPointerMove}
             onPointerUp={handleMinimapPointerEnd}
             onPointerCancel={handleMinimapPointerEnd}
+            onLostPointerCapture={handleMinimapPointerEnd}
           >
             <RetryingImage
               src={getImageUrl(currentPage.imageUrl, { width: 200 })}
@@ -2032,16 +1728,10 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
             />
             <div
               className="line-review-minimap-viewport"
-              style={{
-                left: `${leftPct}%`,
-                top: `${topPct}%`,
-                width: `${widthPct}%`,
-                height: `${heightPct}%`,
-              }}
+              style={minimap}
             />
           </div>
-        );
-      })()}
+      )}
 
       {/* Full-screen lock overlay — greys out everything, double-click anywhere to unverify */}
       {overlayEnabled && segmentEditor.segmentEditMode && currentPageTrusted && (
@@ -2320,7 +2010,7 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
         <span className="line-review-toolbar-divider" />
         <button
           className={`line-review-toolbar-btn${fitHeight ? ' active' : ''}`}
-          onClick={() => { setFitHeight(v => !v); setFitZoom(1); setFitPan({ x: 0, y: 0 }); }}
+          onClick={toggleFit}
           title={fitHeight ? 'Switch to scroll mode' : 'Fit to height'}
         >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -2345,6 +2035,17 @@ const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(fun
 
     </div>
   );
+});
+
+// A DTO refresh does not replace a review session. Only the actual source identity
+// does: outstanding async work is then revoked by the owners' unmount cleanup.
+const LineReviewMode = forwardRef<LineReviewModeHandle, LineReviewModeProps>(function LineReviewMode(props, ref) {
+  const identity = JSON.stringify([
+    props.letter.id,
+    props.letter.primarySourceRevision,
+    props.letter.images.map(page => [page.id, page.type, page.sourceChecksum ?? null]),
+  ]);
+  return <LineReviewSession key={identity} {...props} ref={ref} />;
 });
 
 export default LineReviewMode;

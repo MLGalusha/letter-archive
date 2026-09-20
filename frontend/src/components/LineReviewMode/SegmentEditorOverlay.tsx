@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { EditableSegment } from '../../hooks/useSegmentEditor';
 import VertexHandles from './VertexHandles';
 import RotateHandle from './RotateHandle';
@@ -278,7 +278,7 @@ export default function SegmentEditorOverlay({
       if (!drawStart) return;
       setDrawEnd(pt);
     },
-    [drawStart, getSvgPoint, scaleFactor, onMoveSegment, drawTool, polyPoints.length],
+    [drawStart, getSvgPoint, scaleFactor, onMoveSegment, drawTool, polyPoints.length, segmentEdges],
   );
 
   const handleSvgPointerUp = useCallback(
@@ -386,8 +386,9 @@ export default function SegmentEditorOverlay({
     [selectedSegmentId, onDelete, polyPoints.length],
   );
 
-  // Clear draw state when tool changes
+  // A committed tool change cancels the in-progress DOM gesture and its preview.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Gesture cancellation must clear the old tool preview.
     setPolyPoints([]);
     setPolyPreview(null);
     freehandDrawing.current = false;
@@ -398,7 +399,7 @@ export default function SegmentEditorOverlay({
 
   // Attach keyboard listener for delete key
   const handleKeyDownRef = useRef(handleKeyDown);
-  handleKeyDownRef.current = handleKeyDown;
+  useLayoutEffect(() => { handleKeyDownRef.current = handleKeyDown; }, [handleKeyDown]);
 
   useEffect(() => {
     const listener = (e: KeyboardEvent) => handleKeyDownRef.current(e);

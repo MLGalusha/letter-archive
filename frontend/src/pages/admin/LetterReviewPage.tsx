@@ -828,7 +828,7 @@ export default function LetterReviewPage() {
                 <span className="help-text">Personal reference only</span>
               </div>
               <div className="notes-container">
-                <div className="form-group">
+                <div className="review-form-group">
                   <label htmlFor="notes">Personal Notes</label>
                   <textarea
                     ref={notesRef}
@@ -906,12 +906,12 @@ export default function LetterReviewPage() {
 
       {sourceConflict && (
         <div
-          className="confirm-dialog-overlay"
+          className="review-confirm-dialog-overlay"
           role="alertdialog"
           aria-modal="true"
           aria-labelledby="letter-source-conflict-title"
         >
-          <div className="confirm-dialog" onClick={(event) => event.stopPropagation()}>
+          <div className="review-confirm-dialog" onClick={(event) => event.stopPropagation()}>
             <h3 id="letter-source-conflict-title">Letter source changed</h3>
             <p>
               Another session replaced or changed the source pages. Your local
@@ -919,7 +919,7 @@ export default function LetterReviewPage() {
               new source.
             </p>
             <p>{sourceConflict.detail}</p>
-            <div className="confirm-dialog-actions">
+            <div className="review-confirm-dialog-actions">
               <button
                 className="btn-confirm"
                 autoFocus

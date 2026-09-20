@@ -91,7 +91,7 @@ export default memo(function FilterChoiceField({
     if (!open) {
       setSearchTerm("");
     }
-  }, [open, searchable, allowCustom]);
+  }, [open, searchable, allowCustom, hasValue, options.length]);
 
   useEffect(() => {
     if (!open) return;

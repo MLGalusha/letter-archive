@@ -205,7 +205,9 @@ function JournalTab() {
     }
   }, []);
 
+  // Journal posts are loaded from the API when this tab mounts.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Async response setters publish external data.
     fetchBlogPosts();
   }, [fetchBlogPosts]);
 
@@ -458,6 +460,8 @@ function HomepageTab() {
   useEffect(() => {
     const letterId = featured?.letter?.id;
     if (!letterId) {
+      // Remove scans from a previous featured letter when the featured item is cleared.
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Prevents stale images when the external featured ID disappears.
       setFeaturedImages([]);
       setFeaturedPageIndex(0);
       return;
@@ -1023,7 +1027,11 @@ function PageEditorTab({ slug }: { slug: string }) {
     }
   }, [config, slug]);
 
-  useEffect(() => { void loadPage(); }, [loadPage]);
+  // Page content is external API data for the selected editor tab.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Async response setters publish external page data.
+    void loadPage();
+  }, [loadPage]);
 
   // Fetch live stats for about page
   useEffect(() => {

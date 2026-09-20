@@ -79,6 +79,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// Keep the provider API colocated to avoid import churn; edits may fall back to a full reload.
+// eslint-disable-next-line react-refresh/only-export-components -- Deliberate provider API colocation.
 export function useToast() {
   const context = useContext(ToastContext);
   if (!context) {

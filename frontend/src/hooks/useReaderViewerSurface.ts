@@ -28,6 +28,8 @@ export function useReaderViewerSurface(active: boolean, dialogRef: RefObject<HTM
     const color = surfaceColor ?? getComputedStyle(backdrop).backgroundColor;
     const restoreRoot = setTemporaryStyles(document.documentElement, {
       'background-color': color, 'overflow-x': 'hidden', 'overflow-y': 'hidden',
+      // Preserve the document geometry used as the thumbnail return target.
+      'scrollbar-gutter': 'stable',
     });
     const restoreBody = setTemporaryStyles(document.body, {
       position: 'fixed', top: `-${savedY}px`, width: '100%',

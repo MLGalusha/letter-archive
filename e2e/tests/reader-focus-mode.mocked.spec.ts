@@ -32,6 +32,24 @@ async function recordReturnPaints(page: Page) {
   await page.evaluate(record);
 }
 
+for (const next of [0, 1]) test(`@mocked thumbnail return keeps document horizontal geometry ${next}`, async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockReader(page);
+  await page.goto('/letter/current');
+  await page.addStyleTag({ content: 'html { scrollbar-gutter: stable; } html[style*="overflow-y: hidden"] { scrollbar-gutter: auto; }' });
+  await expect(page.locator('.scan-slide-img').first()).toBeVisible();
+  const read = () => page.locator('.scan-slide-img').first().evaluate(el => {
+    const r = el.getBoundingClientRect(); return { x: r.x, width: r.width };
+  });
+  const before = await read();
+  await page.locator('.scan-slide').first().dispatchEvent('wheel', { deltaY: -100, ctrlKey: true, bubbles: true, cancelable: true });
+  await expect(page.locator('.reader-focus-strip')).toBeVisible();
+  expect(await read()).toEqual(before);
+  await page.locator('.reader-focus-strip .viewer-page-choice').nth(next).click();
+  await expect(page.getByRole('dialog', { name: 'Original scans' })).toHaveCount(0);
+  if (next === 0) expect(await read()).toEqual(before);
+});
+
 test('@mocked first zoom after reload does not focus a thumbnail until keyboard navigation', async ({ page }) => {
   await mockReader(page);
   await page.goto('/letter/current');

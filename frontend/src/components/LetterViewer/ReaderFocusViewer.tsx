@@ -139,8 +139,8 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
     if (!shell) return;
     shell.dataset.readerFocus = 'preparing';
     if (directZoom) shell.dataset.readerDirectZoom = 'true';
-    // The scroll-lock layout effect has now removed any desktop scrollbar.
-    // Child layout effects run earlier and would cache the old viewport center.
+    // Measure after scroll locking has settled the viewport geometry.
+    // Child layout effects run before the surface is ready.
     surfaceReady.current = true;
     followScale(currentScale.current);
     // The thumbnail controls are hidden during entry; focus the dialog itself.

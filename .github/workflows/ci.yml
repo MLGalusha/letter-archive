@@ -51,6 +51,11 @@ jobs:
         working-directory: backend
         run: npm test
 
+      - name: PostgreSQL processing lease regressions
+        timeout-minutes: 10
+        working-directory: backend
+        run: npm run db:test-migrations && npm run test:processing-leases:postgres
+
       - name: Backend build
         working-directory: backend
         run: npm run build

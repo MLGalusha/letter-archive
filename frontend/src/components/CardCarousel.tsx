@@ -17,6 +17,7 @@ export default function CardCarousel({ children, label, className = '', layout =
   const signature = JSON.stringify(keys);
   const [selected, setSelected] = useState<string | null>(null);
   const active = Math.max(0, keys.indexOf(selected ?? keys[0]));
+  const [settledSlide, setSettledSlide] = useState<number | null>(0);
   const selectedRef = useRef<string | null>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const targetRef = useRef<number | null>(null);
@@ -49,8 +50,11 @@ export default function CardCarousel({ children, label, className = '', layout =
       targetRef.current = null;
       if (!viewport.hasAttribute('data-dragging')) viewport.style.scrollSnapType = '';
       readPosition();
+      const index = Math.round(viewport.scrollLeft / (viewport.clientWidth || 1));
+      setSettledSlide(!viewport.hasAttribute('data-dragging') && Math.abs(viewport.scrollLeft - index * viewport.clientWidth) < 1 ? index : null);
     };
     const onScroll = () => {
+      setSettledSlide(null);
       if (!frame) frame = requestAnimationFrame(readPosition);
       // Fallback for browsers without scrollend; never drives scrolling itself.
       clearTimeout(settleTimer);
@@ -61,6 +65,7 @@ export default function CardCarousel({ children, label, className = '', layout =
       viewport.style.scrollSnapType = '';
       const index = Math.max(0, observedKeys.indexOf(selectedRef.current ?? observedKeys[0]));
       select(index);
+      setSettledSlide(index);
       if (carousel) viewport.scrollTo({ left: index * viewport.clientWidth, behavior: 'instant' });
     };
     const interrupt = () => {
@@ -99,6 +104,7 @@ export default function CardCarousel({ children, label, className = '', layout =
       targetRef.current = null;
       return;
     }
+    setSettledSlide(null);
     viewport.scrollTo({ left: next * viewport.clientWidth,
       behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
   };
@@ -123,7 +129,7 @@ export default function CardCarousel({ children, label, className = '', layout =
     <div className={`card-carousel ${className}`} data-layout={layout} data-swipe-ignore={interactive || undefined}
       role={interactive ? 'region' : undefined} aria-roledescription={interactive ? 'carousel' : undefined}
       aria-label={interactive ? label : undefined} onKeyDown={onKeyDown}>
-      <div className="card-carousel-frame">
+      <div className="card-carousel-frame" data-settled-slide={settledSlide ?? undefined}>
         <div className="card-carousel-viewport" ref={viewportRef} tabIndex={interactive ? 0 : undefined}
           aria-label={interactive ? `${label}: use left and right arrow keys to change slides` : undefined} {...pointer}>
           {slides.map((slide, index) => (

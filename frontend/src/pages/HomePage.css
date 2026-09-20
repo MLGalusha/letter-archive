@@ -441,6 +441,23 @@
 
 .home-showcase[data-layout="static"] { display: contents; }
 .home-showcase { --carousel-dot-size: 8px; --carousel-dots-top: 0.75rem; }
+/* The square text slide keeps its border space, but the resting outline
+   belongs to the rounded clip frame. Photos and moving slides stay borderless. */
+.home-showcase[data-layout="carousel"] .home-hero-copy { border-color: transparent; }
+.home-showcase[data-layout="carousel"] .card-carousel-frame { position: relative; }
+.home-showcase[data-layout="carousel"] .card-carousel-frame::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(217, 207, 191, 0.95);
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 4;
+  visibility: hidden;
+}
+.home-showcase[data-layout="carousel"] .card-carousel-frame[data-settled-slide="0"]::after {
+  visibility: visible;
+}
 .home-showcase[data-layout="carousel"] .home-hero-feature-card,
 .home-showcase[data-layout="carousel"] .home-hero-feature-card--placeholder {
   height: 100%;

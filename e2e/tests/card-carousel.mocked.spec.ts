@@ -176,3 +176,33 @@ test('@mocked native wheel scrolling changes cards while vertical wheel scrollin
 });
 
 });
+
+test('@mocked homepage outline only surrounds the settled text card', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const carousel = await openCards(page, '/');
+  const frame = carousel.locator('.card-carousel-frame');
+  const viewport = carousel.locator('.card-carousel-viewport');
+  const outline = () => frame.evaluate(el => getComputedStyle(el, '::after').visibility);
+  await expect.poll(outline).toBe('visible');
+  await expect(carousel.locator('.home-hero-copy')).toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)');
+  await expect(carousel.locator('.home-hero-copy')).toHaveCSS('border-radius', '0px');
+  const box = (await viewport.boundingBox())!;
+  await page.mouse.move(box.x + 280, box.y + 80);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 160, box.y + 80, { steps: 6 });
+  await expect.poll(outline).toBe('hidden');
+  await page.waitForTimeout(200); // Hold a partial drag beyond the scrollend fallback.
+  await expect.poll(outline).toBe('hidden');
+  await page.mouse.up();
+  await expect.poll(outline).toBe('visible');
+  await carousel.locator('.card-carousel-dot').nth(1).click();
+  await expect(frame).toHaveAttribute('data-settled-slide', '1');
+  await expect.poll(outline).toBe('hidden');
+  await carousel.locator('.card-carousel-dot').first().click();
+  await expect(frame).toHaveAttribute('data-settled-slide', '0');
+  await expect.poll(outline).toBe('visible');
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(carousel).toHaveAttribute('data-layout', 'static');
+  await expect(carousel.locator('.home-hero-copy')).toHaveCSS('border-top-color', 'rgba(217, 207, 191, 0.95)');
+  await expect.poll(() => frame.evaluate(el => getComputedStyle(el, '::after').content)).toBe('none');
+});

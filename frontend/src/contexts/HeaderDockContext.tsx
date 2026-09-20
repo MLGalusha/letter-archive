@@ -23,6 +23,8 @@ export interface HeaderDockState {
   collectionsLink?: { label: string; to: string };
 }
 
+// Keep the provider API colocated to avoid import churn; edits may fall back to a full reload.
+// eslint-disable-next-line react-refresh/only-export-components -- Deliberate provider API colocation.
 export const EMPTY_DOCK_STATE: HeaderDockState = {
   hasContent: false,
   transparent: false,
@@ -75,6 +77,8 @@ export function HeaderDockProvider({ children }: { children: ReactNode }) {
   return <HeaderDockContext.Provider value={value}>{children}</HeaderDockContext.Provider>;
 }
 
+// Keep the provider API colocated to avoid import churn; edits may fall back to a full reload.
+// eslint-disable-next-line react-refresh/only-export-components -- Deliberate provider API colocation.
 export function useHeaderDock() {
   const context = useContext(HeaderDockContext);
   if (!context) {

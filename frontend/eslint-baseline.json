@@ -5,7 +5,6 @@
   "src/components/common/ResizableSplitPane.tsx :: react-hooks/set-state-in-effect :: 2": 1,
   "src/components/ConnectionFinder/ConnectionFinder.tsx :: react-hooks/set-state-in-effect :: 2": 1,
   "src/components/DuplicateSuggestions/DuplicateSuggestions.tsx :: react-hooks/set-state-in-effect :: 2": 1,
-  "src/components/ImageLayoutToolbar.tsx :: @typescript-eslint/no-explicit-any :: 2": 1,
   "src/components/InfiniteCarousel.tsx :: react-hooks/refs :: 2": 3,
   "src/components/JournalImageDialog.tsx :: react-hooks/set-state-in-effect :: 2": 4,
   "src/components/LetterHeaderDock/useLetterScrubber.ts :: react-hooks/preserve-manual-memoization :: 2": 2,
@@ -14,12 +13,7 @@
   "src/components/LineReviewMode/SegmentEditorOverlay.tsx :: react-hooks/refs :: 2": 1,
   "src/components/LineReviewMode/SegmentEditorOverlay.tsx :: react-hooks/set-state-in-effect :: 2": 1,
   "src/components/SearchBar/FilterChoiceField.tsx :: react-hooks/exhaustive-deps :: 1": 2,
-  "src/content/blockFactories.ts :: @typescript-eslint/no-explicit-any :: 2": 1,
-  "src/contexts/HeaderDockContext.tsx :: react-refresh/only-export-components :: 2": 2,
-  "src/contexts/ToastContext.tsx :: react-refresh/only-export-components :: 2": 1,
   "src/hooks/useArchiveSearch.ts :: react-hooks/refs :: 2": 2,
-  "src/hooks/useAsync.ts :: react-hooks/exhaustive-deps :: 1": 2,
-  "src/hooks/useAsync.ts :: react-hooks/use-memo :: 2": 1,
   "src/hooks/useIsMobile.ts :: react-hooks/set-state-in-effect :: 2": 1,
   "src/hooks/useIsTouchDevice.ts :: react-hooks/set-state-in-effect :: 2": 1,
   "src/hooks/usePretextFontSize.ts :: react-hooks/refs :: 2": 4,
@@ -45,7 +39,6 @@
   "src/pages/admin/LetterReview/useTranscriptEditing.ts :: react-hooks/preserve-manual-memoization :: 2": 1,
   "src/pages/admin/LetterReview/useTranscriptEditing.ts :: react-hooks/set-state-in-effect :: 2": 1,
   "src/pages/admin/NotesPage.tsx :: react-hooks/set-state-in-effect :: 2": 2,
-  "src/pages/admin/NotificationDetailModal.tsx :: react-refresh/only-export-components :: 2": 2,
   "src/pages/admin/NotificationsPage.tsx :: react-hooks/set-state-in-effect :: 2": 2,
   "src/pages/admin/SettingsPage.tsx :: react-hooks/set-state-in-effect :: 2": 1,
   "src/pages/admin/UpdateEditorPage.tsx :: react-hooks/set-state-in-effect :: 2": 1,
@@ -58,7 +51,5 @@
   "src/pages/CollectionsPage.tsx :: react-hooks/exhaustive-deps :: 1": 2,
   "src/pages/CollectionsPage.tsx :: react-hooks/set-state-in-effect :: 2": 1,
   "src/pages/HomePage.tsx :: react-hooks/refs :: 2": 4,
-  "src/pages/UpdateDetailPage.tsx :: react-hooks/set-state-in-effect :: 2": 1,
-  "src/utils/__tests__/lineAlignment.test.ts :: @typescript-eslint/no-explicit-any :: 2": 4,
-  "src/utils/textMeasurePerf.ts :: @typescript-eslint/no-explicit-any :: 2": 1
+  "src/pages/UpdateDetailPage.tsx :: react-hooks/set-state-in-effect :: 2": 1
 }

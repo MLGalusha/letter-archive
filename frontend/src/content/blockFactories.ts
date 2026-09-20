@@ -114,7 +114,7 @@ export function createContactBlock(data?: Partial<Omit<ContactBlock, 'id' | 'typ
   };
 }
 
-const FACTORIES: Record<BlockType, (data?: any) => ContentBlock> = {
+const FACTORIES: Record<BlockType, () => ContentBlock> = {
   hero: createHeroBlock,
   richtext: createRichtextBlock,
   quote: createQuoteBlock,

@@ -8,6 +8,17 @@ interface Props {
   title: string;
 }
 
+interface TitleNode {
+  setTitle: (title: string) => void;
+}
+
+function hasSetTitle(node: unknown): node is TitleNode {
+  return typeof node === 'object'
+    && node !== null
+    && 'setTitle' in node
+    && typeof node.setTitle === 'function';
+}
+
 function parseLayout(title: string): Layout {
   if (title === 'float-left' || title === 'float-right') return title;
   return '';
@@ -72,8 +83,8 @@ export default function ImageLayoutToolbar({ nodeKey, title }: Props) {
   const setLayout = (layout: Layout) => {
     editor.update(() => {
       const node = $getNodeByKey(nodeKey);
-      if (node && 'setTitle' in node) {
-        (node as any).setTitle(layout);
+      if (hasSetTitle(node)) {
+        node.setTitle(layout);
       }
     });
   };

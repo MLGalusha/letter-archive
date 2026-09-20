@@ -38,6 +38,9 @@ export function useAsync<T>(
         setLoading(false);
       }
     }
+  // Callers own this dependency list: [] means one mount-scoped request, while
+  // [placeId] replaces and cancels the request when that identity changes.
+  // eslint-disable-next-line react-hooks/use-memo, react-hooks/exhaustive-deps -- Dynamic dependencies are this hook's explicit API.
   }, deps);
 
   useEffect(() => {

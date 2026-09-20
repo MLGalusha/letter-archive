@@ -1,0 +1,68 @@
+/* The card/carousel owns corner clipping; controls never round the images. */
+.image-page-controls {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+}
+.image-page-control {
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: max(15%, 44px);
+  border: 0;
+  padding: 0;
+  background: none;
+  color: rgba(255, 250, 242, 0.68);
+  pointer-events: auto;
+  cursor: pointer;
+  opacity: 1;
+  transition: opacity 180ms ease, color 180ms ease;
+}
+.image-page-control--previous { left: 0; }
+.image-page-control--next { right: 0; }
+.image-page-control::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(255, 250, 242, 0.3), rgba(255, 250, 242, 0));
+  mask-image: linear-gradient(transparent, #000 28%, #000 72%, transparent);
+  opacity: 0.3;
+  transition: opacity 180ms ease;
+  pointer-events: none;
+}
+.image-page-control--next::before { transform: scaleX(-1); }
+.image-page-control::after {
+  content: '';
+  position: absolute;
+  top: calc(50% - 4px);
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  pointer-events: none;
+}
+.image-page-control--previous::after { left: 1.1rem; transform: rotate(135deg); }
+.image-page-control--next::after { right: 1.1rem; transform: rotate(-45deg); }
+@media (hover: hover) and (pointer: fine) {
+  .image-page-control { opacity: 0; }
+  :hover > .image-page-controls > .image-page-control { opacity: 1; }
+  .image-page-control:hover { color: rgba(255, 250, 242, 0.98); }
+  .image-page-control:hover::before { opacity: 0.65; }
+}
+.image-page-control:active { opacity: 1; color: #fffaf2; }
+.image-page-control:active::before { opacity: 0.85; transition-duration: 70ms; }
+/* An inset focus cue cannot protrude beyond the clipping surface. */
+.image-page-control:focus-visible {
+  opacity: 1;
+  color: #fffaf2;
+  outline: 2px solid rgba(255, 250, 242, 0.9);
+  outline-offset: -5px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .image-page-control, .image-page-control::before { transition: none; }
+}

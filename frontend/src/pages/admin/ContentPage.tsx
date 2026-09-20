@@ -1,3 +1,4 @@
+import ImagePageControls from '../../components/ImagePageControls';
 import { RetryingImage } from "../../components/common/RetryingImage";
 import { useState, useEffect, useCallback, useRef, useMemo, type MouseEvent as ReactMouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -789,20 +790,7 @@ function HomepageTab() {
                       {fl.hook && <p className="letter-hook">{fl.hook}</p>}
                     </div>
                     {hasMultipleFeaturedPages && (
-                      <>
-                        <button
-                          type="button"
-                          className="home-hero-zone home-hero-zone--prev"
-                          onClick={handleFeaturedPrevPage}
-                          aria-label="Previous page"
-                        />
-                        <button
-                          type="button"
-                          className="home-hero-zone home-hero-zone--next"
-                          onClick={handleFeaturedNextPage}
-                          aria-label="Next page"
-                        />
-                      </>
+                      <ImagePageControls onPrevious={handleFeaturedPrevPage} onNext={handleFeaturedNextPage} />
                     )}
                   </div>
                 ) : (

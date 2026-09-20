@@ -20,6 +20,7 @@ import useArchiveSearch from "../hooks/useArchiveSearch";
 import useStickyDock from "../hooks/useStickyDock";
 import useIsMobile from "../hooks/useIsMobile";
 import CardCarousel from '../components/CardCarousel';
+import ImagePageControls from '../components/ImagePageControls';
 import CardMediaImages from '../components/CardMediaImages';
 import useMediaSelection from '../hooks/useMediaSelection';
 import { formatDate } from "../utils/dateFormatting";
@@ -216,20 +217,7 @@ function HeroLetterCard({
       )}
 
       {hasMultiplePages && !swipeImages && (
-        <>
-          <button
-            type="button"
-            className="home-hero-zone home-hero-zone--prev"
-            onClick={handlePrevPage}
-            aria-label="Previous page"
-          />
-          <button
-            type="button"
-            className="home-hero-zone home-hero-zone--next"
-            onClick={handleNextPage}
-            aria-label="Next page"
-          />
-        </>
+        <ImagePageControls onPrevious={handlePrevPage} onNext={handleNextPage} />
       )}
     </div>
   );

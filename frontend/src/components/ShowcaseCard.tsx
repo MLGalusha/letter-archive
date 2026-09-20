@@ -1,5 +1,6 @@
 import { type MouseEvent as ReactMouseEvent } from 'react';
 import CardCarousel from './CardCarousel';
+import ImagePageControls from './ImagePageControls';
 import CardMediaImages from './CardMediaImages';
 import useMediaSelection from '../hooks/useMediaSelection';
 import type { LetterImageType } from '../types/Letter';
@@ -88,18 +89,7 @@ export default function ShowcaseCard({ items, onNavigate, swipeImages = false }:
           <span className="cd-highlight-page-counter">
             {index + 1}/{items.length}
           </span>
-          {!swipeImages && <>
-          <button type="button"
-            className="cd-highlight-zone cd-highlight-zone--prev"
-            onClick={handlePrev}
-            aria-label="Previous"
-          />
-          <button type="button"
-            className="cd-highlight-zone cd-highlight-zone--next"
-            onClick={handleNext}
-            aria-label="Next"
-          />
-          </>}
+          {!swipeImages && <ImagePageControls onPrevious={handlePrev} onNext={handleNext} previousLabel="Previous" nextLabel="Next" />}
         </>
       )}
     </div>

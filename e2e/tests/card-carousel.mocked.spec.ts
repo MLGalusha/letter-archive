@@ -278,3 +278,58 @@ test.describe('wide image cards', () => {
     await expect(page).toHaveURL(new RegExp(`image=${expectedImage}`));
   });
 });
+
+test.describe('image page button feedback', () => {
+  for (const path of ['/', '/collections/003']) test(`@mocked touch page controls retain clipping and clear press feedback: ${path}`, async ({ page }) => {
+    const outer = await openCards(page, path, true, true);
+    if (path === '/') await outer.locator('.card-carousel-dot').nth(1).click();
+    const card = page.locator(path === '/' ? '.home-hero-feature-card' : '.cd-highlight-card').first();
+    const next = card.locator('.image-page-control--next');
+    const counter = card.locator(path === '/' ? '.home-hero-page-counter' : '.cd-highlight-page-counter');
+    await expect(next).toHaveCSS('-webkit-tap-highlight-color', 'rgba(0, 0, 0, 0)');
+    await expect(next).toHaveCSS('opacity', '1');
+    const geometry = await next.evaluate(el => {
+      const r = el.getBoundingClientRect();
+      const frame = el.closest('.card-carousel-frame')!;
+      return { width: r.width, overflow: getComputedStyle(frame).overflow, radius: getComputedStyle(frame).borderRadius };
+    });
+    expect(geometry.width).toBeGreaterThanOrEqual(44);
+    expect(geometry.overflow).toBe('hidden');
+    expect(geometry.radius).not.toBe('0px');
+    await next.scrollIntoViewIfNeeded();
+    await next.hover();
+    await page.mouse.down();
+    await expect.poll(() => next.evaluate(el => Number(getComputedStyle(el, '::before').opacity))).toBe(0.85);
+    await page.mouse.up();
+    await expect(counter).toHaveText(path === '/' ? '2/2' : '2/3');
+    await expect.poll(() => next.evaluate(el => Number(getComputedStyle(el, '::before').opacity))).toBe(0.3);
+    await next.click();
+    await expect(counter).toHaveText(path === '/' ? '1/2' : '3/3');
+    await expect(page).toHaveURL(new RegExp(path === '/' ? '/$' : '/collections/003$'));
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await expect(next).toHaveCSS('transition-duration', '0s');
+  });
+  test.describe('mouse', () => {
+    test.use({ isMobile: false, hasTouch: false });
+    test('@mocked compact mouse controls reveal smoothly and remain keyboard accessible', async ({ page }) => {
+      await openCards(page, '/collections/003', true, true);
+      const card = page.locator('.cd-highlight-card').first();
+      const next = card.locator('.image-page-control--next');
+      await page.mouse.move(0, 0);
+      await expect(next).toHaveCSS('opacity', '0');
+      await next.hover();
+      await expect(next).toHaveCSS('opacity', '1');
+      await expect.poll(() => next.evaluate(el => Number(getComputedStyle(el, '::before').opacity))).toBe(0.65);
+      await page.mouse.move(0, 0);
+      // WebKit's default tab policy can skip buttons. Establish keyboard
+      // modality before focusing the control to test its focus-visible state.
+      await page.keyboard.press('Tab');
+      await next.focus();
+      await expect(next).toBeFocused();
+      await expect(next).toHaveCSS('opacity', '1');
+      await expect(next).toHaveCSS('outline-offset', '-5px');
+      await page.keyboard.press('Enter');
+      await expect(card.locator('.cd-highlight-page-counter')).toHaveText('2/3');
+    });
+  });
+});

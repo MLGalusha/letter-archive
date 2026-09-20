@@ -76,3 +76,12 @@
   overscroll-behavior-y: auto;
   margin-top: 8px;
 }
+
+/* Centered selection needs an odd number of complete 56px cards, with 8px
+   gaps. Leave spare space outside the scrolling window instead of revealing
+   a fraction of the next card at either edge. */
+.scan-navigation { container-type: inline-size; }
+.scan-navigation .viewer-page-drawer--inline {
+  width: min(100%, calc(56px + round(down, max(0px, 100cqw - 56px), 128px)));
+  margin-inline: auto;
+}

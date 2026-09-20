@@ -32,6 +32,25 @@ async function recordReturnPaints(page: Page) {
   await page.evaluate(record);
 }
 
+for (const width of [320, 390, 540, 768, 1024, 1440]) test(`@mocked settled thumbnails never clip at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 900 });
+  await mockReader(page, Array.from({ length: 15 }, (_, i) => ({ ...viewerImages[0], id: `scan-${i}`, pageNumber: i + 1, imageUrl: `/images/${i}.svg` })));
+  await page.goto('/letter/current');
+  for (const selected of [0, 7, 14]) {
+    await page.locator('.letter-scan-figure .viewer-page-choice').nth(selected).evaluate((el: HTMLElement) => el.click());
+    await page.waitForTimeout(650);
+    const partials = await page.locator('.letter-scan-figure .viewer-page-drawer').evaluate(el => {
+      const frame = el.getBoundingClientRect();
+      return [...el.querySelectorAll('button')].filter(button => {
+        const r = button.getBoundingClientRect();
+        const visible = Math.max(0, Math.min(r.right, frame.right) - Math.max(r.left, frame.left));
+        return visible > .5 && visible < r.width - .5;
+      }).length;
+    });
+    expect(partials).toBe(0);
+  }
+});
+
 for (const width of [390, 1440]) test(`@mocked rapid paging retains loaded scans and previews along long jumps at ${width}px`, async ({ page }) => {
   await page.setViewportSize({ width, height: 900 });
   await mockReader(page, Array.from({ length: 9 }, (_, i) => ({ ...viewerImages[0], id: `scan-${i + 1}`, pageNumber: i + 1, imageUrl: `/images/${i + 1}.svg` })));

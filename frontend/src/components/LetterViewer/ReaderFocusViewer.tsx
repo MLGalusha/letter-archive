@@ -28,7 +28,7 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
     return { opener: document.activeElement instanceof HTMLElement ? document.activeElement : null,
       cornerRatio: image && image.getBoundingClientRect().width ? parseFloat(getComputedStyle(image).borderTopLeftRadius) / image.getBoundingClientRect().width : .01,
       image: image?.getBoundingClientRect(), src: visibleSource(image),
-      strip: document.querySelector('.letter-scan-figure .scan-navigation')?.getBoundingClientRect() };
+      strip: document.querySelector('.letter-scan-figure .viewer-page-drawer')?.getBoundingClientRect() };
   });
   const [phase, setPhase] = useState<'preparing' | 'entering' | 'focused' | 'exiting'>('preparing');
   const [index] = useState(initialIndex);
@@ -291,7 +291,7 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
         flight.style.visibility = 'hidden';
       }
       const stripRect = strip.getBoundingClientRect();
-      const documentStrip = document.querySelector('.letter-scan-figure .scan-navigation')?.getBoundingClientRect();
+      const documentStrip = document.querySelector('.letter-scan-figure .viewer-page-drawer')?.getBoundingClientRect();
       const sourceStrip = entering ? origin.strip : currentStripRect;
       const targetStrip = entering ? stripRect : documentStrip;
       if (sourceStrip && targetStrip) {

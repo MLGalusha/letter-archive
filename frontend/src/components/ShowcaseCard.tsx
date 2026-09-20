@@ -1,6 +1,6 @@
-import { useState, type MouseEvent as ReactMouseEvent } from 'react';
-import { getImageUrl } from '../api/client';
-import { ProgressiveImage } from './common';
+import { type MouseEvent as ReactMouseEvent } from 'react';
+import CardMediaImages from './CardMediaImages';
+import useMediaSelection from '../hooks/useMediaSelection';
 import type { LetterImageType } from '../types/Letter';
 import './ShowcaseCard.css';
 
@@ -18,11 +18,10 @@ export interface ShowcaseItem {
 interface ShowcaseCardProps {
   items: ShowcaseItem[];
   onNavigate?: (letterId: string, imageId?: string) => void;
-  onInteraction?: () => void;
 }
 
-export default function ShowcaseCard({ items, onNavigate, onInteraction }: ShowcaseCardProps) {
-  const [index, setIndex] = useState(0);
+export default function ShowcaseCard({ items, onNavigate }: ShowcaseCardProps) {
+  const { index, step } = useMediaSelection(items.map(item => `${item.letterId}:${item.imageId || item.imageUrl}`));
   const item = items[index];
   const hasMultiple = items.length > 1;
 
@@ -30,14 +29,12 @@ export default function ShowcaseCard({ items, onNavigate, onInteraction }: Showc
 
   const handlePrev = (e: ReactMouseEvent) => {
     e.stopPropagation();
-    setIndex((i) => (i === 0 ? items.length - 1 : i - 1));
-    onInteraction?.();
+    step(-1);
   };
 
   const handleNext = (e: ReactMouseEvent) => {
     e.stopPropagation();
-    setIndex((i) => (i === items.length - 1 ? 0 : i + 1));
-    onInteraction?.();
+    step(1);
   };
 
   const Content = onNavigate ? 'a' : 'div';
@@ -55,26 +52,9 @@ export default function ShowcaseCard({ items, onNavigate, onInteraction }: Showc
           onNavigate(item.letterId, item.imageId);
         }}
       >
-      {items.map((gi, idx) => (
-        idx === index && gi.imageUrl ? (
-          <ProgressiveImage
-            key={gi.imageId || idx}
-            className="cd-highlight-img"
-            src={getImageUrl(gi.imageUrl, { width: 640 })}
-            thumbSrc={getImageUrl(gi.imageUrl, { width: 32 })}
-            midSrc={getImageUrl(gi.imageUrl, { width: 320 })}
-            alt={idx === index ? (gi.hook || gi.label) : ''}
-            loading="eager"
-            fetchPriority="high"
-            style={{ opacity: idx === index ? 1 : 0 }}
-            idleUpgrade
-            context="showcase"
-          />
-        ) : null
-      ))}
-      {items.every((gi) => !gi.imageUrl) && (
-        <div className="cd-highlight-placeholder" />
-      )}
+      <CardMediaImages items={items.map(gi => ({ key: `${gi.letterId}:${gi.imageId || gi.imageUrl}`, imageUrl: gi.imageUrl, alt: gi.hook || gi.label }))}
+        index={index} className="cd-highlight-img" context="showcase" />
+      {!item.imageUrl && <div className="cd-highlight-placeholder" />}
       <div className="cd-highlight-overlay" />
       <span className="cd-highlight-label">{item.label}</span>
       <div className="cd-highlight-content">

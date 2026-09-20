@@ -14,9 +14,10 @@ const items: ShowcaseItem[] = Array.from({ length: 100 }, (_, index) => ({
 }));
 
 describe('ShowcaseCard image loading', () => {
-  it('mounts only the active scan and keeps navigation and wrapping functional', () => {
+  it('bounds preparation to three scans and keeps only the active scan accessible', () => {
     const onNavigate = vi.fn();
-    render(<ShowcaseCard items={items} onNavigate={onNavigate} />);
+    const { container } = render(<ShowcaseCard items={items} onNavigate={onNavigate} />);
+    expect(container.querySelectorAll("img")).toHaveLength(3);
     expect(screen.getAllByRole('img')).toHaveLength(1);
     expect(screen.getByRole('img')).toHaveAttribute('src', '/image-0.jpg');
     fireEvent.click(screen.getByLabelText('Next'));
@@ -29,6 +30,16 @@ describe('ShowcaseCard image loading', () => {
     fireEvent.click(screen.getByLabelText('Previous'));
     expect(screen.getByRole('img')).toHaveAttribute('src', '/image-99.jpg');
   });
+  it('preserves scan identity through reorder and clamps safely when images are removed', () => {
+    const view = render(<ShowcaseCard items={items.slice(0, 3)} onNavigate={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText('Next'));
+    view.rerender(<ShowcaseCard items={[items[2], items[1], items[0]]} onNavigate={vi.fn()} />);
+    expect(screen.getByRole('img')).toHaveAttribute('src', '/image-1.jpg');
+    view.rerender(<ShowcaseCard items={[items[0]]} onNavigate={vi.fn()} />);
+    expect(screen.getByRole('img')).toHaveAttribute('src', '/image-0.jpg');
+    expect(screen.queryByLabelText('Next')).toBeNull();
+  });
+
   it('keeps modified clicks native and page controls separate from navigation', () => {
     const onNavigate = vi.fn();
     render(<ShowcaseCard items={items} onNavigate={onNavigate} />);

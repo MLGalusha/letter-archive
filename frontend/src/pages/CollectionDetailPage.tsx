@@ -21,7 +21,7 @@ import { buildCollectionSeo, buildNotFoundSeo } from '../utils/seo';
 import useArchiveSearch from '../hooks/useArchiveSearch';
 import useStickyDock from '../hooks/useStickyDock';
 import ShowcaseCard, { type ShowcaseItem } from '../components/ShowcaseCard';
-import InfiniteCarousel from '../components/InfiniteCarousel';
+import CardCarousel from '../components/CardCarousel';
 import useIsMobile from '../hooks/useIsMobile';
 import useIsTouchDevice from '../hooks/useIsTouchDevice';
 import useSwipeNavigation from '../hooks/useSwipeNavigation';
@@ -155,8 +155,6 @@ export default function CollectionDetailPage() {
     const qs = params.toString();
     navigate(`/letter/${letterId}${qs ? `?${qs}` : ''}`);
   }, [navigate]);
-
-  const carouselPauseRef = useRef<() => void>(() => {});
 
   const handleHighlightClick = useCallback((letterId: string, imageId?: string) => {
     const params = new URLSearchParams();
@@ -386,34 +384,16 @@ export default function CollectionDetailPage() {
             )}
 
             {(highlights.length > 0 || gallery.length > 0) && (
-              isMobile ? (
-                <InfiniteCarousel classPrefix="cd-highlights" pauseRef={carouselPauseRef} suppressClickAfterDrag>
-                  {[
-                    ...highlightShowcaseItems.map(({ key, items }) => (
-                      <ShowcaseCard key={key} items={items} onNavigate={handleHighlightClick} onInteraction={() => carouselPauseRef.current()} />
-                    )),
-                    ...(galleryShowcaseItems.length > 0 ? [
-                      <ShowcaseCard key="gallery" items={galleryShowcaseItems} onNavigate={handleHighlightClick} onInteraction={() => carouselPauseRef.current()} />
-                    ] : []),
-                  ]}
-                </InfiniteCarousel>
-              ) : (
-                <div className="cd-highlights-col">
-                  {highlightShowcaseItems.map(({ key, items }) => (
-                    <ShowcaseCard
-                      key={key}
-                      items={items}
-                      onNavigate={handleHighlightClick}
-                    />
-                  ))}
-                  {galleryShowcaseItems.length > 0 && (
-                    <ShowcaseCard
-                      items={galleryShowcaseItems}
-                      onNavigate={handleHighlightClick}
-                    />
-                  )}
-                </div>
-              )
+              <CardCarousel label="Collection highlights" className="cd-highlights-col" layout={isMobile ? "carousel" : "static"}>
+                {[
+                  ...highlightShowcaseItems.map(({ key, items }) => (
+                    <ShowcaseCard key={key} items={items} onNavigate={handleHighlightClick} />
+                  )),
+                  ...(galleryShowcaseItems.length > 0 ? [
+                    <ShowcaseCard key="gallery" items={galleryShowcaseItems} onNavigate={handleHighlightClick} />
+                  ] : []),
+                ]}
+              </CardCarousel>
             )}
           </section>
         )}

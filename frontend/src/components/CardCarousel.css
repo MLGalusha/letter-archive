@@ -10,7 +10,8 @@
   overflow-x: auto;
   overflow-y: hidden;
   scroll-snap-type: x mandatory;
-  overscroll-behavior-x: contain;
+  /* Stop at the endpoints without horizontal rubber-banding. */
+  overscroll-behavior-x: none;
   scrollbar-width: none;
   touch-action: auto;
 }

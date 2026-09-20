@@ -84,6 +84,28 @@ for (const path of ['/', '/collections/003']) {
     await expect(dots.first()).toHaveAttribute('aria-current', 'true');
   });
 
+  test(`@mocked card endpoints stay flush during outward drags: ${path}`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const carousel = await openCards(page, path);
+    const viewport = carousel.locator('.card-carousel-viewport');
+    // Safari exposes native rubber-banding with contain, even though Chromium
+    // already clamps scrollLeft. Require the shared native boundary policy too.
+    await expect(viewport).toHaveCSS('overscroll-behavior-x', 'none');
+    for (const index of [0, 1]) {
+      await carousel.locator('.card-carousel-dot').nth(index).click();
+      await expect(carousel.locator('.card-carousel-frame')).toHaveAttribute('data-settled-slide', String(index));
+      const box = (await viewport.boundingBox())!;
+      await page.mouse.move(box.x + box.width / 2, box.y + 80);
+      await page.mouse.down();
+      await page.mouse.move(box.x + (index === 0 ? box.width - 10 : 10), box.y + 80, { steps: 8 });
+      expect(await viewport.evaluate(el => el.scrollLeft)).toBe(index * box.width);
+      const slide = (await carousel.locator('.card-carousel-slide').nth(index).boundingBox())!;
+      expect(slide.x).toBeCloseTo(box.x, 1);
+      expect(slide.width).toBeCloseTo(box.width, 1);
+      await page.mouse.up();
+    }
+  });
+
   test(`@mocked rapid reversals settle on the last requested card: ${path}`, async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     const carousel = await openCards(page, path);

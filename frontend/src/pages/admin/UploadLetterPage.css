@@ -877,6 +877,7 @@
   padding: 0.25rem 0.5rem;
   border-radius: var(--radius-sm);
   transition: all 0.2s ease;
+  line-height: 1;
 }
 
 .upload-modal-close:hover {

@@ -38,9 +38,12 @@ describe("upload CSS ownership", () => {
 
     const confirmation = screen.getByRole("dialog", { name: "Delete upload" });
     const collectionDialog = container.querySelector(".upload-collection-modal");
+    const collectionClose = container.querySelector(".upload-modal-close");
 
     expect(getComputedStyle(confirmation).maxWidth).toBe("400px");
     expect(collectionDialog).not.toBeNull();
     expect(getComputedStyle(collectionDialog!).maxWidth).toBe("750px");
+    expect(collectionClose).not.toBeNull();
+    expect(getComputedStyle(collectionClose!).lineHeight).toBe("1");
   });
 });

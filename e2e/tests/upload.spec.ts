@@ -67,7 +67,7 @@ test.describe('Upload Page', () => {
   test.describe('Collection Selection', () => {
     test('shows collection selection option', async ({ page }) => {
       const collectionSelect = page.locator('select[name*="collection"], .collection-select, [class*="collection"] select');
-      const collectionInput = page.locator('input[name*="collection"], .collection-input');
+      const collectionInput = page.locator('input[name*="collection"], .upload-collection-input');
 
       const hasSelect = await collectionSelect.first().isVisible().catch(() => false);
       const hasInput = await collectionInput.first().isVisible().catch(() => false);

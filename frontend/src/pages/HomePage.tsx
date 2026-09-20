@@ -19,7 +19,9 @@ import { buildHomeSeo } from "../utils/seo";
 import useArchiveSearch from "../hooks/useArchiveSearch";
 import useStickyDock from "../hooks/useStickyDock";
 import useIsMobile from "../hooks/useIsMobile";
-import InfiniteCarousel from '../components/InfiniteCarousel';
+import CardCarousel from '../components/CardCarousel';
+import CardMediaImages from '../components/CardMediaImages';
+import useMediaSelection from '../hooks/useMediaSelection';
 import { formatDate } from "../utils/dateFormatting";
 import { getAppScrollY } from "../utils/appScroll";
 import useSmoothScroll from "../hooks/useSmoothScroll";
@@ -110,15 +112,13 @@ function HeroLetterCard({
   heroImages,
   ariaLabel,
   onNavigate,
-  onInteraction,
 }: {
   heroLetter: FeaturedLetter;
   heroImages: LetterImage[];
   ariaLabel: string;
   onNavigate: (letterId: string, params: URLSearchParams) => void;
-  onInteraction?: () => void;
 }) {
-  const [heroPageIndex, setHeroPageIndex] = useState(0);
+  const { index: heroPageIndex, step } = useMediaSelection(heroImages.map(image => `${heroLetter.id}:${image.id}`));
   const currentImage = heroImages[heroPageIndex] || null;
   const hasMultiplePages = heroImages.length > 1;
   const heroPeopleLine = getCorrespondentLine(heroLetter);
@@ -148,14 +148,12 @@ function HeroLetterCard({
   const handlePrevPage = (event: ReactMouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    setHeroPageIndex((i) => (i === 0 ? heroImages.length - 1 : i - 1));
-    onInteraction?.();
+    step(-1);
   };
   const handleNextPage = (event: ReactMouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    setHeroPageIndex((i) => (i === heroImages.length - 1 ? 0 : i + 1));
-    onInteraction?.();
+    step(1);
   };
 
   return (
@@ -170,27 +168,9 @@ function HeroLetterCard({
         onClick={navigateToLetter}
       >
       {heroImages.length > 0 ? (
-        heroImages.map((img, idx) => {
-          const previous = (heroPageIndex + heroImages.length - 1) % heroImages.length;
-          const next = (heroPageIndex + 1) % heroImages.length;
-          if (idx !== heroPageIndex && idx !== previous && idx !== next) return null;
-          return (
-          <ProgressiveImage
-            key={img.id}
-            className="letter-card-image"
-            src={getImageUrl(img.imageUrl, { width: 640 })}
-            thumbSrc={getImageUrl(img.imageUrl, { width: 32 })}
-            midSrc={getImageUrl(img.imageUrl, { width: 480 })}
-            alt={`Scan of letter${heroLetter.sender ? ` from ${heroLetter.sender}` : ''}${heroLetter.recipient ? ` to ${heroLetter.recipient}` : ''}`}
-            loading={idx === heroPageIndex ? "eager" : "lazy"}
-            fetchPriority={idx === heroPageIndex ? "high" : undefined}
-            decoding="async"
-            style={{ opacity: idx === heroPageIndex ? 1 : 0 }}
-            idleUpgrade
-            context="hero"
-          />
-        );
-        })
+        <CardMediaImages items={heroImages.map(img => ({ key: img.id, imageUrl: img.imageUrl,
+          alt: `Scan of letter${heroLetter.sender ? ` from ${heroLetter.sender}` : ''}${heroLetter.recipient ? ` to ${heroLetter.recipient}` : ''}` }))}
+          index={heroPageIndex} className="letter-card-image" context="hero" midWidth={480} />
       ) : heroLetter.imageUrl ? (
         <ProgressiveImage
           className="letter-card-image"
@@ -264,15 +244,6 @@ export default function HomePage() {
 
   // ── Archive search (extracted hook) ──
   const archive = useArchiveSearch({ storageKey: "home", defaultSort: "relevance" });
-
-  // Freeze facets and total while a search is in flight so the SearchBar's
-  // refine panel doesn't reshuffle counts between keystrokes (causes layout jumps).
-  const stableFacetsRef = useRef(archive.archiveResults.facets);
-  const stableTotalRef = useRef(archive.archiveResults.total);
-  if (!archive.archiveLoading) {
-    stableFacetsRef.current = archive.archiveResults.facets;
-    stableTotalRef.current = archive.archiveResults.total;
-  }
 
   // ── Sticky dock (extracted hook) ──
   const archiveSearchRef = useRef<HTMLElement | null>(null);
@@ -352,11 +323,6 @@ export default function HomePage() {
       ].filter((value): value is string => Boolean(value)).join(", ")
     : "Featured letter";
 
-  const carouselPauseRef = useRef<() => void>(() => {});
-  const handleCarouselChildInteraction = useCallback(() => {
-    carouselPauseRef.current();
-  }, []);
-
   return (
     <div className="body-layout home-page">
       <SEO
@@ -365,85 +331,46 @@ export default function HomePage() {
         canonicalUrl={homeSeo.canonicalPath}
         jsonLd={homeSeo.jsonLd}
       />
-      {isMobile && (heroLetter || !heroLoaded) ? (
-        <section className="home-hero home-hero--carousel">
-          <InfiniteCarousel classPrefix="hero-carousel" pauseRef={carouselPauseRef} suppressClickAfterDrag>
-            {[
-              <div className="home-hero-copy" key="copy">
-                <p className="home-kicker">{heroCopy.kicker}</p>
-                <h1 className="home-headline">{heroCopy.heading}</h1>
-                <p className="home-subtitle">{heroCopy.subtitle}</p>
-                <div className="home-hero-actions">
-                  <a
-                    href="#archive-search"
-                    className="btn-card home-primary-action"
-                    onClick={handleScrollToArchiveSearch}
-                  >
-                    Search the Archive
-                  </a>
-                  <Link to="/collections" className="btn-card home-secondary-action">
-                    Browse Collections
-                  </Link>
-                  <Link to="/blog" className="home-text-link">
-                    Read the Journal &rarr;
-                  </Link>
-                </div>
-              </div>,
-              heroLetter ? (
-                <HeroLetterCard
-                  key="featured"
-                  heroLetter={heroLetter}
-                  heroImages={heroImages}
-                  ariaLabel={heroAriaLabel}
-                  onNavigate={handleHeroNavigate}
-                  onInteraction={handleCarouselChildInteraction}
-                />
-              ) : (
-                <div key="placeholder" className="home-hero-feature-card home-hero-feature-card--placeholder">
-                  <span className="home-hero-feature-placeholder-label">Featured Letter</span>
-                  <p>Loading a featured letter from collection 009...</p>
-                </div>
-              ),
-            ]}
-          </InfiniteCarousel>
-        </section>
-      ) : (
-        <section className="home-hero">
-          <div className="home-hero-copy">
-            <p className="home-kicker">{heroCopy.kicker}</p>
-            <h1 className="home-headline">{heroCopy.heading}</h1>
-            <p className="home-subtitle">{heroCopy.subtitle}</p>
-            <div className="home-hero-actions">
-              <a
-                href="#archive-search"
-                className="btn-card home-primary-action"
-                onClick={handleScrollToArchiveSearch}
-              >
-                Search the Archive
-              </a>
-              <Link to="/collections" className="btn-card home-secondary-action">
-                Browse Collections
-              </Link>
-              <Link to="/blog" className="home-text-link">
-                Read the Journal &rarr;
-              </Link>
-            </div>
-          </div>
-          {heroLetter ? (
-            <HeroLetterCard
-              heroLetter={heroLetter}
-              heroImages={heroImages}
-              ariaLabel={heroAriaLabel}
-              onNavigate={handleHeroNavigate}
-            />
-          ) : !heroLoaded ? (
-            <div className="home-hero-feature-card home-hero-feature-card--placeholder">
-              <span className="home-hero-feature-placeholder-label">Featured Letter</span>
-              <p>Loading a featured letter from collection 009...</p>
-            </div>
-          ) : null}
-        </section>
-      )}
+      <section className={`home-hero${isMobile ? " home-hero--carousel" : ""}`}>
+        <CardCarousel label="Featured archive" className="home-showcase" layout={isMobile ? "carousel" : "static"}>
+          {[
+            <div className="home-hero-copy" key="copy">
+              <p className="home-kicker">{heroCopy.kicker}</p>
+              <h1 className="home-headline">{heroCopy.heading}</h1>
+              <p className="home-subtitle">{heroCopy.subtitle}</p>
+              <div className="home-hero-actions">
+                <a
+                  href="#archive-search"
+                  className="btn-card home-primary-action"
+                  onClick={handleScrollToArchiveSearch}
+                >
+                  Search the Archive
+                </a>
+                <Link to="/collections" className="btn-card home-secondary-action">
+                  Browse Collections
+                </Link>
+                <Link to="/blog" className="home-text-link">
+                  Read the Journal &rarr;
+                </Link>
+              </div>
+            </div>,
+            heroLetter ? (
+              <HeroLetterCard
+                key="featured"
+                heroLetter={heroLetter}
+                heroImages={heroImages}
+                ariaLabel={heroAriaLabel}
+                onNavigate={handleHeroNavigate}
+              />
+            ) : !heroLoaded ? (
+              <div key="featured" className="home-hero-feature-card home-hero-feature-card--placeholder">
+                <span className="home-hero-feature-placeholder-label">Featured Letter</span>
+                <p>Loading a featured letter from collection 009...</p>
+              </div>
+            ) : null,
+          ]}
+        </CardCarousel>
+      </section>
 
       {latestBlogPost && (
         <section className="home-editorial-rail">
@@ -473,8 +400,8 @@ export default function HomePage() {
         <SearchBar
           query={archive.searchQuery}
           filters={archive.filters}
-          facets={stableFacetsRef.current}
-          total={stableTotalRef.current}
+          facets={archive.archiveResults.facets}
+          total={archive.archiveResults.total}
           loading={archive.archiveLoading}
           embedded
           variant="full"

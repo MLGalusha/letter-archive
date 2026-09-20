@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { humanizeKey, formatMetadataValue } from '../NotificationDetailModal';
+import { humanizeKey, formatMetadataValue } from '../notificationFormatters';
 
 describe('humanizeKey', () => {
   it('converts camelCase to title case', () => {

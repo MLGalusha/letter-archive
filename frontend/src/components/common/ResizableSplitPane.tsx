@@ -105,6 +105,7 @@ export function ResizableSplitPane({
 
     const stored = loadStoredState();
     if (stored && stored.letterId === letterId && stored.splitRatio !== undefined) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Letter navigation restores the external persisted split before accepting new drag changes.
       setSplitRatio(stored.splitRatio);
     } else {
       setSplitRatio(defaultSplit);

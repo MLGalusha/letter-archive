@@ -265,7 +265,7 @@
     padding: 0;
   }
 
-  .form-row {
+  .review-form-row {
     flex-direction: column;
   }
 
@@ -1049,13 +1049,13 @@
 }
 
 /* Form Rows for two-column layout with responsive wrap */
-.form-row {
+.review-form-row {
   display: flex;
   flex-wrap: wrap;
   gap: var(--spacing-sm);
 }
 
-.form-row .form-group {
+.review-form-row .review-form-group {
   flex: 1 1 200px; /* Grow, shrink, min-width 200px for natural wrapping */
   min-width: 0;
 }
@@ -1100,18 +1100,18 @@
 
 /* Mobile: reset flex-basis from 200px (which becomes min-height in column mode) */
 @media (max-width: 768px) {
-  .form-row .form-group {
+  .review-form-row .review-form-group {
     flex: 0 0 auto;
   }
 }
 
-.form-group {
+.review-form-group {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-xs);
 }
 
-.form-group label {
+.review-form-group label {
   font-weight: 600;
   font-size: var(--font-sm);
   color: var(--text);
@@ -1119,9 +1119,9 @@
   letter-spacing: 0.05em;
 }
 
-.form-group input,
-.form-group textarea,
-.form-group select {
+.review-form-group input,
+.review-form-group textarea,
+.review-form-group select {
   padding: 0.75rem 1rem;
   border: solid 1px var(--border);
   border-radius: var(--radius-md);
@@ -1132,15 +1132,15 @@
   transition: all 0.2s ease;
 }
 
-.form-group input:focus,
-.form-group textarea:focus,
-.form-group select:focus {
+.review-form-group input:focus,
+.review-form-group textarea:focus,
+.review-form-group select:focus {
   outline: none;
   border-color: var(--text-muted);
   box-shadow: 0 0 0 3px hsla(0, 0%, 50%, 0.1);
 }
 
-.form-group textarea {
+.review-form-group textarea {
   resize: none;
   overflow: hidden;
   min-height: 80px;
@@ -1921,11 +1921,11 @@
   margin-bottom: var(--spacing-md);
 }
 
-.add-entity-dialog .form-group {
+.add-entity-dialog .review-form-group {
   margin-bottom: var(--spacing-md);
 }
 
-.add-entity-dialog .form-group:last-of-type {
+.add-entity-dialog .review-form-group:last-of-type {
   margin-bottom: var(--spacing-lg);
 }
 
@@ -2372,7 +2372,7 @@
    CONFIRMATION DIALOG STYLES
    ============================================================================ */
 
-.confirm-dialog-overlay {
+.review-confirm-dialog-overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -2385,7 +2385,8 @@
   z-index: 1000;
 }
 
-.confirm-dialog {
+.review-confirm-dialog {
+  text-align: center;
   background: var(--bg-light);
   border-radius: var(--radius-lg);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
@@ -2394,27 +2395,33 @@
   width: 90%;
 }
 
-.confirm-dialog h3 {
+.review-confirm-dialog h3 {
   margin: 0 0 var(--spacing-sm) 0;
   font-size: 1.1rem;
   font-weight: 600;
   color: var(--text);
 }
 
-.confirm-dialog p {
+.review-confirm-dialog p {
   margin: 0 0 var(--spacing-md) 0;
   color: var(--text-muted);
   font-size: var(--font-sm);
   line-height: 1.5;
 }
 
-.confirm-dialog-actions {
+.review-confirm-dialog-actions {
   display: flex;
   justify-content: flex-end;
   gap: var(--spacing-sm);
 }
 
-.confirm-dialog .btn-cancel {
+@media (max-width: 480px) {
+  .review-confirm-dialog-actions {
+    flex-direction: column;
+  }
+}
+
+.review-confirm-dialog .btn-cancel {
   padding: 0.5rem 1rem;
   background: var(--bg);
   color: var(--text-muted);
@@ -2425,12 +2432,12 @@
   transition: all 0.2s ease;
 }
 
-.confirm-dialog .btn-cancel:hover {
+.review-confirm-dialog .btn-cancel:hover {
   background: var(--bg-light);
   border-color: var(--text-muted);
 }
 
-.confirm-dialog .btn-confirm {
+.review-confirm-dialog .btn-confirm {
   padding: 0.5rem 1rem;
   background: #e65100;
   color: white;
@@ -2442,7 +2449,7 @@
   transition: all 0.2s ease;
 }
 
-.confirm-dialog .btn-confirm:hover {
+.review-confirm-dialog .btn-confirm:hover {
   background: #d84315;
 }
 

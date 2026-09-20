@@ -57,17 +57,22 @@ export default function BlockEditorPage() {
   const [liveStats, setLiveStats] = useState<{ letters: number; collections: number } | null>(null);
 
   // ── Load ──
-  const loadPage = useCallback(async () => {
-    if (!slug || !config) { setLoading(false); return; }
+  const loadPage = useCallback(async (isCurrent: () => boolean) => {
+    if (!slug || !config) {
+      if (isCurrent()) setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
       const page = await adminGetContentPage(slug);
+      if (!isCurrent()) return;
       const resolved = resolveBlocks(slug, page.contentJson);
       setBlocks(resolved);
       setUpdatedAt(page.updatedAt);
       setSaveState('saved');
     } catch (err) {
+      if (!isCurrent()) return;
       if (err instanceof ApiError && err.status === 404) {
         const defaults = getDefaultBlocks(slug);
         setBlocks(defaults);
@@ -77,11 +82,16 @@ export default function BlockEditorPage() {
         setError(getErrorMessage(err, 'Failed to load page.'));
       }
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   }, [config, slug]);
 
-  useEffect(() => { void loadPage(); }, [loadPage]);
+  useEffect(() => {
+    let isActive = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Loads external page data; request ownership prevents stale slugs from winning.
+    void loadPage(() => isActive);
+    return () => { isActive = false; };
+  }, [loadPage]);
 
   // Fetch live stats for about page (so admin preview matches public)
   useEffect(() => {

@@ -228,6 +228,18 @@ describe('buildAlignedLinesFromDetected', () => {
 // ============================================================================
 
 describe('detectImageLines', () => {
+  type CanvasContextStub = Pick<CanvasRenderingContext2D, 'drawImage' | 'getImageData'>;
+  const restoreGetContextByImage = new WeakMap<HTMLImageElement, () => void>();
+
+  function installCanvasContext(context: CanvasContextStub): () => void {
+    const original = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = vi.fn(() => context) as unknown as
+      typeof HTMLCanvasElement.prototype.getContext;
+    return () => {
+      HTMLCanvasElement.prototype.getContext = original;
+    };
+  }
+
   function createMockImageWithPixels(
     width: number,
     height: number,
@@ -237,27 +249,23 @@ describe('detectImageLines', () => {
     Object.defineProperty(img, 'naturalWidth', { value: width });
     Object.defineProperty(img, 'naturalHeight', { value: height });
 
-    const mockCtx = {
+    const mockCtx: CanvasContextStub = {
       drawImage: vi.fn(),
       getImageData: vi.fn().mockReturnValue({
         data: pixels,
         width,
         height,
-      }),
+      } as ImageData),
     };
 
-    const origGetContext = HTMLCanvasElement.prototype.getContext;
-    HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue(mockCtx) as any;
-
-    (img as any).__restoreGetContext = () => {
-      HTMLCanvasElement.prototype.getContext = origGetContext;
-    };
+    restoreGetContextByImage.set(img, installCanvasContext(mockCtx));
 
     return img;
   }
 
   function cleanup(img: HTMLImageElement) {
-    (img as any).__restoreGetContext?.();
+    restoreGetContextByImage.get(img)?.();
+    restoreGetContextByImage.delete(img);
   }
 
   /**
@@ -374,19 +382,18 @@ describe('detectImageLines', () => {
     Object.defineProperty(img, 'naturalWidth', { value: 200 });
     Object.defineProperty(img, 'naturalHeight', { value: 100 });
 
-    const mockCtx = {
+    const mockCtx: CanvasContextStub = {
       drawImage: vi.fn(),
       getImageData: vi.fn().mockImplementation(() => {
         throw new DOMException('Tainted canvas', 'SecurityError');
       }),
     };
-    const origGetContext = HTMLCanvasElement.prototype.getContext;
-    HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue(mockCtx) as any;
+    const restoreGetContext = installCanvasContext(mockCtx);
 
     try {
       expect(detectImageLines(img)).toEqual([]);
     } finally {
-      HTMLCanvasElement.prototype.getContext = origGetContext;
+      restoreGetContext();
     }
   });
 

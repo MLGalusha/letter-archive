@@ -32,6 +32,7 @@ function hasPublishedLetters(collection: CollectionInfo): boolean {
 }
 
 const COLLECTION_SKELETON_COUNT = 6;
+const EMPTY_COLLECTIONS: CollectionInfo[] = [];
 
 export default function CollectionsPage() {
   const isMobile = useIsMobile();
@@ -65,8 +66,6 @@ export default function CollectionsPage() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
 
     listCollections()
       .then((collections) => {
@@ -87,7 +86,7 @@ export default function CollectionsPage() {
     };
   }, []);
 
-  const collections: CollectionInfo[] = collectionsData ?? [];
+  const collections = collectionsData ?? EMPTY_COLLECTIONS;
   const showLoadingShell = loading && collections.length === 0 && !error;
 
   const visibleCollections = useMemo(() => {

@@ -11,7 +11,7 @@
 }
 
 /* Hidden inputs */
-.hidden-input {
+.upload-hidden-input {
   display: none;
 }
 
@@ -19,7 +19,7 @@
    Header Stats & Actions (in AdminLayout header)
    ============================================================================ */
 
-.header-stats {
+.upload-header-stats {
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -28,11 +28,11 @@
   margin-right: auto;
 }
 
-.header-stats .stat-divider {
+.upload-header-stats .stat-divider {
   opacity: 0.5;
 }
 
-.header-actions {
+.upload-header-actions {
   display: flex;
   gap: var(--spacing-sm);
   align-items: center;
@@ -96,12 +96,6 @@
 .header-btn:hover {
   background: var(--bg-light);
   border-color: var(--text-muted);
-}
-
-.btn-icon {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
 }
 
 /* Upload Dropdown */
@@ -225,7 +219,7 @@
    Edit Mode Controls
    ============================================================================ */
 
-.selected-count {
+.upload-selected-count {
   font-size: var(--font-sm);
   color: var(--text-muted);
 }
@@ -236,7 +230,7 @@
   line-height: 1;
 }
 
-.collection-input {
+.upload-collection-input {
   width: 45px;
   padding: 0.4rem;
   border: 1px solid var(--border);
@@ -752,19 +746,19 @@
    Messages
    ============================================================================ */
 
-.message {
+.upload-message {
   padding: var(--spacing-sm);
   border-radius: var(--radius-md);
   font-size: var(--font-sm);
 }
 
-.message.success {
+.upload-message--success {
   background-color: #d4edda;
   color: #155724;
   border: solid 1px #c3e6cb;
 }
 
-.message.error {
+.upload-message--error {
   background-color: #f8d7da;
   color: #721c24;
   border: solid 1px #f5c6cb;
@@ -826,7 +820,7 @@
    Modal Overlay (Collection Modal)
    ============================================================================ */
 
-.modal-overlay {
+.upload-modal-overlay {
   position: fixed;
   inset: 0;
   background: hsla(0, 0%, 0%, 0.6);
@@ -837,7 +831,7 @@
   padding: var(--spacing-lg);
 }
 
-.modal-content {
+.upload-collection-modal {
   background: var(--bg-light);
   border-radius: var(--radius-lg);
   box-shadow: 0 4px 20px hsla(0, 0%, 0%, 0.3);
@@ -849,7 +843,7 @@
   flex-direction: column;
 }
 
-.modal-header {
+.upload-modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -857,24 +851,24 @@
   border-bottom: solid 1px var(--border);
 }
 
-.modal-header h2 {
+.upload-modal-header h2 {
   margin: 0;
   font-size: 1.25rem;
 }
 
-.modal-title-group {
+.upload-modal-title-group {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.modal-subtitle {
+.upload-modal-subtitle {
   font-size: var(--font-sm);
   color: var(--text-muted);
   font-weight: normal;
 }
 
-.modal-close {
+.upload-modal-close {
   background: none;
   border: none;
   font-size: 1.5rem;
@@ -883,15 +877,16 @@
   padding: 0.25rem 0.5rem;
   border-radius: var(--radius-sm);
   transition: all 0.2s ease;
+  line-height: 1;
 }
 
-.modal-close:hover {
+.upload-modal-close:hover {
   background: var(--bg);
   color: var(--text);
 }
 
 /* Letter Grid in Modal */
-.letter-grid {
+.upload-letter-grid {
   padding: var(--spacing-md);
   overflow-y: auto;
   display: grid;
@@ -899,7 +894,7 @@
   gap: var(--spacing-sm);
 }
 
-.letter-card {
+.upload-letter-card {
   position: relative;
   background: var(--bg);
   border: solid 2px var(--border);
@@ -913,18 +908,18 @@
   gap: 4px;
 }
 
-.letter-card:hover {
+.upload-letter-card:hover {
   border-color: var(--text-muted);
   box-shadow: var(--shadow);
 }
 
-.letter-card-date {
+.upload-letter-card-date {
   font-weight: 600;
   font-size: var(--font-base);
   white-space: nowrap;
 }
 
-.letter-card-counts {
+.upload-letter-card-counts {
   display: flex;
   flex-direction: row;
   gap: var(--spacing-md);
@@ -934,7 +929,7 @@
 }
 
 /* Letter Images in Modal */
-.letter-images {
+.upload-letter-images {
   padding: var(--spacing-md);
   overflow-y: auto;
   display: grid;
@@ -942,7 +937,7 @@
   gap: var(--spacing-md);
 }
 
-.letter-image-item {
+.upload-letter-image-item {
   position: relative;
   aspect-ratio: 1;
   border-radius: var(--radius-md);
@@ -951,11 +946,11 @@
   transition: all 0.2s ease;
 }
 
-.letter-image-item:hover {
+.upload-letter-image-item:hover {
   transform: scale(1.02);
 }
 
-.letter-image-item img {
+.upload-letter-image-item img {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -1102,7 +1097,7 @@
     font-size: 1.25rem;
   }
 
-  .header-actions {
+  .upload-header-actions {
     justify-content: flex-end;
   }
 
@@ -1130,19 +1125,19 @@
     height: 60px;
   }
 
-  .modal-overlay {
+  .upload-modal-overlay {
     padding: var(--spacing-sm);
   }
 
-  .modal-content {
+  .upload-collection-modal {
     max-height: 90vh;
   }
 
-  .modal-header {
+  .upload-modal-header {
     padding: var(--spacing-sm) var(--spacing-md);
   }
 
-  .letter-grid {
+  .upload-letter-grid {
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   }
 
@@ -1186,9 +1181,6 @@
     font-size: var(--font-xs);
   }
 
-  .toolbar-button .btn-icon + span {
-    display: none;
-  }
 }
 
 @media (max-width: 480px) {
@@ -1205,7 +1197,7 @@
     aspect-ratio: 1;
   }
 
-  .header-stats {
+  .upload-header-stats {
     font-size: var(--font-xs);
   }
 
@@ -1510,7 +1502,7 @@
   background: #fefce8;
 }
 
-.letter-card.marked-for-deletion {
+.upload-letter-card.marked-for-deletion {
   border-color: #fca5a5;
   background: #fef2f2;
 }
@@ -1519,17 +1511,17 @@
   border-color: #fca5a5;
 }
 
-.letter-image-item {
+.upload-letter-image-item {
   position: relative;
 }
 
-.letter-image-item.marked-for-deletion {
+.upload-letter-image-item.marked-for-deletion {
   outline: 2px solid #fca5a5;
   outline-offset: -2px;
   border-radius: var(--radius-md);
 }
 
-.letter-card.partial-deletion {
+.upload-letter-card.partial-deletion {
   border-color: #fde68a;
   background: #fefce8;
 }
@@ -1597,18 +1589,18 @@
    ============================================================================ */
 
 /* Stat colors in header */
-.header-stats .stat-new {
+.upload-header-stats .stat-new {
   color: var(--text);
   font-weight: 600;
 }
 
-.header-stats .stat-duplicate {
+.upload-header-stats .stat-duplicate {
   color: var(--text-muted);
   opacity: 0.7;
 }
 
 /* Checking indicator */
-.header-stats .checking-stat {
+.upload-header-stats .checking-stat {
   color: var(--text-muted);
   font-style: italic;
 }
@@ -1623,12 +1615,12 @@
   opacity: 0.7;
 }
 
-.letter-card.is-duplicate {
+.upload-letter-card.is-duplicate {
   opacity: 0.5;
   border-style: dashed;
 }
 
-.letter-card.is-duplicate:hover {
+.upload-letter-card.is-duplicate:hover {
   opacity: 0.7;
 }
 
@@ -1640,11 +1632,11 @@
   opacity: 0.65;
 }
 
-.letter-image-item.is-duplicate {
+.upload-letter-image-item.is-duplicate {
   opacity: 0.45;
 }
 
-.letter-image-item.is-duplicate:hover {
+.upload-letter-image-item.is-duplicate:hover {
   opacity: 0.65;
 }
 

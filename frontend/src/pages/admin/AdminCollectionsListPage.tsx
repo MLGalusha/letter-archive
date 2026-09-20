@@ -147,6 +147,8 @@ export default function CollectionsDashboard() {
     }
   }, []);
 
+  // This panel's initial collection request populates response state.
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- Async initial load is external data, not render-derived state.
   useEffect(() => { fetchCollections(); }, [fetchCollections]);
 
   useEffect(() => {

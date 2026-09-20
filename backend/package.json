@@ -21,6 +21,7 @@
     "drizzle:generate": "node scripts/generate-migration.mjs",
     "drizzle:migrate": "drizzle-kit migrate",
     "test": "vitest run",
+    "test:processing-leases:postgres": "PROCESSING_LEASES_POSTGRES_TEST=1 vitest run src/services/__tests__/processing-leases.postgres.test.ts",
     "test:watch": "vitest",
     "db:validate-migrations": "vitest run src/db/__tests__/migrations.test.ts",
     "db:test-migrations": "bash scripts/test-migrations.sh",

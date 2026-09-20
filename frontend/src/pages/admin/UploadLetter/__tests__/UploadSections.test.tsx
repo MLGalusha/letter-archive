@@ -277,7 +277,7 @@ describe("CollectionModal", () => {
       />,
     );
 
-    const letterCards = container.querySelectorAll(".letter-card");
+    const letterCards = container.querySelectorAll(".upload-letter-card");
     // First card is the non-duplicate (sorted first)
     expect(letterCards[0]).not.toHaveClass("is-duplicate");
     // Second card is all-duplicate → muted
@@ -322,7 +322,7 @@ describe("CollectionModal", () => {
       />,
     );
 
-    const letterCard = container.querySelector(".letter-card");
+    const letterCard = container.querySelector(".upload-letter-card");
     expect(letterCard).not.toHaveClass("is-duplicate");
   });
 });

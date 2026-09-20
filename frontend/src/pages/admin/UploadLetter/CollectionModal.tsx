@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { getTypeName } from "../../../utils/filename-parser";
+import { formatDate } from "./utils";
 import type { CollectionGroup, LetterGroup, UploadedImage } from "./types";
 
 interface CollectionModalProps {
@@ -10,16 +11,6 @@ interface CollectionModalProps {
   onViewImage: (image: UploadedImage, allImages: UploadedImage[]) => void;
   onToggleDeletionLetter: (collectionCode: string, letterKey: string) => void;
   onToggleDeletionImage: (id: string) => void;
-}
-
-function formatDate(isoDate: string): string {
-  const [year, month, day] = isoDate.split("-").map(Number);
-  const date = new Date(year, month - 1, day);
-  return date.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
 }
 
 export default function CollectionModal({
@@ -69,13 +60,13 @@ export default function CollectionModal({
   });
 
   return (
-    <div className="modal-overlay" onClick={handleBackdropClick}>
-      <div className="modal-content">
-        <div className="modal-header">
-          <div className="modal-title-group">
+    <div className="upload-modal-overlay" onClick={handleBackdropClick}>
+      <div className="upload-collection-modal">
+        <div className="upload-modal-header">
+          <div className="upload-modal-title-group">
             <h2>Collection {collection.collectionCode}</h2>
             {selectedLetter && (
-              <span className="modal-subtitle">
+              <span className="upload-modal-subtitle">
                 {selectedLetter.letterDate
                   ? formatDate(selectedLetter.letterDate)
                   : "Unknown Date"}
@@ -83,7 +74,7 @@ export default function CollectionModal({
             )}
           </div>
           <button
-            className="modal-close"
+            className="upload-modal-close"
             onClick={() => (selectedLetter ? setSelectedLetter(null) : onClose())}
           >
             {selectedLetter ? "← Back" : "×"}
@@ -91,13 +82,13 @@ export default function CollectionModal({
         </div>
 
         {selectedLetter ? (
-          <div className="letter-images">
+          <div className="upload-letter-images">
             {selectedLetter.images.map((img) => {
               const imgMarked = deletionImageIds.has(img.id);
               return (
                 <div
                   key={img.id}
-                  className={`letter-image-item ${img.isDuplicate ? "is-duplicate" : ""} ${imgMarked ? "marked-for-deletion" : ""}`}
+                  className={`upload-letter-image-item ${img.isDuplicate ? "is-duplicate" : ""} ${imgMarked ? "marked-for-deletion" : ""}`}
                   onClick={() => onViewImage(img, selectedLetter.images)}
                 >
                   {deletionMode && (
@@ -116,14 +107,14 @@ export default function CollectionModal({
             })}
           </div>
         ) : (
-          <div className="letter-grid">
+          <div className="upload-letter-grid">
             {sortedLetters.map((letter) => {
               const allDup = letter.images.length > 0 && letter.images.every(img => img.isDuplicate);
               const marked = isLetterMarked(letter);
               const partial = isLetterPartial(letter);
 
               const classNames = [
-                "letter-card",
+                "upload-letter-card",
                 allDup ? "is-duplicate" : "",
                 marked ? "marked-for-deletion" : "",
                 partial ? "partial-deletion" : "",
@@ -141,10 +132,10 @@ export default function CollectionModal({
                       onClick={(e) => handleToggleLetterDeletion(e, letter)}
                     />
                   )}
-                  <div className="letter-card-date">
+                  <div className="upload-letter-card-date">
                     {letter.letterDate ? formatDate(letter.letterDate) : "Unknown Date"}
                   </div>
-                  <div className="letter-card-counts">
+                  <div className="upload-letter-card-counts">
                     {letter.letterPageCount > 0 && (
                       <span>
                         {letter.letterPageCount} letter

@@ -3,7 +3,7 @@
   padding: 1rem;
 }
 
-.confirm-dialog.analysis-regeneration-dialog {
+.review-confirm-dialog.analysis-regeneration-dialog {
   box-sizing: border-box;
   width: 464px;
   min-width: 0;
@@ -19,11 +19,11 @@
   border-bottom: 1px solid var(--border);
 }
 
-.analysis-regeneration-fields .form-group {
+.analysis-regeneration-fields .review-form-group {
   margin-bottom: var(--spacing-sm);
 }
 
-.analysis-regeneration-fields .form-group label {
+.analysis-regeneration-fields .review-form-group label {
   display: block;
   margin-bottom: 4px;
   color: var(--text-muted);
@@ -31,7 +31,7 @@
   font-weight: 500;
 }
 
-.analysis-regeneration-fields .form-group input {
+.analysis-regeneration-fields .review-form-group input {
   box-sizing: border-box;
   width: 100%;
   padding: 0.5rem 0.75rem;
@@ -42,7 +42,7 @@
   font-size: var(--font-sm);
 }
 
-.analysis-regeneration-fields .form-group input:focus {
+.analysis-regeneration-fields .review-form-group input:focus {
   outline: none;
   border-color: var(--accent);
 }

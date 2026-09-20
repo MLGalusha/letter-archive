@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -127,5 +127,29 @@ describe('NotesPage', () => {
 
     expect(container.querySelectorAll('select')).toHaveLength(0);
     expect(screen.getByPlaceholderText('Search personal notes...')).toBeInTheDocument();
+  });
+
+  it('ignores an AI pagination response after switching to personal notes', async () => {
+    const user = userEvent.setup();
+    let resolveMore!: (value: ReturnType<typeof createResponse>) => void;
+    getNotesMock
+      .mockResolvedValueOnce({ ...createResponse(), notes: [createResponse().notes[0]], total: 2 })
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveMore = resolve; }))
+      .mockResolvedValueOnce({ ...createResponse(), notes: [createResponse().notes[1]], total: 1 });
+
+    render(<MemoryRouter><NotesPage /></MemoryRouter>);
+    await screen.findByText('AI flagged a date mismatch.');
+    await user.click(screen.getByRole('button', { name: /Load more/i }));
+    await waitFor(() => expect(getNotesMock).toHaveBeenCalledTimes(2));
+
+    await user.click(screen.getByRole('button', { name: /Personal Notes/i }));
+    await screen.findByText('Double-check the family relationship mentioned in paragraph two.');
+    await act(async () => {
+      resolveMore({ ...createResponse(), notes: [{ ...createResponse().notes[0], id: 'ai-note-2', content: 'Stale AI pagination row.' }], total: 2 });
+    });
+
+    expect(screen.queryByText('AI flagged a date mismatch.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Stale AI pagination row.')).not.toBeInTheDocument();
+    expect(screen.getByText('Double-check the family relationship mentioned in paragraph two.')).toBeInTheDocument();
   });
 });

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ApiError } from "../../../api/client";
 import ConnectionFinder from "../ConnectionFinder";
 import { findConnectionPath } from "../../../api/entities";
@@ -24,6 +24,12 @@ function selectPerson(inputIndex: number, query: string, name: string) {
   const input = screen.getAllByPlaceholderText("Search by name...")[inputIndex];
   fireEvent.change(input, { target: { value: query } });
   fireEvent.click(screen.getByText(name));
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => { resolve = done; });
+  return { promise, resolve };
 }
 
 describe("ConnectionFinder", () => {
@@ -113,5 +119,43 @@ describe("ConnectionFinder", () => {
     expect(consoleErrorSpy).toHaveBeenCalled();
 
     consoleErrorSpy.mockRestore();
+  });
+
+  it("ignores an older path after the selected pair changes", async () => {
+    const oldRequest = deferred<Awaited<ReturnType<typeof findConnectionPath>>>();
+    const currentRequest = deferred<Awaited<ReturnType<typeof findConnectionPath>>>();
+    findConnectionPathMock
+      .mockReturnValueOnce(oldRequest.promise)
+      .mockReturnValueOnce(currentRequest.promise);
+    const { onPathFound } = renderFinder();
+
+    selectPerson(0, "alice", "Alice Smith");
+    selectPerson(1, "bob", "Bob Baker");
+    await waitFor(() => expect(findConnectionPathMock).toHaveBeenCalledWith("person-a", "person-b"));
+
+    fireEvent.click(screen.getAllByRole("button", { name: "×" })[1]);
+    selectPerson(1, "carol", "Carol Clark");
+    await waitFor(() => expect(findConnectionPathMock).toHaveBeenCalledWith("person-a", "person-c"));
+
+    await act(async () => currentRequest.resolve({
+      path: [
+        { id: "person-a", name: "Alice Smith" },
+        { id: "person-c", name: "Carol Clark" },
+      ],
+      edges: [{ id: "current-edge", type: "friend" }],
+    }));
+    expect(await screen.findByText("Connection Path (1 degree)")).toBeInTheDocument();
+    expect(onPathFound).toHaveBeenLastCalledWith(["person-a", "person-c"]);
+
+    await act(async () => oldRequest.resolve({
+      path: [
+        { id: "person-a", name: "Alice Smith" },
+        { id: "old", name: "Stale Intermediary" },
+        { id: "person-b", name: "Bob Baker" },
+      ],
+      edges: [{ id: "old-1", type: "friend" }, { id: "old-2", type: "friend" }],
+    }));
+    expect(screen.queryByText("Stale Intermediary")).not.toBeInTheDocument();
+    expect(onPathFound).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { prepareWithSegments, layoutWithLines } from '@chenglou/pretext';
 import type { RefObject } from 'react';
 import { measurePerf } from '../utils/textMeasurePerf.js';
@@ -31,9 +31,6 @@ export function usePretextFontSize(
   const [fontSize, setFontSize] = useState(`${baseFontSize}rem`);
   const maxWidthRef = useRef(0);
 
-  // Resolve font family from the DOM or override
-  const resolvedFontFamily = useRef('');
-
   const resolveFontFamily = useCallback(() => {
     if (fontFamilyOverride) return fontFamilyOverride;
     const el = containerRef.current;
@@ -45,14 +42,13 @@ export function usePretextFontSize(
   }, [containerRef, fontFamilyOverride]);
 
   // Prepare text and compute max natural line width (runs when text changes)
-  useMemo(() => {
+  useLayoutEffect(() => {
     if (!text) {
       maxWidthRef.current = 0;
       return;
     }
 
     const family = resolveFontFamily();
-    resolvedFontFamily.current = family;
     const basePx = baseFontSize * REM_PX;
     const fontString = `${basePx}px ${family}`;
 

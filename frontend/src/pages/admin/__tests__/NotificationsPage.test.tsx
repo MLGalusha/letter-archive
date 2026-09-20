@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -161,6 +161,29 @@ describe('NotificationsPage', () => {
     });
     const lastCall = getNotificationsMock.mock.calls.at(-1)?.[0];
     expect(lastCall.severity).toEqual(['critical']);
+  });
+
+  it('ignores the initial list response when a newer severity filter has loaded', async () => {
+    const user = userEvent.setup();
+    let resolveInitial!: (value: ReturnType<typeof defaultListResponse>) => void;
+    getNotificationsMock
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveInitial = resolve; }))
+      .mockResolvedValueOnce(defaultListResponse([
+        makeNotif({ id: 'current-critical', title: 'Current critical result', severity: 'critical' }),
+      ]));
+
+    renderPage();
+    await waitFor(() => expect(getNotificationsMock).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByRole('button', { name: /Critical/ }));
+    await screen.findByText('Current critical result');
+    await act(async () => {
+      resolveInitial(defaultListResponse([
+        makeNotif({ id: 'stale-initial', title: 'Stale initial result', severity: 'error' }),
+      ]));
+    });
+
+    expect(screen.getByText('Current critical result')).toBeInTheDocument();
+    expect(screen.queryByText('Stale initial result')).not.toBeInTheDocument();
   });
 
   it('search updates trigger refetch', async () => {

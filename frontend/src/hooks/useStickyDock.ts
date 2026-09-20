@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { addAppScrollListener, getAppScrollRootForIO } from '../utils/appScroll';
 
 export interface UseStickyDockConfig {
@@ -37,8 +37,10 @@ export default function useStickyDock(config: UseStickyDockConfig): UseStickyDoc
   const headerDropdownOpenRef = useRef(false);
   const stickyDockActiveRef = useRef(false);
 
-  headerDropdownOpenRef.current = compactRefineOpen || compactSortOpen === true;
-  stickyDockActiveRef.current = stickyDockActive;
+  useLayoutEffect(() => {
+    headerDropdownOpenRef.current = compactRefineOpen || compactSortOpen === true;
+    stickyDockActiveRef.current = stickyDockActive;
+  }, [compactRefineOpen, compactSortOpen, stickyDockActive]);
 
   // ── IntersectionObserver: detect when search bar scrolls past header ──
   useEffect(() => {
@@ -113,6 +115,9 @@ export default function useStickyDock(config: UseStickyDockConfig): UseStickyDoc
   useEffect(() => {
     if (!stickyDockActive) {
       if (compactRefineOpen) {
+        // This handoff must follow dock deactivation. Folding it into each
+        // observer path would duplicate the transition and miss outside callers.
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional post-transition state handoff.
         setPageRefineOpen(true);
       }
       if (compactSortOpen === true) {
@@ -121,7 +126,10 @@ export default function useStickyDock(config: UseStickyDockConfig): UseStickyDoc
       setCompactRefineOpen(false);
       setCompactSortOpen(undefined);
     }
-  }, [stickyDockActive]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Compact state changes while already inactive stay caller-owned; only a
+    // dock transition transfers the snapshot captured for that transition.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Transition-only handoff preserves compact control ownership.
+  }, [stickyDockActive]);
 
   return {
     stickyDockActive,

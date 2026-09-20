@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import AdminLayout from '../../components/AdminLayout';
 import Icon from '../../components/common/Icon';
@@ -82,12 +82,10 @@ export default function NotesPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  useEffect(() => {
-    if (showAiFilters) return;
-    setStatus('all');
-    setPriority('');
-    setCategory('');
-  }, [showAiFilters]);
+  const changeTab = (tab: NoteTypeTab) => {
+    setActiveTab(tab);
+    if (tab !== 'ai') { setStatus('all'); setPriority(''); setCategory(''); }
+  };
 
   const buildParams = useCallback(() => {
     const params: Parameters<typeof getNotes>[0] = {
@@ -104,7 +102,10 @@ export default function NotesPage() {
     return params;
   }, [activeTab, showAiFilters, status, priority, category, debouncedSearch]);
 
+  const listRequest = useRef<symbol | null>(null);
   const fetchNotes = useCallback(async (offset = 0, append = false) => {
+    const request = Symbol();
+    listRequest.current = request;
     try {
       if (!append) setLoading(true);
       else setLoadingMore(true);
@@ -114,6 +115,7 @@ export default function NotesPage() {
       params.offset = offset;
 
       const data = await getNotes(params);
+      if (request !== listRequest.current) return;
 
       if (append) {
         setNotes(prev => [...prev, ...data.notes]);
@@ -123,15 +125,16 @@ export default function NotesPage() {
       setTotal(data.total);
       setCounts(data.counts);
     } catch (err) {
-      setError(getErrorMessage(err, 'Failed to load notes.'));
+      if (request === listRequest.current) setError(getErrorMessage(err, 'Failed to load notes.'));
     } finally {
-      setLoading(false);
-      setLoadingMore(false);
+      if (request === listRequest.current) { setLoading(false); setLoadingMore(false); }
     }
   }, [buildParams]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Start the external list request; only the current request may update its results/loading state.
     fetchNotes(0, false);
+    return () => { listRequest.current = null; };
   }, [fetchNotes]);
 
   const handleLoadMore = () => {
@@ -171,7 +174,7 @@ export default function NotesPage() {
               <button
                 key={tab.key}
                 className={`notes-tab ${activeTab === tab.key ? 'active' : ''}`}
-                onClick={() => setActiveTab(tab.key)}
+                onClick={() => changeTab(tab.key)}
               >
                 {tab.label}
                 {tab.count > 0 && (

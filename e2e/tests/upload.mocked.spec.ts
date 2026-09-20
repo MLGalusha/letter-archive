@@ -59,12 +59,22 @@ test.describe('@mocked Upload Page', () => {
 
     await setCollection009UploadFiles(page);
 
-    await expect(page.locator('.header-stats')).toContainText('2 imported');
-    await expect(page.locator('.header-stats')).toContainText('2 original');
+    await expect(page.locator('.upload-header-stats')).toContainText('2 imported');
+    await expect(page.locator('.upload-header-stats')).toContainText('2 original');
     await expect(page.locator('.collections-section')).toContainText('Collection 009');
     expect(mockedApi.duplicateRequests).toEqual([
       ['009-19470810-L01-01.jpg', '009-19470810-L01-02.jpg'],
     ]);
+
+    await page.locator('.collection-card').filter({ hasText: 'Collection 009' }).click();
+    const collectionClose = page.locator('.upload-modal-close');
+    await expect(collectionClose).toBeVisible();
+    const closeTextMetrics = await collectionClose.evaluate((element) => {
+      const styles = getComputedStyle(element);
+      return { fontSize: styles.fontSize, lineHeight: styles.lineHeight };
+    });
+    expect(closeTextMetrics.lineHeight).toBe(closeTextMetrics.fontSize);
+    await collectionClose.click();
 
     await page.getByRole('button', { name: 'Upload' }).click();
 
@@ -146,7 +156,7 @@ test.describe('@mocked Upload Page', () => {
     await page.locator('.upload-letter-page').waitFor({ state: 'visible' });
     await setCollection009UploadFiles(page);
 
-    await expect(page.locator('.header-stats')).toContainText('1 duplicate');
+    await expect(page.locator('.upload-header-stats')).toContainText('1 duplicate');
     await page.getByRole('button', { name: 'Upload' }).click();
     await expect(page.locator('.duplicate-dialog')).toContainText('Duplicates Found');
     await page.getByRole('button', { name: /Skip Duplicates/i }).click();

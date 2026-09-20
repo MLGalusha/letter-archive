@@ -50,12 +50,12 @@ export default function AnalysisRegenerationDialog({
 
   return (
     <div
-      className="confirm-dialog-overlay analysis-regeneration-overlay"
+      className="review-confirm-dialog-overlay analysis-regeneration-overlay"
       onClick={onClose}
     >
       <div
         ref={dialogRef}
-        className="confirm-dialog regenerate-popup analysis-regeneration-dialog"
+        className="review-confirm-dialog regenerate-popup analysis-regeneration-dialog"
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -68,7 +68,7 @@ export default function AnalysisRegenerationDialog({
           Choose what to regenerate. This will overwrite the existing data.
         </p>
         <div className="analysis-regeneration-fields">
-          <div className="form-group">
+          <div className="review-form-group">
             <label htmlFor="regen-sender">Sender</label>
             <input
               type="text"
@@ -78,7 +78,7 @@ export default function AnalysisRegenerationDialog({
               placeholder="Leave blank if unknown"
             />
           </div>
-          <div className="form-group">
+          <div className="review-form-group">
             <label htmlFor="regen-recipient">Recipient</label>
             <input
               type="text"
@@ -121,7 +121,7 @@ export default function AnalysisRegenerationDialog({
             <span>Both</span>
           </button>
         </div>
-        <div className="confirm-dialog-actions">
+        <div className="review-confirm-dialog-actions">
           <button
             type="button"
             className="btn-cancel"

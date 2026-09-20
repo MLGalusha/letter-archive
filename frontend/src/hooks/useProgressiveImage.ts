@@ -150,6 +150,7 @@ export function useProgressiveImage(
     const dims = alreadyPreloaded ? imagePreloadService.getDimensions(fullSrc)
       : alreadyMid && midSrc ? imagePreloadService.getDimensions(midSrc) : null;
     fullTiming.current = { sourceKey, start: performance.now() };
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- A new enabled image-loading session must reread the external preload cache and clear retry state.
     setState({ sourceKey, thumbLoaded: false, midLoaded: alreadyMid, fullLoaded: fullLoadMode === 'background' && alreadyPreloaded,
       fullAdmitted: alreadyPreloaded, fullFailed: false, dimensionTier: dims ? (alreadyPreloaded ? 3 : 2) : 0,
       naturalWidth: dims?.width ?? null, naturalHeight: dims?.height ?? null });

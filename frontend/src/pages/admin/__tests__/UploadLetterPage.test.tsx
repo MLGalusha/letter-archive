@@ -142,9 +142,24 @@ vi.mock('../UploadLetter/Lightbox', () => ({
 vi.mock('../UploadLetter/UncategorizedCarousel', () => ({
   default: ({
     images,
+    onImageSelect,
   }: {
-    images: Array<{ originalFilename: string }>;
-  }) => <div>Uncategorized {images.length}</div>,
+    images: Array<{ id: string; originalFilename: string }>;
+    onImageSelect: (id: string) => void;
+  }) => (
+    <div>
+      Uncategorized {images.length}
+      {images.map((image) => (
+        <button
+          key={image.id}
+          type="button"
+          onClick={() => onImageSelect(image.id)}
+        >
+          Select {image.originalFilename}
+        </button>
+      ))}
+    </div>
+  ),
 }));
 
 import UploadLetterPage from '../UploadLetterPage';
@@ -264,6 +279,53 @@ describe('UploadLetterPage', () => {
     expect(await screen.findByText('Collection 001')).toBeInTheDocument();
     expect(screen.getByText(/1 imported/)).toBeInTheDocument();
     expect(screen.getByText(/1 original/)).toBeInTheDocument();
+  });
+
+  it('preserves a manually chosen collection code when another categorized image arrives', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<UploadLetterPage />);
+
+    await user.upload(getFileInput(container), [
+      makeImageFile('009-19470810-L01-01.jpg'),
+      makeImageFile('notes.jpg'),
+    ]);
+    await screen.findByText('Collection 009');
+    await screen.findByText('Uncategorized 1');
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    await user.click(screen.getByRole('button', { name: 'Organize' }));
+    await user.click(screen.getByText('New Collection'));
+    const codeInput = screen.getByPlaceholderText('001');
+    await user.clear(codeInput);
+    await user.type(codeInput, '777');
+
+    await user.upload(getFileInput(container), makeImageFile('009-19470810-L01-02.jpg'));
+
+    await waitFor(() => expect(checkDuplicatesMock).toHaveBeenLastCalledWith(['009-19470810-L01-02.jpg']));
+    expect(codeInput).toHaveValue('777');
+  });
+
+  it('suggests the next collection after a custom code is consumed', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<UploadLetterPage />);
+
+    await user.upload(getFileInput(container), makeImageFile('notes.jpg'));
+    await screen.findByText('Uncategorized 1');
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    await user.click(screen.getByRole('button', { name: 'Organize' }));
+    await user.click(screen.getByText('New Collection'));
+    const codeInput = screen.getByPlaceholderText('001');
+    await user.clear(codeInput);
+    await user.type(codeInput, '777');
+    await user.click(screen.getByRole('button', { name: 'Select notes.jpg' }));
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect(await screen.findByText('Collection 777')).toBeInTheDocument();
+    await user.upload(getFileInput(container), makeImageFile('more-notes.jpg'));
+    await screen.findByText('Uncategorized 1');
+    await user.click(screen.getByRole('button', { name: 'Organize' }));
+    await user.click(screen.getByText('New Collection'));
+
+    expect(screen.getByPlaceholderText('001')).toHaveValue('778');
   });
 
   it('blocks upload when nothing has been categorized yet', async () => {

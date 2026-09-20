@@ -17,6 +17,18 @@ interface PerfEntry {
   label?: string;
 }
 
+interface TextMeasurePerfApi {
+  entries: PerfEntry[];
+  summary: typeof summary;
+  clear: typeof clear;
+}
+
+declare global {
+  interface Window {
+    __textMeasurePerf?: TextMeasurePerfApi;
+  }
+}
+
 const MAX_ENTRIES = 200;
 
 const entries: PerfEntry[] = [];
@@ -62,5 +74,5 @@ function clear() {
 
 // Expose on window in dev mode
 if (import.meta.env.DEV) {
-  (window as any).__textMeasurePerf = { entries, summary, clear };
+  window.__textMeasurePerf = { entries, summary, clear };
 }

@@ -40,7 +40,7 @@
   color: var(--page-selected-ink, #181a19);
 }
 .viewer-page-choice:focus-visible { outline: 2px solid var(--page-selection); outline-offset: 1px; }
-.viewer-page-choice .preview-image { height: auto; border-radius: calc(48px * var(--scan-corner-ratio, .01)); background: #ffffff0a; }
+.viewer-page-choice .preview-image { position: relative; height: auto; border-radius: calc(48px * var(--scan-corner-ratio, .01)); background: #ffffff0a; }
 .viewer-page-choice .preview-image__image {
   height: auto;
   aspect-ratio: auto 3 / 4;

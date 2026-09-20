@@ -213,16 +213,12 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
       });
     }
     setTransitionFromIndex(departure);
+    // Instant jumps also keep snapping disabled until scrollend; restoring it
+    // in the same turn can make WebKit resume the previous smooth target.
     carousel.scrollTo({
       left: targetLeft,
       behavior: resolvedBehavior,
     });
-    if (resolvedBehavior === 'instant') {
-      // Direct selection need not traverse/admit the intervening scans. Update
-      // the control and image admission in the same click, then restore touch snap.
-      navigationTargetRef.current = null;
-      carousel.style.scrollSnapType = '';
-    }
   }, [pageMotion]);
 
   return { carouselRef, attachCarousel, activeIndex, transitionFromIndex, pageMotion, carouselDraggedRef, scrollToSlide };

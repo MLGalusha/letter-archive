@@ -137,7 +137,7 @@ test.describe('@mocked Public mobile layout', () => {
     await expect(image).toBeVisible();
     await image.scrollIntoViewIfNeeded();
     const saved = await page.evaluate(() => scrollY);
-    await image.click();
+    await image.focus(); await image.press('+');
     await expect(page.getByRole('dialog', { name: 'Original scans' })).toBeVisible();
     expect(await page.evaluate(() => document.body.style.position)).toBe('fixed');
     await page.keyboard.press('Escape');
@@ -157,9 +157,13 @@ test.describe('@mocked Public mobile layout', () => {
     await expect(page.locator('.scan-slide').first()).toBeVisible();
     await page.evaluate(() => document.fonts.ready);
     await scroll(page, 300);
-    await page.locator('.scan-slide').first().click();
+    await page.locator('.scan-slide').first().focus();
+    await page.keyboard.press('+');
     await expect(page.getByRole('dialog', { name: 'Original scans' })).toBeVisible();
     expect(await page.evaluate(() => parseFloat(document.body.style.top))).toBeLessThan(0);
+    // First Back closes the viewer's own history entry; the next leaves the letter.
+    await page.goBack();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
     await page.goBack();
     await expect(page.locator('.letter-card').first()).toBeVisible();
     await expect(page.getByRole('dialog', { name: 'Original scans' })).toHaveCount(0);

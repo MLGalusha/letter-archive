@@ -1,5 +1,10 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { openReader, closeReader } from './utils/reader-viewer-fixture';
+
+async function expectReturned(page: Page, number?: number) {
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  if (number) await expect(page.locator('.viewer-page-drawer--inline').getByRole('button', { name: `Go to scan ${number}: letter`, exact: true })).toHaveAttribute('aria-current', 'page');
+}
 
 test('@mocked focus-mode dragging at fit leaves the current scan selected', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -29,11 +34,8 @@ test.describe('touch toolbar', () => {
     await page.waitForTimeout(220);
     await expect(page.locator('.viewer-page-counter')).toHaveText('1 / 3');
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-    await expect(page.locator('.viewer-page-counter')).not.toHaveText('1 / 3');
-    await expect.poll(() => strip.evaluate(el => {
-      const box = el.getBoundingClientRect(), selected = el.querySelector('[aria-current="page"]')!.getBoundingClientRect();
-      return Math.abs(selected.left + selected.width / 2 - box.left - box.width / 2);
-    })).toBeLessThan(1);
+    await expectReturned(page);
+    await expect(page.locator('.viewer-page-drawer--inline button').first()).not.toHaveAttribute('aria-current', 'page');
   });
   test('@mocked a native pinch keeps its rendition stable until finger release', async ({ page, browserName }) => {
     test.skip(browserName !== 'chromium', 'Trusted multi-touch dispatch uses CDP; not physical iOS validation.');
@@ -51,14 +53,14 @@ test.describe('touch toolbar', () => {
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: points(100) });
     for (const distance of [110, 120, 140, 150, 170, 200]) {
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: points(distance) });
-      await expect(page.locator('.viewer-mobile-zoom')).toHaveText(`${distance}%`);
+      await expect(page.locator('.letter-viewer')).toHaveAttribute('data-zoom', String(distance / 100));
       await expect(image).toHaveAttribute('src', /w=1200/);
     }
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await expect(image).not.toHaveAttribute('src', /[?&]w=/);
     await expect(page.locator('.viewer-page-counter')).toHaveText('1 / 3');
     await page.getByRole('dialog').getByRole('button', { name: 'Go to scan 2: letter' }).tap();
-    await expect(page.locator('.viewer-mobile-zoom')).toHaveText('100%');
+    await expectReturned(page, 2);
   });
   for (const width of [320, 390, 844]) test(`@mocked phone controls share one row at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: width === 844 ? 390 : 844 });
@@ -67,7 +69,7 @@ test.describe('touch toolbar', () => {
     for (const name of ['Zoom in', 'Zoom out', 'Fit scan']) {
       await expect(toolbar.getByRole('button', { name, includeHidden: true })).toBeHidden();
     }
-    await expect(page.locator('.viewer-mobile-zoom')).toHaveText('100%');
+    await expect(page.locator('.letter-viewer')).toHaveAttribute('data-zoom', '1');
     await expect(page.locator('.viewer-mobile-zoom')).toBeHidden();
     await expect(page.locator('.viewer-zoom-controls')).toBeHidden();
     const strip = page.getByRole('dialog').locator('.viewer-page-drawer');
@@ -76,9 +78,9 @@ test.describe('touch toolbar', () => {
     expect(geometry!.y + geometry!.height).toBeLessThanOrEqual(width === 844 ? 390 : 844);
     await expect(toolbar).toBeHidden();
     await strip.getByRole('button', { name: 'Go to scan 2: letter' }).tap();
-    await expect(page.locator('.viewer-page-counter')).toHaveText('2 / 3');
-    await strip.getByRole('button', { name: 'Go to scan 3: letter' }).tap();
-    await expect(page.locator('.viewer-page-counter')).toHaveText('3 / 3');
+    await expectReturned(page, 2);
+    await page.locator('.viewer-page-drawer--inline').getByRole('button', { name: 'Go to scan 3: letter' }).tap();
+    await expectReturned(page, 3);
   });
 });
 
@@ -119,8 +121,13 @@ for (const width of [320, 844, 1440]) test(`@mocked drawer reserves scan space a
   const dialog = page.getByRole('dialog');
   const choice = dialog.getByRole('button', { name: 'Go to scan 2: cover' });
   await choice.click();
+  await expectReturned(page);
+  const cover = page.locator('.scan-slide').nth(1);
+  await cover.focus(); await cover.press('+');
+  await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'focused');
+  await page.keyboard.press('0');
+  await expect(dialog.locator('.viewer-transform')).not.toHaveClass(/animating/);
   await expect(dialog.locator('.viewer-page-counter')).toHaveText('2 / 2');
-  await expect(choice).toHaveAttribute('aria-current', 'page');
   await expect(dialog.locator('.viewer-image')).toHaveCSS('opacity', '1');
   const boxes = await dialog.evaluate(el => {
     const box = (s: string) => el.querySelector(s)!.getBoundingClientRect().toJSON();
@@ -139,7 +146,7 @@ for (const width of [320, 844, 1440]) test(`@mocked drawer reserves scan space a
     expect(box.right).toBeLessThanOrEqual(width);
   }
   await choice.focus(); await choice.press('Home');
-  await expect(dialog.getByRole('button', { name: 'Go to scan 1: letter' })).toBeFocused();
+  await expectReturned(page, 1);
 });
 
 test('@mocked viewport resizing re-clamps an edge pan after the scan refits', async ({ page }) => {
@@ -164,8 +171,9 @@ test('@mocked viewport resizing re-clamps an edge pan after the scan refits', as
   })).toBeLessThanOrEqual(1);
 });
 
-test('@mocked always-visible strip loads only nearby thumbnails', async ({ page }) => {
+test('@mocked data-saving strip loads only nearby thumbnails', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => Object.defineProperty(navigator, 'connection', { value: { saveData: true } }));
   const requested = new Set<string>();
   page.on('request', request => { if (new URL(request.url()).searchParams.get('w') === '200') requested.add(request.url()); });
   await openReader(page, Array.from({ length: 32 }, (_, i) => ({ id: `scan-${i + 1}`, type: 'letter', pageNumber: i + 1,
@@ -176,10 +184,9 @@ test('@mocked always-visible strip loads only nearby thumbnails', async ({ page 
   await drawer.evaluate(el => el.scrollTo({ left: el.scrollWidth, behavior: 'instant' }));
   const last = drawer.getByRole('button', { name: 'Go to scan 32: letter' });
   await expect.poll(() => last.locator('img').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
-  await last.click();
-  await expect(page.locator('.viewer-page-counter')).toHaveText('32 / 32');
-  await expect(page.locator('.viewer-mobile-zoom')).toHaveText('100%');
   expect(requested.size).toBeLessThan(20);
+  await last.click();
+  await expectReturned(page, 32);
 });
 
 test('@mocked zoom keeps its transform and clear preview through a delayed resolution upgrade', async ({ page }) => {
@@ -188,15 +195,16 @@ test('@mocked zoom keeps its transform and clear preview through a delayed resol
   const surface = await page.locator('.viewer-transform').elementHandle();
   let release!: () => void; const held = new Promise<void>(resolve => { release = resolve; });
   await page.route('**/images/1.svg?**', async route => {
-    if (Number(new URL(route.request().url()).searchParams.get('w')) >= 800) await held;
+    if (Number(new URL(route.request().url()).searchParams.get('w')) >= 640) await held;
     await route.fallback();
   });
   try {
     await page.keyboard.press('+');
-    await expect(page.locator('.viewer-mobile-zoom')).toHaveText('140%');
+    await page.keyboard.press('+');
+    await expect(page.locator('.letter-viewer')).toHaveAttribute('data-zoom', '1.9599999999999997');
     await expect(page.locator('.viewer-image-thumb')).toBeVisible();
     expect(await surface!.evaluate(el => el === document.querySelector('.viewer-transform') && el.isConnected)).toBe(true);
-    await expect.poll(() => page.locator('.viewer-transform').evaluate(el => new DOMMatrixReadOnly(getComputedStyle(el).transform).a)).toBeCloseTo(1.4, 2);
+    await expect.poll(() => page.locator('.viewer-transform').evaluate(el => new DOMMatrixReadOnly(getComputedStyle(el).transform).a)).toBeCloseTo(1.96, 2);
     const width = (await page.locator('.viewer-transform').boundingBox())!.width;
     release(); await expect(image).toHaveCSS('opacity', '1');
     expect(await surface!.evaluate(el => el === document.querySelector('.viewer-transform') && el.isConnected)).toBe(true);
@@ -215,7 +223,7 @@ test('@mocked zoomed pan and pinch keep their gesture owner without page swipes'
     };
   });
   await page.locator('.viewer-container').dblclick();
-  await expect(page.locator('.viewer-mobile-zoom')).toHaveText('250%');
+  await expect(page.locator('.letter-viewer')).toHaveAttribute('data-zoom', '2.5');
   await expect.poll(() => page.locator('.viewer-transform').evaluate(el => new DOMMatrixReadOnly(getComputedStyle(el).transform).a)).toBeCloseTo(2.5, 2);
   await page.evaluate(async () => {
     const touch = (window as any).viewerTouch;
@@ -232,7 +240,7 @@ test('@mocked zoomed pan and pinch keep their gesture owner without page swipes'
     touch('touchstart', [[100, 250], [200, 250]]); touch('touchmove', [[50, 250], [250, 250]]);
     await new Promise(requestAnimationFrame); touch('touchend', []);
   });
-  await expect(page.locator('.viewer-mobile-zoom')).toHaveText('200%');
+  await expect(page.locator('.letter-viewer')).toHaveAttribute('data-zoom', '2');
   await expect(page.locator('.viewer-page-counter')).toHaveText('1 / 3');
 });
 
@@ -291,6 +299,5 @@ test('@mocked reduced motion removes zoom interpolation', async ({ page }) => {
   await expect(page.locator('.viewer-transform')).toHaveCSS('transition-duration', '0s');
   await expect(page.locator('.viewer-image')).toHaveCSS('transition-duration', '0s');
   await page.getByRole('dialog').getByRole('button', { name: 'Go to scan 2: letter' }).click();
-  await expect(page.locator('.viewer-page-counter')).toHaveText('2 / 3');
-  await expect(page.locator('.viewer-mobile-zoom')).toHaveText('100%');
+  await expectReturned(page, 2);
 });

@@ -198,12 +198,13 @@ const LetterViewer = memo(function LetterViewer({
     return () => cancelAnimationFrame(frame);
   }, [swipe.offset, swipe.settling, currentImageIndex, pageMotion, readSwipeOffset]);
 
-  // Keep refs in sync
-  useEffect(() => {
+  // Commit gesture refs before another input event can arrive. A passive
+  // effect can overwrite a newer wheel update with the previous render.
+  useLayoutEffect(() => {
     scaleRef.current = scale;
   }, [scale]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     positionRef.current = position;
   }, [position]);
 

@@ -175,6 +175,7 @@ describe("LetterDetailPage", () => {
     Array.from(carousel.children).forEach((slide, index) => {
       slide.getBoundingClientRect = () => ({ left: 510 + index * 220 - carousel.scrollLeft, width: 180 }) as DOMRect;
     });
+    fireEvent.touchStart(carousel);
     carousel.scrollLeft = 220;
     fireEvent.scroll(carousel);
     await waitFor(() => expect(screen.getByRole("status", { name: "Scan page" })).toHaveTextContent("2 / 2"));

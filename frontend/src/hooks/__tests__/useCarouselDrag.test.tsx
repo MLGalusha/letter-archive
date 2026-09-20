@@ -1,3 +1,4 @@
+import { useLayoutEffect } from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import useCarouselDrag, { type UseCarouselDragReturn } from '../useCarouselDrag';
@@ -14,7 +15,7 @@ function flush() {
 }
 function Harness({ loaded = true, identity = 'a' }: { loaded?: boolean; identity?: string }) {
   const { attachCarousel, activeIndex, carouselDraggedRef, scrollToSlide, pageMotion } = useCarouselDrag();
-  motion = pageMotion;
+  useLayoutEffect(() => { motion = pageMotion; }, [pageMotion]);
   return <>
     {loaded && <div key={identity} ref={attachCarousel} data-testid="carousel">
       {[0, 1, 2].map(index => <div key={index} data-testid={`slide-${index}`}
@@ -110,8 +111,8 @@ describe('scan carousel lifecycle and position', () => {
     fireEvent.mouseDown(carousel, { clientX: 100 }); fireEvent.mouseUp(document);
     fireEvent.click(screen.getByTestId('slide-1')); expect(opened).toHaveBeenCalledWith(1);
   });
-  it('does not let a stale scrollend steal the requested target and returns snapping to gestures', () => {
-    vi.stubGlobal('matchMedia', () => ({ matches: false }));
+  it.each([false, true])('does not let a stale scrollend steal the requested target (instant=%s)', (instant) => {
+    vi.stubGlobal('matchMedia', () => ({ matches: instant }));
     render(<Harness />); const carousel = geometry();
     carousel.scrollTo = vi.fn();
     fireEvent.click(screen.getByText('Third'));

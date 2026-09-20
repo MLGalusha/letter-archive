@@ -1,3 +1,10 @@
+/* WebKit blocks ordinary wheel scrolling when a cancellable zoom listener
+   meets root overscroll containment. Keep native wheel scrolling on pointer
+   devices; touch-only Safari retains its existing edge behavior. */
+@media (any-pointer: fine) {
+  html:has(.letter-article) { overscroll-behavior-y: auto; }
+}
+
 /* A3: the document owns vertical scrolling; this lane owns every reader gutter. */
 .sr-only {
   position: absolute;

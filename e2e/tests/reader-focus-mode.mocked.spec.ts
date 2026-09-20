@@ -32,11 +32,11 @@ async function recordReturnPaints(page: Page) {
   await page.evaluate(record);
 }
 
-for (const next of [0, 1]) test(`@mocked thumbnail return keeps document horizontal geometry ${next}`, async ({ page }) => {
+for (const gutter of ['auto', 'stable']) for (const next of [0, 1]) test(`@mocked thumbnail return keeps document horizontal geometry ${gutter} ${next}`, async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockReader(page);
   await page.goto('/letter/current');
-  await page.addStyleTag({ content: 'html { scrollbar-gutter: stable; } html[style*="overflow-y: hidden"] { scrollbar-gutter: auto; }' });
+  await page.addStyleTag({ content: `html { scrollbar-gutter: ${gutter}; } html[style*="overflow-y: hidden"] { scrollbar-gutter: auto; }` });
   await expect(page.locator('.scan-slide-img').first()).toBeVisible();
   const read = () => page.locator('.scan-slide-img').first().evaluate(el => {
     const r = el.getBoundingClientRect(); return { x: r.x, width: r.width };
@@ -110,21 +110,29 @@ for (const width of [390, 1440]) test(`@mocked rapid paging retains loaded scans
   await expect(first).toHaveAttribute('src', source!);
 });
 
-for (const width of [390, 1440]) test(`@mocked zoom thumbnails have sources on their first frame at ${width}px`, async ({ page }) => {
+for (const delayed of [false, true]) for (const width of [390, 1440]) test(`@mocked zoom thumbnails have sources on their first frame at ${width}px with delayed reload ${delayed}`, async ({ page }) => {
   await page.setViewportSize({ width, height: 900 });
   await mockReader(page);
   await page.goto('/letter/current');
   await expect.poll(() => page.locator('.letter-scan-figure .viewer-page-choice img').evaluateAll(images => images.length === 3 && images.every(img => (img as HTMLImageElement).complete && (img as HTMLImageElement).naturalWidth > 0))).toBe(true);
-  const frames = await page.evaluate(async () => {
-    document.querySelector('.scan-slide')!.dispatchEvent(new WheelEvent('wheel', { deltaY: -1, ctrlKey: true, bubbles: true, cancelable: true }));
-    const frames = [];
-    for (let i = 0; i < 6; i++) {
-      await new Promise(requestAnimationFrame);
-      frames.push([...document.querySelectorAll<HTMLImageElement>(document.querySelector('.reader-focus-strip') ? '.reader-focus-strip img' : '.letter-scan-figure .viewer-page-choice img')].map(img => Boolean(img.getAttribute('src')) && img.complete && img.naturalWidth > 0));
-    }
-    return frames;
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  if (delayed) await page.route('**/images/*.svg?**', async route => {
+    if (new URL(route.request().url()).searchParams.get('w') === '200') await held;
+    await route.fallback();
   });
-  for (const frame of frames) expect(frame).toEqual([true, true, true]);
+  try {
+    const frames = await page.evaluate(async () => {
+      document.querySelector('.scan-slide')!.dispatchEvent(new WheelEvent('wheel', { deltaY: -1, ctrlKey: true, bubbles: true, cancelable: true }));
+      const frames = [];
+      for (let i = 0; i < 6; i++) {
+        await new Promise(requestAnimationFrame);
+        frames.push([...document.querySelectorAll<HTMLImageElement>(document.querySelector('.reader-focus-strip') ? '.reader-focus-strip img' : '.letter-scan-figure .viewer-page-choice img')].map(img => Boolean(img.getAttribute('src')) && ((img.complete && img.naturalWidth > 0) || !!img.parentElement?.querySelector('canvas[data-ready="true"]'))));
+      }
+      return frames;
+    });
+    for (const frame of frames) expect(frame).toEqual([true, true, true]);
+  } finally { release(); }
 });
 
 for (const width of [390, 1440]) test(`@mocked thumbnail number notches keep their regular size through zoom at ${width}px`, async ({ page }) => {
@@ -152,7 +160,7 @@ for (const width of [390, 1440]) for (const [count, selected] of [[2, 0], [2, 1]
     await page.goto('/letter/current');
     // Model a classic scrollbar disappearing on scroll lock, even in headless
     // browsers with overlay scrollbars. Also run this test headed on desktop.
-    await page.addStyleTag({ content: 'html { scrollbar-gutter: stable; } html[style*="overflow-y: hidden"] { scrollbar-gutter: auto; }' });
+    await page.addStyleTag({ content: `html { scrollbar-gutter: stable; } html[style*="overflow-y: hidden"] { scrollbar-gutter: auto; }` });
     await page.locator('.letter-scan-figure .viewer-page-choice').nth(selected).click();
     await expect.poll(() => page.locator('.scan-slide').nth(selected).evaluate(el => {
       const r = el.getBoundingClientRect();
@@ -397,7 +405,7 @@ for (const width of [390, 1440]) test(`@mocked focus mode zooms edge to edge and
   expect(image.y).toBeGreaterThanOrEqual(0);
   expect(image.y + image.height).toBeLessThanOrEqual(stripBefore.y);
   await expect(page.locator('.reader-focus-backdrop')).toHaveCSS('background-color', 'rgb(245, 237, 225)');
-  expect((await stage.boundingBox())!.width).toBe(width);
+  expect((await stage.boundingBox())!.width).toBe(await page.evaluate(() => document.documentElement.clientWidth));
   await expect(dialog.locator('.viewer-toolbar')).toHaveCount(0);
   await stage.evaluate(el => {
     for (const [type, touches] of [
@@ -595,8 +603,8 @@ for (const width of [390, 1440]) for (const reducedMotion of ['reduce', 'no-pref
     }, deltaY);
     await wheel(-1);
     await expect.poll(async () => (await measure()).header).toBeLessThan(0);
-    expect((await measure()).left).toBeLessThanOrEqual(0);
-    expect((await measure()).right).toBeGreaterThanOrEqual(width);
+    await expect.poll(async () => (await measure()).left).toBeLessThanOrEqual(0);
+    await expect.poll(async () => (await measure()).right).toBeGreaterThanOrEqual(width);
     await expect(page.locator('.letter-viewer--focus')).toHaveAttribute('data-zoom', '1.01');
     // Oscillating above document size must not bring any chrome back.
     await wheel(-1); await wheel(1);
@@ -614,8 +622,8 @@ for (const width of [390, 1440]) for (const reducedMotion of ['reduce', 'no-pref
       // Re-enter while the return is incomplete; it reverses from here.
       await wheel(-1);
       await expect.poll(async () => (await measure()).header).toBeLessThan(0);
-      expect((await measure()).left).toBeLessThanOrEqual(0);
-      expect((await measure()).right).toBeGreaterThanOrEqual(width);
+      await expect.poll(async () => (await measure()).left).toBeLessThanOrEqual(0);
+      await expect.poll(async () => (await measure()).right).toBeGreaterThanOrEqual(width);
       await wheel(1);
     }
     await expect.poll(async () => (await measure()).header).toBeCloseTo(before.header, 0);
@@ -868,4 +876,21 @@ for (const width of [390, 1440]) test(`@mocked only extreme thumbnails crop whil
       const box = el.getBoundingClientRect(); return box.width / box.height;
     })).toBeCloseTo(images[index].width / images[index].height, 2);
   }
+});
+
+for (const width of [390, 1440]) test(`@mocked gesture zoom follows the resized document geometry from ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 844 });
+  await mockReader(page); await page.goto('/letter/current');
+  const scan = page.locator('.scan-slide-img').first();
+  await expect(scan).toBeVisible();
+  await page.locator('.scan-slide').first().dispatchEvent('wheel', { deltaY: -1, ctrlKey: true, bubbles: true, cancelable: true });
+  await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'focused');
+  await page.setViewportSize({ width: width === 390 ? 1440 : 390, height: 844 });
+  await expect.poll(async () => {
+    const regular = (await scan.boundingBox())!;
+    const zoomed = (await page.locator('.viewer-transform').boundingBox())!;
+    return Math.abs(zoomed.width / 1.01 - regular.width);
+  }).toBeLessThan(1);
+  await page.locator('.viewer-container').dispatchEvent('wheel', { deltaY: 1, ctrlKey: true, bubbles: true, cancelable: true });
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 });

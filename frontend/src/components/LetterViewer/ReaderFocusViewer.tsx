@@ -30,6 +30,8 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
       image: image?.getBoundingClientRect(), src: visibleSource(image),
       strip: document.querySelector('.letter-scan-figure .viewer-page-drawer')?.getBoundingClientRect() };
   });
+  const [documentGeometry, setDocumentGeometry] = useState({ image: origin.image, strip: origin.strip });
+  const geometryRef = useRef(documentGeometry);
   const [phase, setPhase] = useState<'preparing' | 'entering' | 'focused' | 'exiting'>('preparing');
   const [index] = useState(initialIndex);
   const pendingSelection = useRef(initialIndex);
@@ -72,17 +74,41 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
     currentScale.current = scale;
     if (chromeReady.current) setChromeHidden(scale > 1);
     const strip = document.querySelector<HTMLElement>('.reader-focus-strip');
-    if (surfaceReady.current && strip && origin.strip) {
+    const sourceStrip = geometryRef.current.strip;
+    if (surfaceReady.current && strip && sourceStrip) {
       // Measure once per viewport, not once per wheel/pinch update.
       if (!stripOffset.current || stripOffset.current.width !== innerWidth || stripOffset.current.height !== innerHeight) {
         strip.style.translate = 'none';
         const rect = strip.getBoundingClientRect();
         stripOffset.current = { width: innerWidth, height: innerHeight,
-          x: origin.strip.left + origin.strip.width / 2 - rect.left - rect.width / 2, y: origin.strip.top - rect.top };
+          x: sourceStrip.left + sourceStrip.width / 2 - rect.left - rect.width / 2, y: sourceStrip.top - rect.top };
       }
       strip.style.translate = `${stripOffset.current.x}px ${stripOffset.current.y * (1 - progress)}px`;
     }
-  }, [directZoom, origin, setChromeHidden]);
+  }, [directZoom, setChromeHidden]);
+  useLayoutEffect(() => {
+    geometryRef.current = documentGeometry;
+    stripOffset.current = null;
+    followScale(currentScale.current);
+  }, [documentGeometry, followScale]);
+
+  useLayoutEffect(() => {
+    let frame = 0;
+    const resize = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => setDocumentGeometry({
+        image: scanElement(initialIndex)?.getBoundingClientRect(),
+        strip: document.querySelector('.letter-scan-figure .viewer-page-drawer')?.getBoundingClientRect(),
+      }));
+    };
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(resize);
+    const scan = scanElement(initialIndex);
+    const strip = document.querySelector('.letter-scan-figure .viewer-page-drawer');
+    if (scan) observer?.observe(scan);
+    if (strip) observer?.observe(strip);
+    window.addEventListener('resize', resize);
+    return () => { observer?.disconnect(); cancelAnimationFrame(frame); window.removeEventListener('resize', resize); };
+  }, [initialIndex]);
   const { dialogRef } = useAccessibleDialog({ isOpen: true, onClose: requestClose, isolateBackground: true, initialFocus: 'dialog', restoreFocusTo: origin.opener });
   useReaderViewerSurface(true, dialogRef, '#f5ede1');
 
@@ -180,7 +206,7 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
         // A new zoom may interrupt the previous return. Measure the resting
         // edge, not the still-animated neighbor's intermediate position.
         const transform = getComputedStyle(el).transform;
-        const offset = transform === 'none' ? 0 : new DOMMatrixReadOnly(transform).m41;
+        const offset = !transform || transform === 'none' ? 0 : new DOMMatrixReadOnly(transform).m41;
         el.style.setProperty('--reader-focus-exit-x',
           `${i < index ? -Math.max(0, rect.right - offset) - 1 : Math.max(0, innerWidth - rect.left + offset) + 1}px`);
       }
@@ -328,10 +354,10 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
   }, [exiting, dialogRef, origin, prepareReturnImage, index, directZoom, setChromeHidden]);
 
   return <div className="reader-focus-backdrop viewer-backdrop" data-phase={phase} data-direct-zoom={directZoom}
-    style={origin.strip ? { '--reader-strip-width': `${origin.strip.width}px` } as React.CSSProperties : undefined}>
+    style={documentGeometry.strip ? { '--reader-strip-width': `${documentGeometry.strip.width}px` } as React.CSSProperties : undefined}>
     <div ref={dialogRef} className="reader-focus viewer-modal" role="dialog" aria-modal="true" aria-label="Original scans" tabIndex={-1}>
       <LetterViewer images={images} letterId={letterId} variant="lightbox" focusMode cornerRatios={cornerRatios} entryZoom={entryZoom}
-        focusOrigin={directZoom ? origin.image : undefined} onFocusScale={followScale} onZoomExit={directZoom ? finishZoomOut : requestClose}
+        focusOrigin={directZoom ? documentGeometry.image : undefined} onFocusScale={followScale} onZoomExit={directZoom ? finishZoomOut : requestClose}
         initialIndex={initialIndex} initialAspectRatio={origin.image ? origin.image.width / origin.image.height : undefined}
         fallbackSrc={origin.src} onClose={requestClose} onPageChange={selectPage} />
     </div>

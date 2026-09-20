@@ -26,10 +26,15 @@ export function useReaderViewerSurface(active: boolean, dialogRef: RefObject<HTM
     // Read the actual surface so the root, body and browser hint cannot drift
     // from the viewer's CSS. Layout effect applies them in the opening commit.
     const color = surfaceColor ?? getComputedStyle(backdrop).backgroundColor;
+    const rootStyle = getComputedStyle(document.documentElement);
+    const gutter = rootStyle.scrollbarGutter.includes('stable') ? rootStyle.scrollbarGutter
+      : window.innerWidth > document.documentElement.clientWidth ? 'stable' : 'auto';
     const restoreRoot = setTemporaryStyles(document.documentElement, {
       'background-color': color, 'overflow-x': 'hidden', 'overflow-y': 'hidden',
       // Preserve the document geometry used as the thumbnail return target.
-      'scrollbar-gutter': 'stable',
+      // Overlay scrollbars have no gutter. Reserving one would shrink the page
+      // during zoom and make it jump back when the lock is released.
+      'scrollbar-gutter': gutter,
     });
     const restoreBody = setTemporaryStyles(document.body, {
       position: 'fixed', top: `-${savedY}px`, width: '100%',

@@ -8,6 +8,7 @@ for (const width of [390, 1440]) {
     const { opener, y, styles } = await openReader(page);
     const dialog = page.getByRole('dialog', { name: 'Original scans' });
     await expect(dialog).toBeVisible();
+    await expect(dialog).toHaveCSS('outline-style', 'none');
     expect(await dialog.evaluate(el => el.contains(document.activeElement))).toBe(true);
     await expect(dialog.getByRole('button', { name: 'Close viewer' })).toHaveCount(0);
     await expect(page.locator('#root')).toHaveAttribute('inert', '');

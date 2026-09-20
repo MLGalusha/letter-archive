@@ -71,6 +71,10 @@ vi.mock("react-router-dom", async () => {
   };
 });
 
+// These page tests exercise the compact layout's inner page buttons.
+// Wide-layout swiping is covered by the real-browser carousel suite.
+vi.mock("../../hooks/useIsMobile", () => ({ default: () => true }));
+
 function createLetter(
   id: string,
   overrides: Partial<Letter> & {
@@ -138,6 +142,7 @@ function renderCollectionDetailPage() {
 
 describe("CollectionDetailPage", () => {
   beforeEach(() => {
+    HTMLElement.prototype.scrollTo = vi.fn();
     vi.clearAllMocks();
     sessionStorage.clear();
 

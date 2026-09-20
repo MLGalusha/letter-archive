@@ -135,7 +135,7 @@
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 250, 242, 0.98));
   border: 1px solid rgb(31, 109, 122);
   border-radius: 14px;
-  box-shadow: 0 12px 32px rgba(29, 26, 20, 0.1);
+  box-shadow: var(--shadow-soft, 0 12px 32px rgba(29, 26, 20, 0.1));
   z-index: 20;
 }
 
@@ -311,14 +311,14 @@
 @media (hover: hover) and (pointer: fine) {
   .public-collection-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 24px 48px rgba(29, 26, 20, 0.1);
+    box-shadow: var(--shadow-soft, 0 24px 48px rgba(29, 26, 20, 0.1));
     border-color: rgba(31, 109, 122, 0.22);
   }
 }
 
 .public-collection-card:active {
   border-color: rgba(31, 109, 122, 0.55);
-  box-shadow: 0 4px 12px rgba(29, 26, 20, 0.1);
+  box-shadow: var(--shadow-soft, 0 4px 12px rgba(29, 26, 20, 0.1));
   /* Press feedback is immediate; pressing adds no translation or scaling. */
   transition: transform 0.2s ease;
 }

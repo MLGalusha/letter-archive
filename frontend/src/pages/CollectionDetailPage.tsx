@@ -23,8 +23,6 @@ import useStickyDock from '../hooks/useStickyDock';
 import ShowcaseCard, { type ShowcaseItem } from '../components/ShowcaseCard';
 import CardCarousel from '../components/CardCarousel';
 import useIsMobile from '../hooks/useIsMobile';
-import useIsTouchDevice from '../hooks/useIsTouchDevice';
-import useSwipeNavigation from '../hooks/useSwipeNavigation';
 import './CollectionDetailPage.css';
 
 const EMPTY_COLLECTION_LETTERS: CollectionWithLetters['letters'] = [];
@@ -32,22 +30,8 @@ const EMPTY_COLLECTION_LETTERS: CollectionWithLetters['letters'] = [];
 export default function CollectionDetailPage() {
   const navigate = useNavigate();
   const { collectionCode } = useParams<{ collectionCode: string }>();
-  const { scrubberProps: collectionScrubberProps, adjacent } = useCollectionNavigation(collectionCode);
+  const { scrubberProps: collectionScrubberProps } = useCollectionNavigation(collectionCode);
   const isMobile = useIsMobile(640);
-  const isTouchDevice = useIsTouchDevice();
-  const previousCollectionCode = adjacent.prev?.collectionCode;
-  const nextCollectionCode = adjacent.next?.collectionCode;
-
-  const { ref: swipeRef, offset: swipeOffset, isSwiping, isAnimating } = useSwipeNavigation({
-    onSwipeLeft: nextCollectionCode
-      ? () => navigate(`/collections/${nextCollectionCode}`)
-      : undefined,
-    onSwipeRight: previousCollectionCode
-      ? () => navigate(`/collections/${previousCollectionCode}`)
-      : undefined,
-    enabled: isTouchDevice && !!(previousCollectionCode || nextCollectionCode),
-  });
-
   /* ---- Collection data ---- */
   const [overview, setOverview] = useState<{ code: string; data: CollectionWithLetters | null; error: string | null } | null>(null);
   const [profileResult, setProfileResult] = useState<{ code: string; data: CollectionProfile | null } | null>(null);
@@ -278,19 +262,10 @@ export default function CollectionDetailPage() {
 
   const seo = buildCollectionSeo(collection, dateRange, topCorrespondentNames);
 
-  const swipeActive = isSwiping || isAnimating;
-  const swipeStyle: React.CSSProperties | undefined = swipeActive
-    ? {
-        transform: `translateX(${swipeOffset}px)`,
-        transition: isSwiping ? 'none' : 'transform 0.28s cubic-bezier(0.25, 0.1, 0.25, 1)',
-        willChange: 'transform',
-      }
-    : undefined;
-
   return (
     <>
       {headerDock}
-    <div className="body-layout" ref={swipeRef} style={swipeStyle}>
+    <div className="body-layout">
       <SEO
         title={seo.title}
         description={seo.description}
@@ -382,10 +357,10 @@ export default function CollectionDetailPage() {
               <CardCarousel label="Collection highlights" className="cd-highlights-col" layout={isMobile ? "carousel" : "static"}>
                 {[
                   ...highlightShowcaseItems.map(({ key, items }) => (
-                    <ShowcaseCard key={key} items={items} onNavigate={handleHighlightClick} />
+                    <ShowcaseCard key={key} items={items} swipeImages={!isMobile} onNavigate={handleHighlightClick} />
                   )),
                   ...(galleryShowcaseItems.length > 0 ? [
-                    <ShowcaseCard key="gallery" items={galleryShowcaseItems} onNavigate={handleHighlightClick} />
+                    <ShowcaseCard key="gallery" items={galleryShowcaseItems} swipeImages={!isMobile} onNavigate={handleHighlightClick} />
                   ] : []),
                 ]}
               </CardCarousel>

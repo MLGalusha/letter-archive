@@ -1,7 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import useIsMobile from '../useIsMobile';
-import useIsTouchDevice from '../useIsTouchDevice';
 
 function installMatchMedia(initialMatches: Record<string, boolean>) {
   const queries = new Map<string, MediaQueryList>();
@@ -59,12 +58,4 @@ describe('responsive media hooks', () => {
     expect(result.current).toBe(false);
   });
 
-  it('subscribes to changes in the primary pointer type', () => {
-    const media = installMatchMedia({ '(pointer: coarse)': false });
-    const { result } = renderHook(() => useIsTouchDevice());
-
-    expect(result.current).toBe(false);
-    media.setMatches('(pointer: coarse)', true);
-    expect(result.current).toBe(true);
-  });
 });

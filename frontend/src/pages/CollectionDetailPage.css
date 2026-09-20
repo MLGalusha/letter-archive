@@ -110,13 +110,15 @@
   align-items: stretch;
 }
 
-/* No people column — highlights left-aligned, same width as in 2-col grid */
-.cd-explore:not(:has(.cd-people-col)) {
-  display: block;
-}
+/* Only the desktop two-column layout reserves space for an absent people panel. */
+@media (min-width: 861px) {
+  .cd-explore:not(:has(.cd-people-col)) {
+    display: block;
+  }
 
-.cd-explore:not(:has(.cd-people-col)) .cd-highlights-col {
-  max-width: calc(100% - 240px - 1rem);
+  .cd-explore:not(:has(.cd-people-col)) .cd-highlights-col {
+    max-width: calc(100% - 240px - 1rem);
+  }
 }
 
 /* ---- People column (text-only cards) ---- */
@@ -269,7 +271,7 @@
   background: linear-gradient(180deg, rgba(255, 250, 242, 0.99), rgba(255, 255, 255, 0.97));
   border: 1px solid rgba(217, 207, 191, 0.88);
   border-radius: 24px;
-  box-shadow: 0 24px 48px rgba(29, 26, 20, 0.18);
+  box-shadow: var(--shadow-soft, 0 24px 48px rgba(29, 26, 20, 0.18));
   animation: cd-popup-in 0.2s ease;
 }
 

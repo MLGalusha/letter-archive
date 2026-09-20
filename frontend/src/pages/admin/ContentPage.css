@@ -475,13 +475,7 @@ body.dark .jn-status.draft {
   border-radius: inherit;
 }
 
-.hp-home-feature-card .home-hero-zone--prev {
-  border-radius: var(--hp-home-feature-radius) 0 0 var(--hp-home-feature-radius);
-}
 
-.hp-home-feature-card .home-hero-zone--next {
-  border-radius: 0 var(--hp-home-feature-radius) var(--hp-home-feature-radius) 0;
-}
 
 .hp-home-feature-card--placeholder {
   min-height: 0;
@@ -591,13 +585,7 @@ body.dark .jn-status.draft {
   box-shadow: 0 18px 32px rgba(29, 26, 20, 0.1);
 }
 
-.hp-home-feature-card .home-hero-zone {
-  z-index: 2;
-}
 
-.hp-home-feature-card:hover .home-hero-zone {
-  opacity: 1;
-}
 
 /* ── Homepage Featured Letter Picker ── */
 

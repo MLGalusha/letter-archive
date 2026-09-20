@@ -1,35 +1,46 @@
 /* Pages supply dimensions and content. This component owns swipe geometry. */
 .card-carousel[data-layout="carousel"] { min-width: 0; }
-.card-carousel[data-layout="carousel"] .card-carousel-frame {
+.card-carousel[data-layout="carousel"] > .card-carousel-frame {
   border-radius: var(--carousel-radius, 24px);
   overflow: hidden;
   isolation: isolate;
 }
-.card-carousel[data-layout="carousel"] .card-carousel-viewport {
+.card-carousel[data-layout="carousel"] > .card-carousel-frame > .card-carousel-viewport {
   display: flex;
   overflow-x: auto;
   overflow-y: hidden;
   scroll-snap-type: x mandatory;
-  overscroll-behavior-x: contain;
+  /* Stop at the endpoints without horizontal rubber-banding. */
+  overscroll-behavior-x: none;
   scrollbar-width: none;
   touch-action: auto;
 }
 .card-carousel-viewport::-webkit-scrollbar { display: none; }
-.card-carousel[data-layout="carousel"] .card-carousel-slide {
+.card-carousel[data-layout="carousel"] > .card-carousel-frame > .card-carousel-viewport > .card-carousel-slide {
   display: flex;
   flex: 0 0 100%;
   min-width: 0;
   scroll-snap-align: start;
   scroll-snap-stop: always;
 }
-.card-carousel[data-layout="carousel"] .card-carousel-slide > * {
+.card-carousel[data-layout="carousel"] > .card-carousel-frame > .card-carousel-viewport > .card-carousel-slide > * {
   flex: 1 1 auto;
   width: 100%;
   max-width: none;
   border-radius: 0;
   box-shadow: none;
 }
-.card-carousel[data-layout="static"] :is(.card-carousel-frame, .card-carousel-viewport, .card-carousel-slide) { display: contents; }
+.card-carousel[data-layout="static"] > .card-carousel-frame,
+.card-carousel[data-layout="static"] > .card-carousel-frame > .card-carousel-viewport,
+.card-carousel[data-layout="static"] > .card-carousel-frame > .card-carousel-viewport > .card-carousel-slide { display: contents; }
+
+/* Reuse the same engine inside a stationary image card on wider layouts. */
+.card-carousel.card-media-carousel { position: absolute; inset: 0; --carousel-radius: 0px; }
+.card-media-carousel > .card-carousel-frame,
+.card-media-carousel > .card-carousel-frame > .card-carousel-viewport { height: 100%; }
+.card-media-carousel > .card-carousel-frame > .card-carousel-viewport > .card-carousel-slide { position: relative; }
+.card-media-carousel .card-media-page { position: relative; display: block; min-width: 0; height: 100%; }
+
 .card-carousel-viewport[data-dragging] { cursor: grabbing; user-select: none; }
 .card-carousel-viewport:focus-visible { outline: 3px solid var(--accent); outline-offset: -4px; }
 .card-carousel-dots { display: flex; justify-content: center; padding-top: var(--carousel-dots-top, 0.35rem); }

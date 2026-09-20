@@ -243,19 +243,21 @@ test.describe('@mocked Public mobile layout', () => {
     expect(await page.evaluate(() => scrollY)).toBe(0);
   });
 
-  test('horizontal page swipes do not widen or offset the document', async ({ page, isMobile }) => {
-    test.skip(!isMobile, 'Page swipes are enabled only for touch devices.');
+  test('horizontal gestures neither navigate pages nor offset the document', async ({ page, isMobile }) => {
+    test.skip(!isMobile, 'Exercise touch gestures in the phone projects.');
     await mockPublic(page);
     await home(page);
     const content = page.locator('#main-content');
     await content.dispatchEvent('touchstart', { touches: [{ identifier: 0, clientX: 80, clientY: 300 }] });
     await content.dispatchEvent('touchmove', { touches: [{ identifier: 0, clientX: 240, clientY: 300 }] });
-    await expect.poll(() => content.evaluate(el => new DOMMatrix(getComputedStyle(el.parentElement!).transform).m41)).toBeGreaterThan(100);
+    expect(await content.evaluate(el => [el, el.parentElement!].every(node => getComputedStyle(node).transform === 'none'))).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(await page.evaluate(() => document.documentElement.clientWidth));
     await page.evaluate(() => window.scrollTo(100, 0));
     expect(await page.evaluate(() => window.scrollX)).toBe(0);
     await content.dispatchEvent('touchend', { touches: [] });
-    await expect(page).toHaveURL(/\/support$/);
+    // The removed page gesture used to navigate after a 280ms exit animation.
+    await page.waitForTimeout(400);
+    await expect(page).toHaveURL(/\/$/);
     expect(await page.evaluate(() => window.scrollX)).toBe(0);
   });
 

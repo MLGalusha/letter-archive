@@ -1,42 +1,62 @@
 import { Children, isValidElement, useLayoutEffect, useRef, useState, type ReactNode, type KeyboardEvent } from 'react';
 import useCardCarouselPointer from '../hooks/useCardCarouselPointer';
 import './CardCarousel.css';
+import useCarouselMotion from '../hooks/useCarouselMotion';
+import { CarouselOverlayContext } from './carouselOverlayContext';
 
 interface CardCarouselProps {
   children: ReactNode;
   label: string;
   className?: string;
+  initialIndex?: number;
+  onSlideChange?: (index: number) => void;
+  showDots?: boolean;
   /** Keep content mounted when the page switches to its desktop layout. */
   layout?: 'carousel' | 'static';
 }
 
-/** One clipped frame, native touch/trackpad scrolling, and no cloned content. */
-export default function CardCarousel({ children, label, className = '', layout = 'carousel' }: CardCarouselProps) {
+/** One clipped frame, bounded pointer settling, native wheel scrolling, and no clones. */
+export default function CardCarousel({ children, label, className = '', layout = 'carousel', initialIndex = 0, onSlideChange, showDots = true }: CardCarouselProps) {
   const slides = Children.toArray(children);
   const keys = slides.map((slide, i) => isValidElement(slide) ? String(slide.key ?? i) : String(i));
   const signature = JSON.stringify(keys);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(() => keys[initialIndex] ?? null);
   const active = Math.max(0, keys.indexOf(selected ?? keys[0]));
-  const selectedRef = useRef<string | null>(null);
+  const [settledSlide, setSettledSlide] = useState<number | null>(initialIndex);
+  const selectedRef = useRef<string | null>(keys[initialIndex] ?? null);
+  const changeRef = useRef(onSlideChange);
+  useLayoutEffect(() => { changeRef.current = onSlideChange; }, [onSlideChange]);
+  const [overlayHost, setOverlayHost] = useState<HTMLDivElement | null>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const targetRef = useRef<number | null>(null);
   const carousel = layout === 'carousel';
   const interactive = carousel && slides.length > 1;
-  const pointer = useCardCarouselPointer(interactive);
+  const motion = useCarouselMotion();
+  const pointer = useCardCarouselPointer(interactive, viewportRef, frameRef, (element, index) => {
+    targetRef.current = index;
+    motion.move(element, index * element.clientWidth);
+  }, motion.finish);
+
+  const finishMotion = useRef(motion.finish);
+  useLayoutEffect(() => { finishMotion.current = motion.finish; }, [motion.finish]);
 
   useLayoutEffect(() => {
     const observedKeys: string[] = JSON.parse(signature);
     const viewport = viewportRef.current;
     if (!viewport || !observedKeys.length) return;
     let frame = 0;
+    let alignedWidth = 0;
     let settleTimer: ReturnType<typeof setTimeout> | undefined;
     const select = (index: number) => {
+      const changed = selectedRef.current !== observedKeys[index];
       selectedRef.current = observedKeys[index];
       setSelected(observedKeys[index]);
+      if (changed) changeRef.current?.(index);
     };
     const readPosition = () => {
       frame = 0;
-      if (!carousel || !viewport.clientWidth) return;
+      if (!carousel || !viewport.clientWidth || viewport.clientWidth !== alignedWidth) return;
       select(Math.max(0, Math.min(observedKeys.length - 1, Math.round(viewport.scrollLeft / viewport.clientWidth))));
     };
     const settle = () => {
@@ -49,21 +69,28 @@ export default function CardCarousel({ children, label, className = '', layout =
       targetRef.current = null;
       if (!viewport.hasAttribute('data-dragging')) viewport.style.scrollSnapType = '';
       readPosition();
+      const index = Math.round(viewport.scrollLeft / (viewport.clientWidth || 1));
+      setSettledSlide(!viewport.hasAttribute('data-dragging') && Math.abs(viewport.scrollLeft - index * viewport.clientWidth) < 1 ? index : null);
     };
     const onScroll = () => {
+      setSettledSlide(null);
       if (!frame) frame = requestAnimationFrame(readPosition);
       // Fallback for browsers without scrollend; never drives scrolling itself.
       clearTimeout(settleTimer);
       settleTimer = setTimeout(settle, 160);
     };
     const realign = () => {
+      finishMotion.current();
       targetRef.current = null;
       viewport.style.scrollSnapType = '';
       const index = Math.max(0, observedKeys.indexOf(selectedRef.current ?? observedKeys[0]));
       select(index);
+      setSettledSlide(index);
+      alignedWidth = viewport.clientWidth;
       if (carousel) viewport.scrollTo({ left: index * viewport.clientWidth, behavior: 'instant' });
     };
     const interrupt = () => {
+      finishMotion.current();
       if (targetRef.current !== null) viewport.style.scrollSnapType = '';
       targetRef.current = null;
     };
@@ -93,14 +120,8 @@ export default function CardCarousel({ children, label, className = '', layout =
     // snap target competing with a rapidly reversed smooth-scroll target.
     viewport.style.scrollSnapType = 'none';
     targetRef.current = next;
-    if (Math.abs(viewport.scrollLeft - next * viewport.clientWidth) < 1) {
-      viewport.scrollTo({ left: next * viewport.clientWidth, behavior: 'instant' });
-      viewport.style.scrollSnapType = '';
-      targetRef.current = null;
-      return;
-    }
-    viewport.scrollTo({ left: next * viewport.clientWidth,
-      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+    setSettledSlide(null);
+    motion.move(viewport, next * viewport.clientWidth);
   };
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (!interactive || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
@@ -120,20 +141,23 @@ export default function CardCarousel({ children, label, className = '', layout =
 
   if (!slides.length) return null;
   return (
-    <div className={`card-carousel ${className}`} data-layout={layout} data-swipe-ignore={interactive || undefined}
+    <div className={`card-carousel ${className}`} data-layout={layout}
       role={interactive ? 'region' : undefined} aria-roledescription={interactive ? 'carousel' : undefined}
       aria-label={interactive ? label : undefined} onKeyDown={onKeyDown}>
-      <div className="card-carousel-frame">
+      <div className="card-carousel-frame" ref={frameRef} data-settled-slide={settledSlide ?? undefined}>
         <div className="card-carousel-viewport" ref={viewportRef} tabIndex={interactive ? 0 : undefined}
           aria-label={interactive ? `${label}: use left and right arrow keys to change slides` : undefined} {...pointer}>
           {slides.map((slide, index) => (
             <div className="card-carousel-slide" key={keys[index]} inert={carousel && index !== active}
               role={interactive ? 'group' : undefined} aria-roledescription={interactive ? 'slide' : undefined}
-              aria-label={interactive ? `${index + 1} of ${slides.length}` : undefined}>{slide}</div>
+              aria-label={interactive ? `${index + 1} of ${slides.length}` : undefined}>
+              <CarouselOverlayContext.Provider value={carousel ? { host: overlayHost, active: index === active } : null}>{slide}</CarouselOverlayContext.Provider>
+            </div>
           ))}
         </div>
+        {carousel && <div className="card-carousel-overlay-host" ref={setOverlayHost} />}
       </div>
-      {interactive && (
+      {interactive && showDots && (
         <div className="card-carousel-dots" role="group" aria-label="Choose slide">
           {slides.map((_, index) => <button key={keys[index]} type="button" className="card-carousel-dot"
             aria-label={`Slide ${index + 1}`} aria-current={index === active ? 'true' : undefined} onClick={() => goTo(index)} />)}

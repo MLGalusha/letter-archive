@@ -20,7 +20,7 @@
 }
 
 .cd-highlight-card:hover {
-  box-shadow: 0 16px 36px rgba(29, 26, 20, 0.12);
+  box-shadow: var(--shadow-soft, 0 16px 36px rgba(29, 26, 20, 0.12));
 }
 
 .cd-highlight-img {
@@ -54,93 +54,6 @@
   padding: 0.3rem 0.6rem;
   border-radius: 999px;
   backdrop-filter: blur(4px);
-}
-
-/* ---- Side click zones (prev/next) ---- */
-
-.cd-highlight-zone {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 15%;
-  z-index: 1;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.25s ease;
-  display: flex;
-  align-items: center;
-}
-
-.cd-highlight-zone--prev {
-  left: 0;
-  border-radius: inherit;
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-  background: linear-gradient(90deg, rgba(255, 250, 242, 0.1), transparent);
-  justify-content: flex-start;
-  padding-left: 0.7rem;
-}
-
-.cd-highlight-zone--next {
-  right: 0;
-  border-radius: inherit;
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-  background: linear-gradient(270deg, rgba(255, 250, 242, 0.1), transparent);
-  justify-content: flex-end;
-  padding-right: 0.7rem;
-}
-
-.cd-highlight-zone::after {
-  content: '';
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: rgba(255, 250, 242, 0.15);
-  backdrop-filter: blur(4px);
-  flex-shrink: 0;
-}
-
-.cd-highlight-zone--prev::after {
-  /* left chevron via borders */
-  border-right: 2px solid rgba(255, 250, 242, 0.6);
-  border-bottom: 2px solid rgba(255, 250, 242, 0.6);
-  transform: rotate(135deg);
-  width: 8px;
-  height: 8px;
-  border-radius: 0;
-  background: none;
-  backdrop-filter: none;
-  margin-left: 0.4rem;
-}
-
-.cd-highlight-zone--next::after {
-  /* right chevron via borders */
-  border-right: 2px solid rgba(255, 250, 242, 0.6);
-  border-bottom: 2px solid rgba(255, 250, 242, 0.6);
-  transform: rotate(-45deg);
-  width: 8px;
-  height: 8px;
-  border-radius: 0;
-  background: none;
-  backdrop-filter: none;
-  margin-right: 0.4rem;
-}
-
-.cd-highlight-card:hover .cd-highlight-zone {
-  opacity: 1;
-}
-
-.cd-highlight-zone:hover {
-  background: linear-gradient(90deg, rgba(255, 250, 242, 0.25), transparent);
-}
-
-.cd-highlight-zone--next:hover {
-  background: linear-gradient(270deg, rgba(255, 250, 242, 0.25), transparent);
-}
-
-.cd-highlight-zone:hover::after {
-  border-color: rgba(255, 250, 242, 1);
 }
 
 /* ---- Placeholder / overlay / label ---- */
@@ -231,9 +144,6 @@
     max-width: none;
   }
 
-  .cd-highlight-zone {
-    opacity: 1;
-  }
 }
 
 .cd-highlight-open-link {
@@ -246,17 +156,6 @@
 }
 
 .cd-highlight-open-link:focus-visible {
-  outline: 3px solid currentColor;
-  outline-offset: -4px;
-}
-
-.cd-highlight-zone {
-  border: 0;
-  color: inherit;
-}
-
-.cd-highlight-zone:focus-visible {
-  opacity: 1;
   outline: 3px solid currentColor;
   outline-offset: -4px;
 }

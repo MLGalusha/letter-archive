@@ -4,7 +4,6 @@ import Header from "./components/Header/Header";
 import ScrollToTop from "./components/ScrollToTop";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { HeaderDockProvider } from "./contexts/HeaderDockContext";
-import PageSwipeLayer from "./components/SwipeNavigation/PageSwipeLayer";
 import "./App.css";
 
 const HomePage = lazy(() => import("./pages/HomePage"));
@@ -73,23 +72,21 @@ function AppRoutes() {
               <main className="main-page-layout public-site-shell">
                 <HeaderDockProvider>
                   <Header />
-                  <PageSwipeLayer>
-                    <div id="main-content">
-                      <Routes>
-                        <Route path="/" element={<HomePage />} />
-                        <Route path="/about" element={<AboutPage />} />
-                        <Route path="/support" element={<SupportPage />} />
-                        <Route path="/collections" element={<CollectionsPage />} />
-                        <Route path="/collections/:collectionCode" element={<CollectionDetailPage />} />
-                        <Route path="/blog" element={<BlogPage />} />
-                        <Route path="/blog/:slug" element={<BlogDetailPage />} />
-                        <Route path="/people/:personId" element={<PersonPage />} />
-                        <Route path="/places/:placeId" element={<PlacePage />} />
-                        <Route path="/letter/:letterId" element={<LetterDetailPage />} />
-                        <Route path="*" element={<NotFoundPage />} />
-                      </Routes>
-                    </div>
-                  </PageSwipeLayer>
+                  <div id="main-content">
+                    <Routes>
+                      <Route path="/" element={<HomePage />} />
+                      <Route path="/about" element={<AboutPage />} />
+                      <Route path="/support" element={<SupportPage />} />
+                      <Route path="/collections" element={<CollectionsPage />} />
+                      <Route path="/collections/:collectionCode" element={<CollectionDetailPage />} />
+                      <Route path="/blog" element={<BlogPage />} />
+                      <Route path="/blog/:slug" element={<BlogDetailPage />} />
+                      <Route path="/people/:personId" element={<PersonPage />} />
+                      <Route path="/places/:placeId" element={<PlacePage />} />
+                      <Route path="/letter/:letterId" element={<LetterDetailPage />} />
+                      <Route path="*" element={<NotFoundPage />} />
+                    </Routes>
+                  </div>
                 </HeaderDockProvider>
               </main>
             }

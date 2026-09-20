@@ -44,7 +44,9 @@ export function usePageStripMotion(selected: number,
       }
       const start = performance.now();
       const tick = (now: number) => {
-        const t = Math.min(1, (now - start) / 180);
+        // A scroll event can start this animation after the current frame's
+        // timestamp. Negative progress would briefly move away from the target.
+        const t = Math.max(0, Math.min(1, (now - start) / 180));
         write(from + (to - from) * (1 - (1 - t) ** 3));
         if (t < 1) frame = requestAnimationFrame(tick);
         else { frame = 0; finish(index, commit); }

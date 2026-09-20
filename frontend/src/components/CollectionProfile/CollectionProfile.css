@@ -99,7 +99,7 @@
 
 .cp-start-here:hover {
   transform: translateY(-2px);
-  box-shadow: 0 16px 40px rgba(31, 109, 122, 0.2);
+  box-shadow: var(--shadow-soft, 0 16px 40px rgba(31, 109, 122, 0.2));
 }
 
 .cp-start-here:active {
@@ -192,7 +192,7 @@
   border: 1px solid rgba(217, 207, 191, 0.95);
   border-radius: 12px;
   padding: 0.6rem 0.9rem;
-  box-shadow: 0 4px 16px rgba(29, 26, 20, 0.1);
+  box-shadow: var(--shadow-soft, 0 4px 16px rgba(29, 26, 20, 0.1));
 }
 
 .cp-sentiment-tooltip-tone {
@@ -256,7 +256,7 @@
 
 .cp-person-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 14px 36px rgba(29, 26, 20, 0.1);
+  box-shadow: var(--shadow-soft, 0 14px 36px rgba(29, 26, 20, 0.1));
 }
 
 .cp-person-name {
@@ -348,7 +348,7 @@
   border-radius: 50%;
   background: var(--accent);
   border: 2px solid #fff;
-  box-shadow: 0 2px 8px rgba(31, 109, 122, 0.2);
+  box-shadow: var(--shadow-soft, 0 2px 8px rgba(31, 109, 122, 0.2));
 }
 
 .cp-network-label {

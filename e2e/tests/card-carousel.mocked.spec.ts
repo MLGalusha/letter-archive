@@ -8,11 +8,11 @@ test.use({ isMobile: true, hasTouch: true });
 test.beforeEach(async ({ page }) => {
   await page.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, route => route.abort());
 });
-async function openCards(page: Page, path = '/collections/003') {
+async function openCards(page: Page, path = '/collections/003', withNotes = true, multiScan = false) {
   await page.setViewportSize({ width: 390, height: 844 });
-  const collection = { id: 'collection-003', collectionCode: '003', title: 'Carousel collection', description: 'Carousel browser checks', createdAt: '2026-01-01', letterCount: 24 };
+  const collection = { id: 'collection-003', collectionCode: '003', title: 'Carousel collection', description: withNotes ? 'Carousel browser checks' : '', createdAt: '2026-01-01', letterCount: 24 };
   const letters = ['letter', 'photo'].map((type, index) => ({
-    id: `item-${index}`, images: [{ id: `scan-${index}`, type, imageUrl: `/images/scan-${index}` }],
+    id: `item-${index}`, images: Array.from({ length: multiScan ? 3 : 1 }, (_, scan) => ({ id: `scan-${index}-${scan}`, type, imageUrl: `/images/scan-${index}-${scan}` })),
     metadata: { dateRaw: '19470810', date: '1947-08-10', hook: 'A public archive item', verified: true },
     transcriptStatus: 'VERIFIED', metadataContentStatus: 'VERIFIED', photoDescription: 'A family photograph',
   }));
@@ -34,7 +34,7 @@ async function openCards(page: Page, path = '/collections/003') {
     return route.fulfill({ status: 404, json: { error: 'Not found' } });
   });
   await page.goto(path);
-  const carousel = page.locator('.card-carousel');
+  const carousel = page.locator('.home-showcase, .cd-highlights-col');
   await expect(carousel.locator('.card-carousel-dot')).toHaveCount(2);
   await page.evaluate(() => document.fonts.ready);
   await carousel.scrollIntoViewIfNeeded();
@@ -53,7 +53,7 @@ for (const path of ['/', '/collections/003']) {
     await expect(dots.nth(1)).toHaveAttribute('aria-current', 'true');
     await page.setViewportSize({ width: 1280, height: 900 });
     await expect(carousel).toHaveAttribute('data-layout', 'static');
-    await expect(carousel.locator('[inert]')).toHaveCount(0);
+    await expect(carousel.locator(':scope > .card-carousel-frame > .card-carousel-viewport > .card-carousel-slide[inert]')).toHaveCount(0);
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(dots.nth(1)).toHaveAttribute('aria-current', 'true');
     await page.clock.fastForward(60000);
@@ -82,6 +82,28 @@ for (const path of ['/', '/collections/003']) {
     await expect(dots.nth(1)).toHaveAttribute('aria-current', 'true');
     await page.keyboard.press('Home');
     await expect(dots.first()).toHaveAttribute('aria-current', 'true');
+  });
+
+  test(`@mocked card endpoints stay flush during outward drags: ${path}`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const carousel = await openCards(page, path);
+    const viewport = carousel.locator('.card-carousel-viewport');
+    // Safari exposes native rubber-banding with contain, even though Chromium
+    // already clamps scrollLeft. Require the shared native boundary policy too.
+    await expect(viewport).toHaveCSS('overscroll-behavior-x', 'none');
+    for (const index of [0, 1]) {
+      await carousel.locator('.card-carousel-dot').nth(index).click();
+      await expect(carousel.locator(':scope > .card-carousel-frame')).toHaveAttribute('data-settled-slide', String(index));
+      const box = (await viewport.boundingBox())!;
+      await page.mouse.move(box.x + box.width / 2, box.y + 80);
+      await page.mouse.down();
+      await page.mouse.move(box.x + (index === 0 ? box.width - 10 : 10), box.y + 80, { steps: 8 });
+      expect(await viewport.evaluate(el => el.scrollLeft)).toBe(index * box.width);
+      const slide = (await carousel.locator('.card-carousel-slide').nth(index).boundingBox())!;
+      expect(slide.x).toBeCloseTo(box.x, 1);
+      expect(slide.width).toBeCloseTo(box.width, 1);
+      await page.mouse.up();
+    }
   });
 
   test(`@mocked rapid reversals settle on the last requested card: ${path}`, async ({ page }) => {
@@ -119,10 +141,16 @@ test('@mocked releasing the mouse outside the frame does not leave a stale drag'
 
 for (const width of [320, 390, 430, 640]) {
   test(`@mocked collection cards share a fixed rounded frame and a straight seam at ${width}px`, async ({ page }) => {
-    const carousel = await openCards(page);
+    const carousel = await openCards(page, '/collections/003', false);
     await page.setViewportSize({ width, height: 844 });
-    const frame = carousel.locator('.card-carousel-frame');
+    const frame = carousel.locator(':scope > .card-carousel-frame');
     const before = await frame.boundingBox();
+    // This fixture has no People panel. Desktop's reserved sidebar width must
+    // not shrink the mobile carousel when collection metadata is absent.
+    await expect(page.locator('.cd-people-col')).toHaveCount(0);
+    const lane = (await page.locator('.cd-explore').boundingBox())!;
+    expect(before!.width).toBeCloseTo(lane.width, 1);
+    expect((await carousel.locator('.cd-highlight-card').first().boundingBox())!.width).toBeCloseTo(lane.width, 1);
     const viewport = carousel.locator('.card-carousel-viewport');
     await viewport.evaluate(el => { (el as HTMLElement).style.scrollSnapType = 'none'; el.scrollLeft = 120; });
     const seam = await carousel.locator('.card-carousel-slide > *').evaluateAll(es => ({
@@ -136,7 +164,7 @@ for (const width of [320, 390, 430, 640]) {
   });
 }
 
-test('@mocked native diagonal touch moves continuously without custom direction locking', async ({ page, browserName }) => {
+test('@mocked diagonal horizontal touch follows the finger and settles on release', async ({ page, browserName }) => {
   test.skip(browserName !== 'chromium', 'CDP delivers real touch input only in Chromium; physical Safari remains a separate check.');
   const carousel = await openCards(page);
   const box = (await carousel.locator('.card-carousel-viewport').boundingBox())!;
@@ -169,4 +197,200 @@ test('@mocked native wheel scrolling changes cards while vertical wheel scrollin
   await expect(page).toHaveURL(/collections\/003$/);
 });
 
+});
+
+test('@mocked homepage outline only surrounds the settled text card', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const carousel = await openCards(page, '/');
+  const frame = carousel.locator(':scope > .card-carousel-frame');
+  const viewport = carousel.locator('.card-carousel-viewport');
+  const outline = () => frame.evaluate(el => getComputedStyle(el, '::after').visibility);
+  await expect.poll(outline).toBe('visible');
+  await expect(carousel.locator('.home-hero-copy')).toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)');
+  await expect(carousel.locator('.home-hero-copy')).toHaveCSS('border-radius', '0px');
+  const box = (await viewport.boundingBox())!;
+  await page.mouse.move(box.x + 280, box.y + 80);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 160, box.y + 80, { steps: 6 });
+  await expect.poll(outline).toBe('hidden');
+  await page.waitForTimeout(200); // Hold a partial drag beyond the scrollend fallback.
+  await expect.poll(outline).toBe('hidden');
+  await page.mouse.up();
+  await expect.poll(outline).toBe('visible');
+  await carousel.locator('.card-carousel-dot').nth(1).click();
+  await expect(frame).toHaveAttribute('data-settled-slide', '1');
+  await expect.poll(outline).toBe('hidden');
+  await carousel.locator('.card-carousel-dot').first().click();
+  await expect(frame).toHaveAttribute('data-settled-slide', '0');
+  await expect.poll(outline).toBe('visible');
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(carousel).toHaveAttribute('data-layout', 'static');
+  await expect(carousel.locator('.home-hero-copy')).toHaveCSS('border-top-color', 'rgba(217, 207, 191, 0.95)');
+  await expect.poll(() => frame.evaluate(el => getComputedStyle(el, '::after').content)).toBe('none');
+});
+
+
+test.describe('wide image cards', () => {
+  test.use({ isMobile: false, hasTouch: false });
+  for (const path of ['/', '/collections/003']) test(`@mocked wide cards reuse swipe paging and keep image selection across layouts: ${path}`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const outer = await openCards(page, path, true, true);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await expect(outer).toHaveAttribute('data-layout', 'static');
+    const cards = page.locator(path === '/' ? '.home-hero-feature-card' : '.cd-highlight-card');
+    const card = cards.first();
+    const counter = page.locator(path === '/' ? '.home-hero-page-counter:visible' : '.cd-highlight-page-counter:visible').first();
+    const initialHref = await card.locator('a').first().getAttribute('href');
+    const expectedImage = path === '/' ? 'two' : `scan-${initialHref?.includes('item-0') ? 0 : 1}-1`;
+    const inner = card.locator('.card-media-carousel');
+    const viewport = inner.locator('.card-carousel-viewport');
+    await expect(card.locator('button')).toHaveCount(0);
+    await viewport.scrollIntoViewIfNeeded();
+    const dimensions = await card.evaluate(el => {
+      const card = el.getBoundingClientRect();
+      const viewport = el.querySelector('.card-carousel-viewport')!.getBoundingClientRect();
+      return { widthDifference: viewport.width - card.width, heightDifference: viewport.height - card.height };
+    });
+    expect(dimensions.widthDifference).toBeCloseTo(0, 0);
+    expect(dimensions.heightDifference).toBeCloseTo(0, 0);
+    const box = (await viewport.boundingBox())!;
+    await page.mouse.move(box.x + box.width - 35, box.y + 90);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 35, box.y + 90, { steps: 12 });
+    await page.mouse.up();
+    await expect(counter).toHaveText(path === '/' ? '2/2' : '2/3');
+    await expect(page).toHaveURL(new RegExp(path === '/' ? '/$' : '/collections/003$'));
+    if (path !== '/') await expect(cards.nth(1).locator('.cd-highlight-page-counter')).toHaveText('1/3');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(outer).toHaveAttribute('data-layout', 'carousel');
+    if (path === '/') await outer.locator('.card-carousel-dot').nth(1).click();
+    await expect(card.locator('.card-media-carousel')).toHaveCount(0);
+    await expect(counter).toHaveText(path === '/' ? '2/2' : '2/3');
+    await outer.getByRole('button', { name: path === '/' ? 'Previous page' : 'Previous', exact: true }).click();
+    await expect(counter).toHaveText(path === '/' ? '1/2' : '1/3');
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await viewport.focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(counter).toHaveText(path === '/' ? '2/2' : '2/3');
+    await expect(card.locator('button')).toHaveCount(0);
+    await expect(card.locator('.card-media-carousel')).toHaveCount(1);
+    await card.locator('.card-carousel-slide:not([inert]) a').click();
+    await expect(page).toHaveURL(new RegExp(`image=${expectedImage}`));
+  });
+});
+
+test.describe('image page button feedback', () => {
+  for (const path of ['/', '/collections/003']) test(`@mocked touch page controls retain clipping and clear press feedback: ${path}`, async ({ page }) => {
+    const outer = await openCards(page, path, true, true);
+    if (path === '/') await outer.locator('.card-carousel-dot').nth(1).click();
+    const card = page.locator(path === '/' ? '.home-hero-feature-card' : '.cd-highlight-card').first();
+    const next = page.locator('.stationary-card-overlay:not([hidden]) .image-page-control--next').first();
+    const counter = page.locator(path === '/' ? '.home-hero-page-counter:visible' : '.cd-highlight-page-counter:visible').first();
+    await expect(next).toHaveCSS('-webkit-tap-highlight-color', 'rgba(0, 0, 0, 0)');
+    await expect(next).toHaveCSS('opacity', '1');
+    const geometry = await next.evaluate(el => {
+      const r = el.getBoundingClientRect();
+      const frame = el.closest('.card-carousel-frame')!;
+      return { width: r.width, overflow: getComputedStyle(frame).overflow, radius: getComputedStyle(frame).borderRadius };
+    });
+    expect(geometry.width).toBeGreaterThanOrEqual(44);
+    expect(geometry.overflow).toBe('hidden');
+    expect(geometry.radius).not.toBe('0px');
+    await next.scrollIntoViewIfNeeded();
+    await next.hover();
+    await page.mouse.down();
+    await expect.poll(() => next.evaluate(el => Number(getComputedStyle(el, '::before').opacity))).toBe(0.85);
+    await page.mouse.up();
+    await expect(counter).toHaveText(path === '/' ? '2/2' : '2/3');
+    await expect.poll(() => next.evaluate(el => Number(getComputedStyle(el, '::before').opacity))).toBe(0.3);
+    await next.click();
+    await expect(counter).toHaveText(path === '/' ? '1/2' : '3/3');
+    await expect(page).toHaveURL(new RegExp(path === '/' ? '/$' : '/collections/003$'));
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await expect(next).toHaveCSS('transition-duration', '0s');
+  });
+  test.describe('mouse', () => {
+    test.use({ isMobile: false, hasTouch: false });
+    test('@mocked compact mouse controls reveal smoothly and remain keyboard accessible', async ({ page }) => {
+      await openCards(page, '/collections/003', true, true);
+      const card = page.locator('.cd-highlight-card').first();
+      const next = page.locator('.stationary-card-overlay:not([hidden]) .image-page-control--next').first();
+      await page.mouse.move(0, 0);
+      await expect(next).toHaveCSS('opacity', '0');
+      await next.hover();
+      await expect(next).toHaveCSS('opacity', '1');
+      await expect.poll(() => next.evaluate(el => Number(getComputedStyle(el, '::before').opacity))).toBe(0.65);
+      await page.mouse.move(0, 0);
+      // WebKit's default tab policy can skip buttons. Establish keyboard
+      // modality before focusing the control to test its focus-visible state.
+      await page.keyboard.press('Tab');
+      await next.focus();
+      await expect(next).toBeFocused();
+      await expect(next).toHaveCSS('opacity', '1');
+      await expect(next).toHaveCSS('outline-offset', '-5px');
+      await page.keyboard.press('Enter');
+      await expect(page.locator('.cd-highlight-page-counter:visible').first()).toHaveText('2/3');
+    });
+  });
+});
+
+test('@mocked touch release settles promptly and hands off to the next tap or vertical scroll', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Real touch delivery uses CDP; physical Safari must also be checked.');
+  const outer = await openCards(page, '/collections/003', true, true);
+  const viewport = outer.locator(':scope > .card-carousel-frame > .card-carousel-viewport');
+  const cdp = await page.context().newCDPSession(page);
+  const touch = async (type: string, x = 0, y = 0) => cdp.send('Input.dispatchTouchEvent', {
+    type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }],
+  });
+  const box = (await viewport.boundingBox())!;
+  const y = box.y + 110;
+  await touch('touchStart', box.x + box.width - 30, y);
+  for (const fraction of [0.7, 0.5, 0.3]) await touch('touchMove', box.x + box.width * fraction, y);
+  const released = Date.now();
+  await touch('touchEnd');
+  await expect.poll(() => viewport.evaluate(el => Math.abs(el.scrollLeft - el.clientWidth)), { intervals: [16], timeout: 400 }).toBeLessThan(1);
+  expect(Date.now() - released).toBeLessThan(400);
+  const next = outer.locator('.stationary-card-overlay:not([hidden]) .image-page-control--next');
+  await next.tap();
+  await expect(outer.locator('.cd-highlight-page-counter:visible')).toHaveText('2/3');
+  // Start a new vertical gesture immediately after releasing a reverse swipe,
+  // while its short settling animation is still pending.
+  const reverse = (await viewport.boundingBox())!;
+  await touch('touchStart', reverse.x + 30, reverse.y + 110);
+  for (const fraction of [0.3, 0.5, 0.7]) await touch('touchMove', reverse.x + reverse.width * fraction, reverse.y + 110);
+  await touch('touchEnd');
+  const startY = await page.evaluate(() => window.scrollY);
+  const current = (await viewport.boundingBox())!;
+  await touch('touchStart', current.x + current.width / 2, current.y + 230);
+  await touch('touchMove', current.x + current.width / 2, current.y + 190);
+  await touch('touchMove', current.x + current.width / 2, current.y + 90);
+  await touch('touchEnd');
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(startY + 40);
+  await expect(page).toHaveURL(/collections\/003$/);
+});
+
+test('@mocked overlays stay anchored during card swipes and control the selected card', async ({ page }) => {
+  const outer = await openCards(page, '/collections/003', true, true);
+  const viewport = outer.locator(':scope > .card-carousel-frame > .card-carousel-viewport');
+  const overlay = outer.locator('.stationary-card-overlay:not([hidden])');
+  const next = overlay.locator('.image-page-control--next');
+  await expect(next).toBeVisible();
+  const before = await next.evaluate(el => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width }; });
+  const box = (await viewport.boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.8, box.y + 100);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.2, box.y + 100, { steps: 10 });
+  await expect.poll(() => viewport.evaluate(el => el.scrollLeft)).toBeGreaterThan(box.width / 2);
+  await expect.poll(() => outer.evaluate(el => {
+    const button = el.querySelector('.stationary-card-overlay:not([hidden]) .image-page-control--next')!;
+    const r = button.getBoundingClientRect();
+    return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width) };
+  })).toEqual({ x: Math.round(before.x), y: Math.round(before.y), width: Math.round(before.width) });
+  await expect(viewport.locator('.cd-highlight-label, .cd-highlight-content, .image-page-controls')).toHaveCount(0);
+  await page.mouse.up();
+  await expect(outer.locator('.card-carousel-dot').nth(1)).toHaveAttribute('aria-current', 'true');
+  await next.click();
+  await expect(overlay.locator('.cd-highlight-page-counter')).toHaveText('2/3');
+  await outer.locator('.card-carousel-dot').first().click();
+  await expect(overlay.locator('.cd-highlight-page-counter')).toHaveText('1/3');
 });

@@ -32,6 +32,21 @@ async function recordReturnPaints(page: Page) {
   await page.evaluate(record);
 }
 
+test('@mocked first zoom after reload does not focus a thumbnail until keyboard navigation', async ({ page }) => {
+  await mockReader(page);
+  await page.goto('/letter/current');
+  await page.reload();
+  await expect(page.locator('.scan-slide').first()).toBeVisible();
+  await page.locator('.scan-slide').first().dispatchEvent('wheel', { deltaY: -10, ctrlKey: true, bubbles: true, cancelable: true });
+  const selected = page.locator('.reader-focus-strip [aria-current="page"]');
+  await expect(selected).toBeVisible();
+  await expect(selected).not.toBeFocused();
+  await expect(selected).toHaveCSS('outline-style', 'none');
+  await page.keyboard.press('Tab');
+  await expect(selected).toBeFocused();
+  await expect(selected).toHaveCSS('outline-style', 'solid');
+});
+
 for (const width of [320, 390, 540, 768, 1024, 1440]) test(`@mocked settled thumbnails never clip at ${width}px`, async ({ page }) => {
   await page.setViewportSize({ width, height: 900 });
   await mockReader(page, Array.from({ length: 15 }, (_, i) => ({ ...viewerImages[0], id: `scan-${i}`, pageNumber: i + 1, imageUrl: `/images/${i}.svg` })));

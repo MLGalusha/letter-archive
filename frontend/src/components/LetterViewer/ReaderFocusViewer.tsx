@@ -83,7 +83,7 @@ export function ReaderFocusViewer({ images, letterId, initialIndex, onClose, onP
       strip.style.translate = `${stripOffset.current.x}px ${stripOffset.current.y * (1 - progress)}px`;
     }
   }, [directZoom, origin, setChromeHidden]);
-  const { dialogRef } = useAccessibleDialog({ isOpen: true, onClose: requestClose, isolateBackground: true, restoreFocusTo: origin.opener });
+  const { dialogRef } = useAccessibleDialog({ isOpen: true, onClose: requestClose, isolateBackground: true, initialFocus: 'dialog', restoreFocusTo: origin.opener });
   useReaderViewerSurface(true, dialogRef, '#f5ede1');
 
   const prepareReturnImage = useCallback((source: HTMLImageElement) => {

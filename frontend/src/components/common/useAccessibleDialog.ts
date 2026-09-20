@@ -22,6 +22,7 @@ interface AccessibleDialogOptions {
   onClose: () => void;
   isolateBackground?: boolean;
   restoreFocusTo?: HTMLElement | null;
+  initialFocus?: 'first-control' | 'dialog';
 }
 
 export function useAccessibleDialog({
@@ -29,6 +30,7 @@ export function useAccessibleDialog({
   onClose,
   isolateBackground = false,
   restoreFocusTo,
+  initialFocus = 'first-control',
 }: AccessibleDialogOptions) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
@@ -116,7 +118,7 @@ export function useAccessibleDialog({
     const focusable = () => Array.from(
       dialog?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? [],
     ).filter(element => element.tabIndex >= 0 && !element.matches(':disabled') && !element.closest('[inert], [hidden]'));
-    (focusable()[0] ?? dialog)?.focus({ preventScroll: isolateBackground });
+    (initialFocus === 'dialog' ? dialog : focusable()[0] ?? dialog)?.focus({ preventScroll: isolateBackground });
 
     const isTopmostDialog = () => {
       const dialogs = document.querySelectorAll<HTMLElement>(
@@ -168,7 +170,7 @@ export function useAccessibleDialog({
         restoreFocus();
       }
     };
-  }, [isOpen, isolateBackground, restoreFocus, restoreFocusTo]);
+  }, [isOpen, isolateBackground, restoreFocus, restoreFocusTo, initialFocus]);
 
   return {
     dialogRef,

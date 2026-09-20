@@ -50,66 +50,32 @@ async function paintsAtEdges(page: Page, selector: string, y: number) {
 }
 
 for (const width of [320, 390, 430, 640]) {
-  test(`@mocked homepage swipe paints to edges and preserves resting geometry at ${width}px`, async ({ page }) => {
+  test(`@mocked homepage keeps square slides inside one rounded frame at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await openHome(page);
-    const selectors = ['.hero-carousel-slide:nth-child(2) > *', '.hero-carousel-dots', '.home-archive-surface', '.header'];
+    const frame = page.locator('.card-carousel-frame');
+    const viewport = page.locator('.card-carousel-viewport');
+    const selectors = ['.card-carousel-frame', '.home-archive-surface', '.header'];
     const resting = await boxes(page, selectors);
-    // Reconstruct the old clipping geometry to compare content dimensions and
-    // surrounding layout, rather than accepting changed sizes as a new baseline.
-    const baseline = await page.addStyleTag({ content: '.hero-carousel-viewport {margin-inline:0;} .hero-carousel-slide {padding-inline:0;}' });
+    expect((await frame.boundingBox())!.x).toBe(16);
+    expect((await frame.boundingBox())!.width).toBe(width - 32);
+    expect(await frame.evaluate(el => getComputedStyle(el).borderRadius)).toBe('24px');
+    await expect(page.locator('h1')).toHaveCount(1);
+    await viewport.evaluate(el => { (el as HTMLElement).style.scrollSnapType = 'none'; el.scrollLeft = 120; });
+    const seam = await page.locator('.card-carousel-slide > *').evaluateAll(es => ({
+      gap: es[1].getBoundingClientRect().left - es[0].getBoundingClientRect().right,
+      radii: es.map(el => getComputedStyle(el).borderRadius),
+    }));
+    expect(seam).toEqual({ gap: 0, radii: ['0px', '0px'] });
     sameGeometry(await boxes(page, selectors), resting);
-    await baseline.evaluate(el => el.remove());
-    const frame = (await page.locator('.hero-carousel-viewport').boundingBox())!;
-    expect(frame.x).toBe(0);
-    expect(frame.width).toBe(width);
-    const card = page.locator('.hero-carousel-slide:nth-child(2) > *');
-    const start = (await card.boundingBox())!;
-    await page.mouse.move(width - 50, frame.y + 100);
-    await page.mouse.down();
-    await page.mouse.move(width - 50 - 150, frame.y + 100, { steps: 8 });
-    expect((await card.boundingBox())!.x - start.x).toBeCloseTo(-150, 1);
-    await paintsAtEdges(page, '.hero-carousel-slide', frame.y + 100);
     await noDocumentOverflow(page);
-    await page.mouse.up();
-    await expect(page.getByRole('tab', { name: 'Slide 2' })).toHaveAttribute('aria-selected', 'true');
-    await page.getByRole('tab', { name: 'Slide 1' }).click();
+    await viewport.evaluate(el => { (el as HTMLElement).style.scrollSnapType = ''; });
+    await page.getByRole('button', { name: 'Slide 2', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Slide 2', exact: true })).toHaveAttribute('aria-current', 'true');
+    await page.getByRole('button', { name: 'Slide 1', exact: true }).click();
+    await expect.poll(() => viewport.evaluate(el => el.scrollLeft)).toBe(0);
     sameGeometry(await boxes(page, selectors), resting);
-  });
-}
-
-for (const reducedMotion of ['reduce', 'no-preference'] as const) {
-  test(`@mocked homepage keeps its activation distance, cancellation and infinite wrap (${reducedMotion})`, async ({ page }) => {
-    await page.setViewportSize({ width: 390, height: 1000 });
-    await page.emulateMedia({ reducedMotion });
-    await openHome(page);
-    const first = page.getByRole('tab', { name: 'Slide 1' });
-    const second = page.getByRole('tab', { name: 'Slide 2' });
-    // Keep autoplay paused without changing gesture or transition behavior.
-    await first.click();
-    const frame = (await page.locator('.hero-carousel-viewport').boundingBox())!;
-    const width = (await page.locator('.hero-carousel-wrap').boundingBox())!.width;
-    const drag = async (dx: number) => {
-      await page.mouse.move(200, frame.y + 100);
-      await page.mouse.down();
-      await page.mouse.move(200 + dx, frame.y + 100, { steps: 5 });
-      await page.mouse.up();
-    };
-    await drag(-(width * .2 - 2));
-    await expect(first).toHaveAttribute('aria-selected', 'true');
-    await expect.poll(() => page.locator('.hero-carousel-slide:nth-child(2) > *').evaluate(el => el.getBoundingClientRect().x)).toBeCloseTo(16, 0);
-    // This exceeds the old threshold but is below 20% of the wider viewport.
-    await drag(-(width * .2 + 2));
-    await expect(second).toHaveAttribute('aria-selected', 'true');
-    await expect.poll(() => page.locator('.hero-carousel-slide:nth-child(3) > *').evaluate(el => el.getBoundingClientRect().x)).toBeCloseTo(16, 0);
-    await drag(-100);
-    await expect(first).toHaveAttribute('aria-selected', 'true');
-    await expect.poll(() => page.locator('.hero-carousel-slide:nth-child(2) > *').evaluate(el => el.getBoundingClientRect().x)).toBeCloseTo(16, 0);
-    await drag(100);
-    await expect(second).toHaveAttribute('aria-selected', 'true');
-    await expect.poll(() => page.locator('.hero-carousel-slide:nth-child(3) > *').evaluate(el => el.getBoundingClientRect().x)).toBeCloseTo(16, 0);
-    await expect(page).toHaveURL(/\/$/); // Dragging the featured link never opens it.
   });
 }
 
@@ -188,7 +154,7 @@ test('@mocked asymmetric safe-area geometry keeps both carousel content lanes an
   await openHome(page);
   // These are synthetic layout values, not an emulation of an iPhone notch.
   await page.addStyleTag({ content: '.body-layout {--page-inset-left:60px;--page-inset-right:16px;}' });
-  const homeCard = (await page.locator('.hero-carousel-slide:nth-child(2) > *').boundingBox())!;
+  const homeCard = (await page.locator('.card-carousel-slide:first-child > *').boundingBox())!;
   expect(homeCard.x).toBe(60);
   expect(homeCard.width).toBe(524);
   await noDocumentOverflow(page);

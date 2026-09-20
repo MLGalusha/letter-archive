@@ -412,6 +412,9 @@ export default function UploadLetterPage() {
       ...prev,
       selectedCollection: null,
       selectedImageIds: new Set(),
+      newCollectionCode: editState.selectedCollection === "new"
+        ? suggestedCollectionCode.current
+        : prev.newCollectionCode,
     }));
 
     // Recheck duplicates for new filenames

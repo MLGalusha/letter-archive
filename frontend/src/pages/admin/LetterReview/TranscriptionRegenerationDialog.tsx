@@ -40,12 +40,12 @@ export default function TranscriptionRegenerationDialog({
 
   return (
     <div
-      className="confirm-dialog-overlay"
+      className="review-confirm-dialog-overlay"
       onClick={onClose}
     >
       <div
         ref={dialogRef}
-        className="confirm-dialog regenerate-popup"
+        className="review-confirm-dialog regenerate-popup"
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -90,7 +90,7 @@ export default function TranscriptionRegenerationDialog({
             </button>
           ) : null}
         </div>
-        <div className="confirm-dialog-actions">
+        <div className="review-confirm-dialog-actions">
           <button
             type="button"
             className="btn-cancel"

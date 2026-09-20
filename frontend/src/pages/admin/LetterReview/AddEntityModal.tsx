@@ -38,10 +38,10 @@ export default function AddEntityModal({ type, isOpen, isAdding, onClose, onAdd 
   };
 
   return (
-    <div className="confirm-dialog-overlay" onClick={handleClose}>
-      <div className="confirm-dialog add-entity-dialog" onClick={(e) => e.stopPropagation()}>
+    <div className="review-confirm-dialog-overlay" onClick={handleClose}>
+      <div className="review-confirm-dialog add-entity-dialog" onClick={(e) => e.stopPropagation()}>
         <h3>{title}</h3>
-        <div className="form-group">
+        <div className="review-form-group">
           <label htmlFor={`new${type}Name`}>Name</label>
           <input
             type="text"
@@ -52,7 +52,7 @@ export default function AddEntityModal({ type, isOpen, isAdding, onClose, onAdd 
             autoFocus
           />
         </div>
-        <div className="form-group">
+        <div className="review-form-group">
           <label htmlFor={`new${type}Role`}>Role</label>
           <select
             id={`new${type}Role`}
@@ -64,7 +64,7 @@ export default function AddEntityModal({ type, isOpen, isAdding, onClose, onAdd 
             ))}
           </select>
         </div>
-        <div className="confirm-dialog-actions">
+        <div className="review-confirm-dialog-actions">
           <button className="btn-cancel" onClick={handleClose}>
             Cancel
           </button>

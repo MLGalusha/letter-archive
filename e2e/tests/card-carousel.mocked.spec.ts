@@ -96,8 +96,26 @@ for (const path of ['/', '/collections/003']) {
     await expect.poll(() => viewport.evaluate(el => Math.abs(el.scrollLeft - el.clientWidth))).toBeLessThan(1);
     await dots.first().click();
     await expect.poll(() => viewport.evaluate(el => el.scrollLeft)).toBe(0);
+    await expect.poll(() => viewport.evaluate(el => getComputedStyle(el).scrollSnapType)).toBe('x mandatory');
   });
 }
+
+test('@mocked releasing the mouse outside the frame does not leave a stale drag', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const carousel = await openCards(page);
+  const viewport = carousel.locator('.card-carousel-viewport');
+  const box = (await viewport.boundingBox())!;
+  await page.mouse.move(box.x + box.width - 40, box.y + box.height - 4);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width - 40, box.y + box.height + 20);
+  await page.mouse.up();
+  await page.mouse.move(box.x + 40, box.y + box.height - 20);
+  await expect(viewport).not.toHaveAttribute('data-dragging', 'true');
+  await expect.poll(() => viewport.evaluate(el => el.scrollLeft)).toBe(0);
+  expect(errors).toEqual([]);
+});
 
 for (const width of [320, 390, 430, 640]) {
   test(`@mocked collection cards share a fixed rounded frame and a straight seam at ${width}px`, async ({ page }) => {
@@ -136,7 +154,9 @@ test('@mocked native diagonal touch moves continuously without custom direction 
 
 test.describe('desktop wheel input', () => {
   test.use({ isMobile: false, hasTouch: false });
-test('@mocked native wheel scrolling changes cards while vertical wheel scrolling stays on the page', async ({ page }) => {
+test('@mocked native wheel scrolling changes cards while vertical wheel scrolling stays on the page', async ({ page, browserName }) => {
+  test.skip(browserName === 'webkit' && process.platform !== 'darwin',
+    'Native WebKit wheel coverage runs in the macOS job; Linux WebKit blocks root overscroll wheels (docs/qa/reader-page-picker.md).');
   const carousel = await openCards(page);
   const viewport = carousel.locator('.card-carousel-viewport');
   const box = (await viewport.boundingBox())!;

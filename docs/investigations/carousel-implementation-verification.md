@@ -1,6 +1,6 @@
 # Shared card carousel implementation
 
-Implemented locally on `ui-next-pass`, based on merged PR #188 (`54a71a7f`). Preview: http://localhost:5177/. No PR or deployment was initiated.
+Implemented locally on `ui-next-pass`, based on merged PR #188 (`54a71a7f`). Preview: http://localhost:5177/. PR #189 is open for review and later deployment. No merge or deployment was initiated.
 
 ## Behavior
 
@@ -44,3 +44,12 @@ A synthetic 55px touch flick initially snapped back. The browser now decides the
 ## Remaining device acceptance
 
 Physical iPhone Safari, Home Screen mode, and Chrome have not been tested in this task. On each, check the homepage and collection highlights with slow drags, short flicks, diagonal starts, vertical page scrolling, reversals, inner page arrows, and ordinary taps to open a letter. Browser automation and macOS WebKit results do not certify physical-device feel.
+
+## PR self-review (September 20)
+
+- Reproduced a stale mouse drag in Chromium and WebKit: press near the frame edge, leave vertically, release outside, and reenter. The pointer handler now checks whether the primary mouse button is still held before dragging. The regression failed on both engines before the fix and passed afterward.
+- Reproduced intermittent rapid dot reversal failures in WebKit. Instrumented scroll calls ruled out an extra application realignment; disabling snapping during explicit smooth navigation passed six WebKit reproductions. Explicit navigation now temporarily owns its destination, restoring native snapping on completion or gesture interruption, while ignoring stale completion events from canceled requests. Twelve repeated cross-browser reversal checks passed, followed by the complete carousel file: 25 passed, one intentional CDP/WebKit skip.
+- Assigned native WebKit wheel coverage to the existing macOS CI job. The Linux WebKit wheel limitation is already isolated in `docs/qa/reader-page-picker.md`; Chromium continues to cover wheel input in Linux. The new macOS project passed locally.
+- Full frontend unit run: 1,330 tests passed; 37 API assertions initially failed because this worktree's preview points at port 3005 while their contract expects 3002. With `VITE_API_URL=http://localhost:3002`, all nine affected files plus the carousel tests passed (55 tests). No application or API-test changes were needed for this local configuration issue. The final carousel unit rerun passed all six tests.
+
+The PR is intentionally left unmerged. CI status is checked once at review completion; pending runs are not watched.

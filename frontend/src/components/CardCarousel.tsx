@@ -42,7 +42,12 @@ export default function CardCarousel({ children, label, className = '', layout =
     const settle = () => {
       clearTimeout(settleTimer);
       cancelAnimationFrame(frame);
+      frame = 0;
+      // A canceled animation can emit scrollend after a newer request.
+      const target = targetRef.current;
+      if (target !== null && Math.abs(viewport.scrollLeft - target * viewport.clientWidth) > 1) return;
       targetRef.current = null;
+      if (!viewport.hasAttribute('data-dragging')) viewport.style.scrollSnapType = '';
       readPosition();
     };
     const onScroll = () => {
@@ -53,11 +58,15 @@ export default function CardCarousel({ children, label, className = '', layout =
     };
     const realign = () => {
       targetRef.current = null;
+      viewport.style.scrollSnapType = '';
       const index = Math.max(0, observedKeys.indexOf(selectedRef.current ?? observedKeys[0]));
       select(index);
       if (carousel) viewport.scrollTo({ left: index * viewport.clientWidth, behavior: 'instant' });
     };
-    const interrupt = () => { targetRef.current = null; };
+    const interrupt = () => {
+      if (targetRef.current !== null) viewport.style.scrollSnapType = '';
+      targetRef.current = null;
+    };
     realign();
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(realign);
     observer?.observe(viewport);
@@ -80,7 +89,16 @@ export default function CardCarousel({ children, label, className = '', layout =
     const viewport = viewportRef.current;
     if (!viewport) return;
     const next = Math.max(0, Math.min(keys.length - 1, index));
+    // Explicit navigation already has an exact destination. Avoid WebKit's
+    // snap target competing with a rapidly reversed smooth-scroll target.
+    viewport.style.scrollSnapType = 'none';
     targetRef.current = next;
+    if (Math.abs(viewport.scrollLeft - next * viewport.clientWidth) < 1) {
+      viewport.scrollTo({ left: next * viewport.clientWidth, behavior: 'instant' });
+      viewport.style.scrollSnapType = '';
+      targetRef.current = null;
+      return;
+    }
     viewport.scrollTo({ left: next * viewport.clientWidth,
       behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
   };

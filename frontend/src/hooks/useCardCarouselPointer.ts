@@ -30,6 +30,8 @@ export default function useCardCarouselPointer(enabled: boolean) {
     onPointerMove: (event: PointerEvent<HTMLDivElement>) => {
       const start = gesture.current;
       if (!start || start.id !== event.pointerId) return;
+      // An uncaptured press can be released outside the viewport.
+      if (start.mouse && !(event.buttons & 1)) { release(event); return; }
       const dx = event.clientX - start.x, dy = event.clientY - start.y;
       if (Math.hypot(dx, dy) > 8) suppressClick.current = true;
       if (!start.mouse) return;

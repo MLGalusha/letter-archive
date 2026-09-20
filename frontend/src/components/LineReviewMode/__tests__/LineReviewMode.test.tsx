@@ -763,6 +763,98 @@ describe('LineReviewMode', () => {
     expect(screen.queryByText('Map to segment:')).toBeNull();
   });
 
+  it('preserves an edited draft and history across an ordinary letter refresh', async () => {
+    const letter = makeSegmentTransitionLetter();
+    const props = { ...defaultProps, letter, fullViewport: true };
+    const { container, rerender } = render(<LineReviewMode {...props} />);
+    await simulateImageLoadAsync(container);
+    deleteFirstVisibleSegment(container);
+    rerender(<LineReviewMode {...props} letter={{ ...letter, flagged: true, images: letter.images.map(page => ({ ...page })) }} />);
+    expect(container.querySelectorAll('.segment-editor-rect, .segment-editor-poly')).toHaveLength(1);
+    expect(container.querySelector('button[data-hint^="Undo"]')).not.toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    await waitFor(() => expect(savePageLineSegmentsMock).toHaveBeenCalledTimes(1));
+    expect(savePageLineSegmentsMock.mock.calls[0][1]).toHaveLength(1);
+    await waitFor(() => expect(screen.getByAltText('Page 2')).toBeTruthy());
+  });
+
+  it.each(['letter', 'revision', 'checksum', 'page'] as const)(
+    'revokes an old save and exit when the %s identity changes at the same page index',
+    async identity => {
+      const oldSave = createDeferred<void>();
+      savePageLineSegmentsMock.mockImplementationOnce(() => oldSave.promise);
+      const letter = makeSegmentTransitionLetter();
+      const props = { ...defaultProps, letter, fullViewport: true };
+      const { container, rerender } = render(<LineReviewMode {...props} />);
+      await simulateImageLoadAsync(container);
+      deleteFirstVisibleSegment(container);
+      fireEvent.click(screen.getByRole('button', { name: 'Exit review mode' }));
+      await waitFor(() => expect(savePageLineSegmentsMock).toHaveBeenCalledTimes(1));
+      const replacement = {
+        ...letter,
+        id: identity === 'letter' ? 'replacement-letter' : letter.id,
+        primarySourceRevision: identity === 'revision' ? 10 : letter.primarySourceRevision,
+        images: letter.images.map((page, index) => index ? page : {
+          ...page,
+          id: identity === 'page' ? 'replacement-page' : page.id,
+          sourceChecksum: identity === 'checksum' ? 'replacement-checksum' : page.sourceChecksum,
+        }),
+      };
+      rerender(<LineReviewMode {...props} letter={replacement} />);
+      await simulateImageLoadAsync(container);
+      expect(container.querySelectorAll('.segment-editor-rect, .segment-editor-poly')).toHaveLength(2);
+      deleteFirstVisibleSegment(container);
+      await act(async () => { oldSave.resolve(); await oldSave.promise; });
+      expect(defaultProps.onExit).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+      await waitFor(() => expect(savePageLineSegmentsMock).toHaveBeenCalledTimes(2));
+      expect(savePageLineSegmentsMock).toHaveBeenLastCalledWith(replacement.images[0].id, expect.any(Array), {
+        primarySourceRevision: replacement.primarySourceRevision,
+        sourceChecksum: replacement.images[0].sourceChecksum,
+      });
+      expect(savePageLineSegmentsMock.mock.calls[1][1]).toHaveLength(1);
+    },
+  );
+
+  it('does not verify or clean a pending draft after mutations become blocked', async () => {
+    const pending = createDeferred<void>();
+    savePageLineSegmentsMock.mockImplementationOnce(() => pending.promise);
+    const props = { ...defaultProps, letter: makeSegmentTransitionLetter(), fullViewport: true };
+    const { container, rerender } = render(<LineReviewMode {...props} />);
+    await simulateImageLoadAsync(container);
+    deleteFirstVisibleSegment(container);
+    fireEvent.click(screen.getByRole('button', { name: 'Verify' }));
+    await waitFor(() => expect(savePageLineSegmentsMock).toHaveBeenCalledTimes(1));
+    rerender(<LineReviewMode {...props} mutationsBlocked />);
+    await act(async () => { pending.resolve(); await pending.promise; });
+    expect(updateLetterSegmentTrustMock).not.toHaveBeenCalled();
+    rerender(<LineReviewMode {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    await waitFor(() => expect(savePageLineSegmentsMock).toHaveBeenCalledTimes(2));
+  });
+
+  it('waits for edits made during mapping before completing the mapping', async () => {
+    const first = createDeferred<void>();
+    const second = createDeferred<void>();
+    savePageLineSegmentsMock.mockImplementationOnce(() => first.promise).mockImplementationOnce(() => second.promise);
+    const letter = makeSegmentTransitionLetter();
+    letter.images[0].lineSegments![0].segmentClass = 'continuation';
+    const complete = vi.fn();
+    const { container } = render(<LineReviewMode {...defaultProps} letter={letter} fullViewport mappingText="Mapped text" onMappingComplete={complete} />);
+    await simulateImageLoadAsync(container);
+    fireEvent.pointerDown(container.querySelector('.seg-mappable')!, { pointerId: 1 });
+    await waitFor(() => expect(savePageLineSegmentsMock).toHaveBeenCalledTimes(1));
+    // Undo is a real newer edit during the pending mapping request.
+    fireEvent.click(container.querySelector('button[data-hint^="Undo"]')!);
+    await act(async () => { first.resolve(); await first.promise; });
+    await waitFor(() => expect(savePageLineSegmentsMock).toHaveBeenCalledTimes(2));
+    expect(savePageLineSegmentsMock.mock.calls[1][1][0].mappedText).toBeUndefined();
+    expect(complete).not.toHaveBeenCalled();
+    expect(screen.getByText('Map to segment:')).toBeTruthy();
+    await act(async () => { second.resolve(); await second.promise; });
+    expect(complete).toHaveBeenCalledTimes(1);
+  });
+
   it('shows no lines when Kraken returns empty segments', async () => {
     getPageLineSegmentsMock.mockResolvedValueOnce([]);
 

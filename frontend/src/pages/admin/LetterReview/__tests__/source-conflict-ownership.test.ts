@@ -356,7 +356,8 @@ describe('Letter Review source-conflict ownership', () => {
       'this.cancelQueuedTarget(owner.targetKey)',
     );
     expect(lineReview).toContain('mutationsBlockedRef.current');
-    expect(lineReview).toContain('clearTimeout(autoSaveTimerRef.current)');
+    expect(lineReview).toContain('useSegmentPersistence({');
+    expect(lineReview).toContain('blocked: mutationsBlocked');
     expect(page).toContain('toggleLetterFlag(letter.id, newFlagged)');
     expect(page).not.toMatch(
       /getAdminLetterById\(letterId\)\.then[\s\S]*?setLetter\(updated\)/,
@@ -561,18 +562,13 @@ describe('Letter Review source-conflict ownership', () => {
     );
   });
 
-  it('routes every line-review source write through that owner', async () => {
+  it('routes line-review segment persistence errors through the conflict owner', async () => {
     const lineReview = await readFile(lineReviewPath, 'utf8');
-
-    for (const fallback of [
-      'Failed to save segment edits',
-      'Failed to verify segments',
-      'Failed to unverify segments',
-    ]) {
+    expect(lineReview).toContain('onError: handleMutationError');
+    expect(lineReview).not.toContain('savePageLineSegments(');
+    for (const fallback of ['Failed to verify segments', 'Failed to unverify segments']) {
       expect(lineReview).toContain(`handleMutationError(err, '${fallback}')`);
     }
-    expect(lineReview).toContain(
-      "handleMutationError(error, 'Failed to save segment mapping')",
-    );
+    // Timing, revocation, and retry behavior are covered by the owner/component tests.
   });
 });

@@ -1,3 +1,13 @@
+import type {
+  AdminLetterPageCountsByType as AdminLetterPageCountsByTypeContract,
+  AdminLetterSummary as AdminLetterSummaryContract,
+  LetterImageType as LetterImageTypeContract,
+  LineSegment as LineSegmentContract,
+  LineSegmentWord as LineSegmentWordContract,
+  SegmentClass as SegmentClassContract,
+  SegmentTrustState as SegmentTrustStateContract,
+} from '../contracts/admin-wire-contracts.generated';
+
 // src/types/Letter.ts
 
 export type LetterStatus =
@@ -139,16 +149,7 @@ export interface NotableQuote {
   position?: 'opening' | 'middle' | 'closing';
 }
 
-export type LetterImageType =
-  | 'letter'
-  | 'photo'
-  | 'ephemera'
-  | 'voice'
-  | 'article'
-  | 'diary'
-  | 'cover'
-  | 'card'
-  | 'telegram';
+export type LetterImageType = LetterImageTypeContract;
 
 export interface ExtraContentItem {
   type: LetterImageType;
@@ -158,26 +159,10 @@ export interface ExtraContentItem {
 }
 
 // Segment system types
-export type SegmentTrustState = 'unverified' | 'trusted';
-export type SegmentClass = 'body' | 'continuation' | 'addition' | 'ignore';
-
-export interface LineSegmentWord {
-  text: string;
-  bbox: [number, number, number, number];
-}
-
-export interface LineSegment {
-  line: number;
-  baseline: number[][];
-  bbox: [number, number, number, number];
-  ocrText: string;
-  words?: LineSegmentWord[];
-  boundary?: { x: number; y: number }[];
-  excluded?: boolean;
-  segmentClass?: SegmentClass;
-  isMapped?: boolean;
-  mappedText?: string;
-}
+export type SegmentTrustState = SegmentTrustStateContract;
+export type SegmentClass = SegmentClassContract;
+export type LineSegmentWord = LineSegmentWordContract;
+export type LineSegment = LineSegmentContract;
 
 export interface MergedLineSegment extends LineSegment {
   merged: boolean;
@@ -431,9 +416,7 @@ export interface PublicLetter {
   updatedAt?: string;
 }
 
-export type AdminLetterPageCountsByType = Readonly<
-  Record<LetterImageType, number>
->;
+export type AdminLetterPageCountsByType = AdminLetterPageCountsByTypeContract;
 
 /**
  * Positive read model owned by the paginated admin Dashboard list.
@@ -441,33 +424,7 @@ export type AdminLetterPageCountsByType = Readonly<
  * Detail content and provenance deliberately remain on `Letter`; the list exposes
  * only the facts needed to render rows and issue source-bound Dashboard actions.
  */
-export interface AdminLetterSummary {
-  id: string;
-  title: string;
-  collectionCode: string;
-  primarySourceRevision: number;
-  primaryImageType: LetterImageType;
-  pageCountsByType: AdminLetterPageCountsByType;
-  metadata: {
-    sender?: string;
-    recipient?: string;
-    dateRaw: string;
-  };
-  visibility: VisibilityState;
-  transcriptPublished: boolean;
-  metadataPublished: boolean;
-  transcriptStatus: ContentStatus;
-  metadataContentStatus: ContentStatus;
-  extraContentStatus: ContentStatus;
-  photoDescriptionStatus: ContentStatus;
-  metadataJobStatus: JobStatus;
-  transcriptDigest: string;
-  transcriptConfirmed: boolean;
-  flagged: boolean;
-  createdAt: string;
-  updatedAt: string;
-  lastOpenedAt?: string;
-}
+export type AdminLetterSummary = AdminLetterSummaryContract;
 
 export interface Letter {
   id: string;

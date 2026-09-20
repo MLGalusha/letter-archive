@@ -1,6 +1,15 @@
 import { eq, and, sql, or, type SQL } from 'drizzle-orm';
 import { PAGINATION } from '../constants/pagination.js';
 import { TIMING } from '../constants/timing.js';
+import type {
+  ProcessingActionResult,
+  ProcessingActiveJob,
+  ProcessingQueueClearResult,
+  ProcessingQueueClearSkipCode,
+  ProcessingQueueStatus,
+  ProcessingRecentJob,
+  ProcessingWorkerWakeResult,
+} from '../contracts/admin-wire-contracts.js';
 import { db, letters } from '../db/index.js';
 import { createLogger } from '../utils/logger.js';
 import { AppError } from '../utils/response-helpers.js';
@@ -65,6 +74,7 @@ export type {
   ProcessingJobSnapshot,
   QueueJobType,
 } from './processing-queue-snapshot.js';
+export type { ProcessingWorkerWakeResult } from '../contracts/admin-wire-contracts.js';
 
 const log = createLogger({ module: 'processing-queue' });
 
@@ -147,13 +157,6 @@ export async function ensureBackgroundWorkerForQueuedProcessing(
   await triggerWorkerJob(reason);
   return true;
 }
-
-export type ProcessingWorkerWakeResult =
-  | { requested: true }
-  | {
-      requested: false;
-      reason: 'queue_empty' | 'worker_not_configured';
-    };
 
 /**
  * Truthful operator control for the global durable queue. It never suggests
@@ -276,7 +279,7 @@ export async function recoverExpiredProcessingJobs(
 /**
  * Get full queue status with active, queued, and recent jobs.
  */
-export async function getQueueStatus() {
+export async function getQueueStatus(): Promise<ProcessingQueueStatus> {
   const now = new Date();
   const oneHourAgo = new Date(now.getTime() - TIMING.JOB_RECOVERY_WINDOW_MS);
 
@@ -294,17 +297,7 @@ export async function getQueueStatus() {
   });
 
   const active = activeLetters.flatMap(l => {
-    const jobs: Array<{
-      letterId: string;
-      letterTitle: string;
-      collectionCode: string;
-      sender: string | null;
-      recipient: string | null;
-      type: QueueJobType;
-      primarySourceRevision: number;
-      jobStateToken: string;
-      startedAt: string;
-    }> = [];
+    const jobs: ProcessingActiveJob[] = [];
     if (l.transcriptionStatus === 'RUNNING') {
       jobs.push({
         letterId: l.id,
@@ -417,17 +410,7 @@ export async function getQueueStatus() {
     limit: 100,
   });
 
-  const recent: Array<{
-    letterId: string;
-    letterTitle: string;
-    collectionCode: string;
-    type: QueueJobType;
-    status: string;
-    primarySourceRevision: number;
-    jobStateToken: string;
-    error?: string;
-    completedAt: string;
-  }> = [];
+  const recent: ProcessingRecentJob[] = [];
 
   // Helper to check if a failure was an admin action (clear/remove/cancel/abort)
   const isAdminCleared = (error: string | null) =>
@@ -569,21 +552,8 @@ export async function getQueueStatus() {
 
 export const PROCESSING_JOB_CHANGED_ERROR_CODE = 'PROCESSING_JOB_CHANGED';
 
-export type ClearQueueSkipCode =
-  | 'NOT_FOUND'
-  | typeof SOURCE_REVISION_CHANGED_ERROR_CODE
-  | typeof PROCESSING_JOB_CHANGED_ERROR_CODE;
-
-export interface ClearQueueResult {
-  message: string;
-  requested: number;
-  cleared: number;
-  skipped: number;
-  skipReasons: Array<{
-    letterId: string;
-    code: ClearQueueSkipCode;
-  }>;
-}
+export type ClearQueueSkipCode = ProcessingQueueClearSkipCode;
+export type ClearQueueResult = ProcessingQueueClearResult;
 
 type ExpectedJobSnapshot = Pick<
   ProcessingJobSnapshot,
@@ -791,7 +761,7 @@ export async function removeFromQueue(
   letterId: string,
   type: QueueJobType,
   expected: ExpectedJobSnapshot,
-): Promise<{ message: string }> {
+): Promise<ProcessingActionResult> {
   await transitionQueuedJob(
     letterId,
     type,
@@ -844,7 +814,7 @@ export async function retryJob(
   letterId: string,
   type: QueueJobType,
   expected: ExpectedJobSnapshot,
-): Promise<{ message: string }> {
+): Promise<ProcessingActionResult> {
   const letter = await db.query.letters.findFirst({
     where: eq(letters.id, letterId),
   });
@@ -1001,7 +971,7 @@ export async function cancelActiveJob(
   letterId: string,
   type: QueueJobType,
   expected: ExpectedJobSnapshot,
-): Promise<{ message: string }> {
+): Promise<ProcessingActionResult> {
   const letter = await db.query.letters.findFirst({
     where: eq(letters.id, letterId),
   });

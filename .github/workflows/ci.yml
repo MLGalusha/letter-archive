@@ -29,6 +29,9 @@ jobs:
             backend/package-lock.json
             frontend/package-lock.json
 
+      - name: Verify admin wire contracts
+        run: node scripts/sync-admin-wire-contracts.mjs --check
+
       - name: Install backend deps
         working-directory: backend
         run: npm ci

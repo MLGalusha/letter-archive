@@ -1,27 +1,26 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { PAGINATION } from '../constants/pagination.js';
+import {
+  PROCESSING_JOB_TYPES,
+  type ProcessingJobActionRequest,
+  type ProcessingJobSnapshot,
+  type ProcessingJobType,
+  type ProcessingQueueClearRequest,
+} from '../contracts/admin-wire-contracts.js';
 
-export const queueJobTypeSchema = z.enum([
-  'transcription',
-  'metadata',
-  'entity_extraction',
-  'extra_content',
-]);
-export type QueueJobType = z.infer<typeof queueJobTypeSchema>;
+export const queueJobTypeSchema = z.enum(PROCESSING_JOB_TYPES);
+export type QueueJobType = ProcessingJobType;
 
 export const processingJobSnapshotSchema = z.object({
   letterId: z.string().trim().min(1),
   primarySourceRevision: z.number().int().nonnegative(),
   jobStateToken: z.string().trim().min(1).max(128),
-});
-export type ProcessingJobSnapshot = z.infer<
-  typeof processingJobSnapshotSchema
->;
+}) satisfies z.ZodType<ProcessingJobSnapshot>;
 
 export const processingJobActionSchema = processingJobSnapshotSchema.extend({
   type: queueJobTypeSchema,
-});
+}) satisfies z.ZodType<ProcessingJobActionRequest>;
 
 export const clearProcessingQueueSnapshotSchema = z.object({
   type: queueJobTypeSchema,
@@ -41,7 +40,13 @@ export const clearProcessingQueueSnapshotSchema = z.object({
         seen.add(item.letterId);
       }
     }),
-});
+}) satisfies z.ZodType<ProcessingQueueClearRequest>;
+
+export type {
+  ProcessingJobActionRequest,
+  ProcessingJobSnapshot,
+  ProcessingQueueClearRequest,
+};
 
 export type ProcessingJobPhase = 'queued' | 'active' | 'recent';
 

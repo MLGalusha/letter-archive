@@ -31,6 +31,11 @@ function runStep(label, cwd, command, args) {
   }
 }
 
+runStep('Admin wire-contract drift check', rootDir, 'node', [
+  'scripts/sync-admin-wire-contracts.mjs',
+  '--check',
+]);
+
 runStep('Backend tests', path.join(rootDir, 'backend'), 'npm', ['test']);
 
 if (process.env.VERIFY_SKIP_TYPECHECK !== '1') {

@@ -173,12 +173,12 @@ describe("HomePage archive browsing", () => {
 
     expect(await screen.findByText("1/2")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Next page" }));
+    await user.click(screen.getByRole("button", { name: "Next page", hidden: true }));
 
     expect(await screen.findByText("2/2")).toBeInTheDocument();
     const featureLink = document.querySelector('.home-hero-open-link');
     expect(featureLink).toHaveAttribute('href', '/letter/featured-letter?from=highlight&image=page-2');
-    expect(screen.getByRole('button', { name: 'Next page' }).closest('a')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Next page', hidden: true }).closest('a')).toBeNull();
     fireEvent(featureLink!, new MouseEvent('pointerdown', { bubbles: true, clientX: 300, clientY: 200 }));
     fireEvent.click(featureLink!, { detail: 0, clientX: 0, clientY: 0 });
     expect(screen.getByTestId('location')).toHaveTextContent('/letter/featured-letter');
@@ -270,7 +270,7 @@ describe("HomePage archive browsing", () => {
     render(<MemoryRouter><HeaderDockProvider><HomePage /></HeaderDockProvider></MemoryRouter>);
     expect(await screen.findByText('1/30')).toBeInTheDocument();
     expect(document.querySelectorAll('.home-hero-feature-card .letter-card-image')).toHaveLength(3);
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Next page' }));
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Next page', hidden: true }));
     expect(document.querySelectorAll('.home-hero-feature-card .letter-card-image')).toHaveLength(3);
   });
 

@@ -239,7 +239,7 @@ test.describe('wide image cards', () => {
     await expect(outer).toHaveAttribute('data-layout', 'static');
     const cards = page.locator(path === '/' ? '.home-hero-feature-card' : '.cd-highlight-card');
     const card = cards.first();
-    const counter = card.locator(path === '/' ? '.home-hero-page-counter' : '.cd-highlight-page-counter');
+    const counter = page.locator(path === '/' ? '.home-hero-page-counter:visible' : '.cd-highlight-page-counter:visible').first();
     const initialHref = await card.locator('a').first().getAttribute('href');
     const expectedImage = path === '/' ? 'two' : `scan-${initialHref?.includes('item-0') ? 0 : 1}-1`;
     const inner = card.locator('.card-media-carousel');
@@ -266,7 +266,7 @@ test.describe('wide image cards', () => {
     if (path === '/') await outer.locator('.card-carousel-dot').nth(1).click();
     await expect(card.locator('.card-media-carousel')).toHaveCount(0);
     await expect(counter).toHaveText(path === '/' ? '2/2' : '2/3');
-    await card.getByRole('button', { name: path === '/' ? 'Previous page' : 'Previous', exact: true }).click();
+    await outer.getByRole('button', { name: path === '/' ? 'Previous page' : 'Previous', exact: true }).click();
     await expect(counter).toHaveText(path === '/' ? '1/2' : '1/3');
     await page.setViewportSize({ width: 1280, height: 900 });
     await viewport.focus();
@@ -284,8 +284,8 @@ test.describe('image page button feedback', () => {
     const outer = await openCards(page, path, true, true);
     if (path === '/') await outer.locator('.card-carousel-dot').nth(1).click();
     const card = page.locator(path === '/' ? '.home-hero-feature-card' : '.cd-highlight-card').first();
-    const next = card.locator('.image-page-control--next');
-    const counter = card.locator(path === '/' ? '.home-hero-page-counter' : '.cd-highlight-page-counter');
+    const next = page.locator('.stationary-card-overlay:not([hidden]) .image-page-control--next').first();
+    const counter = page.locator(path === '/' ? '.home-hero-page-counter:visible' : '.cd-highlight-page-counter:visible').first();
     await expect(next).toHaveCSS('-webkit-tap-highlight-color', 'rgba(0, 0, 0, 0)');
     await expect(next).toHaveCSS('opacity', '1');
     const geometry = await next.evaluate(el => {
@@ -314,7 +314,7 @@ test.describe('image page button feedback', () => {
     test('@mocked compact mouse controls reveal smoothly and remain keyboard accessible', async ({ page }) => {
       await openCards(page, '/collections/003', true, true);
       const card = page.locator('.cd-highlight-card').first();
-      const next = card.locator('.image-page-control--next');
+      const next = page.locator('.stationary-card-overlay:not([hidden]) .image-page-control--next').first();
       await page.mouse.move(0, 0);
       await expect(next).toHaveCSS('opacity', '0');
       await next.hover();
@@ -329,7 +329,7 @@ test.describe('image page button feedback', () => {
       await expect(next).toHaveCSS('opacity', '1');
       await expect(next).toHaveCSS('outline-offset', '-5px');
       await page.keyboard.press('Enter');
-      await expect(card.locator('.cd-highlight-page-counter')).toHaveText('2/3');
+      await expect(page.locator('.cd-highlight-page-counter:visible').first()).toHaveText('2/3');
     });
   });
 });
@@ -350,9 +350,9 @@ test('@mocked touch release settles promptly and hands off to the next tap or ve
   await touch('touchEnd');
   await expect.poll(() => viewport.evaluate(el => Math.abs(el.scrollLeft - el.clientWidth)), { intervals: [16], timeout: 400 }).toBeLessThan(1);
   expect(Date.now() - released).toBeLessThan(400);
-  const next = outer.locator('.card-carousel-slide').nth(1).locator('.image-page-control--next');
+  const next = outer.locator('.stationary-card-overlay:not([hidden]) .image-page-control--next');
   await next.tap();
-  await expect(outer.locator('.card-carousel-slide').nth(1).locator('.cd-highlight-page-counter')).toHaveText('2/3');
+  await expect(outer.locator('.cd-highlight-page-counter:visible')).toHaveText('2/3');
   // Start a new vertical gesture immediately after releasing a reverse swipe,
   // while its short settling animation is still pending.
   const reverse = (await viewport.boundingBox())!;
@@ -367,4 +367,30 @@ test('@mocked touch release settles promptly and hands off to the next tap or ve
   await touch('touchEnd');
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(startY + 40);
   await expect(page).toHaveURL(/collections\/003$/);
+});
+
+test('@mocked overlays stay anchored during card swipes and control the selected card', async ({ page }) => {
+  const outer = await openCards(page, '/collections/003', true, true);
+  const viewport = outer.locator(':scope > .card-carousel-frame > .card-carousel-viewport');
+  const overlay = outer.locator('.stationary-card-overlay:not([hidden])');
+  const next = overlay.locator('.image-page-control--next');
+  await expect(next).toBeVisible();
+  const before = await next.evaluate(el => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width }; });
+  const box = (await viewport.boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.8, box.y + 100);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.2, box.y + 100, { steps: 10 });
+  await expect.poll(() => viewport.evaluate(el => el.scrollLeft)).toBeGreaterThan(box.width / 2);
+  await expect.poll(() => outer.evaluate(el => {
+    const button = el.querySelector('.stationary-card-overlay:not([hidden]) .image-page-control--next')!;
+    const r = button.getBoundingClientRect();
+    return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width) };
+  })).toEqual({ x: Math.round(before.x), y: Math.round(before.y), width: Math.round(before.width) });
+  await expect(viewport.locator('.cd-highlight-label, .cd-highlight-content, .image-page-controls')).toHaveCount(0);
+  await page.mouse.up();
+  await expect(outer.locator('.card-carousel-dot').nth(1)).toHaveAttribute('aria-current', 'true');
+  await next.click();
+  await expect(overlay.locator('.cd-highlight-page-counter')).toHaveText('2/3');
+  await outer.locator('.card-carousel-dot').first().click();
+  await expect(overlay.locator('.cd-highlight-page-counter')).toHaveText('1/3');
 });

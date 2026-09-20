@@ -1,0 +1,14 @@
+.card-carousel-frame { position: relative; }
+.card-carousel-overlay-host { position: absolute; inset: 0; pointer-events: none; overflow: hidden; border-radius: inherit; }
+.stationary-card-overlay { position: absolute; inset: 0; pointer-events: none; overflow: hidden; border-radius: inherit; }
+.stationary-card-overlay[hidden] { display: none; }
+.stationary-card-overlay .image-page-controls { pointer-events: none; }
+.overlay-text { display: inline-block; }
+.stationary-card-overlay:not([hidden]) .cd-highlight-label,
+.stationary-card-overlay:not([hidden]) .cd-highlight-content,
+.stationary-card-overlay:not([hidden]) .home-hero-feature-label,
+.stationary-card-overlay:not([hidden]) .letter-card-content { animation: overlay-update 140ms ease-out; }
+@keyframes overlay-update { from { opacity: 0.7; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .stationary-card-overlay * { animation: none !important; }
+}

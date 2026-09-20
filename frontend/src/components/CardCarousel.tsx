@@ -2,6 +2,7 @@ import { Children, isValidElement, useLayoutEffect, useRef, useState, type React
 import useCardCarouselPointer from '../hooks/useCardCarouselPointer';
 import './CardCarousel.css';
 import useCarouselMotion from '../hooks/useCarouselMotion';
+import { CarouselOverlayContext } from './carouselOverlayContext';
 
 interface CardCarouselProps {
   children: ReactNode;
@@ -25,12 +26,14 @@ export default function CardCarousel({ children, label, className = '', layout =
   const selectedRef = useRef<string | null>(keys[initialIndex] ?? null);
   const changeRef = useRef(onSlideChange);
   useLayoutEffect(() => { changeRef.current = onSlideChange; }, [onSlideChange]);
+  const [overlayHost, setOverlayHost] = useState<HTMLDivElement | null>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const targetRef = useRef<number | null>(null);
   const carousel = layout === 'carousel';
   const interactive = carousel && slides.length > 1;
   const motion = useCarouselMotion();
-  const pointer = useCardCarouselPointer(interactive, viewportRef, (element, index) => {
+  const pointer = useCardCarouselPointer(interactive, viewportRef, frameRef, (element, index) => {
     targetRef.current = index;
     motion.move(element, index * element.clientWidth);
   }, motion.finish);
@@ -43,6 +46,7 @@ export default function CardCarousel({ children, label, className = '', layout =
     const viewport = viewportRef.current;
     if (!viewport || !observedKeys.length) return;
     let frame = 0;
+    let alignedWidth = 0;
     let settleTimer: ReturnType<typeof setTimeout> | undefined;
     const select = (index: number) => {
       const changed = selectedRef.current !== observedKeys[index];
@@ -52,7 +56,7 @@ export default function CardCarousel({ children, label, className = '', layout =
     };
     const readPosition = () => {
       frame = 0;
-      if (!carousel || !viewport.clientWidth) return;
+      if (!carousel || !viewport.clientWidth || viewport.clientWidth !== alignedWidth) return;
       select(Math.max(0, Math.min(observedKeys.length - 1, Math.round(viewport.scrollLeft / viewport.clientWidth))));
     };
     const settle = () => {
@@ -82,6 +86,7 @@ export default function CardCarousel({ children, label, className = '', layout =
       const index = Math.max(0, observedKeys.indexOf(selectedRef.current ?? observedKeys[0]));
       select(index);
       setSettledSlide(index);
+      alignedWidth = viewport.clientWidth;
       if (carousel) viewport.scrollTo({ left: index * viewport.clientWidth, behavior: 'instant' });
     };
     const interrupt = () => {
@@ -139,15 +144,18 @@ export default function CardCarousel({ children, label, className = '', layout =
     <div className={`card-carousel ${className}`} data-layout={layout}
       role={interactive ? 'region' : undefined} aria-roledescription={interactive ? 'carousel' : undefined}
       aria-label={interactive ? label : undefined} onKeyDown={onKeyDown}>
-      <div className="card-carousel-frame" data-settled-slide={settledSlide ?? undefined}>
+      <div className="card-carousel-frame" ref={frameRef} data-settled-slide={settledSlide ?? undefined}>
         <div className="card-carousel-viewport" ref={viewportRef} tabIndex={interactive ? 0 : undefined}
           aria-label={interactive ? `${label}: use left and right arrow keys to change slides` : undefined} {...pointer}>
           {slides.map((slide, index) => (
             <div className="card-carousel-slide" key={keys[index]} inert={carousel && index !== active}
               role={interactive ? 'group' : undefined} aria-roledescription={interactive ? 'slide' : undefined}
-              aria-label={interactive ? `${index + 1} of ${slides.length}` : undefined}>{slide}</div>
+              aria-label={interactive ? `${index + 1} of ${slides.length}` : undefined}>
+              <CarouselOverlayContext.Provider value={carousel ? { host: overlayHost, active: index === active } : null}>{slide}</CarouselOverlayContext.Provider>
+            </div>
           ))}
         </div>
+        {carousel && <div className="card-carousel-overlay-host" ref={setOverlayHost} />}
       </div>
       {interactive && showDots && (
         <div className="card-carousel-dots" role="group" aria-label="Choose slide">

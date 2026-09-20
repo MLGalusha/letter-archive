@@ -1,6 +1,7 @@
 import { type MouseEvent as ReactMouseEvent } from 'react';
 import CardCarousel from './CardCarousel';
 import ImagePageControls from './ImagePageControls';
+import StationaryCardOverlay, { OverlayText } from './StationaryCardOverlay';
 import CardMediaImages from './CardMediaImages';
 import useMediaSelection from '../hooks/useMediaSelection';
 import type { LetterImageType } from '../types/Letter';
@@ -61,19 +62,6 @@ export default function ShowcaseCard({ items, onNavigate, swipeImages = false }:
           index={swipeImages ? 0 : index} className="cd-highlight-img" context="showcase" />
       )}
       {!item.imageUrl && <div className="cd-highlight-placeholder" />}
-      <div className="cd-highlight-overlay" />
-      <span className="cd-highlight-label">{item.label}</span>
-      <div className="cd-highlight-content">
-        {item.peopleLine && (
-          <span className="cd-highlight-meta">{item.peopleLine}</span>
-        )}
-        {item.date && (
-          <span className="cd-highlight-date">{item.date}</span>
-        )}
-        {item.hook && (
-          <p className="cd-highlight-hook">{item.hook}</p>
-        )}
-      </div>
       </Content>
     );
   };
@@ -84,14 +72,29 @@ export default function ShowcaseCard({ items, onNavigate, swipeImages = false }:
           {items.map((entry, i) => <div key={`${entry.letterId}:${entry.imageId || entry.imageUrl}`} className={`card-media-page cd-highlight-card--${entry.mediaType}`}>{renderPage(i)}</div>)}
         </CardCarousel>
       ) : renderPage(index)}
+      <StationaryCardOverlay>
+      <div className="cd-highlight-overlay" />
+      <span className="cd-highlight-label"><OverlayText>{item.label}</OverlayText></span>
+      <div className="cd-highlight-content">
+        {item.peopleLine && (
+          <span className="cd-highlight-meta"><OverlayText>{item.peopleLine}</OverlayText></span>
+        )}
+        {item.date && (
+          <span className="cd-highlight-date"><OverlayText>{item.date}</OverlayText></span>
+        )}
+        {item.hook && (
+          <p className="cd-highlight-hook"><OverlayText>{item.hook}</OverlayText></p>
+        )}
+      </div>
       {hasMultiple && (
         <>
           <span className="cd-highlight-page-counter">
-            {index + 1}/{items.length}
+            <OverlayText>{`${index + 1}/${items.length}`}</OverlayText>
           </span>
           {!swipeImages && <ImagePageControls onPrevious={handlePrev} onNext={handleNext} previousLabel="Previous" nextLabel="Next" />}
         </>
       )}
+      </StationaryCardOverlay>
     </div>
   );
 }

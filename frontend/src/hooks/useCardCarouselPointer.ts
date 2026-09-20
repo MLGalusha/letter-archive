@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, type RefObject, type PointerEvent, type MouseE
 type Gesture = { id: number; x: number; y: number; left: number; dragging: boolean; vertical: boolean; time: number; lastX: number; velocity: number };
 
 /** Share drag geometry; leave vertical touch gestures and pinch to the browser. */
-export default function useCardCarouselPointer(enabled: boolean, viewport: RefObject<HTMLDivElement | null>, settle: (element: HTMLDivElement, index: number) => void, finish: () => void) {
+export default function useCardCarouselPointer(enabled: boolean, viewport: RefObject<HTMLDivElement | null>, surface: RefObject<HTMLDivElement | null>, settle: (element: HTMLDivElement, index: number) => void, finish: () => void) {
   const gesture = useRef<Gesture | null>(null);
   const suppressClick = useRef(false);
   const callbacks = useRef({ settle, finish });
@@ -46,7 +46,8 @@ export default function useCardCarouselPointer(enabled: boolean, viewport: RefOb
   // cancels pointer delivery. Vertical intent is never prevented; no global lock.
   useLayoutEffect(() => {
     const element = viewport.current;
-    if (!enabled || !element) return;
+    const target = surface.current;
+    if (!enabled || !element || !target) return;
     const onStart = (event: TouchEvent) => {
       if (event.touches.length !== 1) { release(element, true); return; }
       const touch = event.touches[0];
@@ -64,19 +65,19 @@ export default function useCardCarouselPointer(enabled: boolean, viewport: RefOb
       if (dragged && event.cancelable) event.preventDefault();
       suppressClick.current = false;
     };
-    element.addEventListener('touchstart', onStart, { passive: true });
-    element.addEventListener('touchmove', onMove, { passive: false });
-    element.addEventListener('touchend', onEnd, { passive: false });
-    element.addEventListener('touchcancel', onEnd, { passive: true });
+    target.addEventListener('touchstart', onStart, { passive: true });
+    target.addEventListener('touchmove', onMove, { passive: false });
+    target.addEventListener('touchend', onEnd, { passive: false });
+    target.addEventListener('touchcancel', onEnd, { passive: true });
     return () => {
-      element.removeEventListener('touchstart', onStart);
-      element.removeEventListener('touchmove', onMove);
-      element.removeEventListener('touchend', onEnd);
-      element.removeEventListener('touchcancel', onEnd);
+      target.removeEventListener('touchstart', onStart);
+      target.removeEventListener('touchmove', onMove);
+      target.removeEventListener('touchend', onEnd);
+      target.removeEventListener('touchcancel', onEnd);
       gesture.current = null;
     };
   // Geometry helpers use refs; selection renders must not reset a live gesture.
-  }, [enabled, viewport]);
+  }, [enabled, viewport, surface]);
   const releaseMouse = (event: PointerEvent<HTMLDivElement>) => {
     if (event.pointerType !== 'mouse' || gesture.current?.id !== event.pointerId) return;
     const dragged = gesture.current.dragging;

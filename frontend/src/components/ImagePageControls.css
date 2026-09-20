@@ -50,7 +50,9 @@
 .image-page-control--next::after { right: 1.1rem; transform: rotate(-45deg); }
 @media (hover: hover) and (pointer: fine) {
   .image-page-control { opacity: 0; }
-  :hover > .image-page-controls > .image-page-control { opacity: 1; }
+  :hover > .image-page-controls > .image-page-control,
+  :hover > .stationary-card-overlay .image-page-control,
+  :hover > .card-carousel-overlay-host .image-page-control { opacity: 1; }
   .image-page-control:hover { color: rgba(255, 250, 242, 0.98); }
   .image-page-control:hover::before { opacity: 0.65; }
 }

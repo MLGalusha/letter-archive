@@ -21,6 +21,7 @@ import useStickyDock from "../hooks/useStickyDock";
 import useIsMobile from "../hooks/useIsMobile";
 import CardCarousel from '../components/CardCarousel';
 import ImagePageControls from '../components/ImagePageControls';
+import StationaryCardOverlay, { OverlayText } from '../components/StationaryCardOverlay';
 import CardMediaImages from '../components/CardMediaImages';
 import useMediaSelection from '../hooks/useMediaSelection';
 import { formatDate } from "../utils/dateFormatting";
@@ -190,16 +191,6 @@ function HeroLetterCard({
           <span>{heroDate || "Featured letter"}</span>
         </div>
       )}
-      <div className="letter-card-overlay" />
-      <div className="home-hero-feature-label">
-        <span className="home-hero-feature-title">Featured Letter</span>
-        <span className="home-hero-feature-collection">Collection {heroLetter.collectionCode || "009"}</span>
-      </div>
-      <div className="letter-card-content">
-        {heroPeopleLine && <div className="letter-card-meta">{heroPeopleLine}</div>}
-        {heroDate && <div className="letter-card-date">{heroDate}</div>}
-        {heroLetter.hook && <p className="letter-hook">{heroLetter.hook}</p>}
-      </div>
       </a>
     );
   };
@@ -210,15 +201,27 @@ function HeroLetterCard({
           {heroImages.map((img, i) => <div key={img.id} className="card-media-page">{renderPage(i)}</div>)}
         </CardCarousel>
       ) : renderPage(heroPageIndex)}
+      <StationaryCardOverlay className="home-hero-overlay">
+      <div className="letter-card-overlay" />
+      <div className="home-hero-feature-label">
+        <span className="home-hero-feature-title">Featured Letter</span>
+        <span className="home-hero-feature-collection">Collection {heroLetter.collectionCode || "009"}</span>
+      </div>
+      <div className="letter-card-content">
+        {heroPeopleLine && <div className="letter-card-meta">{heroPeopleLine}</div>}
+        {heroDate && <div className="letter-card-date">{heroDate}</div>}
+        {heroLetter.hook && <p className="letter-hook">{heroLetter.hook}</p>}
+      </div>
       {hasMultiplePages && (
         <span className="home-hero-page-counter">
-          {heroPageIndex + 1}/{heroImages.length}
+          <OverlayText>{`${heroPageIndex + 1}/${heroImages.length}`}</OverlayText>
         </span>
       )}
 
       {hasMultiplePages && !swipeImages && (
         <ImagePageControls onPrevious={handlePrevPage} onNext={handleNextPage} />
       )}
+      </StationaryCardOverlay>
     </div>
   );
 }

@@ -110,13 +110,15 @@
   align-items: stretch;
 }
 
-/* No people column — highlights left-aligned, same width as in 2-col grid */
-.cd-explore:not(:has(.cd-people-col)) {
-  display: block;
-}
+/* Only the desktop two-column layout reserves space for an absent people panel. */
+@media (min-width: 861px) {
+  .cd-explore:not(:has(.cd-people-col)) {
+    display: block;
+  }
 
-.cd-explore:not(:has(.cd-people-col)) .cd-highlights-col {
-  max-width: calc(100% - 240px - 1rem);
+  .cd-explore:not(:has(.cd-people-col)) .cd-highlights-col {
+    max-width: calc(100% - 240px - 1rem);
+  }
 }
 
 /* ---- People column (text-only cards) ---- */

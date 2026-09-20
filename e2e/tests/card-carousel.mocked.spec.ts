@@ -8,9 +8,9 @@ test.use({ isMobile: true, hasTouch: true });
 test.beforeEach(async ({ page }) => {
   await page.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, route => route.abort());
 });
-async function openCards(page: Page, path = '/collections/003') {
+async function openCards(page: Page, path = '/collections/003', withNotes = true) {
   await page.setViewportSize({ width: 390, height: 844 });
-  const collection = { id: 'collection-003', collectionCode: '003', title: 'Carousel collection', description: 'Carousel browser checks', createdAt: '2026-01-01', letterCount: 24 };
+  const collection = { id: 'collection-003', collectionCode: '003', title: 'Carousel collection', description: withNotes ? 'Carousel browser checks' : '', createdAt: '2026-01-01', letterCount: 24 };
   const letters = ['letter', 'photo'].map((type, index) => ({
     id: `item-${index}`, images: [{ id: `scan-${index}`, type, imageUrl: `/images/scan-${index}` }],
     metadata: { dateRaw: '19470810', date: '1947-08-10', hook: 'A public archive item', verified: true },
@@ -119,10 +119,16 @@ test('@mocked releasing the mouse outside the frame does not leave a stale drag'
 
 for (const width of [320, 390, 430, 640]) {
   test(`@mocked collection cards share a fixed rounded frame and a straight seam at ${width}px`, async ({ page }) => {
-    const carousel = await openCards(page);
+    const carousel = await openCards(page, '/collections/003', false);
     await page.setViewportSize({ width, height: 844 });
     const frame = carousel.locator('.card-carousel-frame');
     const before = await frame.boundingBox();
+    // This fixture has no People panel. Desktop's reserved sidebar width must
+    // not shrink the mobile carousel when collection metadata is absent.
+    await expect(page.locator('.cd-people-col')).toHaveCount(0);
+    const lane = (await page.locator('.cd-explore').boundingBox())!;
+    expect(before!.width).toBeCloseTo(lane.width, 1);
+    expect((await carousel.locator('.cd-highlight-card').first().boundingBox())!.width).toBeCloseTo(lane.width, 1);
     const viewport = carousel.locator('.card-carousel-viewport');
     await viewport.evaluate(el => { (el as HTMLElement).style.scrollSnapType = 'none'; el.scrollLeft = 120; });
     const seam = await carousel.locator('.card-carousel-slide > *').evaluateAll(es => ({

@@ -29,11 +29,6 @@ import './CollectionDetailPage.css';
 
 const EMPTY_COLLECTION_LETTERS: CollectionWithLetters['letters'] = [];
 
-interface CollectionPopup {
-  title: string;
-  content: ReactNode;
-}
-
 export default function CollectionDetailPage() {
   const navigate = useNavigate();
   const { collectionCode } = useParams<{ collectionCode: string }>();
@@ -62,11 +57,7 @@ export default function CollectionDetailPage() {
   const error = overview && overview.code === collectionCode ? overview.error : null;
 
   /* ---- Popup state ---- */
-  const [popupResult, setPopupResult] = useState<{ code: string | undefined; value: CollectionPopup } | null>(null);
-  const popup = popupResult && popupResult.code === collectionCode ? popupResult.value : null;
-  const setPopup = useCallback((value: CollectionPopup | null) => {
-    setPopupResult(value ? { code: collectionCode, value } : null);
-  }, [collectionCode]);
+  const [popup, setPopup] = useState<{ title: string; content: ReactNode } | null>(null);
 
   /* ---- Archive search (extracted hook) ---- */
   const fixedFilters = useMemo(
@@ -120,6 +111,11 @@ export default function CollectionDetailPage() {
     if (!collectionCode) return;
 
     const controller = new AbortController();
+    // A route visit must discard the prior visit, including A -> B -> A before B loads.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Initialize the new external-request and popup session; code equality alone cannot identify a visit.
+    setOverview(null);
+    setProfileResult(null);
+    setPopup(null);
 
     void getCollectionByCode(collectionCode, controller.signal).then((data) => {
       if (controller.signal.aborted) return;

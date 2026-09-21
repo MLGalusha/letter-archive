@@ -44,7 +44,7 @@ describe('floating scroll control touch activation', () => {
     expect(action).not.toHaveBeenCalled();
   });
 
-  it('leaves multi-touch, canceled touches, and noncancelable endings alone', () => {
+  it('leaves multi-touch and canceled touches alone', () => {
     const action = vi.fn();
     render(<Control action={action} />);
     const button = screen.getByRole('button');
@@ -53,8 +53,7 @@ describe('floating scroll control touch activation', () => {
     send(button, 'touchstart', [touch]);
     send(button, 'touchcancel', [], [touch]);
     send(button, 'touchend', [], [touch]);
-    send(button, 'touchstart', [touch]);
-    send(button, 'touchend', [], [touch], false);
+
     expect(action).not.toHaveBeenCalled();
   });
 
@@ -69,4 +68,16 @@ describe('floating scroll control touch activation', () => {
     send(button, 'touchend', [], [touch]);
     expect(action).toHaveBeenCalledTimes(1);
   });
+});
+
+it('activates noncancelable touch endings once and preserves keyboard activation', () => {
+  const action = vi.fn();
+  render(<Control action={action} />);
+  const button = screen.getByRole('button');
+  send(button, 'touchstart', [touch]);
+  send(button, 'touchend', [], [touch], false);
+  fireEvent.click(button, { detail: 1 });
+  expect(action).toHaveBeenCalledTimes(1);
+  fireEvent.click(button, { detail: 0 });
+  expect(action).toHaveBeenCalledTimes(2);
 });

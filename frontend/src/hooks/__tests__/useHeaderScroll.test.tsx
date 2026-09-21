@@ -2,13 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import useHeaderScroll from "../useHeaderScroll";
 
-/**
- * Focused coverage for the input-focus visibility lock added after the #35
- * container-scroll refactor. The older hide-on-scroll-down branch is left
- * uncovered here — it would need a mock of `addAppScrollListener` and is out
- * of scope for this change.
- */
-
 function mockMatchMedia(matches: Record<string, boolean>) {
   const listeners = new Map<string, Set<(e: MediaQueryListEvent) => void>>();
   const impl = (query: string) => {
@@ -49,13 +42,13 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-describe("useHeaderScroll — input-focus visibility lock", () => {
+describe("useHeaderScroll — keyboard and focus", () => {
   it("reports visible: true by default (nothing focused, at top of page)", () => {
     const { result } = renderHook(() => useHeaderScroll());
     expect(result.current.visible).toBe(true);
   });
 
-  it("locks header visible while a text input has focus", () => {
+  it("keeps header visible when focus does not open a keyboard", () => {
     const input = document.createElement("input");
     input.type = "text";
     document.body.appendChild(input);
@@ -69,7 +62,7 @@ describe("useHeaderScroll — input-focus visibility lock", () => {
     expect(result.current.visible).toBe(true);
   });
 
-  it("locks header visible while a textarea has focus", () => {
+  it("does not hide merely for textarea focus", () => {
     const ta = document.createElement("textarea");
     document.body.appendChild(ta);
 
@@ -82,7 +75,7 @@ describe("useHeaderScroll — input-focus visibility lock", () => {
     expect(result.current.visible).toBe(true);
   });
 
-  it("locks header visible while a contentEditable element has focus", () => {
+  it("does not hide merely for contentEditable focus", () => {
     const div = document.createElement("div");
     div.contentEditable = "true";
     document.body.appendChild(div);
@@ -134,4 +127,50 @@ describe("useHeaderScroll — input-focus visibility lock", () => {
     // focusout doesn't crash and the state stays coherent.
     expect(result.current.visible).toBe(true);
   });
+});
+
+it("hides for the keyboard and restores on dismissal even while input stays focused", () => {
+  const viewport = Object.assign(new EventTarget(), { height: 844, offsetTop: 0, scale: 1 });
+  vi.stubGlobal("visualViewport", viewport);
+  const input = document.createElement("input");
+  document.body.append(input);
+  const { result, unmount } = renderHook(() => useHeaderScroll());
+  act(() => input.focus());
+  act(() => {
+    viewport.height = 480;
+    viewport.offsetTop = 80;
+    viewport.dispatchEvent(new Event("resize"));
+  });
+  expect(result.current.visible).toBe(false);
+  act(() => {
+    viewport.height = 844;
+    viewport.offsetTop = 24;
+    viewport.dispatchEvent(new Event("resize"));
+  });
+  expect(result.current.visible).toBe(true);
+  expect(result.current.viewportTop).toBe(24);
+  act(() => {
+    viewport.offsetTop = 0;
+    viewport.dispatchEvent(new Event("scroll"));
+  });
+  expect(result.current.viewportTop).toBe(0);
+  unmount();
+  vi.unstubAllGlobals();
+});
+
+it("does not confuse pinch zoom with opening the keyboard", () => {
+  const viewport = Object.assign(new EventTarget(), { height: 844, offsetTop: 0, scale: 1 });
+  vi.stubGlobal("visualViewport", viewport);
+  const input = document.createElement("input");
+  document.body.append(input);
+  const { result, unmount } = renderHook(() => useHeaderScroll());
+  act(() => input.focus());
+  act(() => {
+    viewport.height = 422;
+    viewport.scale = 2;
+    viewport.dispatchEvent(new Event("resize"));
+  });
+  expect(result.current.visible).toBe(true);
+  unmount();
+  vi.unstubAllGlobals();
 });

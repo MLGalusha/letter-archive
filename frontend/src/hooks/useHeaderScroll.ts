@@ -15,15 +15,13 @@ import { addAppScrollListener, getAppScrollY } from "../utils/appScroll";
  * both simply return `{ visible: true, atTop: y <= 4 }` so behaviors that key
  * off `atTop` (dock collapse) still work but the header never hides.
  *
- * Also force-pinned visible while any input/textarea/contentEditable has
- * focus. The user isn't manually scrolling while typing, and any browser-
- * level scroll-into-view adjustments (iOS keyboard reflow, etc.) would
- * otherwise race against the hide-on-scroll-down logic.
+ * Keyboard viewport changes are handled separately from user scroll direction.
  */
 
 export interface HeaderScrollState {
   visible: boolean;
   atTop: boolean;
+  viewportTop: number;
 }
 
 const MOBILE_MAX_WIDTH = 900;
@@ -46,7 +44,7 @@ export default function useHeaderScroll(): HeaderScrollState {
   const [isMobile, setIsMobile] = useState<boolean>(() => readIsMobile());
   const [reducedMotion, setReducedMotion] = useState<boolean>(() => readReducedMotion());
   const [visible, setVisible] = useState<boolean>(true);
-  const [inputFocused, setInputFocused] = useState<boolean>(false);
+  const [viewportTop, setViewportTop] = useState(0);
   const [atTop, setAtTop] = useState<boolean>(() => {
     if (typeof window === "undefined") return true;
     return getAppScrollY() <= ATTOP_EXPAND;
@@ -77,6 +75,32 @@ export default function useHeaderScroll(): HeaderScrollState {
 
     let lastY = getAppScrollY();
     let ticking = false;
+    let frame = 0;
+    let keyboardOpen = false;
+    let editing = false;
+    const viewport = window.visualViewport;
+    let fullHeight = viewport?.height ?? window.innerHeight;
+    const syncViewport = () => {
+      const height = viewport?.height ?? window.innerHeight;
+      // Ignore pinch zoom; a shrunken visual viewport alone is not a keyboard.
+      const shrunk = Math.abs((viewport?.scale ?? 1) - 1) < 0.05
+        && fullHeight - height > 120;
+      const next = isMobile && shrunk && (editing || keyboardOpen);
+      const recovering = keyboardOpen && !next;
+      keyboardOpen = next;
+      if (!editing && !keyboardOpen) fullHeight = height;
+      setViewportTop(isMobile ? Math.max(0, viewport?.offsetTop ?? 0) : 0);
+      if (keyboardOpen || recovering) {
+        lastY = getAppScrollY();
+        setVisible(!keyboardOpen);
+      }
+    };
+    const onFocus = (event?: FocusEvent) => {
+      const el = event?.type === "focusout" ? event.relatedTarget : document.activeElement;
+      editing = el instanceof HTMLElement && (el.isContentEditable
+        || el.matches('textarea, input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"])'));
+      syncViewport();
+    };
 
     const update = () => {
       const y = getAppScrollY();
@@ -87,7 +111,9 @@ export default function useHeaderScroll(): HeaderScrollState {
       // visible — only on mobile, and only when the user hasn't opted out of
       // motion. Desktop and reduced-motion users keep the header pinned so it
       // never slides in and out on scroll.
-      if (isMobile && !reducedMotion) {
+      if (keyboardOpen) {
+        lastY = y;
+      } else if (isMobile && !reducedMotion) {
         if (y < HEADER_NEAR_TOP || y < lastY - HEADER_HYSTERESIS) {
           setVisible(true);
         } else if (y > lastY + HEADER_HYSTERESIS) {
@@ -104,43 +130,32 @@ export default function useHeaderScroll(): HeaderScrollState {
     const onScroll = () => {
       if (ticking) return;
       ticking = true;
-      requestAnimationFrame(update);
+      frame = requestAnimationFrame(update);
     };
 
     // Prime state on mount.
     update();
-    return addAppScrollListener(onScroll);
+    const removeScroll = addAppScrollListener(onScroll);
+    document.addEventListener("focusin", onFocus);
+    document.addEventListener("focusout", onFocus);
+    viewport?.addEventListener("resize", syncViewport);
+    viewport?.addEventListener("scroll", syncViewport);
+    window.addEventListener("resize", syncViewport);
+    onFocus();
+    return () => {
+      removeScroll();
+      cancelAnimationFrame(frame);
+      document.removeEventListener("focusin", onFocus);
+      document.removeEventListener("focusout", onFocus);
+      viewport?.removeEventListener("resize", syncViewport);
+      viewport?.removeEventListener("scroll", syncViewport);
+      window.removeEventListener("resize", syncViewport);
+    };
   }, [isMobile, reducedMotion]);
 
-  // Track whether any text input has focus. While focused we force the
-  // header visible so auto-scroll-on-focus can reposition the search panel
-  // without the hide-on-scroll-down logic racing against it.
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-
-    const isTextInput = (el: EventTarget | null): boolean => {
-      if (!(el instanceof HTMLElement)) return false;
-      const tag = el.tagName;
-      return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable;
-    };
-
-    const onFocusIn = (e: FocusEvent) => {
-      if (isTextInput(e.target)) setInputFocused(true);
-    };
-    const onFocusOut = (e: FocusEvent) => {
-      if (isTextInput(e.target)) setInputFocused(false);
-    };
-
-    document.addEventListener("focusin", onFocusIn);
-    document.addEventListener("focusout", onFocusOut);
-    return () => {
-      document.removeEventListener("focusin", onFocusIn);
-      document.removeEventListener("focusout", onFocusOut);
-    };
-  }, []);
-
   return {
-    visible: isMobile ? visible || inputFocused : true,
+    visible: isMobile ? visible : true,
+    viewportTop,
     atTop,
   };
 }

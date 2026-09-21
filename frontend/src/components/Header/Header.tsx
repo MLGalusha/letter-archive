@@ -22,7 +22,7 @@ export default memo(function Header() {
   const settings = useSiteSettings();
   const [menuOpen, setMenuOpen] = useState(false);
   const { state, registerSlot } = useHeaderDock();
-  const { visible, atTop, viewportTop } = useHeaderScroll();
+  const { visible, atTop } = useHeaderScroll();
   const isMobile = useIsMobile(900);
   const location = useLocation();
 
@@ -136,7 +136,7 @@ export default memo(function Header() {
   return (
     <>
     {state.transparent && <div ref={readerCoverRef} className="header-reader-cover" aria-hidden="true" />}
-    <header ref={headerRef} className={headerClass} inert={hidden} style={{ top: viewportTop }}>
+    <header ref={headerRef} className={headerClass} inert={hidden}>
       <a href="#main-content" className="skip-link">Skip to content</a>
       <div className="header-inner">
         <div className={`header-brand-slot${state.hasContent ? " has-active-dock" : ""}`}>

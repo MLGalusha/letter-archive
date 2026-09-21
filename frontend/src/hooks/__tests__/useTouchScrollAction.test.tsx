@@ -19,7 +19,7 @@ describe('floating scroll control touch activation', () => {
     const action = vi.fn();
     render(<Control action={action} />);
     const button = screen.getByRole('button');
-    expect(send(button, 'touchstart', [touch]).defaultPrevented).toBe(false);
+    expect(send(button, 'touchstart', [touch]).defaultPrevented).toBe(true);
     expect(action).not.toHaveBeenCalled();
     expect(send(button, 'touchend', [], [touch]).defaultPrevented).toBe(true);
     expect(action).toHaveBeenCalledTimes(1);
@@ -80,4 +80,19 @@ it('activates noncancelable touch endings once and preserves keyboard activation
   expect(action).toHaveBeenCalledTimes(1);
   fireEvent.click(button, { detail: 0 });
   expect(action).toHaveBeenCalledTimes(2);
+});
+
+it('keeps an in-progress tap across a render and uses the current action', () => {
+  const first = vi.fn();
+  const latest = vi.fn();
+  const { rerender } = render(<Control action={first} />);
+  const button = screen.getByRole('button');
+  expect(button.style.touchAction).toBe('none');
+  send(button, 'touchstart', [touch]);
+  rerender(<Control action={latest} />);
+  send(button, 'touchend', [], [touch]);
+  expect(first).not.toHaveBeenCalled();
+  expect(latest).toHaveBeenCalledTimes(1);
+  fireEvent.click(button, { detail: 1 });
+  expect(latest).toHaveBeenCalledTimes(1);
 });

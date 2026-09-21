@@ -29,8 +29,6 @@ function mockMatchMedia(matches: Record<string, boolean>) {
 }
 
 beforeEach(() => {
-  // Mobile + motion-allowed is the branch where hide-on-scroll-down is active,
-  // which makes the focus lock behavior observable.
   mockMatchMedia({
     "(max-width: 900px)": true,
     "(prefers-reduced-motion: reduce)": false,
@@ -39,93 +37,32 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   document.body.innerHTML = "";
 });
 
-describe("useHeaderScroll — keyboard and focus", () => {
-  it("reports visible: true by default (nothing focused, at top of page)", () => {
+describe("ordinary scrolling", () => {
+  it.each([false, true])("keeps the header visible with reduced motion %s, while the dock collapses", (reduced) => {
+    mockMatchMedia({ "(max-width: 900px)": true, "(prefers-reduced-motion: reduce)": reduced });
+    vi.stubGlobal("scrollY", 0);
+    let frame: FrameRequestCallback = () => {};
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => { frame = callback; return 1; });
     const { result } = renderHook(() => useHeaderScroll());
-    expect(result.current.visible).toBe(true);
-  });
-
-  it("keeps header visible when focus does not open a keyboard", () => {
-    const input = document.createElement("input");
-    input.type = "text";
-    document.body.appendChild(input);
-
-    const { result } = renderHook(() => useHeaderScroll());
-
-    act(() => {
-      input.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    const scroll = (y: number) => act(() => {
+      vi.stubGlobal("scrollY", y);
+      window.dispatchEvent(new Event("scroll"));
+      frame(0);
     });
-
-    expect(result.current.visible).toBe(true);
-  });
-
-  it("does not hide merely for textarea focus", () => {
-    const ta = document.createElement("textarea");
-    document.body.appendChild(ta);
-
-    const { result } = renderHook(() => useHeaderScroll());
-
-    act(() => {
-      ta.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
-    });
-
-    expect(result.current.visible).toBe(true);
-  });
-
-  it("does not hide merely for contentEditable focus", () => {
-    const div = document.createElement("div");
-    div.contentEditable = "true";
-    document.body.appendChild(div);
-
-    const { result } = renderHook(() => useHeaderScroll());
-
-    act(() => {
-      div.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
-    });
-
-    expect(result.current.visible).toBe(true);
-  });
-
-  it("does not treat non-text elements (buttons, links) as a focus lock", () => {
-    const button = document.createElement("button");
-    document.body.appendChild(button);
-
-    const { result } = renderHook(() => useHeaderScroll());
-
-    // Focus a button — this should NOT trip the input-focus lock. We can't
-    // easily assert "visible only because of the lock" without a scroll mock,
-    // but we can assert the focusin event doesn't throw and the hook remains
-    // in a coherent state. Pairing this with the above tests verifies the
-    // isTextInput guard is in place rather than a blanket document-focus lock.
-    act(() => {
-      button.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
-    });
-
-    expect(result.current.visible).toBe(true);
-  });
-
-  it("releases the lock when the text input blurs", () => {
-    const input = document.createElement("input");
-    input.type = "text";
-    document.body.appendChild(input);
-
-    const { result } = renderHook(() => useHeaderScroll());
-
-    act(() => {
-      input.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
-    });
-    expect(result.current.visible).toBe(true);
-
-    act(() => {
-      input.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
-    });
-    // With nothing focused and no scroll activity, the hook's internal
-    // `visible` state remains true (its default), so we only assert that
-    // focusout doesn't crash and the state stays coherent.
-    expect(result.current.visible).toBe(true);
+    expect(result.current.atTop).toBe(true);
+    for (const y of [100, 1000, 900, 1200]) {
+      scroll(y);
+      expect(result.current.visible).toBe(true);
+      expect(result.current.atTop).toBe(false);
+    }
+    scroll(8);
+    expect(result.current.atTop).toBe(false);
+    scroll(0);
+    expect(result.current.atTop).toBe(true);
   });
 });
 
@@ -148,12 +85,11 @@ it("hides for the keyboard and restores on dismissal even while input stays focu
     viewport.dispatchEvent(new Event("resize"));
   });
   expect(result.current.visible).toBe(true);
-  expect(result.current.viewportTop).toBe(24);
   act(() => {
     viewport.offsetTop = 0;
     viewport.dispatchEvent(new Event("scroll"));
   });
-  expect(result.current.viewportTop).toBe(0);
+  expect(result.current.visible).toBe(true);
   unmount();
   vi.unstubAllGlobals();
 });

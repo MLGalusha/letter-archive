@@ -335,7 +335,7 @@ export default function HomePage() {
         jsonLd={homeSeo.jsonLd}
       />
       <section className={`home-hero${isMobile ? " home-hero--carousel" : ""}`}>
-        <CardCarousel label="Featured archive" className="home-showcase" layout={isMobile ? "carousel" : "static"}>
+        <CardCarousel label="Featured archive" className="home-showcase" overlayPlacement="slide" layout={isMobile ? "carousel" : "static"}>
           {[
             <div className="home-hero-copy" key="copy">
               <p className="home-kicker">{heroCopy.kicker}</p>

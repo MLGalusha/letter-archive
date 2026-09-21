@@ -3,6 +3,10 @@ import { useEffect, useRef } from 'react';
 /** One bounded settle animation for dragging and explicit navigation. */
 export default function useCarouselMotion() {
   const pending = useRef<{ frame: number; element: HTMLDivElement; left: number } | null>(null);
+  const cancel = () => {
+    if (pending.current) cancelAnimationFrame(pending.current.frame);
+    pending.current = null;
+  };
   const finish = () => {
     const motion = pending.current;
     if (!motion) return;
@@ -37,5 +41,5 @@ export default function useCarouselMotion() {
     };
     motion.frame = requestAnimationFrame(tick);
   };
-  return { move, finish };
+  return { move, finish, cancel };
 }

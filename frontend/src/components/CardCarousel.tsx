@@ -11,12 +11,13 @@ interface CardCarouselProps {
   initialIndex?: number;
   onSlideChange?: (index: number) => void;
   showDots?: boolean;
+  overlayPlacement?: 'frame' | 'slide';
   /** Keep content mounted when the page switches to its desktop layout. */
   layout?: 'carousel' | 'static';
 }
 
 /** One clipped frame, bounded pointer settling, native wheel scrolling, and no clones. */
-export default function CardCarousel({ children, label, className = '', layout = 'carousel', initialIndex = 0, onSlideChange, showDots = true }: CardCarouselProps) {
+export default function CardCarousel({ children, label, className = '', layout = 'carousel', initialIndex = 0, onSlideChange, showDots = true, overlayPlacement = 'frame' }: CardCarouselProps) {
   const slides = Children.toArray(children);
   const keys = slides.map((slide, i) => isValidElement(slide) ? String(slide.key ?? i) : String(i));
   const signature = JSON.stringify(keys);
@@ -36,7 +37,7 @@ export default function CardCarousel({ children, label, className = '', layout =
   const pointer = useCardCarouselPointer(interactive, viewportRef, frameRef, (element, index) => {
     targetRef.current = index;
     motion.move(element, index * element.clientWidth);
-  }, motion.finish);
+  }, () => { motion.cancel(); targetRef.current = null; });
 
   const finishMotion = useRef(motion.finish);
   useLayoutEffect(() => { finishMotion.current = motion.finish; }, [motion.finish]);
@@ -100,14 +101,12 @@ export default function CardCarousel({ children, label, className = '', layout =
     window.addEventListener('resize', realign);
     viewport.addEventListener('scroll', onScroll, { passive: true });
     viewport.addEventListener('scrollend', settle);
-    viewport.addEventListener('pointerdown', interrupt, { passive: true });
     viewport.addEventListener('wheel', interrupt, { passive: true });
     return () => {
       cancelAnimationFrame(frame); clearTimeout(settleTimer); observer?.disconnect();
       window.removeEventListener('resize', realign);
       viewport.removeEventListener('scroll', onScroll);
       viewport.removeEventListener('scrollend', settle);
-      viewport.removeEventListener('pointerdown', interrupt);
       viewport.removeEventListener('wheel', interrupt);
     };
   }, [signature, carousel]);
@@ -151,11 +150,11 @@ export default function CardCarousel({ children, label, className = '', layout =
             <div className="card-carousel-slide" key={keys[index]} inert={carousel && index !== active}
               role={interactive ? 'group' : undefined} aria-roledescription={interactive ? 'slide' : undefined}
               aria-label={interactive ? `${index + 1} of ${slides.length}` : undefined}>
-              <CarouselOverlayContext.Provider value={carousel ? { host: overlayHost, active: index === active } : null}>{slide}</CarouselOverlayContext.Provider>
+              <CarouselOverlayContext.Provider value={carousel && overlayPlacement === 'frame' ? { host: overlayHost, active: index === active } : null}>{slide}</CarouselOverlayContext.Provider>
             </div>
           ))}
         </div>
-        {carousel && <div className="card-carousel-overlay-host" ref={setOverlayHost} />}
+        {carousel && overlayPlacement === 'frame' && <div className="card-carousel-overlay-host" ref={setOverlayHost} />}
       </div>
       {interactive && showDots && (
         <div className="card-carousel-dots" role="group" aria-label="Choose slide">

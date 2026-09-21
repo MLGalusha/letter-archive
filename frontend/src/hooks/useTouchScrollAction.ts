@@ -2,8 +2,8 @@ import { useEffect, useLayoutEffect, useRef } from 'react';
 
 const TAP_SLOP = 10;
 
-/** Complete touch taps without waiting for a synthesized click. The small floating
- * button owns its touch sequence; dragging cancels rather than navigating.
+/** Complete touch taps without waiting for a synthesized click. Starting a
+ * swipe over a floating control still scrolls the document normally.
  */
 export default function useTouchScrollAction(action: () => void) {
   const ref = useRef<HTMLButtonElement>(null);
@@ -12,8 +12,6 @@ export default function useTouchScrollAction(action: () => void) {
   useEffect(() => {
     const button = ref.current;
     if (!button) return;
-    const previousTouchAction = button.style.touchAction;
-    button.style.touchAction = "none";
     let start: { id: number; x: number; y: number } | null = null;
     let suppressClickUntil = 0;
     const cancel = () => { start = null; };
@@ -23,9 +21,6 @@ export default function useTouchScrollAction(action: () => void) {
     const onStart = (event: TouchEvent) => {
       suppressClickUntil = 0;
       const touch = event.touches[0];
-      // Reserve this control contact before native momentum handling. Do not
-      // activate until release: moving away or cancellation must remain safe.
-      if (event.touches.length === 1 && event.cancelable) event.preventDefault();
       start = event.touches.length === 1
         ? { id: touch.identifier, x: touch.clientX, y: touch.clientY } : null;
     };
@@ -50,12 +45,11 @@ export default function useTouchScrollAction(action: () => void) {
       }
     };
     button.addEventListener('click', onClick, true);
-    button.addEventListener('touchstart', onStart, { passive: false });
+    button.addEventListener('touchstart', onStart, { passive: true });
     button.addEventListener('touchmove', onMove, { passive: true });
     button.addEventListener('touchend', onEnd, { passive: false });
     button.addEventListener('touchcancel', cancel, { passive: true });
     return () => {
-      button.style.touchAction = previousTouchAction;
       button.removeEventListener('click', onClick, true);
       button.removeEventListener('touchstart', onStart);
       button.removeEventListener('touchmove', onMove);

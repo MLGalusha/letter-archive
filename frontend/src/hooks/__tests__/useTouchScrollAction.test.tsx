@@ -19,7 +19,7 @@ describe('floating scroll control touch activation', () => {
     const action = vi.fn();
     render(<Control action={action} />);
     const button = screen.getByRole('button');
-    expect(send(button, 'touchstart', [touch]).defaultPrevented).toBe(true);
+    expect(send(button, 'touchstart', [touch]).defaultPrevented).toBe(false);
     expect(action).not.toHaveBeenCalled();
     expect(send(button, 'touchend', [], [touch]).defaultPrevented).toBe(true);
     expect(action).toHaveBeenCalledTimes(1);
@@ -87,7 +87,6 @@ it('keeps an in-progress tap across a render and uses the current action', () =>
   const latest = vi.fn();
   const { rerender } = render(<Control action={first} />);
   const button = screen.getByRole('button');
-  expect(button.style.touchAction).toBe('none');
   send(button, 'touchstart', [touch]);
   rerender(<Control action={latest} />);
   send(button, 'touchend', [], [touch]);

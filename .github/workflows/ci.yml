@@ -13,6 +13,25 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  browser-scope:
+    name: Select browser coverage
+    runs-on: ubuntu-latest
+    outputs:
+      run_browser: ${{ steps.scope.outputs.run_browser }}
+    steps:
+      - name: Checkout comparison revisions
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          # PR merge revision and its parents; unavailable history runs full coverage.
+          fetch-depth: 2
+      - name: Verify selection safeguards
+        run: node --test scripts/select-browser-checks.test.mjs
+      - name: Select browser coverage
+        id: scope
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/select-browser-checks.mjs
+
   quality:
     name: Tests, Typecheck, Build
     runs-on: ubuntu-latest
@@ -79,10 +98,31 @@ jobs:
         working-directory: frontend
         run: npm run build
 
-  e2e-mocked:
-    name: E2E Mocked Suite
+  e2e-mocked-tests:
+    name: Mocked browser checks (${{ matrix.suite }})
+    needs: browser-scope
+    if: needs.browser-scope.outputs.run_browser == 'true'
     runs-on: ubuntu-latest
-    needs: quality
+    # Keep one worker per mocked shard; distribute cases across isolated runners.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: shard-1
+            config: playwright.mocked.config.ts
+            shard: 1/4
+          - suite: shard-2
+            config: playwright.mocked.config.ts
+            shard: 2/4
+          - suite: shard-3
+            config: playwright.mocked.config.ts
+            shard: 3/4
+          - suite: shard-4
+            config: playwright.mocked.config.ts
+            shard: 4/4
+          - suite: mobile
+            config: playwright.mobile-layout.config.ts
+            shard: 1/1
     env:
       CI: true
       E2E_MOCKED_BASE_URL: http://127.0.0.1:4174
@@ -121,9 +161,20 @@ jobs:
           npx playwright install --with-deps --only-shell chromium
           npx playwright install --with-deps webkit
 
-      - name: Run mocked e2e
+      - name: Verify benchmark metadata
+        if: matrix.suite == 'mobile'
         working-directory: e2e
-        run: npm run test:mocked
+        run: npm run test:benchmark
+
+      - name: Run browser checks
+        working-directory: e2e
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/results.json
+        run: >-
+          npx playwright test
+          --config=${{ matrix.config }}
+          --shard=${{ matrix.shard }}
+          --reporter=line,html,json
 
       - name: Upload mocked Playwright report
         id: playwright_mocked_report
@@ -132,18 +183,42 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: playwright-mocked-report
-          path: e2e/playwright-report
+          name: playwright-mocked-${{ matrix.suite }}-attempt-${{ github.run_attempt }}
+          path: |
+            e2e/playwright-report
+            e2e/test-results/results.json
           if-no-files-found: ignore
 
       - name: Report diagnostic upload failure
         if: always() && steps.playwright_mocked_report.outcome == 'failure'
         run: echo "::warning::Diagnostic upload failed; test results remain in this job's logs."
 
+  # Preserve the branch-protection context and fail closed on any matrix failure,
+  # cancellation, or unexpected skip. Only a successful scope decision may omit it.
+  e2e-mocked:
+    name: E2E Mocked Suite
+    runs-on: ubuntu-latest
+    needs: [browser-scope, e2e-mocked-tests]
+    if: always()
+    steps:
+      - name: Require browser success or an explicit safe exclusion
+        env:
+          SCOPE_RESULT: ${{ needs.browser-scope.result }}
+          RUN_BROWSER: ${{ needs.browser-scope.outputs.run_browser }}
+          BROWSER_RESULT: ${{ needs.e2e-mocked-tests.result }}
+        run: |
+          echo "Browser matrix result: $BROWSER_RESULT"
+          test "$SCOPE_RESULT" = success
+          case "$RUN_BROWSER:$BROWSER_RESULT" in
+            true:success|false:skipped) ;;
+            *) echo "Browser coverage did not satisfy the selection decision" >&2; exit 1 ;;
+          esac
+
   e2e-webkit-scroll:
     name: WebKit Native Scrolling
+    needs: browser-scope
+    if: needs.browser-scope.outputs.run_browser == 'true'
     runs-on: macos-15
-    needs: quality
     timeout-minutes: 10
     env:
       CI: true
@@ -181,7 +256,6 @@ jobs:
   e2e-smoke:
     name: E2E Smoke
     runs-on: ubuntu-latest
-    needs: quality
     services:
       postgres:
         image: postgres:15

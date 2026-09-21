@@ -143,9 +143,9 @@ export default function CardCarousel({ children, label, className = '', layout =
     <div className={`card-carousel ${className}`} data-layout={layout}
       role={interactive ? 'region' : undefined} aria-roledescription={interactive ? 'carousel' : undefined}
       aria-label={interactive ? label : undefined} onKeyDown={onKeyDown}>
-      <div className="card-carousel-frame" ref={frameRef} data-settled-slide={settledSlide ?? undefined}>
+      <div className="card-carousel-frame" ref={frameRef} data-settled-slide={settledSlide ?? undefined} {...pointer}>
         <div className="card-carousel-viewport" ref={viewportRef} tabIndex={interactive ? 0 : undefined}
-          aria-label={interactive ? `${label}: use left and right arrow keys to change slides` : undefined} {...pointer}>
+          aria-label={interactive ? `${label}: use left and right arrow keys to change slides` : undefined}>
           {slides.map((slide, index) => (
             <div className="card-carousel-slide" key={keys[index]} inert={carousel && index !== active}
               role={interactive ? 'group' : undefined} aria-roledescription={interactive ? 'slide' : undefined}

@@ -98,8 +98,10 @@ export default function useCardCarouselPointer(enabled: boolean, viewport: RefOb
   }, [enabled, viewport, surface]);
   const releaseMouse = (event: PointerEvent<HTMLDivElement>) => {
     if (event.pointerType !== 'mouse' || gesture.current?.id !== event.pointerId) return;
+    const element = viewport.current;
+    if (!element) return;
     const dragged = gesture.current.dragging;
-    release(event.currentTarget, event.type === 'pointercancel');
+    release(element, event.type === 'pointercancel');
     if (dragged && event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   };
   return {
@@ -107,13 +109,13 @@ export default function useCardCarouselPointer(enabled: boolean, viewport: RefOb
       if (event.pointerType !== 'mouse') return;
       suppressClick.current = false;
       if (!enabled || !event.isPrimary || event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
-      if ((event.target as HTMLElement).closest('button, a:not([data-carousel-drag]), input, textarea, select, [contenteditable=true]')) return;
-      begin(event.currentTarget, event.pointerId, event.clientX, event.clientY);
+      if ((event.target as HTMLElement).closest('button:not([data-carousel-drag]), a:not([data-carousel-drag]), input, textarea, select, [contenteditable=true]')) return;
+      if (viewport.current) begin(viewport.current, event.pointerId, event.clientX, event.clientY);
     },
     onPointerMove: (event: PointerEvent<HTMLDivElement>) => {
       if (event.pointerType !== 'mouse' || gesture.current?.id !== event.pointerId) return;
       if (!(event.buttons & 1)) { releaseMouse(event); return; }
-      if (move(event.currentTarget, event.clientX, event.clientY)) {
+      if (viewport.current && move(viewport.current, event.clientX, event.clientY)) {
         event.currentTarget.setPointerCapture(event.pointerId);
         event.preventDefault();
       }

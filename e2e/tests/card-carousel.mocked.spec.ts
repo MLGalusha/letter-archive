@@ -479,3 +479,65 @@ test('@mocked touch reversals and interrupted settling follow the finger without
   expect(await viewport.evaluate(el => el.scrollLeft)).toBeCloseTo(before - 20, 0);
   await touch('touchEnd');
 });
+
+for (const path of ['/', '/collections/003']) {
+  test(`@mocked mouse drags from either image-page control swipe cards without paging images: ${path}`, async ({ page }) => {
+    const outer = await openCards(page, path, true, true);
+    const viewport = outer.locator(':scope > .card-carousel-frame > .card-carousel-viewport');
+    const startIndex = path === '/' ? 1 : 0;
+    await outer.locator('.card-carousel-dot').nth(startIndex).click();
+    await expect(outer.locator(':scope > .card-carousel-frame')).toHaveAttribute('data-settled-slide', String(startIndex));
+    for (const side of ['previous', 'next']) {
+      const button = outer.locator(`.stationary-card-overlay:not([hidden]) .image-page-control--${side}`).first();
+      const counter = outer.locator('.home-hero-page-counter:visible, .cd-highlight-page-counter:visible').first();
+      const text = await counter.textContent();
+      const box = (await button.boundingBox())!;
+      const frame = (await viewport.boundingBox())!;
+      const x = box.x + box.width / 2, y = box.y + box.height / 2;
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      await page.mouse.move(x + (startIndex ? 1 : -1) * frame.width * 0.7, y, { steps: 12 });
+      await page.mouse.up();
+      await expect(outer.locator('.card-carousel-dot').nth(1 - startIndex)).toHaveAttribute('aria-current', 'true');
+      await expect(page).toHaveURL(new RegExp(path === '/' ? '/$' : '/collections/003$'));
+      await outer.locator('.card-carousel-dot').nth(startIndex).click();
+      await expect(outer.locator(':scope > .card-carousel-frame')).toHaveAttribute('data-settled-slide', String(startIndex));
+      await expect(counter).toHaveText(text!);
+      // The next genuine click still works after suppressing the drag's click.
+      await button.click();
+      await expect(counter).not.toHaveText(text!);
+    }
+  });
+}
+
+for (const path of ['/', '/collections/003']) {
+  test(`@mocked touch can swipe from page controls and still tap them afterward: ${path}`, async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'CDP supplies real touch input; physical Safari remains a separate check.');
+    const outer = await openCards(page, path, true, true);
+    const viewport = outer.locator(':scope > .card-carousel-frame > .card-carousel-viewport');
+    const startIndex = path === '/' ? 1 : 0;
+    await outer.locator('.card-carousel-dot').nth(startIndex).click();
+    await expect(outer.locator(':scope > .card-carousel-frame')).toHaveAttribute('data-settled-slide', String(startIndex));
+    const side = startIndex ? 'previous' : 'next';
+    const button = outer.locator(`.stationary-card-overlay:not([hidden]) .image-page-control--${side}`).first();
+    const counter = outer.locator('.home-hero-page-counter:visible, .cd-highlight-page-counter:visible').first();
+    const text = await counter.textContent();
+    const box = (await button.boundingBox())!;
+    const frame = (await viewport.boundingBox())!;
+    const x = box.x + box.width / 2, y = box.y + box.height / 2;
+    const cdp = await page.context().newCDPSession(page);
+    const touch = (type: string, px = 0) => cdp.send('Input.dispatchTouchEvent', {
+      type, touchPoints: type === 'touchEnd' ? [] : [{ x: px, y }],
+    });
+    await touch('touchStart', x);
+    for (const fraction of [0.15, 0.35, 0.7]) await touch('touchMove', x + (startIndex ? 1 : -1) * frame.width * fraction);
+    await touch('touchEnd');
+    await expect(outer.locator('.card-carousel-dot').nth(1 - startIndex)).toHaveAttribute('aria-current', 'true');
+    await expect(page).toHaveURL(new RegExp(path === '/' ? '/$' : '/collections/003$'));
+    await outer.locator('.card-carousel-dot').nth(startIndex).click();
+    await expect(outer.locator(':scope > .card-carousel-frame')).toHaveAttribute('data-settled-slide', String(startIndex));
+    await expect(counter).toHaveText(text!);
+    await button.tap();
+    await expect(counter).not.toHaveText(text!);
+  });
+}

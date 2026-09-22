@@ -110,3 +110,37 @@ it("does not confuse pinch zoom with opening the keyboard", () => {
   unmount();
   vi.unstubAllGlobals();
 });
+
+it.each([false, true])("rebases on rotation with focused input and keyboard open=%s", (open) => {
+  vi.stubGlobal("innerWidth", 390);
+  vi.stubGlobal("innerHeight", 844);
+  const viewport = Object.assign(new EventTarget(), { height: 844, offsetTop: 0, scale: 1 });
+  vi.stubGlobal("visualViewport", viewport);
+  const input = document.createElement("input");
+  document.body.append(input);
+  const { result } = renderHook(() => useHeaderScroll());
+  act(() => input.focus());
+  act(() => {
+    viewport.height = 480;
+    viewport.dispatchEvent(new Event("resize"));
+  });
+  expect(result.current.visible).toBe(false);
+  if (!open) act(() => {
+    viewport.height = 844;
+    viewport.dispatchEvent(new Event("resize"));
+  });
+  act(() => {
+    vi.stubGlobal("innerWidth", 844);
+    vi.stubGlobal("innerHeight", 390);
+    viewport.height = open ? 220 : 390;
+    viewport.dispatchEvent(new Event("resize"));
+    window.dispatchEvent(new Event("resize"));
+  });
+  expect(result.current.visible).toBe(!open);
+  act(() => {
+    input.blur();
+    viewport.height = 390;
+    viewport.dispatchEvent(new Event("resize"));
+  });
+  expect(result.current.visible).toBe(true);
+});

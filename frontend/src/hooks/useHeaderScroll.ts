@@ -72,8 +72,16 @@ export default function useHeaderScroll(): HeaderScrollState {
     let editing = false;
     const viewport = window.visualViewport;
     let fullHeight = viewport?.height ?? window.innerHeight;
+    let layoutWidth = window.innerWidth;
     const syncViewport = () => {
       const height = viewport?.height ?? window.innerHeight;
+      if (window.innerWidth !== layoutWidth) {
+        // Rotation changes the layout baseline even if the input stays focused.
+        // innerHeight retains the layout viewport while the keyboard reduces
+        // visualViewport, so an actually open keyboard still hides the header.
+        layoutWidth = window.innerWidth;
+        fullHeight = window.innerHeight;
+      }
       // Ignore pinch zoom; a shrunken visual viewport alone is not a keyboard.
       const shrunk = Math.abs((viewport?.scale ?? 1) - 1) < 0.05
         && fullHeight - height > 120;

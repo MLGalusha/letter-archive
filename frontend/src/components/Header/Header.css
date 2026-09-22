@@ -38,9 +38,10 @@
   z-index: 50;
   padding: var(--header-top-padding) calc(1.25rem + env(safe-area-inset-right, 0px)) 0 calc(1.25rem + env(safe-area-inset-left, 0px));
   background: linear-gradient(to bottom, var(--bg, #f5ede1) calc(100% - 28px), transparent calc(100% - 28px));
-  /* Move the card and its backdrop together on hide/reveal. */
-  transition: transform 0.25s ease;
-  will-change: transform;
+  /* Keyboard visibility fades in place. Reader focus owns its slide-away
+     transform separately; the pale card must not cross the viewport top when
+     a keyboard opens (Safari can retain that color in its status area). */
+  transition: opacity 0.15s ease;
 }
 
 /* The letter reader retains a floating lower edge, but covers content above
@@ -80,9 +81,9 @@
   }
 }
 
-/* Hide: slide the whole bar and backdrop up. */
+/* Keyboard only: keep geometry fixed while temporarily hiding the controls. */
 .header--hidden {
-  transform: translateY(calc(-100% - 1rem));
+  opacity: 0;
   pointer-events: none;
 }
 
@@ -174,7 +175,7 @@
   pointer-events: none;
 }
 
-/* While the header is off-screen, kill the collapse transition so
+/* While the header is hidden, disable the collapse transition so
    state flips (e.g. scrollY crossing the atTop threshold) happen
    instantly behind the curtain. When the header slides back in,
    it's already in the right state — no animation mid-flight. */

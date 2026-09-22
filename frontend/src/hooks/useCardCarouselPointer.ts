@@ -2,13 +2,16 @@ import { useLayoutEffect, useRef, type RefObject, type PointerEvent, type MouseE
 type Gesture = { id: number; x: number; y: number; left: number; dragging: boolean; vertical: boolean; time: number; lastX: number; velocity: number };
 
 /** Share drag geometry; leave vertical touch gestures and pinch to the browser. */
-export default function useCardCarouselPointer(enabled: boolean, viewport: RefObject<HTMLDivElement | null>, surface: RefObject<HTMLDivElement | null>, settle: (element: HTMLDivElement, index: number) => void, finish: () => void) {
+export default function useCardCarouselPointer(enabled: boolean, viewport: RefObject<HTMLDivElement | null>, surface: RefObject<HTMLDivElement | null>, settle: (element: HTMLDivElement, index: number) => void, cancel: () => void) {
   const gesture = useRef<Gesture | null>(null);
   const suppressClick = useRef(false);
-  const callbacks = useRef({ settle, finish });
-  useLayoutEffect(() => { callbacks.current = { settle, finish }; }, [settle, finish]);
+  const callbacks = useRef({ settle, cancel });
+  useLayoutEffect(() => { callbacks.current = { settle, cancel }; }, [settle, cancel]);
   const begin = (element: HTMLDivElement, id: number, x: number, y: number) => {
-    callbacks.current.finish();
+    callbacks.current.cancel();
+    // A new gesture owns the current position, not the previous destination.
+    element.style.scrollSnapType = 'none';
+    element.dataset.dragging = 'true';
     suppressClick.current = false;
     gesture.current = { id, x, y, left: element.scrollLeft, dragging: false, vertical: false, time: performance.now(), lastX: x, velocity: 0 };
   };
@@ -22,23 +25,26 @@ export default function useCardCarouselPointer(enabled: boolean, viewport: RefOb
       start.dragging = true;
       suppressClick.current = true;
       element.style.scrollSnapType = 'none';
-      element.dataset.dragging = 'true';
     }
     const now = performance.now();
     if (now > start.time) start.velocity = (x - start.lastX) / (now - start.time);
     start.time = now;
     start.lastX = x;
-    element.scrollLeft = start.left - dx;
+    const requested = start.left - dx;
+    const bounded = Math.max(0, Math.min(element.scrollWidth - element.clientWidth, requested));
+    element.scrollLeft = bounded;
+    // Discard outward travel at an endpoint so reversing responds immediately.
+    if (requested !== bounded) { start.left = bounded; start.x = x; }
     return true;
   };
   const release = (element: HTMLDivElement, canceled = false) => {
     const start = gesture.current;
     gesture.current = null;
     if (canceled) suppressClick.current = false;
-    if (!start?.dragging) return;
+    if (!start) return;
     element.removeAttribute('data-dragging');
     const width = element.clientWidth || 1;
-    const projection = !canceled && performance.now() - start.time < 100 ? Math.max(-width / 2, Math.min(width / 2, start.velocity * 100)) : 0;
+    const projection = start.dragging && !canceled && performance.now() - start.time < 100 ? Math.max(-width / 2, Math.min(width / 2, start.velocity * 100)) : 0;
     const index = Math.max(0, Math.min(element.children.length - 1, Math.round((element.scrollLeft - projection) / width)));
     callbacks.current.settle(element, index);
   };
@@ -65,38 +71,51 @@ export default function useCardCarouselPointer(enabled: boolean, viewport: RefOb
       if (dragged && event.cancelable) event.preventDefault();
       suppressClick.current = false;
     };
+    const onMouseEnd = (event: globalThis.PointerEvent) => {
+      // A press can leave the frame before it becomes a captured drag.
+      if (event.pointerType === 'mouse' && gesture.current?.id === event.pointerId) {
+        release(element, event.type === 'pointercancel');
+      }
+    };
     target.addEventListener('touchstart', onStart, { passive: true });
     target.addEventListener('touchmove', onMove, { passive: false });
     target.addEventListener('touchend', onEnd, { passive: false });
     target.addEventListener('touchcancel', onEnd, { passive: true });
+    window.addEventListener('pointerup', onMouseEnd);
+    window.addEventListener('pointercancel', onMouseEnd);
     return () => {
       target.removeEventListener('touchstart', onStart);
       target.removeEventListener('touchmove', onMove);
       target.removeEventListener('touchend', onEnd);
       target.removeEventListener('touchcancel', onEnd);
+      window.removeEventListener('pointerup', onMouseEnd);
+      window.removeEventListener('pointercancel', onMouseEnd);
       gesture.current = null;
+      element.removeAttribute('data-dragging');
+      element.style.scrollSnapType = '';
     };
   // Geometry helpers use refs; selection renders must not reset a live gesture.
   }, [enabled, viewport, surface]);
   const releaseMouse = (event: PointerEvent<HTMLDivElement>) => {
     if (event.pointerType !== 'mouse' || gesture.current?.id !== event.pointerId) return;
+    const element = viewport.current;
+    if (!element) return;
     const dragged = gesture.current.dragging;
-    release(event.currentTarget, event.type === 'pointercancel');
+    release(element, event.type === 'pointercancel');
     if (dragged && event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   };
   return {
     onPointerDown: (event: PointerEvent<HTMLDivElement>) => {
       if (event.pointerType !== 'mouse') return;
-      callbacks.current.finish();
       suppressClick.current = false;
       if (!enabled || !event.isPrimary || event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
-      if ((event.target as HTMLElement).closest('button, a:not([data-carousel-drag]), input, textarea, select, [contenteditable=true]')) return;
-      begin(event.currentTarget, event.pointerId, event.clientX, event.clientY);
+      if ((event.target as HTMLElement).closest('button:not([data-carousel-drag]), a:not([data-carousel-drag]), input, textarea, select, [contenteditable=true]')) return;
+      if (viewport.current) begin(viewport.current, event.pointerId, event.clientX, event.clientY);
     },
     onPointerMove: (event: PointerEvent<HTMLDivElement>) => {
       if (event.pointerType !== 'mouse' || gesture.current?.id !== event.pointerId) return;
       if (!(event.buttons & 1)) { releaseMouse(event); return; }
-      if (move(event.currentTarget, event.clientX, event.clientY)) {
+      if (viewport.current && move(viewport.current, event.clientX, event.clientY)) {
         event.currentTarget.setPointerCapture(event.pointerId);
         event.preventDefault();
       }

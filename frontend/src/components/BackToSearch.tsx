@@ -68,6 +68,7 @@ export default function BackToSearch({
     );
     // Cancel the previous action before it can reset this action's suppression.
     scrollTo(targetTop, {
+      takeOverMomentum: true,
       onStep: () => { programmaticScrollRef.current = true; },
       onFinish: (cancelled) => {
         programmaticScrollRef.current = false;

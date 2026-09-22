@@ -76,3 +76,17 @@ it('clamps the destination and honors reduced motion without queued frames', () 
   cancel();
   expect(onFinish.mock.calls).toEqual([[false]]);
 });
+
+it('takes over a decaying wheel stream but yields to a new direction', () => {
+  window.dispatchEvent(new WheelEvent('wheel', { deltaY: -40 }));
+  const onFinish = vi.fn();
+  smoothScrollToY(200, { takeOverMomentum: true, onFinish });
+  advance(50);
+  const tail = new WheelEvent('wheel', { deltaY: -30, cancelable: true });
+  window.dispatchEvent(tail);
+  expect(tail.defaultPrevented).toBe(true);
+  advance(50);
+  expect(onFinish).not.toHaveBeenCalled();
+  window.dispatchEvent(new WheelEvent('wheel', { deltaY: 30 }));
+  expect(onFinish).toHaveBeenCalledWith(true);
+});

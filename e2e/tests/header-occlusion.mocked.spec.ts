@@ -78,16 +78,10 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) for (const wid
     });
     await checkCover(page);
     await scrollTo(page, 500);
-    if (width < 901 && reducedMotion === 'no-preference') {
-      await expect.poll(() => page.locator('.header').evaluate(el => el.getBoundingClientRect().bottom)).toBeLessThan(0);
-      // No leftover cover when the header slides offscreen.
-      const [edge] = await paintedPixels(page, [{ x: 1, y: 1 }]);
-      // The offscreen card's existing shadow can darken the exposed content.
-      expect(edge[0]).toBeGreaterThan(240);
-      expect(edge[1]).toBeLessThan(10);
-      expect(edge[2]).toBeGreaterThan(240);
-      await scrollTo(page, 420);
-    }
+    // Ordinary scrolling must retain the header regardless of motion preference.
+    await expect.poll(() => page.locator('.header').evaluate(el => el.getBoundingClientRect().top)).toBe(0);
+    await checkCover(page);
+    await scrollTo(page, 420);
     await checkCover(page);
     await testInfo.attach('scrolled-header', { body: await page.screenshot(), contentType: 'image/png' });
     // Simulate a larger top inset; the cover boundary must derive from the card.

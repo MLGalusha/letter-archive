@@ -105,7 +105,8 @@ test.describe('@mocked Public mobile layout', () => {
     expect(geometry.bottomElement).toBe(true);
     expect(geometry.overflow).toBe(false);
     await scroll(page, 2200);
-    if (isMobile) await expect(page.locator('.header')).toHaveClass(/header--hidden/);
+    await expect(page.locator('.header')).not.toHaveClass(/header--hidden/);
+    await expect(page.locator('.header-inner')).toBeInViewport();
     await scroll(page, 1800);
     await expect(page.locator('.header')).not.toHaveClass(/header--hidden/);
     // Height-only changes exercise layout, not native toolbar emulation.

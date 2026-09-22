@@ -139,3 +139,11 @@ Evidence: paused midpoint screenshots show the scan moving between its inline/fu
 Validation: 59 of 60 initial browser checks passed; the remaining mixed-ratio assertion ran before the decoded image's layout commit. It passed in isolation, then the assertion was changed to wait for the expected settled ratio. All 18 reader-mode tests subsequently passed, plus 4 dedicated native transition tests verifying successful scan/page-strip captures in both directions at phone/laptop widths across Chromium/WebKit. Carousel unit tests: 11 passed. Build, changed-source lint, and whitespace checks passed. No deployment or commit.
 
 Final neighboring-image regression: 16 checks passed across eight viewport widths in Chromium and WebKit, including visible neighboring scans outside the desktop content lane and off-screen neighbors on phones.
+
+## Pre-merge review
+
+Found a real entry-zoom regression: the generic image-change effect reset the opening gesture's scale to 1 on mount. Keyboard and wheel entry regressions failed in both engines before the fix. Focus mode now preserves its opening scale and resets only when the image changes; entry scale is also bounded by the viewer maximum. All 26 focused reader checks pass after the correction.
+
+Repeated mixed-ratio tests isolated a fixture problem: WebKit reported rendered SVG viewport dimensions as natural dimensions (for example 61×81 for a 600×800 source), contaminating the ratio used by the progressive image. The mixed-ratio fixture now serves raster PNGs with fixed dimensions, matching production scans; ratio assertions are unchanged. The earlier hypothesis that this was only a decoded-layout timing issue was insufficient.
+
+All 1,419 frontend unit tests pass. Source lint and production build pass. The local preview config is intentionally untracked and excluded from the PR; repository CI runs the clean checkout's full lint gate.

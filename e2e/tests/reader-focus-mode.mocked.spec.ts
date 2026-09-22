@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { API_BASE_URL } from './utils/test-helpers';
 import { openReader, closeReader, mockReader, viewerImages } from './utils/reader-viewer-fixture';
 
 for (const width of [390, 1440]) for (const reducedMotion of ['reduce', 'no-preference'] as const) {
@@ -41,7 +42,22 @@ for (const width of [390, 1440]) for (const reducedMotion of ['reduce', 'no-pref
 for (const width of [390, 1440]) test(`@mocked mixed scan proportions keep navigation stable at ${width}px`, async ({ page }) => {
   await page.setViewportSize({ width, height: 900 });
   const images = viewerImages.map((image, i) => ({ ...image, width: [600, 1800, 300][i], height: [800, 600, 1400][i] }));
-  await mockReader(page, images); await page.goto('/letter/current');
+  await mockReader(page, images);
+  // Production scans are raster images. WebKit can report rendered SVG viewport
+  // dimensions as natural dimensions during layout; use fixed raster dimensions
+  // for the aspect-ratio contract instead of testing that SVG-specific behavior.
+  const rasters = await page.evaluate(images => images.map(image => {
+    const canvas = document.createElement('canvas');
+    canvas.width = image.width; canvas.height = image.height;
+    const context = canvas.getContext('2d')!;
+    context.fillStyle = 'tan'; context.fillRect(0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/png').split(',')[1];
+  }), images);
+  await page.route(`${API_BASE_URL}/images/**`, route => {
+    const index = images.findIndex(image => image.imageUrl === new URL(route.request().url()).pathname);
+    return route.fulfill({ contentType: 'image/png', body: Buffer.from(rasters[index], 'base64') });
+  });
+  await page.goto('/letter/current');
   const stage = page.locator('.scan-carousel'); await expect(stage).toBeVisible();
   const height = (await stage.boundingBox())!.height;
   const stripY = (await page.locator('.scan-navigation').boundingBox())!.y;

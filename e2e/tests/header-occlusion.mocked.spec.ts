@@ -122,7 +122,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) for (const wid
 }
 
 for (const width of [390, 900, 901, 1440, 1920]) {
-  test(`@mocked only large desktop scans pass above the header cover at ${width}px`, async ({ page }) => {
+  test(`@mocked bounded scans stay beneath the header cover at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await openReader(page);
@@ -144,10 +144,10 @@ for (const width of [390, 900, 901, 1440, 1920]) {
       const left = Math.max(0, rect.left), right = Math.min(width, rect.right);
       return right - left > 20 ? [{ x: Math.floor((left + right) / 2), y: 4 }] : [];
     }), width);
-    if (width >= 1440) expect(points).toHaveLength(3);
+    expect(points.length).toBeGreaterThan(0);
     const pixels = await paintedPixels(page, points);
     for (const pixel of pixels) {
-      expectColor(pixel, width > 900 ? [210, 180, 140] : [245, 237, 225]);
+      expectColor(pixel, [245, 237, 225]);
     }
     const card = (await page.locator('.header-inner').boundingBox())!;
     expect(await page.locator('.header-inner').evaluate(el => {
@@ -158,7 +158,7 @@ for (const width of [390, 900, 901, 1440, 1920]) {
     expectColor(cardPixel, [255, 250, 242]);
 
     // Scroll actual thumbnail and text containers into the top gap. Their paint
-    // must still be covered, even though the large scans were visible there.
+    // must still be covered, just like the bounded scans.
     for (const selector of ['.scan-navigation', '.letter-hero-section']) {
       await page.locator(selector).evaluate(el => {
         (el as HTMLElement).style.background = '#f0f';

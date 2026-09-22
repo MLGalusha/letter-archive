@@ -9,9 +9,7 @@ import { Icon } from "../common";
 import "./LetterViewer.css";
 import { scanNeedsOriginal, scanVariantWidth } from "./scanResolution";
 import { useScanDisplayWidth } from "./useScanDisplayWidth";
-import { focusZoomProgress } from './focusZoomProgress';
 import { useViewerSwipe } from "./useViewerSwipe";
-import { createPageMotion } from './pageMotion';
 import { ViewerPageDrawer } from "./ViewerPageDrawer";
 import { InlineScanNavigation } from "./InlineScanNavigation";
 
@@ -53,9 +51,8 @@ interface LetterViewerProps {
   entryZoom?: number;
   initialAspectRatio?: number;
   fallbackSrc?: string;
-  focusOrigin?: { left: number; top: number; width: number; height: number };
-  onFocusScale?: (scale: number) => void;
-  onZoomExit?: () => void;
+  /** The public reader owns selection; admin panels remain uncontrolled. */
+  selectedIndex?: number;
   onClose?: () => void;
 }
 
@@ -124,9 +121,7 @@ const LetterViewer = memo(function LetterViewer({
   focusMode = false,
   cornerRatios,
   entryZoom = 1,
-  focusOrigin,
-  onFocusScale,
-  onZoomExit,
+  selectedIndex,
   initialAspectRatio,
   fallbackSrc,
   onClose,
@@ -140,11 +135,12 @@ const LetterViewer = memo(function LetterViewer({
     ? images.filter((img) => img.type === "letter")
     : images, [showOnlyLetterPages, images]);
 
-  const [currentImageIndex, setCurrentImageIndex] = useState(initialIndex);
+  const [internalIndex, setCurrentImageIndex] = useState(initialIndex);
+  const currentImageIndex = selectedIndex ?? internalIndex;
 
   // Initialize scale and position — lightbox always starts at 1x, panel restores from localStorage
   const [scale, setScale] = useState(() => {
-    if (variant === "lightbox") return focusOrigin ? Math.max(1, entryZoom) : 1;
+    if (variant === "lightbox") return Math.min(MAX_SCALE, Math.max(1, entryZoom));
     const initial = getInitialStateForLetter(letterId, displayImages, 0);
     return initial.scale;
   });
@@ -173,30 +169,11 @@ const LetterViewer = memo(function LetterViewer({
   const displayImagesRef = useRef(displayImages);
   const currentImageIndexRef = useRef(currentImageIndex);
 
-  const pageMotion = useMemo(() => createPageMotion(), []);
   const swipeCommitRef = useRef<(direction: -1 | 1) => void>(() => {});
   const commitSwipe = useCallback((direction: -1 | 1) => swipeCommitRef.current(direction), []);
   const swipe = useViewerSwipe(imageContainerRef, commitSwipe,
     `${letterId ?? ''}:${displayImages.map(image => `${image.id}:${image.imageUrl}`).join('|')}`);
-  const { readOffset: readSwipeOffset, cancel: cancelSwipe, begin: beginSwipe, move: moveSwipe, release: releaseSwipe, settlingRef: swipeSettlingRef } = swipe;
-
-  // Read the rendered carriage during both finger tracking and CSS settlement.
-  // This gives the filmstrip the same progress instead of a second animation.
-  useLayoutEffect(() => {
-    if (!swipe.offset && !swipe.settling) { pageMotion.publish(null); return; }
-    let frame = 0;
-    const follow = () => {
-      const stage = imageContainerRef.current;
-      const carriage = stage?.querySelector('.viewer-carriage');
-      if (carriage && stage?.clientWidth) {
-        const x = readSwipeOffset();
-        pageMotion.publish(currentImageIndex - x / stage.clientWidth);
-      }
-      frame = requestAnimationFrame(follow);
-    };
-    follow();
-    return () => cancelAnimationFrame(frame);
-  }, [swipe.offset, swipe.settling, currentImageIndex, pageMotion, readSwipeOffset]);
+  const { cancel: cancelSwipe, begin: beginSwipe, move: moveSwipe, release: releaseSwipe, settlingRef: swipeSettlingRef } = swipe;
 
   // Commit gesture refs before another input event can arrive. A passive
   // effect can overwrite a newer wheel update with the previous render.
@@ -232,7 +209,7 @@ const LetterViewer = memo(function LetterViewer({
     : loadedAspect?.url === currentImage?.imageUrl ? loadedAspect.ratio
       : currentImageIndex === initialIndex && initialAspectRatio ? initialAspectRatio : 3 / 4;
   const measuredWidth = useScanDisplayWidth(focusMode ? focusFitRef : imageContainerRef, aspectRatio, true);
-  const physicalWidth = focusOrigin ? focusOrigin.width * (window.devicePixelRatio || 1) : measuredWidth;
+  const physicalWidth = measuredWidth;
   const thumbSrc = getImageUrl(currentImage?.imageUrl ?? "", { width: 32 });
   const fullSrc = scanNeedsOriginal(physicalWidth, resolutionScale)
     ? getImageUrl(currentImage?.imageUrl ?? "")
@@ -248,11 +225,11 @@ const LetterViewer = memo(function LetterViewer({
   });
   const displayedRetry = useImageRetry(fullSrc);
   // Keep the last decoded scan visible while a higher-detail rendition loads.
-  const retainedPreview = useRef(fallbackSrc);
+  const retainedPreview = useRef({ imageUrl: currentImage?.imageUrl, src: fallbackSrc });
   useLayoutEffect(() => {
-    if (focusMode && fullLoaded) retainedPreview.current = fullSrc;
-  }, [focusMode, fullLoaded, fullSrc]);
-  const placeholderSrc = focusMode && retainedPreview.current ? retainedPreview.current : midLoaded && midSrc ? midSrc
+    if (focusMode && fullLoaded) retainedPreview.current = { imageUrl: currentImage?.imageUrl, src: fullSrc };
+  }, [focusMode, fullLoaded, fullSrc, currentImage?.imageUrl]);
+  const placeholderSrc = focusMode && retainedPreview.current.imageUrl === currentImage?.imageUrl && retainedPreview.current.src ? retainedPreview.current.src : midLoaded && midSrc ? midSrc
     : focusMode && currentImageIndex === initialIndex && fallbackSrc ? fallbackSrc : thumbSrc;
   const placeholderRetry = useImageRetry(placeholderSrc);
   const activeScanReady = fullLoaded && !displayedRetry.failed;
@@ -339,11 +316,14 @@ const LetterViewer = memo(function LetterViewer({
     }
   }, [letterId, isLightbox]);
 
+  const previousImage = useRef(currentImage);
   // Load state when changing images within the same letter
   // Lightbox always resets to 1x; panel restores from localStorage
   useEffect(() => {
-    // Focus thumbnails exit to the document; preserve zoom for the return flight.
-    if (focusMode) return;
+    const imageChanged = previousImage.current !== currentImage;
+    previousImage.current = currentImage;
+    // Preserve the opening gesture; only a page change returns focus mode to fit.
+    if (focusMode && !imageChanged) return;
     if (!letterId || variant === "lightbox") {
       setScale(1);
       setPosition({ x: 0, y: 0 });
@@ -364,36 +344,57 @@ const LetterViewer = memo(function LetterViewer({
     // No saved state for this image - reset to defaults
     setScale(1);
     setPosition({ x: 0, y: 0 });
-  }, [currentImageIndex, letterId, displayImages, variant, focusMode]);
+  }, [currentImageIndex, currentImage, letterId, displayImages, variant, focusMode]);
 
   // Notify parent of page changes
   useEffect(() => {
-    if (onPageChange && displayImages[currentImageIndex]) {
+    if (selectedIndex === undefined && onPageChange && displayImages[currentImageIndex]) {
       onPageChange(currentImageIndex, displayImages[currentImageIndex]);
     }
-  }, [currentImageIndex, displayImages, onPageChange]);
+  }, [currentImageIndex, displayImages, onPageChange, selectedIndex]);
 
   // ============================================================================
   // ZOOM HELPERS
   // ============================================================================
+
+  // Fit above the actual thumbnail tray, including its responsive height.
+  useLayoutEffect(() => {
+    if (!focusMode) return;
+    const viewer = imageContainerRef.current?.closest<HTMLElement>('.letter-viewer');
+    const strip = viewer?.querySelector<HTMLElement>('.reader-focus-strip');
+    if (!viewer || !strip) return;
+    const measure = () => viewer.style.setProperty('--reader-tray-height', `${strip.getBoundingClientRect().height}px`);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(strip);
+    return () => { observer.disconnect(); viewer.style.removeProperty('--reader-tray-height'); };
+  }, [focusMode]);
 
   // Clamp pan so the zoomed image never exposes empty space beyond its edges
   const clampPosition = useCallback((pos: { x: number; y: number }, zoom: number) => {
     const img = imageRef.current;
     const container = imageContainerRef.current;
     if (!img || !container) return pos;
-    const iw = img.clientWidth;
-    const ih = img.clientHeight;
-    const cw = container.clientWidth;
-    const ch = container.clientHeight;
+    // clientWidth rounds CSS pixels; at high zoom that rounding exposes an
+    // edge strip. Clamp against the same fractional size used to draw the scan.
+    const imageStyle = getComputedStyle(img);
+    const iw = imageStyle.width.endsWith('px') ? parseFloat(imageStyle.width) : img.clientWidth;
+    const ih = imageStyle.height.endsWith('px') ? parseFloat(imageStyle.height) : img.clientHeight;
+    const box = container.getBoundingClientRect();
+    // The fit region sits above the tray; zoom still covers the entire surface.
+    const viewport = focusMode ? container.closest('.reader-focus-backdrop')?.getBoundingClientRect() ?? box : box;
+    const cw = viewport.width;
+    const ch = viewport.height;
+    const offsetX = viewport.left + cw / 2 - (box.left + box.width / 2);
+    const offsetY = viewport.top + ch / 2 - (box.top + box.height / 2);
     if (iw === 0 || ih === 0) return pos;
     const maxX = Math.max(0, (zoom * iw - cw) / 2);
     const maxY = Math.max(0, (zoom * ih - ch) / 2);
     return {
-      x: Math.max(-maxX, Math.min(maxX, pos.x)),
-      y: Math.max(-maxY, Math.min(maxY, pos.y)),
+      x: maxX > 0 ? Math.max(offsetX - maxX, Math.min(offsetX + maxX, pos.x)) : 0,
+      y: maxY > 0 ? Math.max(offsetY - maxY, Math.min(offsetY + maxY, pos.y)) : 0,
     };
-  }, []);
+  }, [focusMode]);
 
   useLayoutEffect(() => {
     if (!isLightbox) return;
@@ -424,23 +425,16 @@ const LetterViewer = memo(function LetterViewer({
     if (isLightbox && surface && typeof DOMMatrixReadOnly !== 'undefined') {
       const matrix = new DOMMatrixReadOnly(getComputedStyle(surface).transform);
       scaleRef.current = Math.max(MIN_SCALE, matrix.a);
-      const remaining = 1 - focusZoomProgress(scaleRef.current);
-      positionRef.current = {
-        x: matrix.m41 - (focusOrigin ? (focusOrigin.left + focusOrigin.width / 2 - innerWidth / 2) * remaining : 0),
-        y: matrix.m42 - (focusOrigin ? (focusOrigin.top + focusOrigin.height / 2 - innerHeight / 2) * remaining : 0),
-      };
+      positionRef.current = { x: matrix.m41, y: matrix.m42 };
       setScale(scaleRef.current);
       setPosition(positionRef.current);
     }
     setIsAnimating(false);
-  }, [isLightbox, focusOrigin]);
+  }, [isLightbox]);
 
   // Apply zoom while maintaining view center
   const applyZoom = useCallback((newScale: number, animate: boolean) => {
     cancelSwipe();
-    if (focusMode && (newScale < 1 || (focusOrigin && newScale <= 1))) {
-      (onZoomExit ?? onClose)?.(); return;
-    }
     const clampedScale = Math.min(Math.max(MIN_SCALE, newScale), MAX_SCALE);
 
     if (animate) animateZoom();
@@ -463,9 +457,8 @@ const LetterViewer = memo(function LetterViewer({
     if (clampedScale === 1) {
       setPosition({ x: 0, y: 0 });
     }
-  }, [clampPosition, cancelSwipe, animateZoom, interruptZoom, focusMode, focusOrigin, onClose, onZoomExit]);
+  }, [clampPosition, cancelSwipe, animateZoom, interruptZoom]);
 
-  useLayoutEffect(() => { onFocusScale?.(scale); }, [scale, onFocusScale]);
 
   useEffect(() => {
     if (!focusMode) return;
@@ -535,7 +528,7 @@ const LetterViewer = memo(function LetterViewer({
 
   useLayoutEffect(() => {
     const container = imageContainerRef.current;
-    if (!focusOrigin || !container) return;
+    if (!focusMode || !container) return;
     // The document keeps native touch ownership across mount/unmount. The
     // viewer still owns pan math and keeps the point between fingers attached.
     const pinch = (event: Event) => {
@@ -546,8 +539,8 @@ const LetterViewer = memo(function LetterViewer({
       const oldScale = scaleRef.current;
       setPinchResolutionScale(value => value ?? oldScale);
       if (requested <= 1) {
-        // Visually reach the document immediately, but preserve this native
-        // touch target so the same gesture can reverse before fingers lift.
+        // Return to fit while preserving the native touch target, so this
+        // gesture can reverse before fingers lift.
         scaleRef.current = 1; positionRef.current = { x: 0, y: 0 };
         setScale(1); setPosition(positionRef.current);
         return;
@@ -562,17 +555,14 @@ const LetterViewer = memo(function LetterViewer({
       positionRef.current = next;
       setPosition(next);
     };
-    const end = (event: Event) => {
-      setPinchResolutionScale(null);
-      if ((event as CustomEvent<{ finished: boolean }>).detail.finished && scaleRef.current <= 1) onZoomExit?.();
-    };
+    const end = () => setPinchResolutionScale(null);
     container.addEventListener('reader-focus-pinch', pinch);
     container.addEventListener('reader-focus-pinch-end', end);
     return () => {
       container.removeEventListener('reader-focus-pinch', pinch);
       container.removeEventListener('reader-focus-pinch-end', end);
     };
-  }, [focusOrigin, applyZoom, clampPosition, onZoomExit]);
+  }, [focusMode, applyZoom, clampPosition]);
 
   // ============================================================================
   // WHEEL ZOOM
@@ -617,12 +607,10 @@ const LetterViewer = memo(function LetterViewer({
   const selectImage = useCallback((index: number) => {
     cancelSwipe();
     saveCurrentImageState();
-    if (!focusMode) {
-      scaleRef.current = 1;
-      positionRef.current = { x: 0, y: 0 };
-      setScale(1);
-      setPosition({ x: 0, y: 0 });
-    }
+    scaleRef.current = 1;
+    positionRef.current = { x: 0, y: 0 };
+    setScale(1);
+    setPosition({ x: 0, y: 0 });
     if (zoomTimer.current !== null) clearTimeout(zoomTimer.current);
     zoomTimer.current = null;
     zoomAnimating.current = false;
@@ -634,15 +622,13 @@ const LetterViewer = memo(function LetterViewer({
     touchStateRef.current.panStart = null;
     touchStateRef.current.isPinching = false;
     touchStateRef.current.lastTapTime = 0;
-    if (focusMode) {
-      // Queue the destination without replacing the scan being zoomed out.
+    if (selectedIndex !== undefined) {
       onPageChange?.(index, displayImages[index]);
-      onClose?.();
-      return false; // The regular page owns thumbnail movement after the return.
+      return;
     }
     currentImageIndexRef.current = index;
     setCurrentImageIndex(index);
-  }, [saveCurrentImageState, cancelSwipe, focusMode, onPageChange, onClose, displayImages]);
+  }, [saveCurrentImageState, cancelSwipe, selectedIndex, onPageChange, displayImages]);
   const nextImage = useCallback(() => selectImage((currentImageIndexRef.current + 1) % displayImages.length), [selectImage, displayImages.length]);
   const prevImage = useCallback(() => selectImage((currentImageIndexRef.current - 1 + displayImages.length) % displayImages.length), [selectImage, displayImages.length]);
 
@@ -735,7 +721,6 @@ const LetterViewer = memo(function LetterViewer({
     // Pinch tracking
     initialDistance: number;
     initialScale: number;
-    exitOnRelease: boolean;
     previousMidpoint: { x: number; y: number };
     // Single-finger pan
     panStart: { x: number; y: number } | null;
@@ -748,7 +733,6 @@ const LetterViewer = memo(function LetterViewer({
   }>({
     initialDistance: 0,
     initialScale: 1,
-    exitOnRelease: false,
     previousMidpoint: { x: 0, y: 0 },
     panStart: null,
     isPinching: false,
@@ -784,7 +768,6 @@ const LetterViewer = memo(function LetterViewer({
         ts.panStart = null;
         ts.initialDistance = Math.max(1, getTouchDistance(e.touches[0], e.touches[1]));
         ts.initialScale = scaleRef.current;
-        ts.exitOnRelease = false;
         setPinchResolutionScale(scaleRef.current);
         ts.previousMidpoint = getTouchMidpoint(e.touches[0], e.touches[1]);
       } else if (e.touches.length === 1) {
@@ -855,7 +838,6 @@ const LetterViewer = memo(function LetterViewer({
         const newDist = getTouchDistance(e.touches[0], e.touches[1]);
         const ratio = newDist / ts.initialDistance;
         const rawScale = ts.initialScale * ratio;
-        ts.exitOnRelease = focusMode && rawScale < 1;
         const newScale = Math.min(Math.max(MIN_SCALE, rawScale), MAX_SCALE);
 
         // Zoom centered on pinch midpoint
@@ -904,7 +886,6 @@ const LetterViewer = memo(function LetterViewer({
       if (e.touches.length < 2) setPinchResolutionScale(null);
 
       if (e.touches.length === 0) {
-        if (ts.exitOnRelease) { ts.exitOnRelease = false; onClose?.(); }
         if (ts.swipeActive) releaseSwipe();
         ts.swipeActive = false;
 
@@ -934,7 +915,6 @@ const LetterViewer = memo(function LetterViewer({
       cancelSwipe();
       const ts = touchStateRef.current;
       ts.swipeActive = false;
-      ts.exitOnRelease = false;
       ts.isPinching = false;
       ts.panStart = null;
       ts.lastTapTime = 0;
@@ -1013,11 +993,6 @@ const LetterViewer = memo(function LetterViewer({
 
   // Panel mode: slider fill percentage
   const sliderPercent = ((scale - MIN_SCALE) / (MAX_SCALE - MIN_SCALE)) * 100;
-  const documentProgress = focusZoomProgress(scale);
-  const documentOffset = focusOrigin ? {
-    x: (focusOrigin.left + focusOrigin.width / 2 - window.innerWidth / 2) * (1 - documentProgress),
-    y: (focusOrigin.top + focusOrigin.height / 2 - window.innerHeight / 2) * (1 - documentProgress),
-  } : { x: 0, y: 0 };
 
   return (
     <div
@@ -1029,6 +1004,8 @@ const LetterViewer = memo(function LetterViewer({
         <span className="viewer-mobile-zoom" aria-label="Zoom level">{Math.round(scale * 100)}%</span>
         <button type="button" className="viewer-close" tabIndex={0} onClick={onClose} aria-label="Close viewer"><Icon name="close" size={24} /></button>
       </div>}
+      {focusMode && <button type="button" tabIndex={0} className="reader-focus-close"
+        onClick={onClose} aria-label="Close viewer"><Icon name="close" size={20} /></button>}
       {focusMode && <div ref={focusFitRef} className="reader-focus-fit" aria-hidden="true" />}
       <div className="viewer-workspace">
       <div
@@ -1054,10 +1031,11 @@ const LetterViewer = memo(function LetterViewer({
           </div>;
         })}
         <div className={`viewer-transform${isAnimating ? ' animating' : ''}`} style={isLightbox ? {
+          viewTransitionName: focusMode ? 'reader-scan' : undefined,
           cursor: scale > 1 ? (isDragging ? 'grabbing' : 'grab') : 'zoom-in',
           width: physicalWidth / (window.devicePixelRatio || 1),
           height: physicalWidth / (window.devicePixelRatio || 1) / aspectRatio,
-          transform: `translate3d(${position.x + documentOffset.x}px, ${position.y + documentOffset.y}px, 0) scale(${scale})`,
+          transform: `translate3d(${position.x}px, ${position.y}px, 0) scale(${scale})`,
         } : undefined}>
         {!fullLoaded && physicalWidth > 0 && (
           <img
@@ -1167,7 +1145,7 @@ const LetterViewer = memo(function LetterViewer({
       {focusMode && <div className="reader-focus-strip"><InlineScanNavigation cornerRatios={cornerRatios} images={displayImages}
         selected={currentImageIndex} onSelect={selectImage} /></div>}
       {isLightbox && !focusMode && <ViewerPageDrawer id={drawerId} images={displayImages}
-        selected={currentImageIndex} onSelect={selectImage} motion={pageMotion} />}
+        selected={currentImageIndex} onSelect={selectImage} />}
       </div>
       {isLightbox && <span className="viewer-page-counter sr-only" role="status" aria-live="polite" aria-atomic="true" aria-label="Scan page">{currentImageIndex + 1} / {displayImages.length}</span>}
       {isLightbox && !focusMode && <div className="viewer-toolbar" aria-label="Scan controls">

@@ -85,6 +85,14 @@
   --scan-height: min(32rem, 60svh);
 }
 .scan-carousel {
+  /* The scroll window reaches the screen edge; slides retain the figure's
+     content width so neighboring scans remain visible on wide screens. */
+  --scan-edge-inset: max(0px, calc((100vw - 100%) / 2));
+  --scan-edge-left: var(--scan-edge-inset);
+  --scan-edge-right: var(--scan-edge-inset);
+  margin-inline: calc(-1 * var(--scan-edge-left)) calc(-1 * var(--scan-edge-right));
+  padding-inline: var(--scan-edge-left) var(--scan-edge-right);
+  scroll-padding-inline: var(--scan-edge-left) var(--scan-edge-right);
   display: flex;
   overflow-x: auto;
   scrollbar-width: none;
@@ -257,18 +265,13 @@
   .letter-scan-figure {
     grid-column: 1;
     grid-row: auto;
-    container-type: inline-size;
-    --scan-height: calc(100cqw / var(--active-scan-ratio, .75));
+    --scan-height: min(34rem, 62svh);
     width: 100%;
     justify-self: center;
   }
   .scan-carousel {
-    /* Extend only the scroll window: the figure still owns image dimensions.
-       Symmetric padding preserves native/explicit centering even when one
-       safe-area inset is larger. The page shell clips excess at screen edges. */
-    --scan-edge-inset: max(var(--reader-inset-left), var(--reader-inset-right));
-    margin-inline: calc(-1 * var(--scan-edge-inset));
-    padding-inline: var(--scan-edge-inset);
+    --scan-edge-left: var(--reader-inset-left);
+    --scan-edge-right: var(--reader-inset-right);
   }
   .letter-reading-column {
     grid-row: auto;
@@ -305,20 +308,8 @@
     justify-self: center;
     --scan-height: min(42rem, max(16rem, calc(100svh - var(--header-height, 6rem) - 10rem)));
   }
-  .scan-carousel {
-    /* Raise only the large scans; the sibling figcaption/thumbnail strip
-       remains beneath the reader's header cover. */
-    position: relative;
-    z-index: 45;
-    padding-block: .75rem;
-    margin-block: -.75rem;
-    /* As on mobile, extend the scroll window to the screen edges while
-       restoring the figure's content width inside it. The public shell clips
-       any scrollbar/safe-area excess; image size and snap centers stay put. */
-    --scan-edge-inset: max(0px, calc((100vw - 100%) / 2));
-    margin-inline: calc(-1 * var(--scan-edge-inset));
-    padding-inline: var(--scan-edge-inset);
-  }
+  .scan-carousel { padding-block: 4px; }
+
   .scan-slide-img {
     border-radius: 8px;
   }

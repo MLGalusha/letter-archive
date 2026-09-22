@@ -43,7 +43,8 @@ for (const width of [320, 390, 900, 901, 1440]) {
     if (width <= 900) {
       expect(boxes.text.top).toBeGreaterThan(boxes.scan.bottom);
       // WebKit's fractional flex sizing can differ by just over half a pixel.
-      expect(Math.abs(boxes.image.width - (width - 24))).toBeLessThan(1);
+      expect(boxes.image.width).toBeLessThanOrEqual(width - 24);
+      expect(boxes.image.height).toBeLessThanOrEqual(558);
       expect(boxes.heading.top).toBeGreaterThanOrEqual(boxes.scan.bottom);
     } else {
       expect(boxes.image.height).toBeGreaterThan(513);

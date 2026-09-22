@@ -30,16 +30,36 @@ export function useReaderViewerSurface(active: boolean, dialogRef: RefObject<HTM
     const gutter = rootStyle.scrollbarGutter.includes('stable') ? rootStyle.scrollbarGutter
       : window.innerWidth > document.documentElement.clientWidth ? 'stable' : 'auto';
     const restoreRoot = setTemporaryStyles(document.documentElement, {
-      'background-color': color, 'overflow-x': 'hidden', 'overflow-y': 'hidden',
+      'background-color': color, 'overflow-x': 'clip', 'overflow-y': 'visible',
       // Preserve the document geometry used as the thumbnail return target.
       // Overlay scrollbars have no gutter. Reserving one would shrink the page
       // during zoom and make it jump back when the lock is released.
       'scrollbar-gutter': gutter,
     });
+    // Keep the reader in the document painting layer. A fixed body plus fixed
+    // overlay is clipped above Safari's browser controls. Freeze only the
+    // underlying application, preserving its layout and React state for return.
+    const app = document.getElementById('root');
+    const restoreApp = app ? setTemporaryStyles(app, {
+      position: 'absolute', top: '0px', width: '100%', height: '0px',
+      overflow: 'hidden', visibility: 'hidden',
+    }) : () => {};
+    const restoreHeaders = [...document.querySelectorAll<HTMLElement>('.header, .header-reader-cover')]
+      .map(element => setTemporaryStyles(element, { display: 'none' }));
     const restoreBody = setTemporaryStyles(document.body, {
-      position: 'fixed', top: `-${savedY}px`, width: '100%',
-      'overflow-x': 'hidden', 'overflow-y': 'hidden', 'background-color': color,
+      position: 'static', width: '100%', 'min-height': '0px',
+      'overflow-x': 'clip', 'overflow-y': 'visible', 'background-color': color,
     });
+    // Center the viewing surface within real document paint space. Safari can
+    // then sample the zoomed image above and below its unobscured viewport.
+    const alignSurface = () => {
+      if (Math.abs(window.scrollY - backdrop.offsetTop) > 1) appScrollTo(backdrop.offsetTop);
+    };
+    alignSurface();
+    const resize = new ResizeObserver(alignSurface);
+    resize.observe(backdrop);
+    // Retain modal scroll locking without disabling the document paint layer.
+    window.addEventListener('scroll', alignSurface, { passive: true });
     const themes = [...document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')]
       .map(element => ({ element, content: element.getAttribute('content') }));
     for (const { element } of themes) element.content = color;
@@ -58,7 +78,11 @@ export function useReaderViewerSurface(active: boolean, dialogRef: RefObject<HTM
     return () => {
       backdrop.removeEventListener('touchmove', preventChromeScroll);
       backdrop.removeEventListener('wheel', preventChromeScroll);
+      resize.disconnect();
+      window.removeEventListener('scroll', alignSurface);
       restoreBody();
+      restoreApp();
+      restoreHeaders.forEach(restore => restore());
       restoreRoot();
       for (const { element, content } of themes) {
         if (content === null) element.removeAttribute('content');

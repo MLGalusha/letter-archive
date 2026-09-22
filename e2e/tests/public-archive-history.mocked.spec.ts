@@ -217,8 +217,8 @@ test('@mocked reader renders detail before adjacency and announces pending navig
     await expect(page.getByRole('button', { name: 'Next', exact: true })).toBeEnabled();
     await page.goBack();
     await expect(page.getByText('First fixture letter', { exact: true })).toBeVisible();
-    // Selecting a scan stays in the document and preserves Forward history.
-    await page.getByRole('button', { name: 'Select page 1', exact: true }).click();
+    // Thumbnail activation stays in the document and preserves Forward history.
+    await page.getByRole('button', { name: 'Go to scan 1: letter', exact: true }).click();
     await expect(page.getByRole('dialog', { name: 'Original scans' })).toHaveCount(0);
     await expect(page.locator('body')).not.toHaveCSS('overflow', 'hidden');
     await page.goForward();

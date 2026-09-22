@@ -1,15 +1,11 @@
 import { useSiteSettings } from '../hooks/useSiteSettings';
-import { useState, useEffect, useLayoutEffect, useMemo, useCallback, Fragment } from "react";
-import { createPortal } from "react-dom";
+import { useState, useEffect, useMemo, useRef, Fragment } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import SEO from "../components/SEO";
+import { ScanReader, type ScanReaderHandle } from "../components/LetterViewer/ScanReader";
 
-import { ReaderFocusViewer } from "../components/LetterViewer/ReaderFocusViewer";
-import { InlineScanNavigation } from "../components/LetterViewer/InlineScanNavigation";
 import { getAdjacentLetters, getLetterById, type AdjacentLettersResponse } from "../api/letters";
 import type { LetterImage, LetterImageType, PublicLetter } from "../types/Letter";
-import { allowImageSpeculation } from "../services/imagePreloadService";
-import { ReaderScanImage } from "../components/LetterViewer/ReaderScanImage";
 import { buildLetterSeo } from "../utils/seo";
 import {
   hasPrimaryTranscriptContent,
@@ -19,9 +15,6 @@ import ReaderTranscript from "../components/LetterViewer/ReaderTranscript";
 import HeaderDock from "../components/Header/HeaderDock";
 import HeaderScrubber from "../components/HeaderScrubber/HeaderScrubber";
 import useLetterScrubber from "../components/LetterHeaderDock/useLetterScrubber";
-import { useScanFocusEntry } from "../hooks/useScanFocusEntry";
-import { useScanCornerRatios } from "../hooks/useScanCornerRatios";
-import useCarouselDrag from "../hooks/useCarouselDrag";
 import BackToTop from "../components/BackToTop";
 import "./LetterDetailPage.css";
 
@@ -125,45 +118,15 @@ export default function LetterDetailPage() {
   const navigationPresentation = navigationResolved ? loadedAdjacent : canRetainNavigation ? settledNavigation : null;
   const navigationPending = !!navigationPresentation && !navigationResolved;
 
-  // Image viewer modal
-  const [viewerOpen, setViewerOpen] = useState(() => Boolean(history.state?.readerFocus && history.state?.readerFocusLetter === letterId));
-  const [viewerStartPage, setViewerStartPage] = useState(() => history.state?.readerFocusLetter === letterId ? history.state.readerFocusIndex ?? 0 : 0);
-  useEffect(() => {
-    // Forward revisits the same-URL focus entry after its viewer has unmounted.
-    // The viewer adopts that entry instead of pushing another history step.
-    const restoreViewer = () => {
-      if (!history.state?.readerFocus || history.state.readerFocusLetter !== letterId) return;
-      setViewerStartPage(history.state.readerFocusIndex ?? 0);
-      setViewerOpen(true);
-    };
-    window.addEventListener('popstate', restoreViewer);
-    return () => window.removeEventListener('popstate', restoreViewer);
-  }, [letterId]);
+  const readerRef = useRef<ScanReaderHandle>(null);
+  const [viewerOpen, setViewerOpen] = useState(false);
   const [routeOwner, setRouteOwner] = useState(letterId);
-  // Reset route-local UI before committing a different destination, including Back.
   if (routeOwner !== letterId) {
     setRouteOwner(letterId);
     setLoadError(null);
     setViewerOpen(false);
   }
-
-
-  // Scan carousel (extracted hook)
-  const { carouselRef, attachCarousel, activeIndex, transitionFromIndex, pageMotion, carouselDraggedRef, scrollToSlide } = useCarouselDrag();
-
-  const cornerRatios = useScanCornerRatios(carouselRef, letter?.images);
-
-  const [readyScan, setReadyScan] = useState<string | null>(null);
-  const activeScanKey = `${letter?.id}:${letter?.images[activeIndex]?.imageUrl ?? activeIndex}`;
-
-  // A link may select a source image; it never owns vertical reading position.
-  // Keep the URL parameter so Back/Forward and reload select the same source.
   const targetImageId = searchParams.get("image");
-  useLayoutEffect(() => {
-    if (!displayedLetterIsCurrent || !letter) return;
-    const index = letter.images.findIndex(image => image.id === targetImageId);
-    scrollToSlide(Math.max(0, index), 'instant');
-  }, [displayedLetterIsCurrent, letter, targetImageId, scrollToSlide]);
 
   useEffect(() => {
     if (!letterId) return;
@@ -228,26 +191,6 @@ export default function LetterDetailPage() {
   const seo = useMemo(() => (letter ? buildLetterSeo(letter, siteName) : null), [letter, siteName]);
 
 
-  const openViewer = useCallback((pageIndex: number, opener: HTMLElement) => {
-    // Safari does not focus mouse-clicked buttons; capture the actual trigger.
-    opener.focus({ preventScroll: true });
-    setViewerStartPage(pageIndex);
-    setViewerOpen(true);
-  }, []);
-
-  const { entryZoom, directZoom } = useScanFocusEntry(openViewer, letterId);
-
-  const selectScan = useCallback((index: number) => {
-    if (index !== activeIndex) scrollToSlide(index);
-    if (window.scrollY > 0) {
-      window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
-    }
-  }, [activeIndex, scrollToSlide]);
-
-  const viewerIsActive = viewerOpen && displayedLetterIsCurrent;
-
-  const syncViewerPage = useCallback((index: number) => scrollToSlide(index, 'instant'), [scrollToSlide]);
-
   // Memoize all derived values — must be before conditional returns (Rules of Hooks)
   const derived = useMemo(() => {
     if (!letter) return null;
@@ -289,8 +232,6 @@ export default function LetterDetailPage() {
     hasTranscript, extraContentItems, hasExtraContent,
     isPhotoRecord, heroHook,
   } = derived;
-  const activeScan = carouselImages[activeIndex];
-  const activeScanRatio = activeScan?.width && activeScan?.height ? activeScan.width / activeScan.height : .75;
 
   return (
     <>
@@ -313,70 +254,8 @@ export default function LetterDetailPage() {
         )}
 
         <div className={`letter-reader${carouselImages.length ? "" : " letter-reader--text-only"}`}>
-        {/* ── 3. Scan Image Carousel ──────────────────────── */}
-        {carouselImages.length > 0 && (
-          <figure id="letter-scans" className="letter-scan-figure" tabIndex={-1} style={{ "--active-scan-ratio": activeScanRatio } as React.CSSProperties}>
-            <div key={letter.id} className="scan-carousel" ref={attachCarousel} data-image-scroll-root>
-              {carouselImages.map((img, idx) => {
-                const isLetter = img.type === "letter";
-                const typeLabel = isLetter
-                  ? undefined
-                  : img.type.charAt(0).toUpperCase() + img.type.slice(1);
-                return (
-                  <div
-                    key={img.id ?? idx}
-                    data-scan-index={idx}
-                    className="scan-slide"
-                    data-index={idx}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => { if (!carouselDraggedRef.current) selectScan(idx); }}
-                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectScan(idx); } }}
-                    aria-pressed={idx === activeIndex}
-                    aria-description="Select image and scroll to the top. Press + to zoom in."
-                    aria-label={
-                      isLetter
-                        ? `Select page ${img.pageNumber ?? idx + 1}`
-                        : `Select ${typeLabel}`
-                    }
-                  >
-                    <ReaderScanImage
-                      imageUrl={img.imageUrl}
-                      previewEnabled={readyScan === activeScanKey && allowImageSpeculation()}
-                      enabled={idx === activeIndex || idx === transitionFromIndex || (Math.abs(idx - activeIndex) === 1 && readyScan === activeScanKey && allowImageSpeculation())}
-                      fetchPriority={idx === activeIndex ? 'high' : 'low'}
-                      onReadyChange={(ready) => { if (idx === activeIndex) setReadyScan(ready ? activeScanKey : null); }}
-                      alt={
-                        isLetter
-                          ? `Page ${img.pageNumber ?? idx + 1} of letter`
-                          : `${typeLabel}`
-                      }
-                      className="scan-slide-img"
-                      imgClassName="scan-slide-img-inner"
-                      objectFit="contain"
-                      draggable={false}
-                      // The enabled gate admits only the active scan and ready neighbors.
-                      // A second native lazy gate would stall wholly clipped neighbors.
-                      loading="eager"
-                      decoding="async"
-                      context="carousel"
-                      aspectRatio={img.width && img.height ? img.width / img.height : undefined}
-                    />
-                    {typeLabel && (
-                      <span className="scan-slide-type-label">{typeLabel}</span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            <figcaption>
-              <InlineScanNavigation cornerRatios={cornerRatios} enabled={!viewerIsActive} key={letter.id} images={carouselImages} selected={activeIndex} motion={pageMotion}
-                onSelect={index => scrollToSlide(index,
-                  window.matchMedia('(min-width: 901px)').matches ? 'smooth' : 'instant')} />
-            </figcaption>
-          </figure>
-        )}
+        <ScanReader key={letter.id} ref={readerRef} images={carouselImages} letterId={letter.id}
+          targetImageId={targetImageId} onViewerChange={setViewerOpen} />
 
         <header className="letter-hero-section">
           <h1>{formatDateText(m.date || (m.sender ? `Letter from ${m.sender}` : m.recipient ? `Letter to ${m.recipient}` : isPhotoRecord ? "Photograph" : "Letter"))}</h1>
@@ -408,7 +287,7 @@ export default function LetterDetailPage() {
             <div className="reader-source-links">
               {allImages.map((img, imageIndex) => item.imageIds.includes(img.id) && <button
                 key={img.id} type="button" className="reader-source-link"
-                onClick={e => openViewer(imageIndex, e.currentTarget)}>
+                onClick={e => readerRef.current?.open(imageIndex, e.currentTarget)}>
                 View on scan {imageIndex + 1} ↗
               </button>)}
             </div>
@@ -418,15 +297,6 @@ export default function LetterDetailPage() {
 
       </article>
 
-      {/* ── Image Viewer Modal ─────────────────────────────── */}
-      {viewerIsActive && createPortal(
-        <ReaderFocusViewer cornerRatios={cornerRatios} entryZoom={entryZoom} directZoom={directZoom} images={allImages} letterId={letter.id} initialIndex={viewerStartPage}
-          onPageChange={syncViewerPage} onClose={index => {
-            setViewerOpen(false);
-            if (index !== activeIndex) scrollToSlide(index);
-          }} />,
-        document.body,
-      )}
       <BackToTop />
     </>
   );

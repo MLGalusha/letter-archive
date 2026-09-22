@@ -7,7 +7,7 @@ export async function mockReader(page: Page, images = viewerImages) {
     const path = new URL(route.request().url()).pathname;
     if (path.startsWith('/images/')) {
       const image = images.find(image => image.imageUrl === path) ?? images[0];
-      return route.fulfill({ contentType: 'image/svg+xml', body: `<svg xmlns="http://www.w3.org/2000/svg" width="${image.width}" height="${image.height}"><rect width="100%" height="100%" fill="tan"/><text x="20" y="40">Scan ${image.pageNumber}</text></svg>` });
+      return route.fulfill({ contentType: 'image/svg+xml', body: `<svg xmlns="http://www.w3.org/2000/svg" width="${image.width}" height="${image.height}" viewBox="0 0 ${image.width} ${image.height}"><rect width="100%" height="100%" fill="tan"/><text x="20" y="40">Scan ${image.pageNumber}</text></svg>` });
     }
     if (path === '/settings/public') return route.fulfill({ json: {} });
     if (path.endsWith('/adjacent')) return route.fulfill({ json: { prev: { id: 'previous' }, next: { id: 'next' }, position: 2, total: 3, collectionCode: '001' } });
@@ -25,7 +25,7 @@ export async function mockReader(page: Page, images = viewerImages) {
 export async function openReader(page: Page, images = viewerImages) {
   await mockReader(page, images);
   await page.goto('/letter/current');
-  const opener = page.locator('[aria-label="Select page 1"]');
+  const opener = page.locator('[aria-label="Open scan 1 full screen"]');
   await expect(opener).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
   await opener.scrollIntoViewIfNeeded();

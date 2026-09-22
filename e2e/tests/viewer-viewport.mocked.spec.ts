@@ -44,6 +44,9 @@ test('@mocked fullscreen paints document edges and restores them on repeated clo
     if (cycle < 2) {
       await opener.press('+');
       await expect(surface).toHaveAttribute('data-phase', 'focused');
+      await page.keyboard.press('0');
+      await expect(page.locator('.letter-viewer')).toHaveAttribute('data-zoom', '1');
+      await expect(page.locator('.viewer-transform')).not.toHaveClass(/animating/);
     }
   }
 });

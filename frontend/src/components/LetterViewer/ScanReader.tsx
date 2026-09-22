@@ -78,7 +78,6 @@ export const ScanReader = forwardRef<ScanReaderHandle, {
   const { entryZoom, resetEntryZoom } = useScanFocusEntry(open, carouselRef, viewerRef);
   useImperativeHandle(ref, () => ({ open: (index, element) => { resetEntryZoom(); open(index, element); } }), [open, resetEntryZoom]);
   const activate = (index: number, opener: HTMLElement) => {
-    if (carouselDraggedRef.current) return;
     if (index !== activeIndex) scrollToSlide(index);
     else { resetEntryZoom(); open(index, opener); }
   };
@@ -92,12 +91,20 @@ export const ScanReader = forwardRef<ScanReaderHandle, {
         {images.map((image, index) => <div key={image.id} className="scan-slide" data-index={index} data-scan-index={index}
           role="button" tabIndex={index === activeIndex ? 0 : -1} aria-pressed={index === activeIndex}
           aria-label={`Open scan ${index + 1} full screen`}
-          onClick={event => activate(index, event.currentTarget)}
+          onClick={event => {
+            if (event.detail > 0 && carouselDraggedRef.current) {
+              carouselDraggedRef.current = false;
+              return;
+            }
+            activate(index, event.currentTarget);
+          }}
           onKeyDown={event => {
             if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); activate(index, event.currentTarget); }
             if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
               event.preventDefault();
-              scrollToSlide(Math.max(0, Math.min(images.length - 1, activeIndex + (event.key === 'ArrowRight' ? 1 : -1))));
+              const nextIndex = Math.max(0, Math.min(images.length - 1, activeIndex + (event.key === 'ArrowRight' ? 1 : -1)));
+              scrollToSlide(nextIndex);
+              (carouselRef.current?.children[nextIndex] as HTMLElement | undefined)?.focus({ preventScroll: true });
             }
           }}>
           <ReaderScanImage imageUrl={image.imageUrl} alt={image.type === 'letter' ? `Page ${image.pageNumber ?? index + 1} of letter` : `${image.type.charAt(0).toUpperCase() + image.type.slice(1)}`}

@@ -180,3 +180,26 @@ for (const input of ['keyboard', 'wheel'] as const) test(`@mocked ${input} entry
   await expect(viewer).toHaveAttribute('data-zoom', '1');
   await closeReader(page);
 });
+
+for (const input of ['arrow', 'drag'] as const) test(`@mocked keyboard activation follows ${input} navigation`, async ({ page }) => {
+  await mockReader(page); await page.goto('/letter/current');
+  const first = page.getByRole('button', { name: 'Open scan 1 full screen', exact: true });
+  await expect(first).toBeVisible(); await first.focus();
+  if (input === 'arrow') {
+    await first.press('ArrowRight');
+    await expect(page.getByRole('button', { name: 'Open scan 2 full screen', exact: true })).toBeFocused();
+  } else {
+    const box = (await first.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 - 20, box.y + box.height / 2, { steps: 4 });
+    await page.mouse.up();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await first.focus();
+  }
+  await page.keyboard.press('Enter');
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator('[aria-current="page"]')).toHaveAccessibleName(`Go to scan ${input === 'arrow' ? 2 : 1}: letter`);
+  await closeReader(page);
+});

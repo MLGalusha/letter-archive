@@ -140,7 +140,9 @@ test.describe('@mocked Public mobile layout', () => {
     const saved = await page.evaluate(() => scrollY);
     await image.focus(); await image.press('+');
     await expect(page.getByRole('dialog', { name: 'Original scans' })).toBeVisible();
-    expect(await page.evaluate(() => document.body.style.position)).toBe('fixed');
+    await expect(page.locator('#root')).toHaveAttribute('inert', '');
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect.poll(() => page.locator('.reader-focus-backdrop').evaluate(el => Math.abs(el.getBoundingClientRect().top))).toBeLessThan(1);
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog', { name: 'Original scans' })).toHaveCount(0);
     expect(await page.evaluate(() => document.body.style.position)).toBe('');
@@ -161,7 +163,8 @@ test.describe('@mocked Public mobile layout', () => {
     await page.locator('.scan-slide').first().focus();
     await page.keyboard.press('+');
     await expect(page.getByRole('dialog', { name: 'Original scans' })).toBeVisible();
-    expect(await page.evaluate(() => parseFloat(document.body.style.top))).toBeLessThan(0);
+    await expect(page.locator('#root')).toHaveAttribute('inert', '');
+    await expect.poll(() => page.locator('.reader-focus-backdrop').evaluate(el => Math.abs(el.getBoundingClientRect().top))).toBeLessThan(1);
     // First Back closes the viewer's own history entry; the next leaves the letter.
     await page.goBack();
     await expect(page.getByRole('dialog')).toHaveCount(0);

@@ -108,7 +108,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) for (const wid
     await opener.press('+');
     await expect(page.getByRole('dialog', { name: 'Original scans' })).toBeVisible();
     await expect(page.locator('.reader-focus-backdrop')).toHaveAttribute('data-phase', 'focused');
-    expect(await page.locator('.reader-focus-strip [aria-current="page"]').evaluate(el => {
+    await expect.poll(() => page.locator('.reader-focus-strip [aria-current="page"]').evaluate(el => {
       const r = el.getBoundingClientRect();
       return el.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
     })).toBe(true);

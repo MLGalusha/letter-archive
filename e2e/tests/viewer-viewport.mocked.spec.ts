@@ -9,7 +9,10 @@ test('@mocked fullscreen paints document edges and restores them on repeated clo
   for (let cycle = 0; cycle < 3; cycle++) {
     await expect(page.locator('html')).toHaveCSS('background-color', color);
     await expect(page.locator('body')).toHaveCSS('background-color', color);
-    await expect(page.locator('html')).toHaveCSS('overflow', 'hidden');
+    await expect(page.locator('html')).toHaveCSS('overflow-y', 'visible');
+    await expect(surface).toHaveCSS('position', 'relative');
+    await expect(page.locator('body')).toHaveCSS('position', 'static');
+    await expect(page.locator('#root')).toHaveCSS('visibility', 'hidden');
     await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#f5ede1');
     for (const height of [620, 844]) {
       await page.setViewportSize({ width: 390, height });
@@ -19,20 +22,31 @@ test('@mocked fullscreen paints document edges and restores them on repeated clo
       })).toBeLessThan(1);
       await expect(page.locator('.viewer-modal-header')).toHaveCount(0);
       const stageBox = (await page.locator('.viewer-container').boundingBox())!;
-      expect(stageBox.y).toBe(0);
-      expect(stageBox.height).toBe(height);
+      expect(stageBox.y).toBeGreaterThan(55);
+      expect(stageBox.height).toBeGreaterThan(0);
       const pages = await page.getByRole('dialog', { name: 'Original scans' }).locator('.viewer-page-drawer').boundingBox();
       expect(pages!.y + pages!.height).toBeLessThanOrEqual(height);
+      expect(stageBox.y + stageBox.height).toBeLessThanOrEqual(pages!.y - 11);
+      const image = (await page.locator('.viewer-transform').boundingBox())!;
+      expect(image.y).toBeGreaterThanOrEqual(stageBox.y - 1);
+      expect(image.y + image.height).toBeLessThanOrEqual(pages!.y - 11);
+      expect(await page.evaluate(() => scrollY)).toBeGreaterThan(0);
     }
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect.poll(() => surface.evaluate(el => Math.abs(el.getBoundingClientRect().top))).toBeLessThan(1);
     await closeReader(page);
     await expect(page.locator('body')).toHaveAttribute('style', styles);
     await expect(page.locator('html')).toHaveCSS('background-color', 'rgb(245, 237, 225)');
     await expect(page.locator('html')).toHaveCSS('overflow', 'visible');
     await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#f5ede1');
+    await expect(page.locator('#root')).toHaveCSS('visibility', 'visible');
     await expect(opener).toBeFocused();
     if (cycle < 2) {
       await opener.press('+');
       await expect(surface).toHaveAttribute('data-phase', 'focused');
+      await page.keyboard.press('0');
+      await expect(page.locator('.letter-viewer')).toHaveAttribute('data-zoom', '1');
+      await expect(page.locator('.viewer-transform')).not.toHaveClass(/animating/);
     }
   }
 });
@@ -52,6 +66,7 @@ test('@mocked fullscreen blocks chrome gestures while preserving drawer scrollin
   });
   await opener.focus();
   await opener.press('+');
+  await expect(page.getByRole('dialog', { name: 'Original scans' })).toBeVisible();
   const gestures = await page.evaluate(() => {
     const dispatch = (selector: string, type: string) => {
       const event = new Event(type, { bubbles: true, cancelable: true });

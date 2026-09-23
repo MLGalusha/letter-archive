@@ -1,116 +1,100 @@
-/* Resized previews are SDR, but original photos can contain HDR gain maps.
-   Keep the same brightness when zoom loads the original, including the
-   transition image and thumbnails, without reducing the scan's resolution. */
-.letter-scan-figure,
-.reader-focus-backdrop {
-  dynamic-range-limit: standard;
-}
-
-/* One viewport stage, a separate control layer, and the unchanged document below. */
+/* The stage paints edge to edge. Safe areas inset controls, never the image. */
+.letter-scan-figure, .reader-focus-backdrop { dynamic-range-limit: standard; }
 .reader-focus-backdrop.viewer-backdrop {
+  /* Keep one viewport of paint space on either side. The surface hook scrolls
+     to this stage; zoomed scans can paint into that space beneath Safari UI.
+     Only controls respect safe areas. No device-specific offsets are needed. */
+  position: relative;
+  inset: auto;
+  margin-block: 100lvh;
+  width: 100%;
+  height: 100vh;
+  height: 100lvh;
+  overflow: visible;
   --viewer-surface: #f5ede1;
   --bg: #f5ede1;
   --text-muted: #6d5f51;
   --accent: #1f6d7a;
-  background: transparent;
+  background: var(--viewer-surface);
   color: #2d241d;
   font-family: 'Instrument Sans', sans-serif;
+
 }
-.reader-focus-backdrop[data-phase='focused'] { background: var(--bg); }
-.reader-focus.viewer-modal { padding: 0; outline: none; }
-.reader-focus .letter-viewer--focus { display: block; position: relative; width: 100%; height: 100%; }
+.reader-focus.viewer-modal { padding: 0; outline: none; overflow: visible; }
+.reader-focus .letter-viewer--focus { overflow: visible; display: block; position: relative; width: 100%; height: 100%; }
 .reader-focus .viewer-workspace { display: contents; }
-.reader-focus .viewer-container { position: absolute; inset: 0; width: 100%; height: 100%; overflow: hidden; }
-.reader-focus-fit {
+.reader-focus .viewer-container, .reader-focus-fit {
   position: absolute;
-  inset: calc(108px + env(safe-area-inset-top, 0px)) 12px calc(108px + env(safe-area-inset-bottom, 0px));
+  top: calc(56px + env(safe-area-inset-top, 0px));
+  bottom: calc(100lvh - 100dvh + var(--reader-tray-height, 80px) + 24px + env(safe-area-inset-bottom, 0px));
+  left: 12px;
+  right: 12px;
+  width: auto;
+  height: auto;
+}
+.reader-focus .viewer-container { overflow: visible; }
+.reader-focus-fit {
   pointer-events: none;
   visibility: hidden;
 }
 .reader-focus-strip {
+  view-transition-name: reader-pages;
   position: absolute;
-  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-  left: 50%;
-  transform: translateX(-50%);
-  /* Preserve the document strip's clipping window when the scrollbar disappears. */
-  width: min(var(--reader-strip-width, 52rem), calc(100% - 24px));
+  bottom: calc(100lvh - 100dvh + 12px + env(safe-area-inset-bottom, 0px));
+  left: calc(12px + env(safe-area-inset-left, 0px));
+  right: calc(12px + env(safe-area-inset-right, 0px));
   z-index: 2;
-  visibility: hidden;
-  border-radius: 14px;
+  max-width: 52rem;
+  margin-inline: auto;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg);
 }
-.reader-focus-strip .viewer-page-drawer { margin-top: 0; overscroll-behavior: contain; }
-.reader-focus .viewer-image, .reader-focus .viewer-image-thumb { border-radius: var(--scan-image-corner-radius); }
-.reader-focus-backdrop[data-phase='preparing'] .viewer-transform { visibility: hidden; }
-.reader-focus-flight {
-  position: fixed;
-  transform-origin: 0 0;
-  object-fit: fill;
-  max-width: none;
-  max-height: none;
-  pointer-events: none;
-  visibility: hidden;
-  z-index: 1;
-  border-radius: 4px;
+.reader-focus-strip .viewer-page-drawer { margin-top: 0; }
+.reader-focus .viewer-image, .reader-focus .viewer-image-thumb { border-radius: 4px; }
+.reader-focus-close {
+  position: absolute;
+  top: calc(8px + env(safe-area-inset-top, 0px));
+  right: calc(8px + env(safe-area-inset-right, 0px));
+  z-index: 3;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: #2d241d;
+  cursor: pointer;
+  isolation: isolate;
 }
-.reader-focus-return {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  visibility: hidden;
-  z-index: 1;
+/* A small visible control with a larger, comfortable touch target. */
+.reader-focus-close::before {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  z-index: -1;
+  border-radius: inherit;
+  background: #f5ede1e8;
+  box-shadow: 0 0 0 1px #2d241d20;
 }
-.public-site-shell[data-reader-focus] .header,
-.public-site-shell[data-reader-focus] .header-reader-cover,
-.public-site-shell[data-reader-focus] .letter-hero-section,
-.public-site-shell[data-reader-focus] .letter-reading-column,
-.public-site-shell[data-reader-focus] .scan-slide {
-  transition: transform var(--reader-focus-duration, 420ms) cubic-bezier(.22,.75,.2,1), opacity var(--reader-focus-duration, 420ms) ease;
-}
-.public-site-shell[data-reader-focus] .scan-slide[data-focus-side='selected'],
-.public-site-shell[data-reader-focus] .letter-scan-figure figcaption,
-.public-site-shell[data-reader-focus] .back-to-top { visibility: hidden; }
-.public-site-shell:is([data-reader-focus='entering'], [data-reader-focus='focused']) .header,
-.public-site-shell:is([data-reader-focus='entering'], [data-reader-focus='focused']) .header-reader-cover { transform: translateY(-120%); }
-.public-site-shell:is([data-reader-focus='entering'], [data-reader-focus='focused']) .letter-hero-section,
-.public-site-shell:is([data-reader-focus='entering'], [data-reader-focus='focused']) .letter-reading-column { transform: translateY(100vh); opacity: 0; }
-.public-site-shell:is([data-reader-focus='entering'], [data-reader-focus='focused']) [data-focus-side='left'] { transform: translateX(-100vw); }
-.public-site-shell:is([data-reader-focus='entering'], [data-reader-focus='focused']) [data-focus-side='right'] { transform: translateX(100vw); }
-/* Entry uses the visible edge distance, so side previews slide away perceptibly.
-   Once offscreen, park them at the original return position without animation. */
-.public-site-shell[data-reader-focus='entering'] .scan-slide:not([data-focus-side='selected']) {
-  transform: translateX(var(--reader-focus-exit-x, 0px));
-}
-.public-site-shell[data-reader-focus='focused'] .scan-slide { transition: none; }
-.public-site-shell[data-reader-focus='entering'] .header,
-.public-site-shell[data-reader-focus='entering'] .header-reader-cover {
-  transition-timing-function: ease-in-out;
-}
-@media (max-height: 500px) {
-  .reader-focus-fit { inset-block: 92px; }
-  .reader-focus-strip { bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .public-site-shell[data-reader-focus] *, .reader-focus * { transition-duration: 0s !important; }
-}
-
-/* Selecting a thumbnail recenters the hidden document scan without inheriting
-   its departing-neighbor transform. Its measured return destination stays real. */
-.public-site-shell[data-reader-focus] .scan-slide[data-focus-side="selected"] { transform: none; transition: none; }
-/* The departing/returning header stays in front until it clears the viewport. */
-.public-site-shell[data-reader-focus] .header { z-index: 1100; }
-
-/* Image and thumbnail geometry follow the gesture. Page chrome has its own
-   timed mode animation, including a return that can outlive this overlay. */
-.reader-focus-backdrop[data-direct-zoom='true'] { background: transparent; }
-.reader-focus-backdrop[data-direct-zoom='true'][data-phase='preparing'] .viewer-transform { visibility: visible; }
-.reader-focus-backdrop[data-direct-zoom='true'] .reader-focus-strip { visibility: visible; }
-.public-site-shell[data-reader-direct-zoom] :is(.header, .header-reader-cover, .scan-slide, .letter-hero-section, .letter-reading-column) {
-  transition: none;
-  transform: none;
-  opacity: 1;
-}
-
-/* Allow document scrolling, while reserving scan pinch gestures for focus mode. */
+.reader-focus-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.reader-focus-close:hover::before { background: #f5ede1; }
 .scan-slide { touch-action: pan-x pan-y; }
+/* One browser-owned shared-image transition, in both directions. The page
+   snapshot fades the header and neighboring scans without extra DOM clones. */
+::view-transition-group(reader-scan), ::view-transition-group(reader-pages) {
+  animation-duration: 260ms;
+  animation-timing-function: cubic-bezier(.22, .68, .2, 1);
+}
+::view-transition-old(reader-scan), ::view-transition-new(reader-scan) {
+  height: 100%;
+  object-fit: fill;
+  mix-blend-mode: normal;
+}
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 260ms; }
+::view-transition { pointer-events: none; }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*) { animation-duration: 0s; }
+}

@@ -80,7 +80,7 @@ for (const width of [320, 390, 430, 640]) {
 }
 
 for (const width of [320, 390, 430, 844, 901, 1280, 1440, 1920]) {
-  test(`@mocked inline scans preserve geometry, edge painting and endpoint selection at ${width}px`, async ({ page }) => {
+  test(`@mocked edge-to-edge inline scans preserve geometry and endpoint selection at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await openReader(page);
@@ -101,27 +101,23 @@ for (const width of [320, 390, 430, 844, 901, 1280, 1440, 1920]) {
     await baseline.evaluate(el => el.remove());
     const carousel = page.locator('.scan-carousel');
     const frame = (await carousel.boundingBox())!;
-    expect(frame.x).toBeCloseTo(0, 0);
-    expect(frame.width).toBeCloseTo(width, 0);
+    expect(frame.x).toBeGreaterThanOrEqual(0);
+    expect(frame.x + frame.width).toBeLessThanOrEqual(width);
+    // Large neighbors are visible beyond the figure on laptops, not hidden by
+    // a narrow internal clipping window. On phones they remain off-screen.
+    const nextScan = (await page.locator('.scan-slide-img').nth(1).boundingBox())!;
+    if (width >= 1440) {
+      const figure = (await page.locator('.letter-scan-figure').boundingBox())!;
+      expect(nextScan.x).toBeGreaterThan(figure.x + figure.width);
+      expect(nextScan.x).toBeLessThan(frame.x + frame.width);
+    } else if (width <= 430) {
+      expect(nextScan.x).toBeGreaterThanOrEqual(width);
+    }
     const noSnap = await page.addStyleTag({ content: '.scan-carousel {scroll-snap-type:none !important;}' });
-    if (width <= 900) {
-      await carousel.evaluate(el => { el.scrollLeft = 120; });
-      await paintsAtEdges(page, '.scan-slide', Math.max(frame.y + 100, 250));
-    } else {
-      // Put the incoming image halfway through the right screen edge, then
-      // the outgoing image halfway through the left. Their boxes alone are
-      // insufficient: hit testing detects an ancestor clipping their paint.
-      for (const [index, edge] of [[1, width - 1], [0, 1]]) {
-        await carousel.evaluate((el, { index, width }) => {
-          const image = el.children[index].querySelector('.scan-slide-img')!.getBoundingClientRect();
-          el.scrollLeft += image.left + image.width / 2 - (index === 1 ? width : 0);
-        }, { index, width });
-        const image = (await page.locator('.scan-slide-img').nth(index).boundingBox())!;
-        const y = Math.max(image.y + 100, 250);
-        expect(await page.evaluate(({ edge, y }) =>
-          document.elementFromPoint(edge, y)?.closest('.scan-slide')?.getAttribute('data-index'),
-        { edge, y })).toBe(String(index));
-      }
+    await carousel.evaluate(el => { el.scrollLeft = 120; });
+    for (const edge of [frame.x - 1, frame.x + frame.width + 1]) {
+      expect(await page.evaluate(({ edge, y }) => Boolean(document.elementFromPoint(edge, y)?.closest('.scan-slide')),
+        { edge, y: frame.y + frame.height / 2 })).toBe(false);
     }
     // Finish the synthetic unsnapped paint probe at a real snap point before
     // testing user navigation. Otherwise WebKit can still be restoring the
@@ -141,9 +137,7 @@ for (const width of [320, 390, 430, 844, 901, 1280, 1440, 1920]) {
     sameGeometry(await boxes(page, selectors), resting);
     await noDocumentOverflow(page);
     await page.locator('.scan-slide').first().click();
-    await expect(page.getByRole('dialog', { name: 'Original scans' })).toHaveCount(0);
-    await page.locator('.scan-slide').first().focus();
-    await page.keyboard.press('+');
+
     await expect(page.getByRole('dialog', { name: 'Original scans' })).toBeVisible();
   });
 }

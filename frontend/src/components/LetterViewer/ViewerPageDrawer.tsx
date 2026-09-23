@@ -4,16 +4,15 @@ import type { LetterImage } from '../../types/Letter';
 import { PreviewImage } from '../common/PreviewImage';
 import './ViewerPageDrawer.css';
 import { usePageStripMotion } from './usePageStripMotion';
-import type { PageMotion } from './pageMotion';
 
-/** Shared filmstrip with coordinated paging and native touch scrolling. Only settled user scrolling selects a new scan. */
-export const ViewerPageDrawer = memo(function ViewerPageDrawer({ id, images, selected, onSelect, motion, layout = 'viewer', cornerRatios, enabled = true }: {
+/** Shared page picker. Native scrolling browses; buttons activate pages. */
+export const ViewerPageDrawer = memo(function ViewerPageDrawer({ id, images, selected, onSelect, layout = 'viewer', cornerRatios, enabled = true }: {
   id: string; images: LetterImage[]; selected: number; onSelect: (index: number) => void;
-  motion?: PageMotion;
+
   layout?: 'viewer' | 'inline';
   enabled?: boolean; cornerRatios?: number[];
 }) {
-  const { root, choose, suppressClick } = usePageStripMotion( selected, onSelect, motion, images.length);
+  const { root, choose, suppressClick } = usePageStripMotion( selected, onSelect, images.length);
 
   return <div id={id} ref={root} className={`viewer-page-drawer${layout === 'inline' ? ' viewer-page-drawer--inline' : ''}`} role="region" aria-label="Scan pages" data-image-scroll-root onDragStart={event => event.preventDefault()}
     onKeyDown={event => {

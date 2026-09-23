@@ -20,7 +20,7 @@ vi.mock("../../api/letters", () => ({
 
 // Mock LetterViewer since it requires complex DOM setup
 vi.mock("../../components/LetterViewer/LetterViewer", () => ({
-  default: ({ initialIndex }: { initialIndex: number }) => <div data-index={initialIndex}>LetterViewer</div>,
+  default: ({ selectedIndex }: { selectedIndex: number }) => <div data-index={selectedIndex}>LetterViewer</div>,
 }));
 
 vi.mock("react-router-dom", async () => {
@@ -299,7 +299,7 @@ describe("LetterDetailPage", () => {
     expect(screen.getByText("Original scans are not available.")).toBeInTheDocument();
   });
 
-  it("selects the main scan without opening focus mode and supports keyboard zoom", async () => {
+  it("opens the selected scan explicitly and supports keyboard zoom", async () => {
     const user = userEvent.setup();
     getLetterByIdMock.mockResolvedValue(createLetter({ images: [
       { id: 'card-first', type: 'card', imageUrl: '/images/card.jpg' },
@@ -308,7 +308,7 @@ describe("LetterDetailPage", () => {
     renderLetterDetailPage();
     await user.click(await screen.findByRole('button', { name: 'Original formatting' }));
     expect(screen.queryByRole('button', { name: /View page .* on scan/ })).not.toBeInTheDocument();
-    const scan = screen.getByRole('button', { name: 'Select page 1' });
+    const scan = screen.getByRole('button', { name: 'Open scan 2 full screen' });
     await user.click(scan);
     expect(screen.queryByText('LetterViewer')).not.toBeInTheDocument();
     expect(scan).toHaveAttribute('aria-pressed', 'true');

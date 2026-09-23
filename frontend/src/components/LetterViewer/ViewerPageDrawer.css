@@ -1,4 +1,5 @@
 .viewer-page-drawer {
+  box-sizing: border-box;
   --page-surface: #181a19;
   --page-ink: #f4eee4;
   --page-selection: #f4eee4;
@@ -9,7 +10,7 @@
   touch-action: auto;
   user-select: none;
   overscroll-behavior: contain;
-  scroll-snap-type: x mandatory;
+
   min-width: 0;
   min-height: 76px;
   width: 100%;
@@ -17,11 +18,6 @@
   scrollbar-width: none;
 }
 .viewer-page-drawer::-webkit-scrollbar { display: none; }
-/* End space lets the first and last pages occupy the same center position. */
-.viewer-page-drawer::before, .viewer-page-drawer::after {
-  content: '';
-  flex: 0 0 max(0px, calc(50% - 36px));
-}
 .viewer-page-choice {
   position: relative;
   flex: 0 0 56px;
@@ -32,7 +28,7 @@
   border-radius: 6px;
   background: var(--page-surface);
   color: var(--page-ink);
-  scroll-snap-align: center;
+
   cursor: pointer;
 }
 .viewer-page-choice[aria-current="page"] {
@@ -77,11 +73,6 @@
   margin-top: 8px;
 }
 
-/* Centered selection needs an odd number of complete 56px cards, with 8px
-   gaps. Leave spare space outside the scrolling window instead of revealing
-   a fraction of the next card at either edge. */
-.scan-navigation { container-type: inline-size; }
-.scan-navigation .viewer-page-drawer--inline {
-  width: min(100%, calc(56px + round(down, max(0px, 100cqw - 56px), 128px)));
-  margin-inline: auto;
-}
+/* Short documents center as a group; long strips browse naturally. */
+.scan-navigation { min-width: 0; }
+.viewer-page-drawer { width: max-content; max-width: 100%; margin-inline: auto; padding: 4px; }

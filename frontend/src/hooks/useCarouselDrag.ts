@@ -1,6 +1,11 @@
-import { useCallback, useEffect, useRef, useState, useMemo, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 
-import { createPageMotion, type PageMotion } from '../components/LetterViewer/pageMotion';
+/** The padded content lane owns selection; the wider window only reveals neighbors. */
+function carouselCenter(carousel: HTMLElement) {
+  const style = getComputedStyle(carousel);
+  return carousel.getBoundingClientRect().left + carousel.clientLeft
+    + (carousel.clientWidth + (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0)) / 2;
+}
 
 export interface UseCarouselDragReturn {
   carouselRef: RefObject<HTMLDivElement | null>;
@@ -8,7 +13,6 @@ export interface UseCarouselDragReturn {
   attachCarousel: (node: HTMLDivElement | null) => void;
   activeIndex: number;
   transitionFromIndex: number | null;
-  pageMotion: PageMotion;
   /** True when a drag gesture occurred (suppresses click handler) */
   carouselDraggedRef: RefObject<boolean>;
   /** Smoothly scroll to a slide by index */
@@ -21,7 +25,6 @@ export interface UseCarouselDragReturn {
  * Reports the slide closest to the viewport center for React-rendered dots.
  */
 export default function useCarouselDrag(): UseCarouselDragReturn {
-  const pageMotion = useMemo(() => createPageMotion(), []);
   const carouselRef = useRef<HTMLDivElement>(null);
   const carouselDraggedRef = useRef(false);
   const explicitSelection = useRef(false);
@@ -53,8 +56,7 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
 
       // Both centers use viewport coordinates; offsetLeft can use a different
       // offset parent from the scrolling element (especially inside a figure).
-      const bounds = carousel.getBoundingClientRect();
-      const center = bounds.left + carousel.clientLeft + carousel.clientWidth / 2;
+      const center = carouselCenter(carousel);
       let closestIdx = 0;
       let closestDist = Infinity;
 
@@ -69,10 +71,6 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
         }
       }
 
-      const first = (slides[0] as HTMLElement).getBoundingClientRect();
-      const second = slides[1]?.getBoundingClientRect();
-      const pitch = second ? second.left - first.left : first.width;
-      if (pitch > 0 && !suppressProgress) pageMotion.publish((center - first.left - first.width / 2) / pitch);
       if (!suppressProgress || navigationTargetRef.current === null) setActiveIndex(closestIdx);
     };
 
@@ -94,13 +92,11 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
       const target = navigationTargetRef.current;
       if (target === null || Math.abs(carousel.scrollLeft - target) <= 1) {
         const wasExplicit = explicitSelection.current;
-        // Do not let a queued scroll frame re-publish drag progress after the
-        // strip has been released at scrollend.
+        // Discard queued intermediate positions after settling.
         if (rafId !== null) cancelAnimationFrame(rafId);
         rafId = null;
-        // Publish the final position before releasing synchronization.
+        // Commit the settled native selection.
         if (!wasExplicit) updateActiveDot();
-        pageMotion.publish(null);
         restoreSnap();
       }
     };
@@ -124,7 +120,7 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
       observer?.disconnect();
       if (rafId != null) cancelAnimationFrame(rafId);
     };
-  }, [carousel, pageMotion]);
+  }, [carousel]);
 
   // Mouse drag-to-scroll (desktop only — touch uses native scroll)
   useEffect(() => {
@@ -180,9 +176,8 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
     if (!carousel) return;
     const slide = carousel.children[index] as HTMLElement | undefined;
     if (!slide) return;
-    const bounds = carousel.getBoundingClientRect();
     const slideBounds = slide.getBoundingClientRect();
-    const center = bounds.left + carousel.clientLeft + carousel.clientWidth / 2;
+    const center = carouselCenter(carousel);
     const slideCenter = slideBounds.left + slideBounds.width / 2;
     const targetLeft = carousel.scrollLeft + slideCenter - center;
     // Native snapping can retain its previous target during a rapid reversal
@@ -191,9 +186,6 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
     explicitSelection.current = true;
     // The clicked page owns selection while the image travels. Intermediate
     // slides must not pull the thumbnail animation back toward older pages.
-    // A click can interrupt native settling before scrollend arrives (or on a
-    // browser without scrollend). Explicit selection now owns strip motion.
-    pageMotion.publish(null);
     setActiveIndex(index);
     carousel.style.scrollSnapType = 'none';
     navigationTargetRef.current = targetLeft;
@@ -219,7 +211,7 @@ export default function useCarouselDrag(): UseCarouselDragReturn {
       left: targetLeft,
       behavior: resolvedBehavior,
     });
-  }, [pageMotion]);
+  }, []);
 
-  return { carouselRef, attachCarousel, activeIndex, transitionFromIndex, pageMotion, carouselDraggedRef, scrollToSlide };
+  return { carouselRef, attachCarousel, activeIndex, transitionFromIndex, carouselDraggedRef, scrollToSlide };
 }

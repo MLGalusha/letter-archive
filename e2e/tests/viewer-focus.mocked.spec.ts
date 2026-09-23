@@ -10,7 +10,7 @@ for (const width of [390, 1440]) {
     await expect(dialog).toBeVisible();
     await expect(dialog).toHaveCSS('outline-style', 'none');
     expect(await dialog.evaluate(el => el.contains(document.activeElement))).toBe(true);
-    await expect(dialog.getByRole('button', { name: 'Close viewer' })).toHaveCount(0);
+    await expect(dialog.getByRole('button', { name: 'Close viewer' })).toHaveCount(1);
     await expect(page.locator('#root')).toHaveAttribute('inert', '');
     for (let i = 0; i < 16; i++) {
       await page.keyboard.press(i < 8 ? 'Tab' : 'Shift+Tab');
@@ -25,13 +25,23 @@ for (const width of [390, 1440]) {
     await dialog.locator('.viewer-container').dblclick();
     await expect(dialog.locator('.letter-viewer')).toHaveAttribute('data-zoom', '2.5');
     await dialog.getByRole('button', { name: 'Go to scan 2: letter', exact: true }).click();
-    await expect(dialog).toHaveCount(0);
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator('.scan-navigation [role="status"]')).toHaveText('2 / 3');
+    await closeReader(page);
     await expect(page.locator('.scan-navigation [role="status"]')).toHaveText('2 / 3');
     await expect(opener).toBeFocused();
+    // Selection alone is insufficient: a hidden carousel can retain page 2 in
+    // state while showing page 1 after its dimensions are restored.
+    await expect.poll(() => page.locator('.scan-carousel').evaluate(el => {
+      const viewport = el.getBoundingClientRect();
+      const selected = el.children[1].getBoundingClientRect();
+      return Math.abs(selected.left + selected.width / 2 - (viewport.left + viewport.width / 2));
+    })).toBeLessThan(1);
     await expect(page.locator('#root')).not.toHaveAttribute('inert');
     expect((await page.locator('body').evaluate(el => el.style.cssText)) || '').toBe(styles || '');
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBeCloseTo(y, 0);
     // Closing gives the reader its normal adjacent-letter shortcut back.
+    await page.locator('.letter-hero-section h1').evaluate(el => { el.setAttribute('tabindex', '-1'); (el as HTMLElement).focus(); });
     await page.keyboard.press('ArrowRight');
     await expect(page).toHaveURL(/\/letter\/next$/);
   });
@@ -61,7 +71,7 @@ test('@mocked pointer zoom restores focus to its actual scan trigger', async ({ 
   await opener.evaluate(el => el.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, ctrlKey: true, deltaY: -30 })));
   const dialog = page.getByRole('dialog', { name: 'Original scans' });
   expect(await dialog.evaluate(el => el.contains(document.activeElement))).toBe(true);
-  await expect(dialog.getByRole('button', { name: 'Close viewer' })).toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: 'Close viewer' })).toHaveCount(1);
   await closeReader(page);
   await expect(opener).toBeFocused();
 });

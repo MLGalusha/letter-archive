@@ -25,7 +25,7 @@ export async function mockReader(page: Page, images = viewerImages) {
 export async function openReader(page: Page, images = viewerImages) {
   await mockReader(page, images);
   await page.goto('/letter/current');
-  const opener = page.locator('[aria-label="Select page 1"]');
+  const opener = page.locator('[aria-label="Open scan 1 full screen"]');
   await expect(opener).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
   await opener.scrollIntoViewIfNeeded();
